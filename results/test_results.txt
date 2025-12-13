@@ -1,0 +1,44 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.1, pytest-9.0.2, pluggy-1.6.0 -- /Users/ibkim/Ormi_1/power-demand-forecast/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ibkim/Ormi_1/power-demand-forecast
+collecting ... collected 36 items
+
+tests/test_weather_features.py::TestRelativeHumidity::test_normal_case PASSED [  2%]
+tests/test_weather_features.py::TestRelativeHumidity::test_saturation_case PASSED [  5%]
+tests/test_weather_features.py::TestRelativeHumidity::test_anomaly_clipping PASSED [  8%]
+tests/test_weather_features.py::TestRelativeHumidity::test_low_humidity PASSED [ 11%]
+tests/test_weather_features.py::TestRelativeHumidity::test_vectorized_calculation PASSED [ 13%]
+tests/test_weather_features.py::TestTHI::test_comfortable_range PASSED   [ 16%]
+tests/test_weather_features.py::TestTHI::test_uncomfortable_hot_humid PASSED [ 19%]
+tests/test_weather_features.py::TestTHI::test_extreme_discomfort PASSED  [ 22%]
+tests/test_weather_features.py::TestTHI::test_formula_correctness PASSED [ 25%]
+tests/test_weather_features.py::TestTHIIntegration::test_columns_added PASSED [ 27%]
+tests/test_weather_features.py::TestTHIIntegration::test_original_preserved PASSED [ 30%]
+tests/test_weather_features.py::TestTHIIntegration::test_no_nan_in_output PASSED [ 33%]
+tests/test_weather_features.py::TestTHIIntegration::test_missing_column_error PASSED [ 36%]
+tests/test_weather_features.py::TestUnitConversion::test_ms_to_kmh_conversion PASSED [ 38%]
+tests/test_weather_features.py::TestUnitConversion::test_ms_to_kmh_zero PASSED [ 41%]
+tests/test_weather_features.py::TestWindChill::test_normal_winter_case PASSED [ 44%]
+tests/test_weather_features.py::TestWindChill::test_formula_correctness PASSED [ 47%]
+tests/test_weather_features.py::TestWindChill::test_high_wind_extreme_cold PASSED [ 50%]
+tests/test_weather_features.py::TestWindChill::test_zero_wind PASSED     [ 52%]
+tests/test_weather_features.py::TestWindChill::test_validity_mask_applied PASSED [ 55%]
+tests/test_weather_features.py::TestWindChill::test_low_wind_validity_mask PASSED [ 58%]
+tests/test_weather_features.py::TestWindChill::test_vectorized_calculation PASSED [ 61%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_column_added PASSED [ 63%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_unit_conversion_applied PASSED [ 66%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_kmh_unit_direct PASSED [ 69%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_invalid_unit_error PASSED [ 72%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_missing_column_error PASSED [ 75%]
+tests/test_weather_features.py::TestWindChillDataFrame::test_nan_handling PASSED [ 77%]
+tests/test_weather_features.py::TestAddWeatherFeatures::test_all_features_added PASSED [ 80%]
+tests/test_weather_features.py::TestAddWeatherFeatures::test_selective_features PASSED [ 83%]
+tests/test_weather_features.py::TestAddWeatherFeatures::test_missing_dewpoint_warning PASSED [ 86%]
+tests/test_weather_features.py::TestEdgeCases::test_freezing_temperature_thi PASSED [ 88%]
+tests/test_weather_features.py::TestEdgeCases::test_empty_dataframe PASSED [ 91%]
+tests/test_weather_features.py::TestRealData::test_real_data_thi_features PASSED [ 94%]
+tests/test_weather_features.py::TestRealData::test_real_data_wind_chill_conditional SKIPPED [ 97%]
+tests/test_weather_features.py::TestRealData::test_summer_high_thi PASSED [100%]
+
+======================== 35 passed, 1 skipped in 0.32s =========================

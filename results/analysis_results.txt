@@ -1,0 +1,53 @@
+/Users/ibkim/Ormi_1/power-demand-forecast/src/analysis/check_distribution.py:111: MatplotlibDeprecationWarning: The 'labels' parameter of boxplot() has been renamed 'tick_labels' since Matplotlib 3.9; support for the old name will be dropped in 3.11.
+  ax2.boxplot([train_df['power_sum'], test_df['power_sum']], labels=['Train', 'Test'])
+============================================================
+📊 ANALYSIS-001: Train/Test Distribution Analysis
+============================================================
+
+📂 Loaded 4,387 records
+   Date range: 2013-01-01 00:00:00 ~ 2024-12-31 00:00:00
+
+============================================================
+📋 STATISTICS COMPARISON
+============================================================
+
+Metric                    Train      Validation            Test
+------------------------------------------------------------
+Count                     3,512             437             438
+Mean                    9,108.2        12,033.2        11,696.2
+Std                     2,008.4         1,430.5         1,700.8
+Min                     4,636.0         7,982.0         8,148.2
+Max                    15,964.0        15,796.0        16,869.3
+Median                  8,985.2        12,070.0        11,472.2
+------------------------------------------------------------
+Date Start           2013-01-01      2022-08-10      2023-10-21
+Date End             2022-08-09      2023-10-20      2024-12-31
+
+============================================================
+⚠️ SCALING RANGE ANALYSIS
+============================================================
+
+   Train Max: 15,964.0 MW
+   Test Max:  16,869.3 MW
+   Test > Train Max: 1 records (0.2%)
+
+   ⚠️ SCALING OVERFLOW DETECTED!
+   Test Max exceeds Train Max by 5.7%
+   → MinMaxScaler will produce values > 1.0 for Test data
+   → LSTM cannot extrapolate beyond training range!
+
+📈 Generating visualizations...
+✅ Saved: /Users/ibkim/Ormi_1/power-demand-forecast/results/analysis/timeseries_split.png
+✅ Saved: /Users/ibkim/Ormi_1/power-demand-forecast/results/analysis/distribution_comparison.png
+✅ Saved: /Users/ibkim/Ormi_1/power-demand-forecast/results/analysis/yearly_trend.png
+
+============================================================
+📝 CONCLUSION
+============================================================
+
+   Mean increase (Train→Test): +28.4%
+
+   🔴 CRITICAL: Significant distribution shift detected!
+   Recommendation: Apply differencing or use expanding window validation
+
+   Output directory: /Users/ibkim/Ormi_1/power-demand-forecast/results/analysis

@@ -1,0 +1,66 @@
+============================================================
+🔬 LSTM Power Demand Forecasting: THI Feature Impact Study
+============================================================
+
+============================================================
+🧪 Experiment: WITHOUT_THI
+   Features: 18 columns
+============================================================
+
+📂 Loading data from /Users/ibkim/Ormi_1/power-demand-forecast/data/processed/jeju_daily_dataset.csv
+   Total records: 4387
+   Date range: 2013-01-01 00:00:00 ~ 2024-12-31 00:00:00
+   Sequence shape: (4366, 14, 18)
+✅ Using Apple Silicon MPS
+   Model parameters: 56,897
+
+🚀 Training for 100 epochs (patience=15)...
+   Epoch  10: train_loss=0.021272, val_loss=0.051771
+   Epoch  20: train_loss=0.019336, val_loss=0.061411
+   Early stopping at epoch 20
+
+📊 WITHOUT_THI Results:
+   RMSE: 2952.43 MW
+   MAE:  2505.02 MW
+   MAPE: 20.54%
+   R²:   -2.1074
+
+============================================================
+🧪 Experiment: WITH_THI
+   Features: 20 columns
+============================================================
+
+📂 Loading data from /Users/ibkim/Ormi_1/power-demand-forecast/data/processed/jeju_daily_dataset.csv
+🔧 Calculating THI and Humidity...
+   Total records: 4387
+   Date range: 2013-01-01 00:00:00 ~ 2024-12-31 00:00:00
+   Sequence shape: (4366, 14, 20)
+✅ Using Apple Silicon MPS
+   Model parameters: 57,409
+
+🚀 Training for 100 epochs (patience=15)...
+   Epoch  10: train_loss=0.022227, val_loss=0.076064
+   Epoch  20: train_loss=0.020513, val_loss=0.059044
+   Early stopping at epoch 27
+
+📊 WITH_THI Results:
+   RMSE: 2973.74 MW
+   MAE:  2466.93 MW
+   MAPE: 20.12%
+   R²:   -2.1524
+
+============================================================
+📋 COMPARISON REPORT: THI Feature Impact
+============================================================
+
+Metric         Without THI        With THI     Improvement
+------------------------------------------------------------
+RMSE             2952.4263       2973.7423         -0.72% ↑
+MAE              2505.0237       2466.9280         +1.52% ↓
+MAPE               20.5369         20.1179         +2.04% ↓
+R2                 -2.1074         -2.1524         -2.14% ↓
+------------------------------------------------------------
+Features                18              20
+
+✅ Conclusion: R² improved by -0.0450 (-4.50%)
+   THI 변수 추가가 유의미한 개선을 보이지 않았습니다.
