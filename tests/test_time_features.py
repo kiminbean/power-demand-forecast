@@ -329,7 +329,7 @@ class TestAddTimeFeatures:
     @pytest.fixture
     def sample_df(self):
         """샘플 DataFrame 생성"""
-        dates = pd.date_range('2024-01-01', periods=48, freq='H')
+        dates = pd.date_range('2024-01-01', periods=48, freq='h')
         return pd.DataFrame({'value': np.random.randn(48)}, index=dates)
 
     def test_add_all_features(self, sample_df):
@@ -481,7 +481,7 @@ class TestEdgeCases:
 
     def test_year_boundary(self):
         """연말-연초 경계"""
-        dates = pd.date_range('2023-12-31 22:00:00', periods=4, freq='H')
+        dates = pd.date_range('2023-12-31 22:00:00', periods=4, freq='h')
         df = pd.DataFrame({'value': np.random.randn(4)}, index=dates)
         result = add_time_features(df)
 
@@ -499,7 +499,7 @@ class TestPerformanceAndTypes:
     def test_large_dataframe(self):
         """대용량 DataFrame 처리"""
         # 1년치 시간별 데이터
-        dates = pd.date_range('2024-01-01', periods=8760, freq='H')
+        dates = pd.date_range('2024-01-01', periods=8760, freq='h')
         df = pd.DataFrame({'value': np.random.randn(8760)}, index=dates)
 
         result = add_time_features(df)
@@ -509,7 +509,7 @@ class TestPerformanceAndTypes:
 
     def test_output_types(self):
         """출력 데이터 타입 확인"""
-        dates = pd.date_range('2024-01-01', periods=24, freq='H')
+        dates = pd.date_range('2024-01-01', periods=24, freq='h')
         df = pd.DataFrame({'value': np.random.randn(24)}, index=dates)
         result = add_time_features(df)
 
@@ -523,7 +523,7 @@ class TestPerformanceAndTypes:
 
     def test_value_ranges(self):
         """값 범위 확인"""
-        dates = pd.date_range('2024-01-01', periods=8760, freq='H')
+        dates = pd.date_range('2024-01-01', periods=8760, freq='h')
         df = pd.DataFrame({'value': np.random.randn(8760)}, index=dates)
         result = add_time_features(df)
 

@@ -1,0 +1,295 @@
+{
+  "generated_at": "2025-12-14T15:46:17.948812",
+  "task_id": "DATA-002",
+  "description": "결측치 및 이상치 전처리 (선형 보간법)",
+  "weather_preprocessing": {
+    "steps": [
+      {
+        "step": "special_columns",
+        "details": {
+          "강수량": {
+            "treatment": "fill_zero",
+            "filled_count": 92005
+          },
+          "일조": {
+            "treatment": "night_fill_zero",
+            "night_filled": 43344
+          },
+          "일사": {
+            "treatment": "night_fill_zero",
+            "night_filled": 43346
+          }
+        }
+      },
+      {
+        "step": "outlier_handling",
+        "config": {
+          "method": "clip",
+          "k": 1.5
+        },
+        "details": {
+          "습도": {
+            "outlier_count": 460,
+            "outlier_pct": 0.43730392622872893,
+            "lower_bound": 28.5,
+            "upper_bound": 112.5,
+            "method": "clip"
+          },
+          "풍속": {
+            "outlier_count": 2152,
+            "outlier_pct": 2.0458218461830975,
+            "lower_bound": -1.8000000000000005,
+            "upper_bound": 7.800000000000001,
+            "method": "clip"
+          },
+          "지면온도": {
+            "outlier_count": 1075,
+            "outlier_pct": 1.0219602623823556,
+            "lower_bound": -14.550000000000002,
+            "upper_bound": 49.85,
+            "method": "clip"
+          },
+          "m01Te": {
+            "outlier_count": 1,
+            "outlier_pct": 0.0009506607091928891,
+            "lower_bound": -10.299999999999997,
+            "upper_bound": 46.5,
+            "method": "clip"
+          }
+        }
+      },
+      {
+        "step": "interpolation",
+        "config": {
+          "method": "linear",
+          "limit_direction": "both"
+        },
+        "details": {
+          "기온": {
+            "missing_before": 7,
+            "missing_after": 0,
+            "interpolated": 7,
+            "method": "linear"
+          },
+          "taQcflg": {
+            "missing_before": 53676,
+            "missing_after": 0,
+            "interpolated": 53676,
+            "method": "linear"
+          },
+          "rnQcflg": {
+            "missing_before": 74088,
+            "missing_after": 0,
+            "interpolated": 74088,
+            "method": "linear"
+          },
+          "풍속": {
+            "missing_before": 34,
+            "missing_after": 0,
+            "interpolated": 34,
+            "method": "linear"
+          },
+          "wsQcflg": {
+            "missing_before": 55069,
+            "missing_after": 0,
+            "interpolated": 55069,
+            "method": "linear"
+          },
+          "풍향": {
+            "missing_before": 218,
+            "missing_after": 0,
+            "interpolated": 218,
+            "method": "linear"
+          },
+          "wdQcflg": {
+            "missing_before": 55069,
+            "missing_after": 0,
+            "interpolated": 55069,
+            "method": "linear"
+          },
+          "습도": {
+            "missing_before": 4,
+            "missing_after": 0,
+            "interpolated": 4,
+            "method": "linear"
+          },
+          "hmQcflg": {
+            "missing_before": 53797,
+            "missing_after": 0,
+            "interpolated": 53797,
+            "method": "linear"
+          },
+          "증기압": {
+            "missing_before": 7,
+            "missing_after": 0,
+            "interpolated": 7,
+            "method": "linear"
+          },
+          "이슬점온도": {
+            "missing_before": 31,
+            "missing_after": 0,
+            "interpolated": 31,
+            "method": "linear"
+          },
+          "현지기압": {
+            "missing_before": 51,
+            "missing_after": 0,
+            "interpolated": 51,
+            "method": "linear"
+          },
+          "paQcflg": {
+            "missing_before": 53798,
+            "missing_after": 0,
+            "interpolated": 53798,
+            "method": "linear"
+          },
+          "해면기압": {
+            "missing_before": 6,
+            "missing_after": 0,
+            "interpolated": 6,
+            "method": "linear"
+          },
+          "psQcflg": {
+            "missing_before": 53795,
+            "missing_after": 0,
+            "interpolated": 53795,
+            "method": "linear"
+          },
+          "일조": {
+            "missing_before": 4475,
+            "missing_after": 0,
+            "interpolated": 4475,
+            "method": "linear"
+          },
+          "ssQcflg": {
+            "missing_before": 30145,
+            "missing_after": 0,
+            "interpolated": 30145,
+            "method": "linear"
+          },
+          "일사": {
+            "missing_before": 4333,
+            "missing_after": 0,
+            "interpolated": 4333,
+            "method": "linear"
+          },
+          "dsnw": {
+            "missing_before": 104284,
+            "missing_after": 0,
+            "interpolated": 104284,
+            "method": "linear"
+          },
+          "hr3Fhsc": {
+            "missing_before": 104969,
+            "missing_after": 0,
+            "interpolated": 104969,
+            "method": "linear"
+          },
+          "전운량": {
+            "missing_before": 10361,
+            "missing_after": 0,
+            "interpolated": 10361,
+            "method": "linear"
+          },
+          "중하층운량": {
+            "missing_before": 6476,
+            "missing_after": 0,
+            "interpolated": 6476,
+            "method": "linear"
+          },
+          "lcsCh": {
+            "missing_before": 32529,
+            "missing_after": 0,
+            "interpolated": 32529,
+            "method": "linear"
+          },
+          "시정": {
+            "missing_before": 4002,
+            "missing_after": 0,
+            "interpolated": 4002,
+            "method": "linear"
+          },
+          "gndSttCd": {
+            "missing_before": 100081,
+            "missing_after": 0,
+            "interpolated": 100081,
+            "method": "linear"
+          },
+          "dmstMtphNo": {
+            "missing_before": 78818,
+            "missing_after": 0,
+            "interpolated": 78818,
+            "method": "linear"
+          },
+          "지면온도": {
+            "missing_before": 345,
+            "missing_after": 0,
+            "interpolated": 345,
+            "method": "linear"
+          },
+          "tsQcflg": {
+            "missing_before": 53358,
+            "missing_after": 0,
+            "interpolated": 53358,
+            "method": "linear"
+          },
+          "m005Te": {
+            "missing_before": 287,
+            "missing_after": 0,
+            "interpolated": 287,
+            "method": "linear"
+          },
+          "m01Te": {
+            "missing_before": 300,
+            "missing_after": 0,
+            "interpolated": 300,
+            "method": "linear"
+          },
+          "m02Te": {
+            "missing_before": 300,
+            "missing_after": 0,
+            "interpolated": 300,
+            "method": "linear"
+          },
+          "m03Te": {
+            "missing_before": 19,
+            "missing_after": 0,
+            "interpolated": 19,
+            "method": "linear"
+          }
+        }
+      }
+    ],
+    "final_missing": {
+      "clfmAbbrCd": 33423
+    }
+  },
+  "power_preprocessing": {
+    "steps": [
+      {
+        "step": "outlier_handling",
+        "config": {
+          "method": "clip",
+          "k": 1.5
+        },
+        "details": {
+          "power_demand": {
+            "outlier_count": 919,
+            "outlier_pct": 0.8736405810327782,
+            "lower_bound": 98.23658125,
+            "upper_bound": 694.65805125,
+            "method": "clip"
+          }
+        }
+      }
+    ]
+  },
+  "summary": {
+    "weather_steps": 3,
+    "power_steps": 1,
+    "weather_final_missing": {
+      "clfmAbbrCd": 33423
+    },
+    "power_final_missing": {}
+  }
+}

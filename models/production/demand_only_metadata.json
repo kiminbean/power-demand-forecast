@@ -1,0 +1,52 @@
+{
+  "model_name": "demand_only",
+  "timestamp": "2025-12-16T04:55:31.403770",
+  "features": [
+    "power_demand",
+    "hour_sin",
+    "hour_cos",
+    "dayofweek_sin",
+    "dayofweek_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_holiday",
+    "demand_lag_1",
+    "demand_lag_24",
+    "demand_lag_168",
+    "demand_ma_6h",
+    "demand_ma_24h",
+    "demand_std_24h",
+    "demand_diff_1h",
+    "demand_diff_24h"
+  ],
+  "n_features": 17,
+  "model_config": {
+    "model_type": "lstm",
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "bidirectional": false
+  },
+  "training_config": {
+    "seq_length": 168,
+    "horizon": 1,
+    "batch_size": 64,
+    "epochs": 100,
+    "patience": 15,
+    "learning_rate": 0.001,
+    "scheduler": "plateau"
+  },
+  "metrics": {
+    "MAPE": 6.467241048812866,
+    "R2": 0.8457607626914978,
+    "MSE": 1651.029052734375,
+    "RMSE": 40.63285827636719,
+    "MAE": 30.408126831054688,
+    "sMAPE": 6.342609226703644,
+    "MBE": -3.789558172225952,
+    "CV_RMSE": 8.18551778793335,
+    "MaxError": 303.20233154296875,
+    "MedianAE": 24.260543823242188
+  }
+}

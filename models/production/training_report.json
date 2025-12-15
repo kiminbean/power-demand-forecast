@@ -1,0 +1,60 @@
+{
+  "training_date": "2025-12-16T05:04:26.226530",
+  "device": "mps",
+  "seed": 42,
+  "model_config": {
+    "model_type": "lstm",
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "bidirectional": false
+  },
+  "training_config": {
+    "seq_length": 168,
+    "horizon": 1,
+    "batch_size": 64,
+    "epochs": 100,
+    "patience": 15,
+    "learning_rate": 0.001,
+    "scheduler": "plateau"
+  },
+  "results": {
+    "demand_only": {
+      "n_features": 17,
+      "metrics": {
+        "MAPE": 6.467241048812866,
+        "R2": 0.8457607626914978,
+        "MSE": 1651.029052734375,
+        "RMSE": 40.63285827636719,
+        "MAE": 30.408126831054688,
+        "sMAPE": 6.342609226703644,
+        "MBE": -3.789558172225952,
+        "CV_RMSE": 8.18551778793335,
+        "MaxError": 303.20233154296875,
+        "MedianAE": 24.260543823242188
+      },
+      "best_epoch": 21
+    },
+    "weather_full": {
+      "n_features": 18,
+      "metrics": {
+        "MAPE": 6.05810210108757,
+        "R2": 0.8649908751249313,
+        "MSE": 1445.1832275390625,
+        "RMSE": 38.01556396484375,
+        "MAE": 27.811365127563477,
+        "sMAPE": 5.894067138433456,
+        "MBE": 0.2749507427215576,
+        "CV_RMSE": 7.658262550830841,
+        "MaxError": 311.55328369140625,
+        "MedianAE": 21.718582153320312
+      },
+      "best_epoch": 24
+    }
+  },
+  "recommendation": {
+    "primary_model": "demand_only",
+    "conditional_mode": "soft",
+    "winter_improvement": "+2.23%"
+  }
+}

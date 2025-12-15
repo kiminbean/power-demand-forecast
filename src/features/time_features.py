@@ -336,7 +336,7 @@ def add_time_features(
 
     Examples:
         >>> df = pd.DataFrame({'value': [1, 2, 3]},
-        ...                   index=pd.date_range('2024-01-01', periods=3, freq='H'))
+        ...                   index=pd.date_range('2024-01-01', periods=3, freq='h'))
         >>> df_with_time = add_time_features(df)
         >>> df_with_time.columns.tolist()
         ['value', 'hour_sin', 'hour_cos', 'dayofweek_sin', 'dayofweek_cos',
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # 샘플 데이터 생성 (1주일, 시간별)
-    dates = pd.date_range('2024-01-01', periods=168, freq='H')  # 7일 * 24시간
+    dates = pd.date_range('2024-01-01', periods=168, freq='h')  # 7일 * 24시간
     df = pd.DataFrame({
         'value': np.random.randn(len(dates))
     }, index=dates)

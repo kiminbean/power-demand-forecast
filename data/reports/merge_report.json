@@ -1,0 +1,41 @@
+{
+  "generated_at": "2025-12-14T15:51:23.777932",
+  "task_id": "DATA-003",
+  "description": "데이터셋 병합 (전력 + 기상 + 외부 변수)",
+  "input_files": {
+    "cleaned": "/Users/ibkim/Ormi_1/power-demand-forecast/data/processed/jeju_hourly_cleaned.csv",
+    "visitors": "/Users/ibkim/Ormi_1/power-demand-forecast/data/raw/jejudo_daily_visitors_2013_2025.csv",
+    "ev": "/Users/ibkim/Ormi_1/power-demand-forecast/data/raw/jeju_CAR_daily_2013_2024.csv",
+    "solar": "/Users/ibkim/Ormi_1/power-demand-forecast/data/raw/한국동서발전_제주_기상관측_태양광발전.csv"
+  },
+  "output_file": "/Users/ibkim/Ormi_1/power-demand-forecast/data/processed/jeju_hourly_merged.csv",
+  "statistics": {
+    "steps": [
+      {
+        "step": "visitors_merge",
+        "coverage_pct": 99.79,
+        "missing_count": 216
+      },
+      {
+        "step": "ev_merge",
+        "coverage_pct": 99.32,
+        "missing_count": 720
+      },
+      {
+        "step": "solar_merge",
+        "coverage_pct": 51.44,
+        "missing_count": 51077,
+        "note": "Solar data available from 2018-01 to 2024-05"
+      }
+    ],
+    "final_shape": [
+      105190,
+      44
+    ],
+    "final_missing": {
+      "clfmAbbrCd": 33423,
+      "solar_capacity_mw": 43822,
+      "solar_generation_mwh": 43822
+    }
+  }
+}

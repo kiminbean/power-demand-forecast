@@ -1,0 +1,53 @@
+{
+  "model_name": "weather_full",
+  "timestamp": "2025-12-16T05:04:26.226346",
+  "features": [
+    "power_demand",
+    "hour_sin",
+    "hour_cos",
+    "dayofweek_sin",
+    "dayofweek_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_holiday",
+    "demand_lag_1",
+    "demand_lag_24",
+    "demand_lag_168",
+    "demand_ma_6h",
+    "demand_ma_24h",
+    "demand_std_24h",
+    "demand_diff_1h",
+    "demand_diff_24h",
+    "\uae30\uc628"
+  ],
+  "n_features": 18,
+  "model_config": {
+    "model_type": "lstm",
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "bidirectional": false
+  },
+  "training_config": {
+    "seq_length": 168,
+    "horizon": 1,
+    "batch_size": 64,
+    "epochs": 100,
+    "patience": 15,
+    "learning_rate": 0.001,
+    "scheduler": "plateau"
+  },
+  "metrics": {
+    "MAPE": 6.05810210108757,
+    "R2": 0.8649908751249313,
+    "MSE": 1445.1832275390625,
+    "RMSE": 38.01556396484375,
+    "MAE": 27.811365127563477,
+    "sMAPE": 5.894067138433456,
+    "MBE": 0.2749507427215576,
+    "CV_RMSE": 7.658262550830841,
+    "MaxError": 311.55328369140625,
+    "MedianAE": 21.718582153320312
+  }
+}
