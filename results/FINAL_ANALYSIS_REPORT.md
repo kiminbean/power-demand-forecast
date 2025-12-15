@@ -1,8 +1,8 @@
-# 기상변수 효용성 종합 분석 보고서
-## EVAL-003 & EVAL-004 통합 결과
+# 기상변수 및 외부 피처 효용성 종합 분석 보고서
+## EVAL-003 ~ EVAL-006 통합 결과
 
-**실험 일시**: 2025-12-15
-**실험 환경**: Apple M1 Pro (MPS), 5 trials, 50 epochs
+**실험 일시**: 2025-12-15 ~ 2025-12-16
+**실험 환경**: Apple M1 Pro (MPS), 3~5 trials, 50 epochs
 
 ---
 
@@ -14,6 +14,8 @@
 |------|------|-----------|
 | **EVAL-003** | Horizon별 기상변수 효과 분석 | 전반적 악화, 겨울철 변곡점만 +2.5% 개선 |
 | **EVAL-004** | Conditional Model 구현 및 검증 | conditional_soft 겨울철 **+2.23%** 개선 |
+| **EVAL-005** | External Features (인구+전기차) 효과 | 단기 예측에서 **-10.51%** 악화 |
+| **EVAL-006** | External Features Horizon별 효과 | 모든 Horizon에서 효과 없음 |
 
 ### 핵심 발견
 
@@ -29,6 +31,11 @@
 4. **Conditional Model 유효성**: EVAL-004에서 conditional_soft 모델 검증 완료
    - 겨울철 전용 테스트: **+2.23% MAPE 개선**
    - 전체 데이터: **+0.22% MAPE 개선**
+
+5. **외부 피처 무효**: 인구/전기차 데이터는 **모든 Horizon에서 효과 없음**
+   - 단기(h=1): **-14.54%** 악화
+   - 장기(h=168): **-2.05%** 악화 (부정적 효과 감소하나 여전히 무효)
+   - Lag 변수(corr=0.974)가 느린 외부 트렌드 신호를 압도
 
 ---
 
@@ -170,27 +177,126 @@ h=168: LAG ████████ (corr~0.5)
 
 ---
 
-## 6. 결론 및 권장사항
+## 6. EVAL-005: External Features 실험
 
-### 6.1 결론
+### 6.1 외부 데이터 개요
+
+| 데이터 | 설명 | 값 범위 |
+|--------|------|---------|
+| **estimated_population** | 제주도 실제 인구 (거주자+관광객) | 600K ~ 780K |
+| **ev_cumulative** | 전기차 누적 등록대수 | 20 → 49,007 |
+| **tourist_ratio** | 관광객 비율 (tourist_stock / base_population) | 변동 |
+| **ev_penetration** | 전기차 보급률 (per 1000명) | 증가 추세 |
+| **ev_cumulative_log** | 전기차 로그 변환 (스케일 조정) | 3.0 ~ 10.8 |
+
+### 6.2 데이터 전처리
+
+```
+[Daily Data] → [Forward Fill to Hourly] → [Feature Engineering] → [Model Input]
+
+인구 데이터: jeju_daily_population_2013_2024_v2.csv
+  - base_population: 기본 거주 인구
+  - tourist_stock: 관광객 재고 (누적 입도 - 출도)
+  - estimated_population: 추정 실제 인구
+
+전기차 데이터: jeju_CAR_daily_2013_2024.csv
+  - ev_cumulative: 누적 전기차 대수
+  - ev_daily_new: 일일 신규 등록
+```
+
+### 6.3 실험 결과 (5 trials, 50 epochs, h=1)
+
+| Model | Features | MAPE | vs baseline |
+|-------|----------|------|-------------|
+| **baseline** | 시간 + lag | 6.33% | - |
+| weather | 시간 + lag + 기상 | 6.71% | **-5.93%** |
+| external | 시간 + lag + 인구/EV | 7.00% | **-10.51%** |
+| full | 시간 + lag + 기상 + 인구/EV | 7.12% | **-12.40%** |
+
+### 6.4 핵심 발견
+
+1. **외부 피처 효과 없음**: 인구/전기차 데이터가 단기 예측에서 오히려 성능 저하
+2. **신호 마스킹**: lag 변수(corr=0.974)가 느리게 변하는 외부 트렌드 신호 압도
+3. **노이즈 증가**: 추가 피처가 모델 복잡도만 증가시키고 과적합 유발
+
+---
+
+## 7. EVAL-006: External Features Horizon 실험
+
+### 7.1 가설
+
+> "외부 피처(인구/전기차)는 느리게 변하는 트렌드 데이터이므로,
+> 장기 예측(h=168)에서는 유용할 수 있다."
+
+### 7.2 Horizon별 결과 (3 trials, 50 epochs)
+
+| Horizon | baseline MAPE | external MAPE | Effect |
+|---------|---------------|---------------|--------|
+| **h=1** | 6.40% ± 0.15 | 7.33% ± 0.43 | **-14.54%** (악화) |
+| **h=24** | 15.66% ± 0.18 | 16.27% ± 0.28 | **-3.89%** (악화) |
+| **h=168** | 17.14% ± 0.05 | 17.49% ± 0.20 | **-2.05%** (악화) |
+
+### 7.3 Horizon별 트렌드 시각화
+
+```
+External Features Effect by Horizon
+────────────────────────────────────────────────────
+h=1:   ████████████████████ -14.54% (최대 악화)
+h=24:  ████ -3.89%
+h=168: ██ -2.05% (최소 악화, but still negative)
+────────────────────────────────────────────────────
+       ←───────────────────────────────────────────→
+       악화                                    개선
+```
+
+### 7.4 핵심 발견
+
+1. **모든 Horizon에서 효과 없음**: 가설 기각 - 인구/전기차 데이터가 어떤 예측 구간에서도 개선 효과 없음
+
+2. **Horizon 증가시 부정적 효과 감소**:
+   - h=1: -14.54% → h=168: -2.05%
+   - 기상변수와 동일한 패턴 (단, 기상변수는 h=168에서 0.01%p로 거의 무효화)
+
+3. **외부 피처의 한계**:
+   - 인구: 일별 변동이 있으나 전력 수요 예측에 직접적 기여 없음
+   - 전기차: 느린 증가 트렌드가 시간별 변동 예측에 무관함
+
+4. **Lag 변수 지배력 재확인**: 단기~장기 모든 구간에서 자기상관이 외부 피처보다 압도적
+
+### 7.5 외부 피처 vs 기상변수 비교
+
+| Horizon | Weather Effect | External Effect | 결론 |
+|---------|----------------|-----------------|------|
+| h=1 | -7.2% | **-14.54%** | 외부 피처가 더 해로움 |
+| h=24 | -2.8% | **-3.89%** | 비슷하게 해로움 |
+| h=168 | 0.01%p | **-2.05%** | 기상변수가 더 나음 |
+
+**결론**: 외부 피처는 기상변수보다 더 부정적인 영향을 미침. 제외 권장.
+
+---
+
+## 8. 결론 및 권장사항
+
+### 8.1 결론
 
 | 항목 | 결론 |
 |------|------|
-| **단기 예측 (h=1~24)** | 기상변수 **제외** 권장. Lag 변수만으로 최적 성능 |
-| **장기 예측 (h=168)** | 기상변수 효과 없음 (0.01%p). **제외** 권장 |
+| **단기 예측 (h=1~24)** | 기상변수/외부피처 **제외** 권장. Lag 변수만으로 최적 성능 |
+| **장기 예측 (h=168)** | 기상변수 효과 없음 (0.01%p), 외부피처 **-2.05%** 악화. **제외** 권장 |
 | **겨울철 급변 구간** | **conditional_soft** 사용 권장. +2.23% 개선 효과 |
 | **전체 기간** | conditional_soft로 +0.22% 미세 개선 가능 |
+| **외부 데이터 (인구/EV)** | **모든 구간에서 제외** 권장. 효과 없음 |
 
-### 6.2 후속 연구 현황
+### 8.2 후속 연구 현황
 
 | 연구 항목 | 상태 | 결과 |
 |-----------|------|------|
 | Feature Selection | 진행 예정 | - |
 | **Conditional Model** | **완료** | **+2.23% 개선 (겨울)** |
 | Attention 메커니즘 | 진행 예정 | - |
-| 외부 요인 (관광객 등) | 진행 예정 | - |
+| **외부 요인 (인구/EV)** | **완료** | **효과 없음 (제외 권장)** |
 
-### 6.3 실무 적용 코드
+### 8.3 실무 적용 코드
 
 ```python
 from models.conditional import create_conditional_predictor
@@ -217,7 +323,7 @@ for ctx in contexts:
     print(f"Weather weight: {ctx.weather_weight:.2f}")
 ```
 
-### 6.4 적용 시나리오별 권장
+### 8.4 적용 시나리오별 권장
 
 | 시나리오 | 권장 모델 | 예상 효과 | 비고 |
 |----------|-----------|-----------|------|
@@ -229,17 +335,19 @@ for ctx in contexts:
 
 ---
 
-## 7. 실험 메트릭 요약
+## 9. 실험 메트릭 요약
 
-### 7.1 전체 실험 통계
+### 9.1 전체 실험 통계
 
 | 실험 | 실험 수 | 총 Epochs | 데이터 샘플 |
 |------|---------|-----------|-------------|
 | EVAL-003 | 40 (4 horizons × 2 groups × 5 trials) | 2,000 | 87,263 |
 | EVAL-004 | 20 (4 models × 5 trials) | 1,000 | 87,263 |
+| EVAL-005 | 20 (4 configs × 5 trials) | 1,000 | 87,263 |
+| EVAL-006 | 18 (3 horizons × 2 groups × 3 trials) | 900 | 87,263 |
 | Winter Test | 4 (4 models × 1 trial) | 120 | 1,540 |
 
-### 7.2 파일 위치
+### 9.2 파일 위치
 
 #### EVAL-003
 - 상세 결과: `results/metrics/horizon_comparison.csv`
@@ -254,7 +362,16 @@ for ctx in contexts:
 - 실험 스크립트: `src/experiments/conditional_experiment.py`
 - 겨울 테스트 스크립트: `src/experiments/winter_test.py`
 
+#### EVAL-005
+- 외부 피처 실험 결과: `results/metrics/external_features_report.json`
+- 외부 피처 모듈: `src/features/external_features.py`
+- 실험 스크립트: `src/experiments/external_features_experiment.py`
+
+#### EVAL-006
+- Horizon별 실험 결과: `results/metrics/external_horizon_report.json`
+- 실험 스크립트: `src/experiments/external_horizon_experiment.py`
+
 ---
 
-*Report Generated: 2025-12-15*
-*Experiments: EVAL-003 Horizon Comparison, EVAL-004 Conditional Model*
+*Report Generated: 2025-12-16*
+*Experiments: EVAL-003 Horizon, EVAL-004 Conditional, EVAL-005 External Features, EVAL-006 External Horizon*
