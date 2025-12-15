@@ -38,6 +38,7 @@ env/
 # === Jupyter Notebook ===
 .ipynb_checkpoints
 *.ipynb
+!notebooks/demo_*.ipynb
 
 # === ML/DL Specific ===
 # Large model files (>100MB) - 선별적으로 커밋
