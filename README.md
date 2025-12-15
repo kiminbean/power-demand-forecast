@@ -2,8 +2,16 @@
 
 > **Jeju Island Power Demand Forecasting using Weather Variables and Deep Learning**
 
+<!-- CI/CD Badges -->
+[![CI](https://github.com/kiminbean/power-demand-forecast/actions/workflows/ci.yml/badge.svg)](https://github.com/kiminbean/power-demand-forecast/actions/workflows/ci.yml)
+[![CD](https://github.com/kiminbean/power-demand-forecast/actions/workflows/cd.yml/badge.svg)](https://github.com/kiminbean/power-demand-forecast/actions/workflows/cd.yml)
+[![codecov](https://codecov.io/gh/kiminbean/power-demand-forecast/branch/main/graph/badge.svg)](https://codecov.io/gh/kiminbean/power-demand-forecast)
+
+<!-- Tech Stack Badges -->
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## 프로젝트 개요
@@ -472,4 +480,4 @@ MIT License
 
 ---
 
-*Last Updated: 2024-12-14*
+*Last Updated: 2025-12-16*
