@@ -1,11 +1,11 @@
 """
 Test Suite for Weather Features Module
 ======================================
-THI(불쾌지수), 상대습도, Wind Chill(체감온도) 계산 로직 검증
+THI(불쾌지수), 상대습도, Wind Chill(체감온도), HDD/CDD 계산 로직 검증
 
 Test Cases:
 - FEAT-001: THI 및 RH 계산
-- FEAT-002: Wind Chill 계산
+- FEAT-002: HDD/CDD (난방/냉방 도일) 계산
 
 Author: Hybrid Agent Pipeline (Claude + Gemini)
 Date: 2024-12
@@ -29,14 +29,19 @@ from features.weather_features import (
     calculate_saturation_vapor_pressure,
     MAGNUS_A,
     MAGNUS_B,
-    # FEAT-002: Wind Chill
+    # Wind Chill
     calculate_wind_chill,
     calculate_wind_chill_from_df,
     convert_ms_to_kmh,
     add_weather_features,
     WIND_CHILL_TEMP_THRESHOLD,
     WIND_CHILL_WIND_THRESHOLD,
-    MS_TO_KMH
+    MS_TO_KMH,
+    # FEAT-002: HDD/CDD
+    calculate_hdd,
+    calculate_cdd,
+    calculate_hdd_cdd,
+    BASE_TEMPERATURE
 )
 
 
@@ -315,6 +320,168 @@ class TestAddWeatherFeatures:
         with pytest.warns(UserWarning, match="THI를 계산할 수 없습니다"):
             result = add_weather_features(df, include_thi=True)
         assert 'wind_chill' in result.columns
+
+
+# ============================================================================
+# FEAT-002: HDD/CDD Tests
+# ============================================================================
+
+class TestHDD:
+    """난방도일(HDD) 계산 테스트"""
+
+    def test_hdd_below_base(self):
+        """기준온도 이하일 때 HDD > 0"""
+        temp = np.array([10.0, 5.0, 0.0, -5.0])
+        hdd = calculate_hdd(temp)
+        expected = np.array([8.0, 13.0, 18.0, 23.0])
+        np.testing.assert_array_almost_equal(hdd, expected)
+
+    def test_hdd_above_base(self):
+        """기준온도 이상일 때 HDD = 0"""
+        temp = np.array([20.0, 25.0, 30.0])
+        hdd = calculate_hdd(temp)
+        expected = np.array([0.0, 0.0, 0.0])
+        np.testing.assert_array_almost_equal(hdd, expected)
+
+    def test_hdd_at_base(self):
+        """기준온도와 같을 때 HDD = 0"""
+        temp = np.array([18.0])
+        hdd = calculate_hdd(temp)
+        assert hdd[0] == 0.0
+
+    def test_hdd_custom_base(self):
+        """사용자 정의 기준온도"""
+        temp = np.array([10.0])
+        hdd = calculate_hdd(temp, base_temp=15.0)
+        assert hdd[0] == 5.0
+
+
+class TestCDD:
+    """냉방도일(CDD) 계산 테스트"""
+
+    def test_cdd_above_base(self):
+        """기준온도 이상일 때 CDD > 0"""
+        temp = np.array([20.0, 25.0, 30.0, 35.0])
+        cdd = calculate_cdd(temp)
+        expected = np.array([2.0, 7.0, 12.0, 17.0])
+        np.testing.assert_array_almost_equal(cdd, expected)
+
+    def test_cdd_below_base(self):
+        """기준온도 이하일 때 CDD = 0"""
+        temp = np.array([10.0, 5.0, 0.0])
+        cdd = calculate_cdd(temp)
+        expected = np.array([0.0, 0.0, 0.0])
+        np.testing.assert_array_almost_equal(cdd, expected)
+
+    def test_cdd_at_base(self):
+        """기준온도와 같을 때 CDD = 0"""
+        temp = np.array([18.0])
+        cdd = calculate_cdd(temp)
+        assert cdd[0] == 0.0
+
+    def test_cdd_custom_base(self):
+        """사용자 정의 기준온도"""
+        temp = np.array([25.0])
+        cdd = calculate_cdd(temp, base_temp=20.0)
+        assert cdd[0] == 5.0
+
+
+class TestHDDCDDDataFrame:
+    """HDD/CDD DataFrame 통합 테스트"""
+
+    @pytest.fixture
+    def sample_df(self):
+        return pd.DataFrame({
+            'temp_mean': [30.0, 25.0, 18.0, 10.0, 0.0, -5.0]
+        }, index=pd.date_range('2024-01-01', periods=6, name='datetime'))
+
+    def test_columns_added(self, sample_df):
+        """HDD/CDD 컬럼 추가 확인"""
+        result = calculate_hdd_cdd(sample_df)
+        assert 'HDD' in result.columns
+        assert 'CDD' in result.columns
+
+    def test_cumulative_columns_added(self, sample_df):
+        """누적 컬럼 추가 확인"""
+        result = calculate_hdd_cdd(sample_df, include_cumulative=True)
+        assert 'HDD_cumsum' in result.columns
+        assert 'CDD_cumsum' in result.columns
+
+    def test_hdd_cdd_values(self, sample_df):
+        """HDD/CDD 값 정확성 검증"""
+        result = calculate_hdd_cdd(sample_df)
+        # 30°C: HDD=0, CDD=12
+        assert result['HDD'].iloc[0] == 0.0
+        assert result['CDD'].iloc[0] == 12.0
+        # 18°C: HDD=0, CDD=0
+        assert result['HDD'].iloc[2] == 0.0
+        assert result['CDD'].iloc[2] == 0.0
+        # 0°C: HDD=18, CDD=0
+        assert result['HDD'].iloc[4] == 18.0
+        assert result['CDD'].iloc[4] == 0.0
+
+    def test_cumulative_values(self, sample_df):
+        """누적 값 정확성 검증"""
+        result = calculate_hdd_cdd(sample_df, include_cumulative=True)
+        # HDD cumsum: 0, 0, 0, 8, 26, 49
+        assert result['HDD_cumsum'].iloc[0] == 0.0
+        assert result['HDD_cumsum'].iloc[3] == 8.0  # 0+0+0+8
+        # CDD cumsum: 12, 19, 19, 19, 19, 19
+        assert result['CDD_cumsum'].iloc[0] == 12.0
+        assert result['CDD_cumsum'].iloc[5] == 19.0
+
+    def test_no_cumulative(self, sample_df):
+        """누적 없이 계산"""
+        result = calculate_hdd_cdd(sample_df, include_cumulative=False)
+        assert 'HDD_cumsum' not in result.columns
+        assert 'CDD_cumsum' not in result.columns
+
+    def test_missing_column_error(self):
+        """필수 컬럼 없을 때 에러"""
+        bad_df = pd.DataFrame({'other_col': [25.0]})
+        with pytest.raises(ValueError, match="필수 컬럼"):
+            calculate_hdd_cdd(bad_df)
+
+    def test_nan_handling(self):
+        """NaN 값 처리"""
+        df = pd.DataFrame({
+            'temp_mean': [25.0, np.nan, 10.0]
+        }, index=pd.date_range('2024-01-01', periods=3))
+        result = calculate_hdd_cdd(df)
+        assert not np.isnan(result['HDD'].iloc[0])
+        assert np.isnan(result['HDD'].iloc[1])
+        assert not np.isnan(result['HDD'].iloc[2])
+
+
+class TestHDDCDDIntegration:
+    """HDD/CDD 통합 기능 테스트"""
+
+    def test_add_weather_features_includes_hdd_cdd(self):
+        """add_weather_features에 HDD/CDD 포함"""
+        df = pd.DataFrame({
+            'temp_mean': [30.0, 5.0],
+            'dewpoint_mean': [25.0, 0.0],
+            'wind_speed_mean': [2.0, 8.0]
+        }, index=pd.date_range('2024-01-01', periods=2))
+        result = add_weather_features(df, include_hdd_cdd=True)
+        assert 'HDD' in result.columns
+        assert 'CDD' in result.columns
+
+    def test_selective_hdd_cdd(self):
+        """HDD/CDD 선택적 추가"""
+        df = pd.DataFrame({
+            'temp_mean': [25.0, 10.0]
+        }, index=pd.date_range('2024-01-01', periods=2))
+        result = add_weather_features(
+            df,
+            include_thi=False,
+            include_wind_chill=False,
+            include_hdd_cdd=True
+        )
+        assert 'HDD' in result.columns
+        assert 'CDD' in result.columns
+        assert 'THI' not in result.columns
+        assert 'wind_chill' not in result.columns
 
 
 # ============================================================================

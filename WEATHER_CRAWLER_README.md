@@ -8,27 +8,27 @@
 
 ```bash
 # 제주도 2013~2024년 기온 데이터
-python scripts/download_weather.py "제주도 2013~2024년 기온 데이터를 다운로드해줘"
+python tools/crawlers/download_weather.py "제주도 2013~2024년 기온 데이터를 다운로드해줘"
 
 # 서울 최근 5년간 습도와 강수량
-python scripts/download_weather.py "서울 지역의 최근 5년간 습도와 강수량 데이터"
+python tools/crawlers/download_weather.py "서울 지역의 최근 5년간 습도와 강수량 데이터"
 
 # 부산 2024년 일사량
-python scripts/download_weather.py "부산 2024년 일사량 자료"
+python tools/crawlers/download_weather.py "부산 2024년 일사량 자료"
 ```
 
 ### 명령줄 인자로 다운로드
 
 ```bash
 # 기본 사용법
-python scripts/download_weather.py \
+python tools/crawlers/download_weather.py \
     --station 제주 \
     --start 2013-01-01 \
     --end 2024-12-31 \
     --elements 기온 습도
 
 # 연도별 일괄 다운로드
-python scripts/download_weather.py \
+python tools/crawlers/download_weather.py \
     --station 제주 \
     --start-year 2013 \
     --end-year 2024 \
@@ -52,7 +52,7 @@ python scripts/download_weather.py \
 - 사이트 구조 변경에 취약
 
 ```python
-from src.crawlers import KMACrawler
+from tools.crawlers import KMACrawler
 
 crawler = KMACrawler()
 result = crawler.download(
@@ -76,7 +76,7 @@ result = crawler.download(
 - 일부 데이터 제한 가능
 
 ```python
-from src.crawlers import KMAAPI
+from tools.crawlers import KMAAPI
 
 # 환경변수로 API 키 설정: export KMA_API_KEY='your_key'
 api = KMAAPI()
@@ -105,7 +105,7 @@ export KMA_API_KEY='your_api_key_here'
 
 ```bash
 # 지점 목록 확인
-python scripts/download_weather.py --list-stations
+python tools/crawlers/download_weather.py --list-stations
 ```
 
 주요 지점:
@@ -121,7 +121,7 @@ python scripts/download_weather.py --list-stations
 
 ```bash
 # 요소 목록 확인
-python scripts/download_weather.py --list-elements
+python tools/crawlers/download_weather.py --list-elements
 ```
 
 주요 요소:
@@ -173,7 +173,7 @@ Claude Code에서 다음과 같이 요청하면 자동으로 크롤러가 실행
 Claude Code는 이 요청을 파싱하여 다음 명령을 실행합니다:
 
 ```bash
-python scripts/download_weather.py "제주도 2013~2024년 기온 데이터를 다운로드해줘"
+python tools/crawlers/download_weather.py "제주도 2013~2024년 기온 데이터를 다운로드해줘"
 ```
 
 ## 문제 해결
@@ -207,23 +207,22 @@ export KMA_API_KEY='your_key'
 
 ```bash
 # 브라우저 창 표시하여 디버깅
-python scripts/download_weather.py --no-headless --station 제주 --start 2024-01-01 --end 2024-12-31
+python tools/crawlers/download_weather.py --no-headless --station 제주 --start 2024-01-01 --end 2024-12-31
 ```
 
 ## 프로젝트 구조
 
 ```
 power-demand-forecast/
-├── src/
+├── tools/
 │   └── crawlers/
 │       ├── __init__.py
-│       ├── config.py      # 지점코드, 요소코드 정의
-│       ├── kma_crawler.py # Selenium 크롤러
-│       └── kma_api.py     # 공공데이터포털 API 클라이언트
-├── scripts/
-│   └── download_weather.py # CLI 스크립트
+│       ├── config.py          # 지점코드, 요소코드 정의
+│       ├── kma_crawler.py     # Selenium 크롤러
+│       ├── kma_api.py         # 공공데이터포털 API 클라이언트
+│       └── download_weather.py # CLI 스크립트
 ├── data/
-│   └── raw/               # 다운로드된 파일 저장
+│   └── raw/                   # 다운로드된 파일 저장
 └── WEATHER_CRAWLER_README.md
 ```
 

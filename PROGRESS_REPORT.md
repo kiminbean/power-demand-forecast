@@ -4,7 +4,54 @@
 - **프로젝트**: 제주도 전력 수요 예측 (Power Demand Forecasting)
 - **위치**: `/Users/ibkim/Ormi_1/power-demand-forecast`
 - **파이프라인**: Anthropic State Persistence + DeepMind IMO 2025 Verification Loop
-- **날짜**: 2024-12-13
+- **최종 업데이트**: 2024-12-14
+
+---
+
+## 하이브리드 에이전트 파이프라인 현황
+
+### 아키텍처 구성
+
+| 역할 | 담당 | 상태 | 설명 |
+|------|------|------|------|
+| **Controller** | `agent_harness.py` | ✅ 구현완료 | 상태 관리, 루프 제어 |
+| **Worker** | Claude Code CLI | ✅ 사용가능 | 코드 생성 |
+| **Verifier** | Gemini CLI | ✅ 통합됨 | L2 검증 (코드 리뷰) |
+| **State File** | `feature_list.json` | ✅ 구현완료 | 20개 태스크 정의 |
+| **Progress Log** | `results/claude-progress.txt` | ✅ 구현완료 | 작업 히스토리 |
+| **Git Versioning** | `.git/hooks/auto-commit.sh` | ✅ 구현완료 | 자동 커밋 |
+
+### 검증 체계 (IMO 2025 Style)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Verification Pipeline                     │
+├─────────────────────────────────────────────────────────────┤
+│  L1 (Deterministic): pytest 실행 - 기능 정확성               │
+│  L2 (Probabilistic): Gemini 리뷰 - 아키텍처, 보안, 엣지케이스 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 사용법
+
+```bash
+# 작업 상태 확인
+python agent_harness.py --status
+
+# 다음 작업 자동 실행
+python agent_harness.py
+
+# 특정 작업 실행
+python agent_harness.py --task DATA-001
+
+# 특정 작업 검증만 수행
+python agent_harness.py --verify DATA-001
+
+# 작업 초기화
+python agent_harness.py --reset DATA-001
+```
+
+---
 
 ---
 

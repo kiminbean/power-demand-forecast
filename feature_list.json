@@ -1,0 +1,732 @@
+{
+  "project": {
+    "name": "제주도 전력수요 예측",
+    "version": "1.0.0",
+    "description": "제주시 기상 데이터를 활용한 1h~24h 전력 수요 예측 딥러닝 모델",
+    "hypothesis": "제주도의 숨겨진 태양광 발전량(BTM)이 한전 전력 수요에 주요 영향",
+    "target_metrics": {
+      "MAPE": "5-6%",
+      "R2": ">= 0.75"
+    },
+    "reference_paper": "JPD_RNN_Weather.pdf (정현수, 길준민, 2025)",
+    "hardware": "M1 MacBook Pro 32GB (MPS)",
+    "created_date": "2024-12-14"
+  },
+  "data": {
+    "period": {
+      "start": "2013-01-01",
+      "end": "2024-12-31",
+      "train": "2013-01 ~ 2022-12",
+      "validation": "2023-01 ~ 2023-06",
+      "test": "2023-07 ~ 2024-12"
+    },
+    "sources": [
+      {
+        "name": "전력거래량",
+        "file": "jeju_hourly_power_2013_2024.csv",
+        "frequency": "hourly",
+        "rows": 105192
+      },
+      {
+        "name": "기상관측",
+        "file": "jeju_temp_hourly_*.csv",
+        "frequency": "hourly",
+        "source": "기상청 ASOS"
+      },
+      {
+        "name": "태양광발전",
+        "file": "한국동서발전_제주_기상관측_태양광발전.csv",
+        "frequency": "hourly",
+        "period": "2018-01 ~ 2024-05"
+      },
+      {
+        "name": "전기차등록",
+        "file": "jeju_CAR_daily_2013_2024.csv",
+        "frequency": "daily"
+      },
+      {
+        "name": "관광객",
+        "file": "jejudo_daily_visitors_2013_2025.csv",
+        "frequency": "daily"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "DATA-001",
+      "phase": "Phase 1: Data Preparation",
+      "description": "원본 데이터 품질 검사 및 EDA",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "전력 데이터 로드 및 기본 통계 확인",
+        "기상 데이터 (12년치) 병합",
+        "결측치 비율 분석",
+        "이상치 탐지 (IQR, Z-score)",
+        "피어슨 상관계수 히트맵 생성"
+      ],
+      "output_files": [
+        "notebooks/01_EDA.ipynb",
+        "results/figures/correlation_heatmap.png",
+        "results/figures/missing_values.png"
+      ],
+      "files_changed": [
+        "notebooks/01_EDA.ipynb",
+        "src/analysis/correlation_analysis.py",
+        "data/processed/jeju_weather_hourly_merged.csv",
+        "results/figures/correlation_heatmap.png",
+        "results/figures/missing_values.png",
+        "results/metrics/correlation_matrix.csv",
+        "results/metrics/outlier_summary.csv"
+      ],
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "DATA-002",
+      "phase": "Phase 1: Data Preparation",
+      "description": "결측치 및 이상치 전처리 (선형 보간법)",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "기상 데이터 결측치 선형 보간",
+        "전력 데이터 결측치 처리",
+        "이상치 탐지 후 보간 대체",
+        "단위 변환 (kWh → MWh)",
+        "전처리 리포트 생성"
+      ],
+      "output_files": [
+        "src/data/preprocessing.py",
+        "notebooks/02_Preprocessing.ipynb",
+        "data/processed/jeju_hourly_cleaned.csv"
+      ],
+      "files_changed": [
+        "src/data/__init__.py",
+        "src/data/preprocessing.py",
+        "notebooks/02_Preprocessing.ipynb",
+        "data/processed/jeju_hourly_cleaned.csv",
+        "data/reports/preprocessing_report.json"
+      ],
+      "notes": "판다스 보간법 사용 필수, 임의 데이터 가공 금지",
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "DATA-003",
+      "phase": "Phase 1: Data Preparation",
+      "description": "데이터셋 병합 (전력 + 기상 + 외부 변수)",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "전력-기상 데이터 시간 기준 병합",
+        "일별 데이터 시간별로 확장 (관광객, 전기차)",
+        "태양광 발전량 데이터 병합",
+        "시간대 정렬 및 인덱스 검증"
+      ],
+      "output_files": [
+        "src/data/merge_datasets.py",
+        "data/processed/jeju_hourly_merged.csv"
+      ],
+      "files_changed": [
+        "src/data/__init__.py",
+        "src/data/merge_datasets.py",
+        "data/processed/jeju_hourly_merged.csv",
+        "data/reports/merge_report.json"
+      ],
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "FEAT-001",
+      "phase": "Phase 2: Feature Engineering",
+      "description": "THI (불쾌지수) 및 상대습도 계산",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "August-Roche-Magnus 공식으로 이슬점 → RH 계산",
+        "THI = 1.8×T - 0.55×(1-RH/100)×(1.8×T-26) + 32",
+        "THI 카테고리 분류 (쾌적/불쾌/매우불쾌)"
+      ],
+      "output_files": [
+        "src/features/weather_features.py",
+        "tests/test_weather_features.py"
+      ],
+      "commit": "8a016e1"
+    },
+    {
+      "id": "FEAT-002",
+      "phase": "Phase 2: Feature Engineering",
+      "description": "HDD/CDD (난방/냉방 도일) 생성",
+      "status": "done",
+      "priority": "medium",
+      "subtasks": [
+        "기준온도 설정 (18°C)",
+        "HDD = max(18 - T, 0)",
+        "CDD = max(T - 18, 0)",
+        "누적 HDD/CDD 계산"
+      ],
+      "output_files": [
+        "src/features/weather_features.py"
+      ],
+      "files_changed": [
+        "src/features/weather_features.py",
+        "tests/test_weather_features.py"
+      ],
+      "verification": {
+        "HDD": {"min": 0.0, "max": 23.3, "correlation_demand": 0.214},
+        "CDD": {"min": 0.0, "max": 19.0, "correlation_demand": 0.151}
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "FEAT-003",
+      "phase": "Phase 2: Feature Engineering",
+      "description": "시간 특성 생성 (주기적 인코딩)",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "hour_sin = sin(2π × hour / 24)",
+        "hour_cos = cos(2π × hour / 24)",
+        "dayofweek_sin, dayofweek_cos",
+        "month_sin, month_cos",
+        "is_weekend, is_holiday"
+      ],
+      "output_files": [
+        "src/features/time_features.py"
+      ],
+      "files_changed": [
+        "src/features/time_features.py",
+        "src/features/__init__.py",
+        "tests/test_time_features.py"
+      ],
+      "verification": {
+        "features_added": 11,
+        "weekend_pct": 28.6,
+        "holiday_pct": 4.1,
+        "workday_pct": 68.5,
+        "correlations": {
+          "hour_sin": -0.260,
+          "is_workday": 0.114,
+          "is_weekend": -0.097
+        }
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "FEAT-004",
+      "phase": "Phase 2: Feature Engineering",
+      "description": "태양광 관련 파생 변수 생성",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "일사량 기반 예상 발전량 추정",
+        "전운량 기반 일사 감쇠 계수",
+        "일출/일몰 시간 플래그",
+        "BTM 발전 추정량 (hypothesis 검증용)"
+      ],
+      "output_files": [
+        "src/features/solar_features.py"
+      ],
+      "files_changed": [
+        "src/features/solar_features.py",
+        "src/features/__init__.py",
+        "tests/test_solar_features.py"
+      ],
+      "verification": {
+        "features_added": 7,
+        "solar_elevation_range": [-78.4, 78.4],
+        "daylight_hours_range": [10, 14],
+        "btm_ratio_2023": "70.6%",
+        "correlations": {
+          "solar_elevation": 0.155,
+          "is_daylight": 0.141,
+          "btm_effect": 0.104
+        }
+      },
+      "notes": "숨겨진 태양광(BTM) 가설 검증을 위한 핵심 변수",
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "FEAT-005",
+      "phase": "Phase 2: Feature Engineering",
+      "description": "지연 변수 및 이동평균 생성",
+      "status": "done",
+      "priority": "medium",
+      "subtasks": [
+        "전력수요 lag (t-1, t-24, t-48, t-168)",
+        "기온 이동평균 (6h, 12h, 24h)",
+        "일사량 이동평균",
+        "롤링 표준편차 (변동성)"
+      ],
+      "output_files": [
+        "src/features/lag_features.py"
+      ],
+      "files_changed": [
+        "src/features/lag_features.py",
+        "src/features/__init__.py",
+        "tests/test_lag_features.py"
+      ],
+      "verification": {
+        "features_added": 26,
+        "top_correlations": {
+          "demand_lag_1": 0.974,
+          "demand_ma_6h": 0.874,
+          "demand_lag_24": 0.871,
+          "demand_lag_168": 0.793
+        },
+        "data_leakage_prevention": "shift(1) applied to all rolling/MA calculations"
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "MODEL-001",
+      "phase": "Phase 3: Model Development",
+      "description": "PyTorch Dataset 및 DataLoader 구현",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "시퀀스 생성 (48시간 입력 → 예측)",
+        "Train/Val/Test 분할",
+        "Min-Max 정규화",
+        "배치 생성"
+      ],
+      "output_files": [
+        "src/data/dataset.py"
+      ],
+      "files_changed": [
+        "src/data/__init__.py",
+        "src/data/dataset.py",
+        "tests/test_dataset.py"
+      ],
+      "hyperparameters": {
+        "sequence_length": 48,
+        "batch_size": 32,
+        "prediction_horizons": [1, 6, 12, 24]
+      },
+      "verification": {
+        "train_samples": 87646,
+        "val_samples": 4344,
+        "test_samples": 13200,
+        "n_features": 38,
+        "train_batches": 2738,
+        "device": "mps",
+        "unit_tests": "32 passed"
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "MODEL-002",
+      "phase": "Phase 3: Model Development",
+      "description": "Vanilla RNN 모델 구현 (Baseline)",
+      "status": "pending",
+      "priority": "medium",
+      "subtasks": [
+        "RNN 클래스 정의",
+        "순전파/역전파 구현",
+        "학습 루프 구현"
+      ],
+      "output_files": [
+        "src/models/rnn.py"
+      ],
+      "hyperparameters": {
+        "hidden_size": 50,
+        "num_layers": 2,
+        "dropout": 0.2
+      }
+    },
+    {
+      "id": "MODEL-003",
+      "phase": "Phase 3: Model Development",
+      "description": "LSTM 모델 구현",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "LSTM 클래스 정의",
+        "MPS 디바이스 지원",
+        "Early Stopping 구현",
+        "Learning Rate Scheduler"
+      ],
+      "output_files": [
+        "src/models/lstm.py",
+        "src/training/train_lstm.py"
+      ],
+      "files_changed": [
+        "src/models/__init__.py",
+        "src/models/lstm.py",
+        "src/training/__init__.py",
+        "src/training/trainer.py",
+        "src/training/train_lstm.py",
+        "tests/test_lstm.py"
+      ],
+      "hyperparameters": {
+        "hidden_size": 64,
+        "num_layers": 2,
+        "dropout": 0.2,
+        "learning_rate": 0.001,
+        "epochs": 100,
+        "patience": 15
+      },
+      "verification": {
+        "unit_tests": "44 passed",
+        "model_types": ["LSTM", "BiLSTM", "MultiHorizonLSTM", "ResidualLSTM"],
+        "parameters": {
+          "LSTM": 66177,
+          "BiLSTM": 162945,
+          "MultiHorizonLSTM": 72516
+        },
+        "quick_test_3epochs": {
+          "train_loss": 0.003286,
+          "val_loss": 0.003961,
+          "test_metrics": {
+            "RMSE": 42.53,
+            "MAE": 33.86,
+            "MAPE": 7.16,
+            "R2": 0.8300
+          }
+        },
+        "device": "mps"
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "MODEL-004",
+      "phase": "Phase 3: Model Development",
+      "description": "BiLSTM 모델 구현",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "BiLSTM 클래스 정의 (bidirectional=True)",
+        "출력 차원 조정 (hidden*2)",
+        "성능 비교 실험"
+      ],
+      "output_files": [
+        "src/models/lstm.py"
+      ],
+      "notes": "LSTMModel 클래스에 bidirectional=True 옵션으로 구현됨. create_model('bilstm', ...) 으로 사용 가능",
+      "verification": {
+        "parameters": 162945,
+        "usage": "create_model('bilstm', input_size=38, hidden_size=64)"
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "MODEL-005",
+      "phase": "Phase 3: Model Development",
+      "description": "다중 시간대 예측 구현 (1h~24h)",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "Multi-output 모델 설계",
+        "각 시간대별 손실 함수 가중치",
+        "시간대별 성능 평가"
+      ],
+      "output_files": [
+        "src/models/lstm.py",
+        "src/training/train_lstm.py"
+      ],
+      "notes": "MultiHorizonLSTM 클래스로 구현됨. create_model('multi_horizon', ...) 으로 사용 가능. --multi_horizon 플래그로 학습",
+      "verification": {
+        "horizons": [1, 6, 12, 24],
+        "parameters": 72516,
+        "usage": "create_model('multi_horizon', input_size=38, horizons=[1, 6, 12, 24])",
+        "train_command": "python -m src.training.train_lstm --multi_horizon"
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "EVAL-001",
+      "phase": "Phase 4: Evaluation",
+      "description": "평가 지표 구현 (MAPE, R², MAE, MSE)",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "MAPE 함수 구현",
+        "R² 함수 구현",
+        "MAE, MSE 함수 구현",
+        "평가 리포트 생성"
+      ],
+      "output_files": [
+        "src/evaluation/metrics.py"
+      ],
+      "files_changed": [
+        "src/evaluation/__init__.py",
+        "src/evaluation/metrics.py",
+        "tests/test_metrics.py",
+        "results/metrics/evaluation_report_lstm_h1.json"
+      ],
+      "features": {
+        "primary_metrics": ["MAPE", "R2"],
+        "secondary_metrics": ["MSE", "RMSE", "MAE"],
+        "advanced_metrics": ["sMAPE", "MASE", "MBE", "CV_RMSE", "MaxError", "MedianAE"],
+        "time_analysis": ["hourly", "dayofweek", "monthly", "seasonal"],
+        "additional": ["residual_analysis", "prediction_intervals", "model_comparison"]
+      },
+      "verification": {
+        "unit_tests": "50 passed",
+        "quick_test_5epochs": {
+          "MAPE": 6.01,
+          "R2": 0.8726,
+          "RMSE": 36.82,
+          "MAE": 29.15
+        },
+        "seasonal_analysis": {
+          "Spring": {"MAPE": 5.21, "R2": 0.8340},
+          "Summer": {"MAPE": 6.87, "R2": 0.8624},
+          "Fall": {"MAPE": 6.17, "R2": 0.8816},
+          "Winter": {"MAPE": 5.29, "R2": 0.8302}
+        }
+      },
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "EVAL-002",
+      "phase": "Phase 4: Evaluation",
+      "description": "기상변수 포함/미포함 비교 실험",
+      "status": "done",
+      "priority": "high",
+      "subtasks": [
+        "기온+지중온도 포함 모델",
+        "전력수요만 사용 모델",
+        "10회 반복 실험",
+        "Box plot 시각화"
+      ],
+      "output_files": [
+        "results/metrics/weather_comparison.csv",
+        "results/metrics/weather_comparison_summary.csv",
+        "results/metrics/weather_comparison_report.json",
+        "results/figures/weather_comparison_boxplot.png"
+      ],
+      "files_changed": [
+        "src/experiments/__init__.py",
+        "src/experiments/weather_comparison.py"
+      ],
+      "reference": "JPD_RNN_Weather.pdf Figure 2, 3, 4",
+      "experiment_config": {
+        "n_trials": 10,
+        "epochs": 50,
+        "sequence_length": 48,
+        "hidden_size": 64,
+        "batch_size": 32
+      },
+      "feature_groups": {
+        "demand_only": {
+          "description": "전력수요 + 시간특성만",
+          "features": 17
+        },
+        "weather_basic": {
+          "description": "+ 기온, 지중온도",
+          "features": 23
+        },
+        "weather_full": {
+          "description": "+ 전체 기상변수 (THI, HDD, CDD, 태양광 등)",
+          "features": 51
+        }
+      },
+      "results_summary": {
+        "demand_only": {
+          "MAPE": "5.00 ± 0.44%",
+          "R2": "0.9061 ± 0.0194",
+          "RMSE": "31.5 ± 3.3"
+        },
+        "weather_basic": {
+          "MAPE": "5.20 ± 0.75%",
+          "R2": "0.8944 ± 0.0398",
+          "RMSE": "33.0 ± 6.0"
+        },
+        "weather_full": {
+          "MAPE": "5.18 ± 0.52%",
+          "R2": "0.8998 ± 0.0189",
+          "RMSE": "32.5 ± 3.1"
+        }
+      },
+      "key_findings": [
+        "demand_only 그룹이 최고 성능 (MAPE 5.00%, R² 0.9061)",
+        "기상변수 추가 시 오히려 성능 소폭 감소 (-3.6% MAPE 증가)",
+        "전력 수요의 lag 변수가 가장 강력한 예측 변수임을 확인",
+        "논문(JPD_RNN_Weather.pdf)의 기상변수 개선 효과와 상반된 결과"
+      ],
+      "completed_date": "2024-12-14"
+    },
+    {
+      "id": "EVAL-003",
+      "phase": "Phase 4: Evaluation",
+      "description": "시퀀스 길이 실험 (24h, 48h, 72h)",
+      "status": "pending",
+      "priority": "medium",
+      "subtasks": [
+        "24시간 입력 실험",
+        "48시간 입력 실험 (논문 기준)",
+        "72시간 입력 실험",
+        "성능 비교"
+      ],
+      "output_files": [
+        "results/metrics/sequence_length_comparison.csv"
+      ]
+    },
+    {
+      "id": "VIS-001",
+      "phase": "Phase 5: Visualization",
+      "description": "시계열 예측 결과 시각화",
+      "status": "pending",
+      "priority": "high",
+      "subtasks": [
+        "실제값 vs 예측값 시계열 플롯",
+        "오차 분포 히스토그램",
+        "계절별 예측 정확도",
+        "시간대별 예측 정확도"
+      ],
+      "output_files": [
+        "src/evaluation/visualize.py",
+        "results/figures/prediction_vs_actual.png",
+        "results/figures/error_distribution.png"
+      ]
+    },
+    {
+      "id": "VIS-002",
+      "phase": "Phase 5: Visualization",
+      "description": "모델 성능 비교 시각화",
+      "status": "pending",
+      "priority": "medium",
+      "subtasks": [
+        "RNN vs LSTM vs BiLSTM 비교",
+        "예측 시간대별 성능 비교 (1h~24h)",
+        "학습 곡선 (Loss/Metric over epochs)"
+      ],
+      "output_files": [
+        "results/figures/model_comparison.png",
+        "results/figures/horizon_comparison.png",
+        "results/figures/learning_curves.png"
+      ]
+    },
+    {
+      "id": "COLAB-001",
+      "phase": "Phase 6: Deployment",
+      "description": "Google Colab 노트북 작성",
+      "status": "pending",
+      "priority": "high",
+      "subtasks": [
+        "01_EDA.ipynb - 데이터 탐색",
+        "02_Preprocessing.ipynb - 전처리",
+        "03_Feature_Engineering.ipynb - 피처 생성",
+        "04_LSTM_Training.ipynb - 모델 학습",
+        "05_Model_Comparison.ipynb - 모델 비교",
+        "06_Results_Analysis.ipynb - 결과 분석"
+      ],
+      "output_files": [
+        "notebooks/*.ipynb"
+      ],
+      "notes": "Colab에서 추가 테스트를 위한 완전한 코드"
+    },
+    {
+      "id": "DOC-001",
+      "phase": "Phase 6: Deployment",
+      "description": "최종 결과 보고서 작성",
+      "status": "pending",
+      "priority": "high",
+      "subtasks": [
+        "실험 결과 요약",
+        "모델별 성능 비교표",
+        "주요 발견사항 정리",
+        "향후 개선 방향"
+      ],
+      "output_files": [
+        "results/reports/final_report.md"
+      ]
+    }
+  ],
+  "models": {
+    "baseline": {
+      "name": "RNN",
+      "architecture": "Input(48) → RNN(hidden=50, layers=2) → Linear → Output(1)"
+    },
+    "primary": {
+      "name": "LSTM",
+      "architecture": "Input(48) → LSTM(hidden=64, layers=2, dropout=0.2) → Linear → Output(1~24)"
+    },
+    "advanced": {
+      "name": "BiLSTM",
+      "architecture": "Input(48) → BiLSTM(hidden=64, layers=2, dropout=0.2) → Linear → Output(1~24)"
+    }
+  },
+  "hyperparameters": {
+    "sequence_length": 48,
+    "prediction_horizons": [
+      1,
+      6,
+      12,
+      24
+    ],
+    "hidden_size": 64,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "batch_size": 32,
+    "epochs": 100,
+    "patience": 15,
+    "optimizer": "Adam",
+    "loss_function": "MSELoss",
+    "device": "mps"
+  },
+  "features": {
+    "target": [
+      "전력거래량(MWh)"
+    ],
+    "weather": [
+      "기온",
+      "지면온도",
+      "m005Te",
+      "m01Te",
+      "m02Te",
+      "m03Te",
+      "습도",
+      "이슬점온도",
+      "강수량",
+      "풍속",
+      "일사",
+      "일조",
+      "전운량",
+      "중하층운량",
+      "현지기압",
+      "해면기압"
+    ],
+    "derived": [
+      "THI",
+      "humidity_calculated",
+      "HDD",
+      "CDD",
+      "hour_sin",
+      "hour_cos",
+      "dayofweek_sin",
+      "dayofweek_cos",
+      "month_sin",
+      "month_cos",
+      "is_weekend",
+      "is_holiday",
+      "solar_estimated",
+      "btm_effect"
+    ],
+    "external": [
+      "전기차누적대수",
+      "일별입도객수",
+      "태양광발전량",
+      "태양광설비용량"
+    ],
+    "lag": [
+      "demand_lag_1",
+      "demand_lag_24",
+      "demand_lag_48",
+      "demand_lag_168",
+      "temp_ma_6h",
+      "temp_ma_12h",
+      "temp_ma_24h"
+    ]
+  },
+  "evaluation_metrics": {
+    "primary": [
+      "MAPE",
+      "R2"
+    ],
+    "secondary": [
+      "MAE",
+      "MSE",
+      "RMSE"
+    ]
+  }
+}

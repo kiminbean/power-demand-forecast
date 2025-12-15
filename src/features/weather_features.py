@@ -7,6 +7,12 @@ Features:
 - humidity: 상대습도 (August-Roche-Magnus 공식으로 이슬점에서 역산)
 - THI: 불쾌지수 (Temperature-Humidity Index) - 여름철 냉방 수요 지표
 - wind_chill: 체감온도 (JAG/Siple 공식) - 동절기 난방 수요 지표
+- HDD: 난방도일 (Heating Degree Days) - max(18-T, 0)
+- CDD: 냉방도일 (Cooling Degree Days) - max(T-18, 0)
+
+Tasks:
+- FEAT-001: THI 및 상대습도 계산
+- FEAT-002: HDD/CDD (난방/냉방 도일) 생성
 
 Author: Hybrid Agent Pipeline (Claude + Gemini)
 Date: 2024-12
@@ -311,6 +317,164 @@ def calculate_wind_chill_from_df(
 
 
 # ============================================================================
+# HDD/CDD Functions (FEAT-002)
+# ============================================================================
+
+# 기준 온도 상수
+BASE_TEMPERATURE = 18.0  # 난방/냉방 기준온도 (°C)
+
+
+def calculate_hdd(
+    temperature: np.ndarray,
+    base_temp: float = BASE_TEMPERATURE
+) -> np.ndarray:
+    """
+    난방도일(Heating Degree Days)을 계산합니다.
+
+    HDD = max(기준온도 - 기온, 0)
+
+    Args:
+        temperature: 기온 배열 (섭씨)
+        base_temp: 기준온도 (기본값: 18°C)
+
+    Returns:
+        난방도일 (HDD)
+
+    Note:
+        - HDD는 난방 수요의 대리 지표
+        - 기온이 기준온도보다 낮을수록 HDD 증가 → 난방 수요 증가
+        - 시간별 데이터의 경우 일별로 합산하여 사용 권장
+    """
+    return np.maximum(base_temp - temperature, 0)
+
+
+def calculate_cdd(
+    temperature: np.ndarray,
+    base_temp: float = BASE_TEMPERATURE
+) -> np.ndarray:
+    """
+    냉방도일(Cooling Degree Days)을 계산합니다.
+
+    CDD = max(기온 - 기준온도, 0)
+
+    Args:
+        temperature: 기온 배열 (섭씨)
+        base_temp: 기준온도 (기본값: 18°C)
+
+    Returns:
+        냉방도일 (CDD)
+
+    Note:
+        - CDD는 냉방 수요의 대리 지표
+        - 기온이 기준온도보다 높을수록 CDD 증가 → 냉방 수요 증가
+        - 시간별 데이터의 경우 일별로 합산하여 사용 권장
+    """
+    return np.maximum(temperature - base_temp, 0)
+
+
+def calculate_cumulative_degree_days(
+    degree_days: np.ndarray,
+    reset_period: str = 'yearly'
+) -> np.ndarray:
+    """
+    누적 도일(Cumulative Degree Days)을 계산합니다.
+
+    Args:
+        degree_days: 도일 배열 (HDD 또는 CDD)
+        reset_period: 리셋 주기 ('yearly', 'monthly', 'none')
+
+    Returns:
+        누적 도일
+
+    Note:
+        - 'none': 전체 기간 누적
+        - 실제 사용시 datetime index와 함께 groupby 필요
+    """
+    if reset_period == 'none':
+        return np.cumsum(degree_days)
+    else:
+        # DataFrame에서 처리해야 하므로 단순 누적만 반환
+        return np.cumsum(degree_days)
+
+
+def calculate_hdd_cdd(
+    df: pd.DataFrame,
+    temp_col: str = 'temp_mean',
+    base_temp: float = BASE_TEMPERATURE,
+    include_cumulative: bool = True,
+    cumulative_period: str = 'yearly',
+    inplace: bool = False
+) -> pd.DataFrame:
+    """
+    DataFrame에 HDD/CDD 및 누적 도일 컬럼을 추가합니다.
+
+    Args:
+        df: 입력 DataFrame (datetime index 권장)
+        temp_col: 기온 컬럼명 (기본값: 'temp_mean')
+        base_temp: 기준온도 (기본값: 18°C)
+        include_cumulative: 연간 누적 도일 추가 여부
+        cumulative_period: 누적 리셋 주기 ('yearly', 'monthly')
+        inplace: True면 원본 수정, False면 복사본 반환
+
+    Returns:
+        HDD, CDD (및 누적) 컬럼이 추가된 DataFrame
+
+    Raises:
+        ValueError: 필수 컬럼이 없는 경우
+
+    Example:
+        >>> df = pd.DataFrame({
+        ...     'temp_mean': [30.0, 15.0, 5.0, -5.0],
+        ... }, index=pd.date_range('2024-01-01', periods=4))
+        >>> result = calculate_hdd_cdd(df)
+        >>> result[['HDD', 'CDD']].values
+        array([[ 0., 12.],
+               [ 3.,  0.],
+               [13.,  0.],
+               [23.,  0.]])
+    """
+    # 필수 컬럼 검증
+    if temp_col not in df.columns:
+        raise ValueError(f"필수 컬럼이 없습니다: {temp_col}")
+
+    # 복사본 생성
+    result = df if inplace else df.copy()
+
+    # numpy 배열로 변환
+    temp = result[temp_col].values.astype(float)
+
+    # HDD/CDD 계산
+    hdd = calculate_hdd(temp, base_temp)
+    cdd = calculate_cdd(temp, base_temp)
+
+    # NaN 처리
+    nan_mask = np.isnan(temp)
+    hdd = np.where(nan_mask, np.nan, hdd)
+    cdd = np.where(nan_mask, np.nan, cdd)
+
+    result['HDD'] = hdd
+    result['CDD'] = cdd
+
+    # 누적 도일 계산
+    if include_cumulative and hasattr(result.index, 'year'):
+        if cumulative_period == 'yearly':
+            # 연간 누적 (매년 1월 1일 리셋)
+            result['HDD_cumsum'] = result.groupby(result.index.year)['HDD'].cumsum()
+            result['CDD_cumsum'] = result.groupby(result.index.year)['CDD'].cumsum()
+        elif cumulative_period == 'monthly':
+            # 월간 누적 (매월 1일 리셋)
+            year_month = result.index.to_period('M')
+            result['HDD_cumsum'] = result.groupby(year_month)['HDD'].cumsum()
+            result['CDD_cumsum'] = result.groupby(year_month)['CDD'].cumsum()
+    elif include_cumulative:
+        # datetime index가 없으면 단순 누적
+        result['HDD_cumsum'] = result['HDD'].cumsum()
+        result['CDD_cumsum'] = result['CDD'].cumsum()
+
+    return result
+
+
+# ============================================================================
 # Unified Feature Functions
 # ============================================================================
 
@@ -318,44 +482,50 @@ def add_weather_features(
     df: pd.DataFrame,
     include_thi: bool = True,
     include_wind_chill: bool = True,
+    include_hdd_cdd: bool = True,
     temp_col: str = 'temp_mean',
     dewpoint_col: str = 'dewpoint_mean',
     wind_col: str = 'wind_speed_mean',
-    wind_unit: str = 'ms'
+    wind_unit: str = 'ms',
+    base_temp: float = BASE_TEMPERATURE,
+    include_cumulative: bool = True
 ) -> pd.DataFrame:
     """
     기상 관련 파생 변수를 일괄 추가하는 편의 함수입니다.
-    
+
     Args:
         df: 입력 DataFrame
         include_thi: THI(불쾌지수) 및 humidity 추가 여부
         include_wind_chill: wind_chill(체감온도) 추가 여부
+        include_hdd_cdd: HDD/CDD(난방/냉방 도일) 추가 여부
         temp_col: 기온 컬럼명
         dewpoint_col: 이슬점 컬럼명 (THI 계산용)
         wind_col: 풍속 컬럼명 (wind_chill 계산용)
         wind_unit: 풍속 단위 ('ms' = m/s, 'kmh' = km/h)
-        
+        base_temp: HDD/CDD 기준온도 (기본값: 18°C)
+        include_cumulative: 누적 HDD/CDD 추가 여부
+
     Returns:
         파생 변수가 추가된 DataFrame
-        
+
     Example:
         >>> df = pd.DataFrame({
         ...     'temp_mean': [25.0, 5.0],
         ...     'dewpoint_mean': [20.0, 0.0],
         ...     'wind_speed_mean': [2.0, 8.0]
-        ... })
+        ... }, index=pd.date_range('2024-01-01', periods=2))
         >>> result = add_weather_features(df)
-        >>> list(result.columns)
-        ['temp_mean', 'dewpoint_mean', 'wind_speed_mean', 'humidity', 'THI', 'wind_chill']
+        >>> 'HDD' in result.columns and 'CDD' in result.columns
+        True
     """
     result = df.copy()
-    
+
     # THI 및 humidity 추가 (여름철 냉방 수요 지표)
     if include_thi:
         if dewpoint_col in result.columns:
             result = calculate_humidity_and_thi(
-                result, 
-                temp_col=temp_col, 
+                result,
+                temp_col=temp_col,
                 dewpoint_col=dewpoint_col
             )
         else:
@@ -365,7 +535,7 @@ def add_weather_features(
                 f"'{dewpoint_col}' 컬럼이 없어 THI를 계산할 수 없습니다.",
                 UserWarning
             )
-    
+
     # Wind Chill 추가 (동절기 난방 수요 지표)
     if include_wind_chill:
         if wind_col in result.columns:
@@ -382,7 +552,23 @@ def add_weather_features(
                 f"'{wind_col}' 컬럼이 없어 wind_chill을 계산할 수 없습니다.",
                 UserWarning
             )
-    
+
+    # HDD/CDD 추가 (난방/냉방 도일)
+    if include_hdd_cdd:
+        if temp_col in result.columns:
+            result = calculate_hdd_cdd(
+                result,
+                temp_col=temp_col,
+                base_temp=base_temp,
+                include_cumulative=include_cumulative
+            )
+        else:
+            import warnings
+            warnings.warn(
+                f"'{temp_col}' 컬럼이 없어 HDD/CDD를 계산할 수 없습니다.",
+                UserWarning
+            )
+
     return result
 
 
@@ -393,20 +579,30 @@ def add_weather_features(
 if __name__ == "__main__":
     # 샘플 데이터: 여름/겨울 시나리오
     sample_data = pd.DataFrame({
-        'date': pd.date_range('2024-01-01', periods=6),
         'temp_mean': [30.0, 25.0, 15.0, 5.0, 0.0, -5.0],
         'dewpoint_mean': [25.0, 20.0, 10.0, 0.0, -5.0, -10.0],
         'wind_speed_mean': [2.0, 3.0, 4.0, 5.0, 8.0, 10.0]  # m/s
-    })
-    
+    }, index=pd.date_range('2024-01-01', periods=6, name='datetime'))
+
     result = add_weather_features(sample_data)
-    
+
     print("=" * 70)
-    print("Weather Features Demo")
+    print("Weather Features Demo (FEAT-001 + FEAT-002)")
     print("=" * 70)
-    print("\nInput + Output:")
-    print(result[['date', 'temp_mean', 'wind_speed_mean', 'humidity', 'THI', 'wind_chill']])
-    
-    print("\n해석:")
+
+    print("\n[Input]")
+    print(sample_data)
+
+    print("\n[Output - THI & Wind Chill (FEAT-001)]")
+    print(result[['temp_mean', 'humidity', 'THI', 'wind_chill']].round(2))
+
+    print("\n[Output - HDD & CDD (FEAT-002)]")
+    print(result[['temp_mean', 'HDD', 'CDD', 'HDD_cumsum', 'CDD_cumsum']].round(2))
+
+    print("\n[해석]")
     print("- THI > 75: 여름철 냉방 수요 증가 예상")
     print("- wind_chill < 0: 동절기 난방 수요 증가 예상")
+    print("- HDD > 0: 난방 필요 (기온 < 18°C)")
+    print("- CDD > 0: 냉방 필요 (기온 > 18°C)")
+    print(f"- 누적 HDD: {result['HDD_cumsum'].iloc[-1]:.1f}")
+    print(f"- 누적 CDD: {result['CDD_cumsum'].iloc[-1]:.1f}")
