@@ -273,6 +273,41 @@ python src/training/train_lstm.py
 
 # 다중 시간대 예측 학습 (1h~24h)
 python src/training/train_multi_horizon.py --horizons 1 6 12 24
+
+# Production 모델 학습 (권장)
+python src/training/train_production.py
+```
+
+### Production 모델 추론
+
+```bash
+# CLI로 예측
+python src/inference/predict.py --data data.csv --model conditional
+
+# 배치 예측
+python src/inference/predict.py --data data.csv --model demand_only --batch --output predictions.csv
+```
+
+```python
+# Python에서 사용
+from inference import predict, ProductionPredictor
+
+# 방법 1: 간편 함수
+result = predict(df, model='conditional', mode='soft')
+print(f"Predicted: {result.predicted_demand:.2f} MW")
+
+# 방법 2: ProductionPredictor 클래스
+predictor = ProductionPredictor()
+predictor.load_models()
+
+# 단일 예측
+pred = predictor.predict_demand_only(df)
+
+# Conditional 예측 (겨울철 자동 최적화)
+result = predictor.predict_conditional(df, mode='soft')
+
+# 배치 예측
+batch = predictor.predict_batch(df, model='demand_only', step=24)
 ```
 
 ### Google Colab에서 실행
