@@ -1,0 +1,113 @@
+# ============================================================
+# Docker Ignore File
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/
+
+# Documentation (not needed at runtime)
+docs/
+*.md
+!api/README.md
+
+# Data files (mount at runtime instead)
+data/
+*.csv
+*.xlsx
+*.json
+!requirements*.txt
+
+# Logs (mount at runtime)
+logs/
+*.log
+
+# Results and outputs
+results/
+outputs/
+
+# Large files
+*.pdf
+*.zip
+*.tar.gz
+*.h5
+*.hdf5
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Temporary files
+.temp_downloads/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Claude/AI tools
+.claude/
+.launchd/
+
+# Development files
+agent_harness.py
+commit.sh
+AUTO_COMMIT_README.md
+feature_list.json
+
+# v14 download folder
+v14_download/
+
+# Tools not needed in container
+tools/
+
+# Keep models but exclude training checkpoints
+models/checkpoints/
+models/*.bak
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
