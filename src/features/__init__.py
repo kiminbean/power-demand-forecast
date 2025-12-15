@@ -7,6 +7,7 @@ FEAT-001: THI (불쾌지수) 및 습도 - 여름철 냉방 수요 지표
 FEAT-002: HDD/CDD (난방/냉방 도일) - 에너지 수요 누적 지표
 FEAT-003: 시간 특성 (주기적 인코딩) - 시계열 패턴 학습
 FEAT-004: 태양광 특성 - BTM 태양광 가설 검증
+FEAT-006: 외부 데이터 (인구, 전기차) - 실제 전력 소비자 반영
 """
 
 from .weather_features import (
@@ -86,6 +87,22 @@ from .lag_features import (
     create_weather_lag_features,
 )
 
+from .external_features import (
+    # FEAT-006: 외부 데이터 (인구, 전기차)
+    add_external_features,
+    load_population_data,
+    load_ev_data,
+    add_population_features,
+    add_ev_features,
+    get_external_feature_names,
+    # 피처 그룹
+    POPULATION_FEATURES,
+    POPULATION_DERIVED,
+    EV_FEATURES,
+    EV_DERIVED,
+    EXTERNAL_FEATURES_ALL,
+)
+
 __all__ = [
     # FEAT-001: THI
     'calculate_humidity_and_thi',
@@ -141,4 +158,16 @@ __all__ = [
     'create_pct_change',
     'create_demand_lag_features',
     'create_weather_lag_features',
+    # FEAT-006: 외부 데이터
+    'add_external_features',
+    'load_population_data',
+    'load_ev_data',
+    'add_population_features',
+    'add_ev_features',
+    'get_external_feature_names',
+    'POPULATION_FEATURES',
+    'POPULATION_DERIVED',
+    'EV_FEATURES',
+    'EV_DERIVED',
+    'EXTERNAL_FEATURES_ALL',
 ]
