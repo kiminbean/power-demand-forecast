@@ -428,6 +428,10 @@ class TestConvenienceFunctions:
 
     def test_predict_function_calls_predictor(self):
         """predict 함수가 예측기 호출"""
+        # Import the actual module (not the function)
+        from importlib import import_module
+        predict_module = import_module('inference.predict')
+
         mock_pred = Mock()
         mock_pred.predict_conditional.return_value = PredictionResult(
             timestamp=datetime.now(),
@@ -435,7 +439,7 @@ class TestConvenienceFunctions:
             model_used="conditional_soft"
         )
 
-        with patch('inference.predict.get_predictor', return_value=mock_pred):
+        with patch.object(predict_module, 'get_predictor', return_value=mock_pred):
             result = predict(pd.DataFrame(), model='conditional')
 
             mock_pred.predict_conditional.assert_called_once()
