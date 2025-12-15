@@ -476,6 +476,322 @@ class TestDataLeakagePrevention:
 # 성능 테스트
 # ============================================================
 
+# ============================================================
+# 추가 스케일러 테스트
+# ============================================================
+
+class TestTimeSeriesScalerAdditional:
+    """TimeSeriesScaler 추가 테스트"""
+
+    def test_transform_dataframe(self):
+        """DataFrame transform 테스트"""
+        df = pd.DataFrame({'a': [0, 5, 10], 'b': [0, 50, 100]})
+        scaler = TimeSeriesScaler()
+        scaler.fit(df)
+
+        # DataFrame으로 transform
+        transformed = scaler.transform(df)
+
+        np.testing.assert_array_almost_equal(transformed[0], [0, 0])
+        np.testing.assert_array_almost_equal(transformed[2], [1, 1])
+
+    def test_inverse_transform_without_fit_error(self):
+        """fit 없이 inverse_transform 시 에러"""
+        scaler = TimeSeriesScaler()
+
+        with pytest.raises(ValueError, match="학습되지 않았습니다"):
+            scaler.inverse_transform(np.array([[0.5, 0.5]]))
+
+    def test_inverse_transform_target_without_fit_error(self):
+        """fit 없이 inverse_transform_target 시 에러"""
+        scaler = TimeSeriesScaler()
+
+        with pytest.raises(ValueError, match="학습되지 않았습니다"):
+            scaler.inverse_transform_target(np.array([0.5]), target_idx=0)
+
+    def test_fit_with_nan(self):
+        """NaN이 있는 데이터 fit"""
+        data = np.array([[1, np.nan], [2, 20], [np.nan, 30], [4, 40]])
+        scaler = TimeSeriesScaler()
+        scaler.fit(data)
+
+        # nanmin, nanmax 사용
+        assert scaler.min_vals[0] == 1
+        assert scaler.max_vals[0] == 4
+        assert scaler.min_vals[1] == 20
+        assert scaler.max_vals[1] == 40
+
+    def test_transform_range(self):
+        """변환 결과 범위 확인"""
+        data = np.array([[0, 0], [5, 50], [10, 100]])
+        scaler = TimeSeriesScaler()
+        transformed = scaler.fit_transform(data)
+
+        # 모든 값이 0~1 범위
+        assert transformed.min() >= 0
+        assert transformed.max() <= 1
+
+
+# ============================================================
+# 추가 MultiHorizonDataset 테스트
+# ============================================================
+
+class TestMultiHorizonDatasetAdditional:
+    """MultiHorizonDataset 추가 테스트"""
+
+    def test_default_horizons(self):
+        """기본 horizons 값"""
+        data = np.random.randn(200, 5).astype(np.float32)
+        dataset = MultiHorizonDataset(data, seq_length=48)
+
+        X, y = dataset[0]
+
+        # 기본값 [1, 6, 12, 24] -> 4개의 예측
+        assert y.shape == (4,)
+
+    def test_short_data_error(self):
+        """데이터가 너무 짧을 때 에러"""
+        short_data = np.random.randn(50, 5).astype(np.float32)
+
+        with pytest.raises(ValueError, match="데이터가 너무 짧습니다"):
+            MultiHorizonDataset(short_data, seq_length=48, horizons=[1, 6, 12, 24])
+
+    def test_dataset_length(self):
+        """데이터셋 길이 계산"""
+        data = np.random.randn(100, 5).astype(np.float32)
+        seq_length = 10
+        horizons = [1, 5]
+        max_horizon = 5
+
+        dataset = MultiHorizonDataset(data, seq_length=seq_length, horizons=horizons)
+
+        expected_length = len(data) - seq_length - max_horizon + 1
+        assert len(dataset) == expected_length
+
+    def test_tensor_dtype(self):
+        """텐서 데이터 타입 확인"""
+        data = np.random.randn(100, 5).astype(np.float32)
+        dataset = MultiHorizonDataset(data, seq_length=10, horizons=[1, 3])
+
+        X, y = dataset[0]
+
+        assert X.dtype == torch.float32
+        assert y.dtype == torch.float32
+
+
+# ============================================================
+# 추가 DataLoader 테스트
+# ============================================================
+
+class TestCreateMultiHorizonDataLoadersAdditional:
+    """create_multi_horizon_dataloaders 추가 테스트"""
+
+    def test_default_horizons(self):
+        """기본 horizons 값"""
+        np.random.seed(42)
+        train = np.random.randn(500, 10).astype(np.float32)
+        val = np.random.randn(100, 10).astype(np.float32)
+        test = np.random.randn(100, 10).astype(np.float32)
+
+        # horizons=None으로 호출
+        train_loader, val_loader, test_loader = create_multi_horizon_dataloaders(
+            train, val, test, seq_length=48, horizons=None, batch_size=32
+        )
+
+        for X, y in train_loader:
+            # 기본값 [1, 6, 12, 24]
+            assert y.shape[1] == 4
+            break
+
+    def test_val_test_no_shuffle(self):
+        """Val/Test는 셔플 안함"""
+        np.random.seed(42)
+        train = np.random.randn(200, 10).astype(np.float32)
+        val = np.random.randn(100, 10).astype(np.float32)
+        test = np.random.randn(100, 10).astype(np.float32)
+
+        _, val_loader, test_loader = create_multi_horizon_dataloaders(
+            train, val, test, seq_length=48, horizons=[1], batch_size=32
+        )
+
+        # 첫 번째 배치 두 번 가져와서 비교
+        batch1 = next(iter(val_loader))[0]
+        batch2 = next(iter(val_loader))[0]
+
+        # 셔플 안하므로 동일해야 함
+        np.testing.assert_array_equal(batch1.numpy(), batch2.numpy())
+
+
+# ============================================================
+# 추가 prepare_features 테스트
+# ============================================================
+
+class TestPrepareFeaturesAdditional:
+    """prepare_features 추가 테스트"""
+
+    def test_custom_feature_cols(self):
+        """사용자 지정 특성 컬럼"""
+        df = pd.DataFrame({
+            'power_demand': [100, 200, 300],
+            'temp': [10, 20, 30],
+            'humidity': [50, 60, 70],
+            'wind': [5, 6, 7]
+        })
+
+        data, feature_names, target_idx = prepare_features(
+            df,
+            feature_cols=['power_demand', 'temp']
+        )
+
+        assert feature_names == ['power_demand', 'temp']
+        assert data.shape[1] == 2
+
+    def test_missing_value_handling(self):
+        """결측치 처리"""
+        df = pd.DataFrame({
+            'power_demand': [100, np.nan, 300],
+            'temp': [np.nan, 20, 30]
+        })
+
+        data, _, _ = prepare_features(df)
+
+        # 결측치가 처리되어야 함
+        assert not np.isnan(data).any()
+
+    def test_all_nan_column(self):
+        """전체 NaN 컬럼"""
+        df = pd.DataFrame({
+            'power_demand': [100, 200, 300],
+            'all_nan': [np.nan, np.nan, np.nan]
+        })
+
+        data, _, _ = prepare_features(df)
+
+        # fillna(0)으로 처리됨
+        assert not np.isnan(data).any()
+
+    def test_target_not_in_feature_cols(self):
+        """타겟이 feature_cols에 없는 경우"""
+        df = pd.DataFrame({
+            'power_demand': [100, 200, 300],
+            'temp': [10, 20, 30]
+        })
+
+        data, feature_names, target_idx = prepare_features(
+            df,
+            target_col='power_demand',
+            feature_cols=['temp']  # power_demand 없음
+        )
+
+        # 타겟이 첫 번째로 추가됨
+        assert feature_names[0] == 'power_demand'
+        assert target_idx == 0
+
+    def test_exclude_cols_custom(self):
+        """사용자 지정 제외 컬럼"""
+        df = pd.DataFrame({
+            'power_demand': [100, 200, 300],
+            'temp': [10, 20, 30],
+            'exclude_me': [1, 2, 3]
+        })
+
+        data, feature_names, _ = prepare_features(
+            df,
+            exclude_cols=['exclude_me']
+        )
+
+        assert 'exclude_me' not in feature_names
+
+
+# ============================================================
+# 추가 split_data_by_time 테스트
+# ============================================================
+
+class TestSplitDataByTimeAdditional:
+    """split_data_by_time 추가 테스트"""
+
+    def test_temporal_order_preserved(self):
+        """시간 순서 유지"""
+        dates = pd.date_range('2020-01-01', periods=100, freq='h')
+        df = pd.DataFrame({'value': range(100)}, index=dates)
+
+        train, val, test = split_data_by_time(
+            df,
+            train_end='2020-01-02 23:00:00',
+            val_end='2020-01-03 23:00:00'
+        )
+
+        # 각 분할 내에서 시간 순서 유지
+        assert (train.index == train.index.sort_values()).all()
+        assert (val.index == val.index.sort_values()).all()
+        assert (test.index == test.index.sort_values()).all()
+
+    def test_empty_val_or_test(self):
+        """Val 또는 Test가 비어있는 경우"""
+        dates = pd.date_range('2020-01-01', periods=50, freq='h')
+        df = pd.DataFrame({'value': range(50)}, index=dates)
+
+        # val_end를 데이터 끝으로 설정
+        train, val, test = split_data_by_time(
+            df,
+            train_end='2020-01-01 23:00:00',
+            val_end='2020-01-02 23:00:00'
+        )
+
+        # 모든 분할이 DataFrame
+        assert isinstance(train, pd.DataFrame)
+        assert isinstance(val, pd.DataFrame)
+        assert isinstance(test, pd.DataFrame)
+
+
+# ============================================================
+# 추가 TimeSeriesDataset 테스트
+# ============================================================
+
+class TestTimeSeriesDatasetAdditional:
+    """TimeSeriesDataset 추가 테스트"""
+
+    def test_different_target_idx(self):
+        """다른 타겟 인덱스"""
+        data = np.arange(30).reshape(10, 3).astype(np.float32)
+        # [[0,1,2], [3,4,5], [6,7,8], ...]
+
+        dataset = TimeSeriesDataset(data, target_idx=1, seq_length=3, horizon=1)
+
+        X, y = dataset[0]
+
+        # target_idx=1이므로 y는 data[3, 1] = 10
+        # (row 3 = [9, 10, 11], column 1 = 10)
+        assert y.item() == 10
+
+    def test_last_valid_sample(self):
+        """마지막 유효 샘플 접근"""
+        data = np.arange(20).reshape(10, 2).astype(np.float32)
+
+        dataset = TimeSeriesDataset(data, seq_length=3, horizon=1)
+
+        # 마지막 샘플 접근
+        last_idx = len(dataset) - 1
+        X, y = dataset[last_idx]
+
+        assert X.shape == (3, 2)
+        assert y.shape == (1,)
+
+    def test_boundary_conditions(self):
+        """경계 조건 테스트"""
+        # 최소 크기 데이터
+        data = np.arange(10).reshape(5, 2).astype(np.float32)
+
+        dataset = TimeSeriesDataset(data, seq_length=3, horizon=1)
+
+        # n_samples = 5 - 3 - 1 + 1 = 2
+        assert len(dataset) == 2
+
+
+# ============================================================
+# 성능 테스트
+# ============================================================
+
 class TestPerformance:
     """성능 테스트"""
 
