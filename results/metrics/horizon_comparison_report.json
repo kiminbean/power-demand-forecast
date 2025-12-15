@@ -1,0 +1,56 @@
+{
+  "experiment": "EVAL-003",
+  "description": "Horizon Comparison Experiment",
+  "timestamp": "2025-12-15T15:25:56.765780",
+  "config": {
+    "n_trials": 5,
+    "epochs": 50,
+    "horizons": [
+      1,
+      24,
+      48,
+      168
+    ],
+    "sequence_length": 168,
+    "hidden_size": 64
+  },
+  "improvements": [
+    {
+      "horizon": 1,
+      "demand_only_MAPE": 4.992055669426918,
+      "weather_full_MAPE": 5.351153463125229,
+      "MAPE_improvement_%": -7.193385199959816,
+      "demand_only_R2": 0.906169293820858,
+      "weather_full_R2": 0.8947259888052941,
+      "R2_improvement_%": -1.2628219796891664
+    },
+    {
+      "horizon": 24,
+      "demand_only_MAPE": 10.340761542320251,
+      "weather_full_MAPE": 10.626524090766907,
+      "MAPE_improvement_%": -2.7634574811260575,
+      "demand_only_R2": 0.6353992402553559,
+      "weather_full_R2": 0.6143260180950165,
+      "R2_improvement_%": -3.3165324767889857
+    },
+    {
+      "horizon": 48,
+      "demand_only_MAPE": 11.379388272762299,
+      "weather_full_MAPE": 11.4621202647686,
+      "MAPE_improvement_%": -0.7270337387496405,
+      "demand_only_R2": 0.5713086307048798,
+      "weather_full_R2": 0.5641274750232697,
+      "R2_improvement_%": -1.2569660767683577
+    },
+    {
+      "horizon": 168,
+      "demand_only_MAPE": 12.632826268672943,
+      "weather_full_MAPE": 12.621149122714996,
+      "MAPE_improvement_%": 0.09243494456109101,
+      "demand_only_R2": 0.4482913017272949,
+      "weather_full_R2": 0.42456347942352296,
+      "R2_improvement_%": -5.292947289485019
+    }
+  ],
+  "hypothesis_validated": true
+}

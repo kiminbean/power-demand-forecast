@@ -1,0 +1,15 @@
+{
+  "analysis": "Inflection Point Analysis",
+  "timestamp": "2025-12-15T20:41:12.243947",
+  "config": {
+    "n_trials": 5,
+    "epochs": 50,
+    "percentile": 95,
+    "horizon": 1
+  },
+  "summary": {
+    "inflection_improvement_%": -4.600832238793373,
+    "normal_improvement_%": -3.713151067495346,
+    "weather_helps_at_inflection": false
+  }
+}

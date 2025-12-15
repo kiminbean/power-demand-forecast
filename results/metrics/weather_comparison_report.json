@@ -1,0 +1,113 @@
+{
+  "experiment": "EVAL-002",
+  "description": "Weather Variable Comparison",
+  "timestamp": "2025-12-14T22:40:01.957287",
+  "config": {
+    "n_trials": 10,
+    "epochs": 50,
+    "sequence_length": 48,
+    "hidden_size": 64,
+    "horizon": 1
+  },
+  "summary": {
+    "MAPE_mean": {
+      "demand_only": 4.9973,
+      "weather_basic": 5.1951,
+      "weather_full": 5.1765
+    },
+    "MAPE_std": {
+      "demand_only": 0.4373,
+      "weather_basic": 0.7532,
+      "weather_full": 0.5168
+    },
+    "MAPE_min": {
+      "demand_only": 4.1665,
+      "weather_basic": 4.2372,
+      "weather_full": 4.3322
+    },
+    "MAPE_max": {
+      "demand_only": 5.623,
+      "weather_basic": 6.7061,
+      "weather_full": 6.2251
+    },
+    "R2_mean": {
+      "demand_only": 0.9061,
+      "weather_basic": 0.8944,
+      "weather_full": 0.8998
+    },
+    "R2_std": {
+      "demand_only": 0.0194,
+      "weather_basic": 0.0398,
+      "weather_full": 0.0189
+    },
+    "R2_min": {
+      "demand_only": 0.8725,
+      "weather_basic": 0.8075,
+      "weather_full": 0.8668
+    },
+    "R2_max": {
+      "demand_only": 0.9388,
+      "weather_basic": 0.9381,
+      "weather_full": 0.9312
+    },
+    "RMSE_mean": {
+      "demand_only": 31.460100173950195,
+      "weather_basic": 33.02899932861328,
+      "weather_full": 32.51300048828125
+    },
+    "RMSE_std": {
+      "demand_only": 3.315700054168701,
+      "weather_basic": 5.996500015258789,
+      "weather_full": 3.12719988822937
+    },
+    "RMSE_min": {
+      "demand_only": 25.51129913330078,
+      "weather_basic": 25.67060089111328,
+      "weather_full": 27.052000045776367
+    },
+    "RMSE_max": {
+      "demand_only": 36.83110046386719,
+      "weather_basic": 45.263301849365234,
+      "weather_full": 37.64670181274414
+    },
+    "MAE_mean": {
+      "demand_only": 24.464000701904297,
+      "weather_basic": 25.731700897216797,
+      "weather_full": 25.433700561523438
+    },
+    "MAE_std": {
+      "demand_only": 2.6317999362945557,
+      "weather_basic": 4.551300048828125,
+      "weather_full": 2.559799909591675
+    },
+    "MAE_min": {
+      "demand_only": 19.561599731445312,
+      "weather_basic": 19.81089973449707,
+      "weather_full": 20.90719985961914
+    },
+    "MAE_max": {
+      "demand_only": 28.729999542236328,
+      "weather_basic": 34.612998962402344,
+      "weather_full": 29.808399200439453
+    },
+    "n_features_first": {
+      "demand_only": 17,
+      "weather_basic": 23,
+      "weather_full": 51
+    }
+  },
+  "groups": {
+    "demand_only": {
+      "description": "전력수요 + 시간특성만",
+      "n_features": 16
+    },
+    "weather_basic": {
+      "description": "+ 기온, 지중온도",
+      "n_features": 22
+    },
+    "weather_full": {
+      "description": "+ 전체 기상변수",
+      "n_features": 50
+    }
+  }
+}
