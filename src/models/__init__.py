@@ -7,6 +7,7 @@ MODEL-002: Vanilla RNN (pending)
 MODEL-003: LSTM
 MODEL-004: BiLSTM
 MODEL-005: Multi-horizon LSTM
+MODEL-006: Conditional Predictor (겨울철 변곡점 특화)
 """
 
 from .lstm import (
@@ -20,6 +21,17 @@ from .lstm import (
     model_summary,
 )
 
+from .conditional import (
+    # 조건부 모델
+    Season,
+    PredictionContext,
+    SeasonClassifier,
+    InflectionDetector,
+    ConditionalPredictor,
+    AdaptiveConditionalPredictor,
+    create_conditional_predictor,
+)
+
 __all__ = [
     # MODEL-003: LSTM
     'LSTMModel',
@@ -27,4 +39,12 @@ __all__ = [
     'ResidualLSTM',
     'create_model',
     'model_summary',
+    # MODEL-006: Conditional
+    'Season',
+    'PredictionContext',
+    'SeasonClassifier',
+    'InflectionDetector',
+    'ConditionalPredictor',
+    'AdaptiveConditionalPredictor',
+    'create_conditional_predictor',
 ]
