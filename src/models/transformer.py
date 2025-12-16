@@ -944,6 +944,582 @@ class StaticEnrichmentLayer(nn.Module):
 
 
 # ============================================================
+# LSTM Encoder
+# ============================================================
+
+class LSTMEncoder(nn.Module):
+    """
+    LSTM Encoder for Past Sequence Processing
+
+    과거 시퀀스(encoder_length)를 처리하여 hidden state를 생성합니다.
+    Static context를 사용하여 초기 hidden state를 설정합니다.
+
+    Args:
+        input_size: 입력 특성 차원
+        hidden_size: LSTM hidden 차원
+        num_layers: LSTM 레이어 수
+        dropout: Dropout 비율
+
+    Example:
+        >>> encoder = LSTMEncoder(input_size=64, hidden_size=64, num_layers=2)
+        >>> x = torch.randn(32, 48, 64)  # (batch, encoder_len, features)
+        >>> init_state = (torch.randn(2, 32, 64), torch.randn(2, 32, 64))
+        >>> output, (h_n, c_n) = encoder(x, init_state)
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        dropout: float = 0.0
+    ):
+        super().__init__()
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        init_state: Tuple[torch.Tensor, torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        순전파
+
+        Args:
+            x: 입력 시퀀스 (batch, seq_len, input_size)
+            init_state: 초기 상태 (h_0, c_0), 각각 (num_layers, batch, hidden_size)
+
+        Returns:
+            output: 모든 시점의 출력 (batch, seq_len, hidden_size)
+            (h_n, c_n): 마지막 hidden state
+        """
+        output, (h_n, c_n) = self.lstm(x, init_state)
+        return output, (h_n, c_n)
+
+
+# ============================================================
+# LSTM Decoder
+# ============================================================
+
+class LSTMDecoder(nn.Module):
+    """
+    LSTM Decoder for Future Sequence Processing
+
+    미래 시퀀스(decoder_length)를 처리합니다.
+    Encoder의 마지막 hidden state로 초기화됩니다.
+
+    Args:
+        input_size: 입력 특성 차원 (known future features)
+        hidden_size: LSTM hidden 차원
+        num_layers: LSTM 레이어 수
+        dropout: Dropout 비율
+
+    Example:
+        >>> decoder = LSTMDecoder(input_size=64, hidden_size=64, num_layers=2)
+        >>> x = torch.randn(32, 24, 64)  # (batch, decoder_len, features)
+        >>> encoder_state = (torch.randn(2, 32, 64), torch.randn(2, 32, 64))
+        >>> output, (h_n, c_n) = decoder(x, encoder_state)
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        dropout: float = 0.0
+    ):
+        super().__init__()
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        encoder_state: Tuple[torch.Tensor, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        순전파
+
+        Args:
+            x: Known future 입력 시퀀스 (batch, decoder_len, input_size)
+            encoder_state: Encoder의 마지막 상태 (h_n, c_n)
+
+        Returns:
+            output: 모든 시점의 출력 (batch, decoder_len, hidden_size)
+            (h_n, c_n): 마지막 hidden state
+        """
+        output, (h_n, c_n) = self.lstm(x, encoder_state)
+        return output, (h_n, c_n)
+
+
+# ============================================================
+# Temporal Fusion Transformer (Full Model)
+# ============================================================
+
+class TemporalFusionTransformer(nn.Module):
+    """
+    Temporal Fusion Transformer (TFT)
+
+    Google의 TFT 논문을 기반으로 한 시계열 예측 모델입니다.
+    다중 시간대 예측과 해석 가능성을 제공합니다.
+
+    Architecture:
+        1. Input Embeddings (Static, Known, Unknown)
+        2. Variable Selection Networks
+        3. LSTM Encoder-Decoder
+        4. Static Enrichment
+        5. Temporal Self-Attention
+        6. Position-wise Feed-Forward
+        7. Quantile Outputs
+
+    Args:
+        num_static_vars: 정적 변수 개수 (0이면 없음)
+        num_known_vars: Known future 변수 개수
+        num_unknown_vars: Unknown 변수 개수 (과거에만 사용)
+        hidden_size: 모델 hidden 차원
+        lstm_layers: LSTM 레이어 수
+        num_attention_heads: Attention head 수
+        dropout: Dropout 비율
+        encoder_length: Encoder 시퀀스 길이 (과거)
+        decoder_length: Decoder 시퀀스 길이 (미래 예측)
+        quantiles: 예측할 분위수 리스트
+
+    Example:
+        >>> model = TemporalFusionTransformer(
+        ...     num_static_vars=0,
+        ...     num_known_vars=8,
+        ...     num_unknown_vars=25,
+        ...     hidden_size=64,
+        ...     encoder_length=48,
+        ...     decoder_length=24
+        ... )
+        >>> # known: (batch, encoder_len + decoder_len, num_known, 1)
+        >>> # unknown: (batch, encoder_len, num_unknown, 1)
+        >>> known = torch.randn(32, 72, 8, 1)
+        >>> unknown = torch.randn(32, 48, 25, 1)
+        >>> output = model(known_inputs=known, unknown_inputs=unknown)
+        >>> print(output['predictions'].shape)  # (32, 24, 3) for 3 quantiles
+    """
+
+    def __init__(
+        self,
+        num_static_vars: int = 0,
+        num_known_vars: int = 8,
+        num_unknown_vars: int = 25,
+        hidden_size: int = 64,
+        lstm_layers: int = 2,
+        num_attention_heads: int = 4,
+        dropout: float = 0.1,
+        encoder_length: int = 48,
+        decoder_length: int = 24,
+        quantiles: List[float] = None
+    ):
+        super().__init__()
+
+        self.num_static_vars = num_static_vars
+        self.num_known_vars = num_known_vars
+        self.num_unknown_vars = num_unknown_vars
+        self.hidden_size = hidden_size
+        self.lstm_layers = lstm_layers
+        self.num_attention_heads = num_attention_heads
+        self.encoder_length = encoder_length
+        self.decoder_length = decoder_length
+        self.quantiles = quantiles if quantiles is not None else [0.1, 0.5, 0.9]
+        self.num_quantiles = len(self.quantiles)
+
+        # ============================================================
+        # 1. Input Embeddings (Linear projections to hidden_size)
+        # ============================================================
+
+        # Static variable embeddings (if any)
+        if num_static_vars > 0:
+            self.static_encoder = StaticCovariateEncoder(
+                input_size=1,
+                num_static_vars=num_static_vars,
+                hidden_size=hidden_size,
+                dropout=dropout
+            )
+        else:
+            self.static_encoder = None
+
+        # ============================================================
+        # 2. Variable Selection Networks
+        # ============================================================
+
+        # Temporal variable selection
+        self.temporal_vsn = TemporalVariableSelection(
+            input_sizes={'known': 1, 'unknown': 1},
+            num_inputs={'known': num_known_vars, 'unknown': num_unknown_vars},
+            hidden_size=hidden_size,
+            dropout=dropout,
+            context_size=hidden_size if num_static_vars > 0 else None
+        )
+
+        # ============================================================
+        # 3. LSTM Encoder-Decoder
+        # ============================================================
+
+        # Encoder (processes past: known + unknown combined)
+        self.lstm_encoder = LSTMEncoder(
+            input_size=hidden_size,  # After VSN, features are hidden_size
+            hidden_size=hidden_size,
+            num_layers=lstm_layers,
+            dropout=dropout
+        )
+
+        # Decoder (processes future: known only)
+        self.lstm_decoder = LSTMDecoder(
+            input_size=hidden_size,  # After VSN
+            hidden_size=hidden_size,
+            num_layers=lstm_layers,
+            dropout=dropout
+        )
+
+        # GRN for LSTM output processing
+        self.post_lstm_grn = GatedResidualNetwork(
+            input_size=hidden_size,
+            hidden_size=hidden_size,
+            dropout=dropout
+        )
+
+        # ============================================================
+        # 4. Static Enrichment
+        # ============================================================
+
+        self.static_enrichment = StaticEnrichmentLayer(
+            d_model=hidden_size,
+            dropout=dropout
+        )
+
+        # ============================================================
+        # 5. Temporal Self-Attention
+        # ============================================================
+
+        self.temporal_attention = TemporalSelfAttention(
+            d_model=hidden_size,
+            num_heads=num_attention_heads,
+            dropout=dropout,
+            use_positional_encoding=True
+        )
+
+        # ============================================================
+        # 6. Position-wise Feed-Forward (GRN)
+        # ============================================================
+
+        self.position_wise_grn = GatedResidualNetwork(
+            input_size=hidden_size,
+            hidden_size=hidden_size,
+            dropout=dropout
+        )
+
+        # ============================================================
+        # 7. Output Layer (Quantile predictions)
+        # ============================================================
+
+        self.output_layer = nn.Linear(hidden_size, self.num_quantiles)
+
+        # Initialize weights
+        self._init_weights()
+
+    def _init_weights(self):
+        """가중치 초기화"""
+        for name, param in self.named_parameters():
+            if 'weight' in name and param.dim() >= 2:
+                nn.init.xavier_uniform_(param)
+            elif 'bias' in name:
+                nn.init.zeros_(param)
+
+    def _get_static_context(
+        self,
+        static_inputs: torch.Tensor = None
+    ) -> Dict[str, torch.Tensor]:
+        """정적 컨텍스트 생성"""
+        if self.static_encoder is not None and static_inputs is not None:
+            contexts, static_weights = self.static_encoder(static_inputs)
+            return contexts, static_weights
+        else:
+            return None, None
+
+    def _get_lstm_init_state(
+        self,
+        batch_size: int,
+        device: torch.device,
+        static_context: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """LSTM 초기 상태 생성"""
+        if static_context is not None:
+            # Use static context for initialization
+            # Expand to (num_layers, batch, hidden)
+            h_0 = static_context.unsqueeze(0).expand(
+                self.lstm_layers, -1, -1
+            ).contiguous()
+            c_0 = torch.zeros_like(h_0)
+            return (h_0, c_0)
+        else:
+            # Zero initialization
+            h_0 = torch.zeros(
+                self.lstm_layers, batch_size, self.hidden_size,
+                device=device
+            )
+            c_0 = torch.zeros_like(h_0)
+            return (h_0, c_0)
+
+    def forward(
+        self,
+        known_inputs: torch.Tensor,
+        unknown_inputs: torch.Tensor,
+        static_inputs: torch.Tensor = None,
+        return_attention: bool = False
+    ) -> Dict[str, torch.Tensor]:
+        """
+        순전파
+
+        Args:
+            known_inputs: Known future 변수
+                Shape: (batch, encoder_length + decoder_length, num_known_vars, 1)
+            unknown_inputs: Unknown 변수 (과거만)
+                Shape: (batch, encoder_length, num_unknown_vars, 1)
+            static_inputs: 정적 변수 (옵션)
+                Shape: (batch, num_static_vars, 1)
+            return_attention: Attention 가중치 반환 여부
+
+        Returns:
+            dict containing:
+                - 'predictions': 예측값 (batch, decoder_length, num_quantiles)
+                - 'attention_weights': Attention 가중치 (optional)
+                - 'variable_weights': 변수 선택 가중치 (optional)
+        """
+        batch_size = known_inputs.size(0)
+        device = known_inputs.device
+
+        # ============================================================
+        # 1. Static Context
+        # ============================================================
+
+        static_contexts, static_weights = self._get_static_context(static_inputs)
+        selection_context = static_contexts['selection'] if static_contexts else None
+        encoder_context = static_contexts['encoder'] if static_contexts else None
+        enrichment_context = static_contexts['enrichment'] if static_contexts else None
+
+        # ============================================================
+        # 2. Variable Selection
+        # ============================================================
+
+        # Split known inputs into encoder and decoder parts
+        known_encoder = known_inputs[:, :self.encoder_length, :, :]
+        known_decoder = known_inputs[:, self.encoder_length:, :, :]
+
+        # Encoder period: known + unknown
+        encoder_vsn_outputs, encoder_vsn_weights = self.temporal_vsn(
+            known_inputs=known_encoder,
+            unknown_inputs=unknown_inputs,
+            context=selection_context
+        )
+
+        # Combine known and unknown for encoder
+        # Both are (batch, encoder_length, hidden_size)
+        encoder_features = encoder_vsn_outputs['known'] + encoder_vsn_outputs['unknown']
+
+        # Decoder period: known only
+        decoder_vsn_outputs, decoder_vsn_weights = self.temporal_vsn(
+            known_inputs=known_decoder,
+            unknown_inputs=None,
+            context=selection_context
+        )
+        decoder_features = decoder_vsn_outputs['known']
+
+        # ============================================================
+        # 3. LSTM Encoder-Decoder
+        # ============================================================
+
+        # Initialize LSTM state
+        init_state = self._get_lstm_init_state(
+            batch_size, device, encoder_context
+        )
+
+        # Encode past sequence
+        encoder_output, encoder_state = self.lstm_encoder(
+            encoder_features, init_state
+        )
+
+        # Decode future sequence
+        decoder_output, _ = self.lstm_decoder(
+            decoder_features, encoder_state
+        )
+
+        # Concatenate encoder and decoder outputs
+        # Shape: (batch, encoder_length + decoder_length, hidden_size)
+        lstm_output = torch.cat([encoder_output, decoder_output], dim=1)
+
+        # Post-LSTM GRN
+        lstm_output = self.post_lstm_grn(lstm_output)
+
+        # ============================================================
+        # 4. Static Enrichment
+        # ============================================================
+
+        if enrichment_context is not None:
+            enriched = self.static_enrichment(lstm_output, enrichment_context)
+        else:
+            # Use zero context if no static variables
+            zero_context = torch.zeros(batch_size, self.hidden_size, device=device)
+            enriched = self.static_enrichment(lstm_output, zero_context)
+
+        # ============================================================
+        # 5. Temporal Self-Attention
+        # ============================================================
+
+        # Generate mask for encoder-decoder
+        total_length = self.encoder_length + self.decoder_length
+        mask = generate_encoder_decoder_mask(
+            self.encoder_length,
+            self.decoder_length,
+            device=device
+        )
+
+        attention_output, attention_weights = self.temporal_attention(
+            enriched, mask=mask, return_attention=True
+        )
+
+        # ============================================================
+        # 6. Position-wise Feed-Forward
+        # ============================================================
+
+        output = self.position_wise_grn(attention_output)
+
+        # Add residual from attention
+        output = output + attention_output
+
+        # ============================================================
+        # 7. Output Layer (Decoder part only)
+        # ============================================================
+
+        # Take only decoder outputs
+        decoder_output_final = output[:, self.encoder_length:, :]
+
+        # Project to quantiles
+        predictions = self.output_layer(decoder_output_final)
+
+        # ============================================================
+        # Build output dictionary
+        # ============================================================
+
+        result = {
+            'predictions': predictions,  # (batch, decoder_length, num_quantiles)
+        }
+
+        if return_attention:
+            result['attention_weights'] = attention_weights
+            result['encoder_variable_weights'] = encoder_vsn_weights
+            result['decoder_variable_weights'] = decoder_vsn_weights
+            if static_weights is not None:
+                result['static_variable_weights'] = static_weights
+
+        return result
+
+    def get_attention_weights(
+        self,
+        known_inputs: torch.Tensor,
+        unknown_inputs: torch.Tensor,
+        static_inputs: torch.Tensor = None
+    ) -> torch.Tensor:
+        """Attention 가중치만 추출"""
+        result = self.forward(
+            known_inputs, unknown_inputs, static_inputs,
+            return_attention=True
+        )
+        return result['attention_weights']
+
+
+# ============================================================
+# Quantile Loss
+# ============================================================
+
+class QuantileLoss(nn.Module):
+    """
+    Quantile Loss (Pinball Loss)
+
+    분위수 회귀를 위한 손실 함수입니다.
+
+    L_q(y, ŷ) = q * max(y - ŷ, 0) + (1-q) * max(ŷ - y, 0)
+
+    Args:
+        quantiles: 예측할 분위수 리스트
+
+    Example:
+        >>> loss_fn = QuantileLoss(quantiles=[0.1, 0.5, 0.9])
+        >>> predictions = torch.randn(32, 24, 3)  # 3 quantiles
+        >>> targets = torch.randn(32, 24)
+        >>> loss = loss_fn(predictions, targets)
+    """
+
+    def __init__(self, quantiles: List[float] = None):
+        super().__init__()
+        self.quantiles = quantiles if quantiles is not None else [0.1, 0.5, 0.9]
+        self.register_buffer(
+            'quantile_tensor',
+            torch.tensor(self.quantiles, dtype=torch.float32)
+        )
+
+    def forward(
+        self,
+        predictions: torch.Tensor,
+        targets: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        순전파
+
+        Args:
+            predictions: 예측값 (batch, seq_len, num_quantiles)
+            targets: 실제값 (batch, seq_len) or (batch, seq_len, 1)
+
+        Returns:
+            loss: 평균 Quantile Loss
+        """
+        if targets.dim() == 2:
+            targets = targets.unsqueeze(-1)  # (batch, seq_len, 1)
+
+        # Expand targets to match predictions
+        # (batch, seq_len, num_quantiles)
+        targets = targets.expand_as(predictions)
+
+        # Compute errors
+        errors = targets - predictions
+
+        # Quantile loss for each quantile
+        # quantile_tensor shape: (num_quantiles,)
+        quantiles = self.quantile_tensor.view(1, 1, -1)
+
+        losses = torch.max(
+            (quantiles - 1) * errors,
+            quantiles * errors
+        )
+
+        return losses.mean()
+
+
+# ============================================================
 # 테스트 및 검증 함수
 # ============================================================
 
@@ -1216,6 +1792,212 @@ def test_static_enrichment():
     return True
 
 
+def test_lstm_encoder():
+    """LSTM Encoder 테스트"""
+    print("Testing LSTM Encoder...")
+
+    batch_size, seq_len, input_size = 32, 48, 64
+    hidden_size = 64
+    num_layers = 2
+
+    encoder = LSTMEncoder(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        num_layers=num_layers
+    )
+
+    x = torch.randn(batch_size, seq_len, input_size)
+    output, (h_n, c_n) = encoder(x)
+
+    assert output.shape == (batch_size, seq_len, hidden_size), \
+        f"Expected {(batch_size, seq_len, hidden_size)}, got {output.shape}"
+    assert h_n.shape == (num_layers, batch_size, hidden_size)
+    assert c_n.shape == (num_layers, batch_size, hidden_size)
+    print(f"  Input: {x.shape} -> Output: {output.shape}, h_n: {h_n.shape}")
+
+    # With initial state
+    h_0 = torch.randn(num_layers, batch_size, hidden_size)
+    c_0 = torch.randn(num_layers, batch_size, hidden_size)
+    output2, _ = encoder(x, (h_0, c_0))
+    assert output2.shape == output.shape
+    print(f"  With init state: Output: {output2.shape}")
+
+    print("  LSTM Encoder tests passed!")
+    return True
+
+
+def test_lstm_decoder():
+    """LSTM Decoder 테스트"""
+    print("Testing LSTM Decoder...")
+
+    batch_size, seq_len, input_size = 32, 24, 64
+    hidden_size = 64
+    num_layers = 2
+
+    decoder = LSTMDecoder(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        num_layers=num_layers
+    )
+
+    x = torch.randn(batch_size, seq_len, input_size)
+    encoder_state = (
+        torch.randn(num_layers, batch_size, hidden_size),
+        torch.randn(num_layers, batch_size, hidden_size)
+    )
+
+    output, (h_n, c_n) = decoder(x, encoder_state)
+
+    assert output.shape == (batch_size, seq_len, hidden_size), \
+        f"Expected {(batch_size, seq_len, hidden_size)}, got {output.shape}"
+    assert h_n.shape == (num_layers, batch_size, hidden_size)
+    print(f"  Input: {x.shape} -> Output: {output.shape}")
+
+    print("  LSTM Decoder tests passed!")
+    return True
+
+
+def test_temporal_fusion_transformer():
+    """Temporal Fusion Transformer 전체 모델 테스트"""
+    print("Testing Temporal Fusion Transformer...")
+
+    batch_size = 32
+    encoder_length = 48
+    decoder_length = 24
+    num_known_vars = 8
+    num_unknown_vars = 25
+    hidden_size = 64
+    num_quantiles = 3
+
+    model = TemporalFusionTransformer(
+        num_static_vars=0,
+        num_known_vars=num_known_vars,
+        num_unknown_vars=num_unknown_vars,
+        hidden_size=hidden_size,
+        encoder_length=encoder_length,
+        decoder_length=decoder_length
+    )
+
+    # Create inputs
+    known_inputs = torch.randn(
+        batch_size,
+        encoder_length + decoder_length,
+        num_known_vars,
+        1
+    )
+    unknown_inputs = torch.randn(
+        batch_size,
+        encoder_length,
+        num_unknown_vars,
+        1
+    )
+
+    # Forward pass
+    result = model(known_inputs=known_inputs, unknown_inputs=unknown_inputs)
+
+    assert 'predictions' in result
+    assert result['predictions'].shape == (batch_size, decoder_length, num_quantiles), \
+        f"Expected {(batch_size, decoder_length, num_quantiles)}, got {result['predictions'].shape}"
+    print(f"  Predictions shape: {result['predictions'].shape}")
+
+    # With attention weights
+    result_attn = model(
+        known_inputs=known_inputs,
+        unknown_inputs=unknown_inputs,
+        return_attention=True
+    )
+    assert 'attention_weights' in result_attn
+    total_len = encoder_length + decoder_length
+    assert result_attn['attention_weights'].shape == (batch_size, total_len, total_len)
+    print(f"  Attention weights shape: {result_attn['attention_weights'].shape}")
+
+    # Count parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"  Total parameters: {total_params:,}")
+    print(f"  Trainable parameters: {trainable_params:,}")
+
+    print("  Temporal Fusion Transformer tests passed!")
+    return True
+
+
+def test_tft_with_static():
+    """정적 변수가 있는 TFT 테스트"""
+    print("Testing TFT with static variables...")
+
+    batch_size = 32
+    encoder_length = 48
+    decoder_length = 24
+    num_static_vars = 5
+    num_known_vars = 8
+    num_unknown_vars = 25
+
+    model = TemporalFusionTransformer(
+        num_static_vars=num_static_vars,
+        num_known_vars=num_known_vars,
+        num_unknown_vars=num_unknown_vars,
+        hidden_size=64,
+        encoder_length=encoder_length,
+        decoder_length=decoder_length
+    )
+
+    known_inputs = torch.randn(batch_size, encoder_length + decoder_length, num_known_vars, 1)
+    unknown_inputs = torch.randn(batch_size, encoder_length, num_unknown_vars, 1)
+    static_inputs = torch.randn(batch_size, num_static_vars, 1)
+
+    result = model(
+        known_inputs=known_inputs,
+        unknown_inputs=unknown_inputs,
+        static_inputs=static_inputs,
+        return_attention=True
+    )
+
+    assert result['predictions'].shape == (batch_size, decoder_length, 3)
+    assert 'static_variable_weights' in result
+    assert result['static_variable_weights'].shape == (batch_size, num_static_vars)
+    print(f"  With static vars: predictions {result['predictions'].shape}")
+    print(f"  Static weights: {result['static_variable_weights'].shape}")
+
+    print("  TFT with static variables tests passed!")
+    return True
+
+
+def test_quantile_loss():
+    """Quantile Loss 테스트"""
+    print("Testing Quantile Loss...")
+
+    batch_size, seq_len = 32, 24
+    num_quantiles = 3
+    quantiles = [0.1, 0.5, 0.9]
+
+    loss_fn = QuantileLoss(quantiles=quantiles)
+
+    predictions = torch.randn(batch_size, seq_len, num_quantiles)
+    targets = torch.randn(batch_size, seq_len)
+
+    loss = loss_fn(predictions, targets)
+
+    assert loss.dim() == 0, "Loss should be scalar"
+    assert loss >= 0, "Loss should be non-negative"
+    print(f"  Loss value: {loss.item():.4f}")
+
+    # Test with 3D targets
+    targets_3d = targets.unsqueeze(-1)
+    loss_3d = loss_fn(predictions, targets_3d)
+    assert loss_3d.dim() == 0
+    print(f"  Loss with 3D targets: {loss_3d.item():.4f}")
+
+    # Test gradient flow
+    predictions_grad = predictions.clone().requires_grad_(True)
+    loss_grad = loss_fn(predictions_grad, targets)
+    loss_grad.backward()
+    assert predictions_grad.grad is not None
+    print("  Gradient flow: OK")
+
+    print("  Quantile Loss tests passed!")
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("TFT Components Test Suite")
@@ -1239,6 +2021,18 @@ if __name__ == "__main__":
     test_causal_mask()
     print()
     test_static_enrichment()
+    print()
+
+    # Subtask 1.4 tests
+    test_lstm_encoder()
+    print()
+    test_lstm_decoder()
+    print()
+    test_temporal_fusion_transformer()
+    print()
+    test_tft_with_static()
+    print()
+    test_quantile_loss()
 
     print()
     print("=" * 60)

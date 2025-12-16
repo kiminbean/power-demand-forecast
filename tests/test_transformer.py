@@ -27,6 +27,10 @@ from models.transformer import (
     StaticEnrichmentLayer,
     generate_causal_mask,
     generate_encoder_decoder_mask,
+    LSTMEncoder,
+    LSTMDecoder,
+    TemporalFusionTransformer,
+    QuantileLoss,
 )
 
 
@@ -1100,3 +1104,355 @@ class TestAttentionIntegration:
             for j in range(decoder_len):
                 if j > i:
                     assert decoder_mask[i, j] == True
+
+
+# ============================================================
+# LSTM Encoder 테스트
+# ============================================================
+
+class TestLSTMEncoder:
+    """LSTM Encoder 테스트"""
+
+    def test_encoder_creation(self, batch_config):
+        """Encoder 생성 테스트"""
+        encoder = LSTMEncoder(
+            input_size=batch_config['hidden_size'],
+            hidden_size=batch_config['hidden_size'],
+            num_layers=2
+        )
+        assert encoder is not None
+
+    def test_encoder_forward(self, batch_config):
+        """순전파 테스트"""
+        encoder = LSTMEncoder(
+            input_size=batch_config['hidden_size'],
+            hidden_size=batch_config['hidden_size'],
+            num_layers=2
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        output, (h_n, c_n) = encoder(x)
+
+        assert output.shape == x.shape
+        assert h_n.shape == (2, batch_config['batch_size'], batch_config['hidden_size'])
+        assert c_n.shape == (2, batch_config['batch_size'], batch_config['hidden_size'])
+
+    def test_encoder_with_init_state(self, batch_config):
+        """초기 상태와 함께 테스트"""
+        num_layers = 2
+        encoder = LSTMEncoder(
+            input_size=batch_config['hidden_size'],
+            hidden_size=batch_config['hidden_size'],
+            num_layers=num_layers
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        h_0 = torch.randn(num_layers, batch_config['batch_size'], batch_config['hidden_size'])
+        c_0 = torch.randn(num_layers, batch_config['batch_size'], batch_config['hidden_size'])
+
+        output, _ = encoder(x, (h_0, c_0))
+
+        assert output.shape == x.shape
+
+
+# ============================================================
+# LSTM Decoder 테스트
+# ============================================================
+
+class TestLSTMDecoder:
+    """LSTM Decoder 테스트"""
+
+    def test_decoder_creation(self, batch_config):
+        """Decoder 생성 테스트"""
+        decoder = LSTMDecoder(
+            input_size=batch_config['hidden_size'],
+            hidden_size=batch_config['hidden_size'],
+            num_layers=2
+        )
+        assert decoder is not None
+
+    def test_decoder_forward(self, batch_config):
+        """순전파 테스트"""
+        num_layers = 2
+        decoder_len = 24
+        decoder = LSTMDecoder(
+            input_size=batch_config['hidden_size'],
+            hidden_size=batch_config['hidden_size'],
+            num_layers=num_layers
+        )
+        x = torch.randn(batch_config['batch_size'], decoder_len, batch_config['hidden_size'])
+        encoder_state = (
+            torch.randn(num_layers, batch_config['batch_size'], batch_config['hidden_size']),
+            torch.randn(num_layers, batch_config['batch_size'], batch_config['hidden_size'])
+        )
+
+        output, (h_n, c_n) = decoder(x, encoder_state)
+
+        assert output.shape == (batch_config['batch_size'], decoder_len, batch_config['hidden_size'])
+        assert h_n.shape == (num_layers, batch_config['batch_size'], batch_config['hidden_size'])
+
+
+# ============================================================
+# TemporalFusionTransformer 전체 모델 테스트
+# ============================================================
+
+class TestTemporalFusionTransformer:
+    """TFT 전체 모델 테스트"""
+
+    @pytest.fixture
+    def tft_config(self):
+        """TFT 설정"""
+        return {
+            'num_static_vars': 0,
+            'num_known_vars': 8,
+            'num_unknown_vars': 25,
+            'hidden_size': 64,
+            'lstm_layers': 2,
+            'num_attention_heads': 4,
+            'dropout': 0.1,
+            'encoder_length': 48,
+            'decoder_length': 24,
+        }
+
+    def test_tft_creation(self, tft_config):
+        """TFT 모델 생성 테스트"""
+        model = TemporalFusionTransformer(**tft_config)
+        assert model is not None
+
+    def test_tft_forward(self, tft_config):
+        """TFT 순전파 테스트"""
+        batch_size = 32
+        model = TemporalFusionTransformer(**tft_config)
+
+        known_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'] + tft_config['decoder_length'],
+            tft_config['num_known_vars'],
+            1
+        )
+        unknown_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'],
+            tft_config['num_unknown_vars'],
+            1
+        )
+
+        result = model(known_inputs=known_inputs, unknown_inputs=unknown_inputs)
+
+        assert 'predictions' in result
+        assert result['predictions'].shape == (
+            batch_size,
+            tft_config['decoder_length'],
+            3  # default quantiles
+        )
+
+    def test_tft_with_attention(self, tft_config):
+        """Attention 가중치 반환 테스트"""
+        batch_size = 32
+        model = TemporalFusionTransformer(**tft_config)
+
+        known_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'] + tft_config['decoder_length'],
+            tft_config['num_known_vars'],
+            1
+        )
+        unknown_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'],
+            tft_config['num_unknown_vars'],
+            1
+        )
+
+        result = model(
+            known_inputs=known_inputs,
+            unknown_inputs=unknown_inputs,
+            return_attention=True
+        )
+
+        assert 'attention_weights' in result
+        total_len = tft_config['encoder_length'] + tft_config['decoder_length']
+        assert result['attention_weights'].shape == (batch_size, total_len, total_len)
+
+    def test_tft_with_static(self, tft_config):
+        """정적 변수와 함께 테스트"""
+        batch_size = 32
+        tft_config['num_static_vars'] = 5
+        model = TemporalFusionTransformer(**tft_config)
+
+        known_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'] + tft_config['decoder_length'],
+            tft_config['num_known_vars'],
+            1
+        )
+        unknown_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'],
+            tft_config['num_unknown_vars'],
+            1
+        )
+        static_inputs = torch.randn(batch_size, tft_config['num_static_vars'], 1)
+
+        result = model(
+            known_inputs=known_inputs,
+            unknown_inputs=unknown_inputs,
+            static_inputs=static_inputs,
+            return_attention=True
+        )
+
+        assert 'static_variable_weights' in result
+        assert result['static_variable_weights'].shape == (
+            batch_size,
+            tft_config['num_static_vars']
+        )
+
+    def test_tft_gradient_flow(self, tft_config):
+        """그래디언트 흐름 테스트"""
+        batch_size = 8
+        model = TemporalFusionTransformer(**tft_config)
+
+        known_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'] + tft_config['decoder_length'],
+            tft_config['num_known_vars'],
+            1,
+            requires_grad=True
+        )
+        unknown_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'],
+            tft_config['num_unknown_vars'],
+            1,
+            requires_grad=True
+        )
+
+        result = model(known_inputs=known_inputs, unknown_inputs=unknown_inputs)
+        loss = result['predictions'].sum()
+        loss.backward()
+
+        assert known_inputs.grad is not None
+        assert unknown_inputs.grad is not None
+
+    def test_tft_custom_quantiles(self, tft_config):
+        """커스텀 분위수 테스트"""
+        batch_size = 32
+        custom_quantiles = [0.05, 0.25, 0.5, 0.75, 0.95]
+        tft_config['quantiles'] = custom_quantiles
+        model = TemporalFusionTransformer(**tft_config)
+
+        known_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'] + tft_config['decoder_length'],
+            tft_config['num_known_vars'],
+            1
+        )
+        unknown_inputs = torch.randn(
+            batch_size,
+            tft_config['encoder_length'],
+            tft_config['num_unknown_vars'],
+            1
+        )
+
+        result = model(known_inputs=known_inputs, unknown_inputs=unknown_inputs)
+
+        assert result['predictions'].shape == (
+            batch_size,
+            tft_config['decoder_length'],
+            len(custom_quantiles)
+        )
+
+    def test_tft_parameter_count(self, tft_config):
+        """파라미터 수 테스트"""
+        model = TemporalFusionTransformer(**tft_config)
+
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        # 모든 파라미터가 학습 가능해야 함
+        assert total_params == trainable_params
+        # TFT는 충분한 용량이 있어야 함 (대략 100K+ 파라미터)
+        assert total_params > 100000
+
+
+# ============================================================
+# QuantileLoss 테스트
+# ============================================================
+
+class TestQuantileLoss:
+    """Quantile Loss 테스트"""
+
+    def test_loss_creation(self):
+        """Loss 생성 테스트"""
+        loss_fn = QuantileLoss(quantiles=[0.1, 0.5, 0.9])
+        assert loss_fn is not None
+
+    def test_loss_forward(self):
+        """Loss 순전파 테스트"""
+        loss_fn = QuantileLoss(quantiles=[0.1, 0.5, 0.9])
+
+        predictions = torch.randn(32, 24, 3)
+        targets = torch.randn(32, 24)
+
+        loss = loss_fn(predictions, targets)
+
+        assert loss.dim() == 0  # scalar
+        assert loss.item() >= 0  # non-negative
+
+    def test_loss_with_3d_targets(self):
+        """3D 타겟 테스트"""
+        loss_fn = QuantileLoss(quantiles=[0.1, 0.5, 0.9])
+
+        predictions = torch.randn(32, 24, 3)
+        targets = torch.randn(32, 24, 1)
+
+        loss = loss_fn(predictions, targets)
+
+        assert loss.dim() == 0
+
+    def test_loss_gradient_flow(self):
+        """그래디언트 흐름 테스트"""
+        loss_fn = QuantileLoss(quantiles=[0.1, 0.5, 0.9])
+
+        predictions = torch.randn(32, 24, 3, requires_grad=True)
+        targets = torch.randn(32, 24)
+
+        loss = loss_fn(predictions, targets)
+        loss.backward()
+
+        assert predictions.grad is not None
+        assert not torch.isnan(predictions.grad).any()
+
+    def test_loss_perfect_prediction(self):
+        """완벽한 예측 시 낮은 loss"""
+        loss_fn = QuantileLoss(quantiles=[0.5])
+
+        targets = torch.randn(32, 24)
+        predictions = targets.unsqueeze(-1)  # 완벽한 예측
+
+        loss = loss_fn(predictions, targets)
+
+        assert loss.item() < 0.01  # 매우 낮은 loss
+
+    @pytest.mark.parametrize("quantiles", [
+        [0.1, 0.5, 0.9],
+        [0.25, 0.5, 0.75],
+        [0.05, 0.5, 0.95],
+    ])
+    def test_loss_various_quantiles(self, quantiles):
+        """다양한 분위수 테스트"""
+        loss_fn = QuantileLoss(quantiles=quantiles)
+
+        predictions = torch.randn(32, 24, len(quantiles))
+        targets = torch.randn(32, 24)
+
+        loss = loss_fn(predictions, targets)
+
+        assert loss.item() >= 0
