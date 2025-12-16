@@ -38,6 +38,7 @@ try:
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
+    Trial = Any  # Fallback for type hints when optuna not available
     warnings.warn("Optuna not available. Install with: pip install optuna")
 
 logger = logging.getLogger(__name__)
