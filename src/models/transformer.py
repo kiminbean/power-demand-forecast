@@ -1509,7 +1509,8 @@ class QuantileLoss(nn.Module):
 
         # Quantile loss for each quantile
         # quantile_tensor shape: (num_quantiles,)
-        quantiles = self.quantile_tensor.view(1, 1, -1)
+        # Ensure quantiles are on the same device as predictions
+        quantiles = self.quantile_tensor.to(predictions.device).view(1, 1, -1)
 
         losses = torch.max(
             (quantiles - 1) * errors,

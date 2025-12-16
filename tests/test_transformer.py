@@ -1456,3 +1456,336 @@ class TestQuantileLoss:
         loss = loss_fn(predictions, targets)
 
         assert loss.item() >= 0
+
+
+# ============================================================
+# TFT Training Pipeline Tests
+# ============================================================
+
+from training.train_tft import (
+    TFTFeatureConfig,
+    TFTDataset,
+    TFTTrainer,
+    create_tft_dataloaders,
+)
+
+
+class TestTFTFeatureConfig:
+    """TFTFeatureConfig 테스트"""
+
+    def test_default_config(self):
+        """기본 설정 테스트"""
+        config = TFTFeatureConfig()
+
+        assert len(config.known_features) > 0
+        assert len(config.unknown_features) > 0
+        assert config.target_col == 'power_demand'
+        assert config.target_col == config.unknown_features[0]
+
+    def test_custom_config(self):
+        """커스텀 설정 테스트"""
+        known = ['hour_sin', 'hour_cos']
+        unknown = ['target', 'temp', 'humidity']
+
+        config = TFTFeatureConfig(
+            known_features=known,
+            unknown_features=unknown,
+            target_col='target'
+        )
+
+        assert config.known_features == known
+        assert config.unknown_features[0] == 'target'
+
+    def test_get_available_features(self):
+        """사용 가능한 피처 필터링 테스트"""
+        config = TFTFeatureConfig()
+
+        # 일부 피처만 포함된 컬럼 리스트
+        df_columns = ['power_demand', 'temp_mean', 'hour_sin', 'hour_cos', 'missing_col']
+
+        available = config.get_available_features(df_columns)
+
+        assert 'power_demand' in available['unknown']
+        assert 'temp_mean' in available['unknown']
+        assert 'hour_sin' in available['known']
+        assert 'missing_col' not in available['known']
+        assert 'missing_col' not in available['unknown']
+
+
+class TestTFTDataset:
+    """TFTDataset 테스트"""
+
+    @pytest.fixture
+    def sample_data(self):
+        """테스트용 샘플 데이터"""
+        np.random.seed(42)
+        n_samples = 200
+        n_known = 5
+        n_unknown = 8
+        n_features = n_known + n_unknown
+
+        data = np.random.randn(n_samples, n_features).astype(np.float32)
+        known_indices = list(range(n_unknown, n_features))
+        unknown_indices = list(range(n_unknown))
+
+        return data, known_indices, unknown_indices
+
+    def test_dataset_creation(self, sample_data):
+        """Dataset 생성 테스트"""
+        data, known_indices, unknown_indices = sample_data
+
+        dataset = TFTDataset(
+            data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=24,
+            decoder_length=12
+        )
+
+        assert len(dataset) == 200 - 24 - 12 + 1
+
+    def test_dataset_shapes(self, sample_data):
+        """출력 형태 테스트"""
+        data, known_indices, unknown_indices = sample_data
+        encoder_length = 24
+        decoder_length = 12
+        n_known = len(known_indices)
+        n_unknown = len(unknown_indices)
+
+        dataset = TFTDataset(
+            data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=encoder_length,
+            decoder_length=decoder_length
+        )
+
+        known, unknown, targets, static = dataset[0]
+
+        assert known.shape == (encoder_length + decoder_length, n_known, 1)
+        assert unknown.shape == (encoder_length, n_unknown, 1)
+        assert targets.shape == (decoder_length,)
+        assert static is None
+
+    def test_dataset_values(self, sample_data):
+        """값 정확성 테스트"""
+        data, known_indices, unknown_indices = sample_data
+
+        dataset = TFTDataset(
+            data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=24,
+            decoder_length=12
+        )
+
+        known, unknown, targets, _ = dataset[5]
+
+        # 첫 번째 known feature의 첫 번째 시점
+        expected_known = data[5, known_indices[0]]
+        assert abs(known[0, 0, 0].item() - expected_known) < 1e-6
+
+        # 타겟 값 확인
+        expected_target = data[5 + 24, 0]  # encoder_end에서의 타겟
+        assert abs(targets[0].item() - expected_target) < 1e-6
+
+    def test_dataset_insufficient_data(self, sample_data):
+        """데이터 부족 시 예외 테스트"""
+        data, known_indices, unknown_indices = sample_data
+        short_data = data[:50]  # 짧은 데이터
+
+        with pytest.raises(ValueError, match="데이터가 너무 짧습니다"):
+            TFTDataset(
+                data=short_data,
+                known_indices=known_indices,
+                unknown_indices=unknown_indices,
+                target_idx=0,
+                encoder_length=48,
+                decoder_length=24  # 48 + 24 = 72 > 50
+            )
+
+
+class TestCreateTFTDataloaders:
+    """create_tft_dataloaders 테스트"""
+
+    def test_dataloader_creation(self):
+        """DataLoader 생성 테스트"""
+        np.random.seed(42)
+        data = np.random.randn(300, 13).astype(np.float32)
+        known_indices = list(range(8, 13))
+        unknown_indices = list(range(8))
+
+        train_loader, val_loader, test_loader = create_tft_dataloaders(
+            train_data=data,
+            val_data=data,
+            test_data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=24,
+            decoder_length=12,
+            batch_size=32
+        )
+
+        assert len(train_loader) > 0
+        assert len(val_loader) > 0
+        assert len(test_loader) > 0
+
+    def test_dataloader_batch(self):
+        """DataLoader 배치 테스트"""
+        np.random.seed(42)
+        data = np.random.randn(300, 13).astype(np.float32)
+        known_indices = list(range(8, 13))
+        unknown_indices = list(range(8))
+        batch_size = 16
+
+        train_loader, _, _ = create_tft_dataloaders(
+            train_data=data,
+            val_data=data,
+            test_data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=24,
+            decoder_length=12,
+            batch_size=batch_size
+        )
+
+        known, unknown, targets, static = next(iter(train_loader))
+
+        assert known.shape[0] == batch_size
+        assert unknown.shape[0] == batch_size
+        assert targets.shape[0] == batch_size
+
+
+class TestTFTTrainer:
+    """TFTTrainer 테스트"""
+
+    @pytest.fixture
+    def trainer_setup(self, device):
+        """Trainer 설정"""
+        np.random.seed(42)
+        n_known = 5
+        n_unknown = 8
+        encoder_length = 24
+        decoder_length = 12
+
+        # 데이터
+        data = np.random.randn(200, n_known + n_unknown).astype(np.float32)
+        known_indices = list(range(n_unknown, n_known + n_unknown))
+        unknown_indices = list(range(n_unknown))
+
+        train_loader, val_loader, test_loader = create_tft_dataloaders(
+            train_data=data,
+            val_data=data,
+            test_data=data,
+            known_indices=known_indices,
+            unknown_indices=unknown_indices,
+            target_idx=0,
+            encoder_length=encoder_length,
+            decoder_length=decoder_length,
+            batch_size=16
+        )
+
+        # 모델
+        model = TemporalFusionTransformer(
+            num_static_vars=0,
+            num_known_vars=n_known,
+            num_unknown_vars=n_unknown,
+            hidden_size=32,
+            lstm_layers=1,
+            num_attention_heads=2,
+            dropout=0.1,
+            encoder_length=encoder_length,
+            decoder_length=decoder_length
+        )
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+        trainer = TFTTrainer(
+            model=model,
+            optimizer=optimizer,
+            device=device,
+            grad_clip=1.0
+        )
+
+        return trainer, train_loader, val_loader, test_loader
+
+    def test_trainer_creation(self, trainer_setup):
+        """Trainer 생성 테스트"""
+        trainer, _, _, _ = trainer_setup
+
+        assert trainer.model is not None
+        assert trainer.criterion is not None
+        assert trainer.quantiles == [0.1, 0.5, 0.9]
+
+    def test_trainer_fit(self, trainer_setup):
+        """Trainer fit 테스트"""
+        trainer, train_loader, val_loader, _ = trainer_setup
+
+        history = trainer.fit(
+            train_loader, val_loader,
+            epochs=2,
+            patience=5,
+            verbose=0
+        )
+
+        assert len(history.history['train_loss']) == 2
+        assert len(history.history['val_loss']) == 2
+        assert history.history['train_loss'][-1] >= 0
+        assert history.history['val_loss'][-1] >= 0
+
+    def test_trainer_evaluate(self, trainer_setup):
+        """Trainer evaluate 테스트"""
+        trainer, train_loader, val_loader, test_loader = trainer_setup
+
+        # 먼저 학습
+        trainer.fit(train_loader, val_loader, epochs=1, verbose=0)
+
+        # 평가
+        result = trainer.evaluate(test_loader, return_predictions=True)
+
+        assert 'test_quantile_loss' in result
+        assert 'test_mse_loss' in result
+        assert 'test_rmse' in result
+        assert 'predictions' in result
+        assert 'targets' in result
+
+    def test_trainer_predict(self, trainer_setup):
+        """Trainer predict 테스트"""
+        trainer, train_loader, val_loader, test_loader = trainer_setup
+
+        # 먼저 학습
+        trainer.fit(train_loader, val_loader, epochs=1, verbose=0)
+
+        # 예측
+        result = trainer.predict(test_loader, return_intervals=True)
+
+        assert 'median' in result
+        assert 'lower' in result
+        assert 'upper' in result
+        assert result['median'].shape == result['lower'].shape
+        assert result['median'].shape == result['upper'].shape
+
+    def test_trainer_checkpoint(self, trainer_setup, tmp_path):
+        """체크포인트 저장/로드 테스트"""
+        trainer, train_loader, val_loader, _ = trainer_setup
+
+        # 학습
+        history = trainer.fit(train_loader, val_loader, epochs=2, verbose=0)
+
+        # 체크포인트 저장
+        checkpoint_path = tmp_path / "checkpoint.pt"
+        trainer.save_checkpoint(str(checkpoint_path), epoch=2, history=history)
+
+        assert checkpoint_path.exists()
+
+        # 체크포인트 로드
+        loaded = trainer.load_checkpoint(str(checkpoint_path))
+
+        assert loaded['epoch'] == 2
+        assert 'model_state_dict' in loaded
+        assert 'optimizer_state_dict' in loaded
