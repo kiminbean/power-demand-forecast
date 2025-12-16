@@ -24,6 +24,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -40,12 +47,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install dependencies (CPU-only PyTorch)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-api.txt
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install pandas numpy scipy scikit-learn matplotlib seaborn
+          pip install holidays python-dateutil tqdm PyYAML python-dotenv
           pip install pytest pytest-asyncio httpx
+          pip install -r requirements-api.txt
 
       - name: Create necessary directories
         run: |
@@ -73,6 +82,16 @@ jobs:
       image-digest: ${{ steps.build.outputs.digest }}
 
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -116,7 +135,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
