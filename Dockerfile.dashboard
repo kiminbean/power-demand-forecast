@@ -1,0 +1,51 @@
+# ============================================================
+# Power Demand Forecast Dashboard - Dockerfile (Task 15)
+# ============================================================
+# Streamlit Dashboard container
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    STREAMLIT_SERVER_PORT=8501 \
+    STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install streamlit plotly requests
+
+# Copy application code
+COPY --chown=appuser:appuser src/ ./src/
+
+# Create directories
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose Streamlit port
+EXPOSE 8501
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# Run Streamlit
+CMD ["streamlit", "run", "src/dashboard/app.py", "--server.port=${STREAMLIT_SERVER_PORT}", "--server.address=${STREAMLIT_SERVER_ADDRESS}"]
