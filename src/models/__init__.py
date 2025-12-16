@@ -10,6 +10,7 @@ MODEL-005: Multi-horizon LSTM
 MODEL-006: Conditional Predictor (겨울철 변곡점 특화)
 MODEL-007: Temporal Fusion Transformer (TFT)
 MODEL-011: Ensemble (Weighted Average, Stacking, Blending)
+MODEL-012: Probabilistic Forecasting (MC Dropout, Deep Ensemble, Quantile)
 """
 
 from .lstm import (
@@ -73,6 +74,23 @@ from .ensemble import (
     compare_with_individual,
 )
 
+from .probabilistic import (
+    # 데이터 클래스
+    PredictionInterval,
+    # 확률적 모델
+    QuantileRegressor,
+    MCDropout,
+    DeepEnsembleUncertainty,
+    # 손실 함수
+    PinballLoss,
+    # 보정 및 평가
+    CalibrationMetrics,
+    ProbabilisticWrapper,
+    # 팩토리 및 유틸리티
+    create_probabilistic_model,
+    calculate_prediction_intervals,
+)
+
 __all__ = [
     # MODEL-003: LSTM
     'LSTMModel',
@@ -115,6 +133,16 @@ __all__ = [
     'create_ensemble',
     'evaluate_ensemble',
     'compare_with_individual',
+    # MODEL-012: Probabilistic
+    'PredictionInterval',
+    'QuantileRegressor',
+    'MCDropout',
+    'DeepEnsembleUncertainty',
+    'PinballLoss',
+    'CalibrationMetrics',
+    'ProbabilisticWrapper',
+    'create_probabilistic_model',
+    'calculate_prediction_intervals',
 ]
 
 
