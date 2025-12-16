@@ -68,3 +68,35 @@ If conversation is lost, read:
 - Follow existing code patterns
 - Run tests after major changes
 - Commit frequently with descriptive messages
+
+---
+
+## Auto Commit Protocol
+
+**IMPORTANT**: Automatically commit changes after completing each task:
+
+1. **When to commit**:
+   - After completing a feature or significant code change
+   - After fixing a bug
+   - After refactoring code
+   - Before starting a new, unrelated task
+
+2. **Commit message format**:
+   ```
+   <type>: <short description>
+
+   <detailed description if needed>
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+   ```
+
+3. **Commit types**:
+   - `feat`: New feature
+   - `fix`: Bug fix
+   - `refactor`: Code refactoring
+   - `docs`: Documentation changes
+   - `test`: Test additions/changes
+   - `chore`: Maintenance tasks
+
+4. **Do NOT auto-push**: Only commit locally, let user decide when to push
