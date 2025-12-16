@@ -1,0 +1,18 @@
+# Streamlit Dashboard Dependencies
+# ================================
+# This file contains the minimal dependencies for running the Streamlit dashboard
+# Use: pip install -r requirements-streamlit.txt
+
+# Core
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+plotly>=5.18.0
+
+# HTTP Client
+requests>=2.31.0
+
+# Date handling
+python-dateutil>=2.8.2
