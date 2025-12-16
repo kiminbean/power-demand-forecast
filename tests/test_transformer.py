@@ -21,6 +21,12 @@ from models.transformer import (
     VariableSelectionNetwork,
     StaticCovariateEncoder,
     TemporalVariableSelection,
+    PositionalEncoding,
+    InterpretableMultiHeadAttention,
+    TemporalSelfAttention,
+    StaticEnrichmentLayer,
+    generate_causal_mask,
+    generate_encoder_decoder_mask,
 )
 
 
@@ -696,3 +702,401 @@ class TestTFTComponentsPerformance:
 
         assert output.shape == (32, 48, 64)
         assert weights.shape == (32, 48, num_vars)
+
+
+# ============================================================
+# Positional Encoding 테스트
+# ============================================================
+
+class TestPositionalEncoding:
+    """Positional Encoding 테스트"""
+
+    def test_pe_creation(self, batch_config):
+        """Positional Encoding 생성 테스트"""
+        pe = PositionalEncoding(d_model=batch_config['hidden_size'])
+        assert pe is not None
+
+    def test_pe_forward(self, batch_config):
+        """Positional Encoding 순전파 테스트"""
+        pe = PositionalEncoding(d_model=batch_config['hidden_size'])
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        output = pe(x)
+
+        assert output.shape == x.shape
+
+    def test_pe_adds_position_info(self, batch_config):
+        """Positional Encoding이 위치 정보를 추가하는지 테스트"""
+        pe = PositionalEncoding(d_model=batch_config['hidden_size'], dropout=0.0)
+        x = torch.zeros(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        output = pe(x)
+
+        # 입력이 0이어도 출력은 위치 인코딩으로 인해 0이 아니어야 함
+        assert not torch.allclose(output, x)
+
+    def test_pe_different_positions(self, batch_config):
+        """다른 위치는 다른 인코딩을 가져야 함"""
+        pe = PositionalEncoding(d_model=batch_config['hidden_size'], dropout=0.0)
+        x = torch.zeros(1, 10, batch_config['hidden_size'])
+        output = pe(x)
+
+        # 위치 0과 위치 1은 다른 인코딩을 가져야 함
+        assert not torch.allclose(output[0, 0], output[0, 1])
+
+    @pytest.mark.parametrize("seq_len", [10, 48, 100])
+    def test_pe_variable_sequence_lengths(self, seq_len, batch_config):
+        """다양한 시퀀스 길이에서 테스트"""
+        pe = PositionalEncoding(d_model=batch_config['hidden_size'])
+        x = torch.randn(batch_config['batch_size'], seq_len, batch_config['hidden_size'])
+        output = pe(x)
+
+        assert output.shape == (batch_config['batch_size'], seq_len, batch_config['hidden_size'])
+
+
+# ============================================================
+# InterpretableMultiHeadAttention 테스트
+# ============================================================
+
+class TestInterpretableMultiHeadAttention:
+    """Interpretable Multi-Head Attention 테스트"""
+
+    def test_attention_creation(self, batch_config):
+        """Attention 생성 테스트"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        assert attn is not None
+        assert attn.num_heads == 4
+        assert attn.d_k == batch_config['hidden_size'] // 4
+
+    def test_attention_forward(self, batch_config):
+        """Self-Attention 순전파 테스트"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        output, weights = attn(x, x, x)
+
+        assert output.shape == x.shape
+        assert weights.shape == (
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['seq_len']
+        )
+
+    def test_attention_weights_sum_to_one(self, batch_config):
+        """Attention 가중치가 1로 합산되는지 테스트"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        _, weights = attn(x, x, x)
+        weight_sums = weights.sum(dim=-1)
+
+        assert torch.allclose(weight_sums, torch.ones_like(weight_sums), atol=1e-5)
+
+    def test_attention_with_mask(self, batch_config):
+        """Masking이 적용되는지 테스트"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        mask = generate_causal_mask(batch_config['seq_len'])
+        _, weights = attn(x, x, x, mask=mask)
+
+        # 첫 번째 위치는 자기 자신만 볼 수 있음
+        first_pos_weights = weights[:, 0, :]
+        assert first_pos_weights[:, 1:].sum() < 1e-5
+
+    def test_attention_cross_attention(self, batch_config):
+        """Cross-Attention 테스트 (Q != K, V)"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        query = torch.randn(batch_config['batch_size'], 10, batch_config['hidden_size'])
+        key = torch.randn(batch_config['batch_size'], 20, batch_config['hidden_size'])
+        value = torch.randn(batch_config['batch_size'], 20, batch_config['hidden_size'])
+
+        output, weights = attn(query, key, value)
+
+        assert output.shape == (batch_config['batch_size'], 10, batch_config['hidden_size'])
+        assert weights.shape == (batch_config['batch_size'], 10, 20)
+
+    @pytest.mark.parametrize("num_heads", [1, 2, 4, 8])
+    def test_attention_various_heads(self, num_heads, batch_config):
+        """다양한 head 수에서 테스트"""
+        attn = InterpretableMultiHeadAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=num_heads
+        )
+        x = torch.randn(batch_config['batch_size'], batch_config['seq_len'], batch_config['hidden_size'])
+        output, _ = attn(x, x, x)
+
+        assert output.shape == x.shape
+
+
+# ============================================================
+# TemporalSelfAttention 테스트
+# ============================================================
+
+class TestTemporalSelfAttention:
+    """Temporal Self-Attention Layer 테스트"""
+
+    def test_layer_creation(self, batch_config):
+        """Layer 생성 테스트"""
+        layer = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        assert layer is not None
+
+    def test_layer_forward(self, batch_config):
+        """순전파 테스트"""
+        layer = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        output, attention = layer(x)
+
+        assert output.shape == x.shape
+        assert attention.shape == (
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['seq_len']
+        )
+
+    def test_layer_with_mask(self, batch_config):
+        """마스킹 테스트"""
+        layer = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        mask = generate_causal_mask(batch_config['seq_len'])
+
+        output, _ = layer(x, mask=mask)
+
+        assert output.shape == x.shape
+
+    def test_layer_without_positional_encoding(self, batch_config):
+        """위치 인코딩 없이 테스트"""
+        layer = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4,
+            use_positional_encoding=False
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+
+        output, _ = layer(x)
+
+        assert output.shape == x.shape
+
+    def test_layer_gradient_flow(self, batch_config):
+        """그래디언트 흐름 테스트"""
+        layer = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+        x = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size'],
+            requires_grad=True
+        )
+
+        output, _ = layer(x)
+        loss = output.sum()
+        loss.backward()
+
+        assert x.grad is not None
+        assert not torch.isnan(x.grad).any()
+
+
+# ============================================================
+# Causal Mask 테스트
+# ============================================================
+
+class TestCausalMask:
+    """Causal Mask 생성 함수 테스트"""
+
+    def test_mask_shape(self):
+        """마스크 shape 테스트"""
+        for seq_len in [5, 10, 48]:
+            mask = generate_causal_mask(seq_len)
+            assert mask.shape == (seq_len, seq_len)
+
+    def test_mask_structure(self):
+        """마스크 구조 테스트"""
+        mask = generate_causal_mask(4)
+        expected = torch.tensor([
+            [False, True, True, True],
+            [False, False, True, True],
+            [False, False, False, True],
+            [False, False, False, False],
+        ])
+        assert torch.equal(mask, expected)
+
+    def test_mask_diagonal(self):
+        """대각선은 False여야 함 (자기 자신은 볼 수 있음)"""
+        mask = generate_causal_mask(10)
+        for i in range(10):
+            assert mask[i, i] == False
+
+    def test_mask_upper_triangular(self):
+        """상삼각 부분만 True"""
+        seq_len = 10
+        mask = generate_causal_mask(seq_len)
+
+        for i in range(seq_len):
+            for j in range(seq_len):
+                if j > i:
+                    assert mask[i, j] == True
+                else:
+                    assert mask[i, j] == False
+
+    def test_mask_device(self):
+        """디바이스 지정 테스트"""
+        mask = generate_causal_mask(5, device=torch.device('cpu'))
+        assert mask.device == torch.device('cpu')
+
+
+# ============================================================
+# StaticEnrichmentLayer 테스트
+# ============================================================
+
+class TestStaticEnrichmentLayer:
+    """Static Enrichment Layer 테스트"""
+
+    def test_layer_creation(self, batch_config):
+        """Layer 생성 테스트"""
+        layer = StaticEnrichmentLayer(d_model=batch_config['hidden_size'])
+        assert layer is not None
+
+    def test_layer_forward(self, batch_config):
+        """순전파 테스트"""
+        layer = StaticEnrichmentLayer(d_model=batch_config['hidden_size'])
+        temporal = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        static_context = torch.randn(
+            batch_config['batch_size'],
+            batch_config['hidden_size']
+        )
+
+        output = layer(temporal, static_context)
+
+        assert output.shape == temporal.shape
+
+    def test_layer_context_influence(self, batch_config):
+        """정적 컨텍스트가 출력에 영향을 미치는지 테스트"""
+        layer = StaticEnrichmentLayer(d_model=batch_config['hidden_size'])
+        temporal = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        context1 = torch.randn(batch_config['batch_size'], batch_config['hidden_size'])
+        context2 = torch.randn(batch_config['batch_size'], batch_config['hidden_size'])
+
+        output1 = layer(temporal, context1)
+        output2 = layer(temporal, context2)
+
+        # 다른 컨텍스트는 다른 출력을 생성해야 함
+        assert not torch.allclose(output1, output2)
+
+
+# ============================================================
+# Attention 통합 테스트
+# ============================================================
+
+class TestAttentionIntegration:
+    """Attention 컴포넌트 통합 테스트"""
+
+    def test_full_attention_pipeline(self, batch_config):
+        """전체 Attention 파이프라인 테스트"""
+        # Static enrichment → Temporal self-attention
+        enrichment = StaticEnrichmentLayer(d_model=batch_config['hidden_size'])
+        attention = TemporalSelfAttention(
+            d_model=batch_config['hidden_size'],
+            num_heads=4
+        )
+
+        temporal = torch.randn(
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['hidden_size']
+        )
+        static_context = torch.randn(
+            batch_config['batch_size'],
+            batch_config['hidden_size']
+        )
+
+        enriched = enrichment(temporal, static_context)
+        output, attn_weights = attention(enriched)
+
+        assert output.shape == temporal.shape
+        assert attn_weights.shape == (
+            batch_config['batch_size'],
+            batch_config['seq_len'],
+            batch_config['seq_len']
+        )
+
+    def test_encoder_decoder_mask(self, batch_config):
+        """Encoder-Decoder 마스크 테스트"""
+        encoder_len, decoder_len = 48, 24
+        mask = generate_encoder_decoder_mask(encoder_len, decoder_len)
+
+        assert mask.shape == (encoder_len + decoder_len, encoder_len + decoder_len)
+
+        # Encoder 부분은 모두 볼 수 있음
+        assert not mask[:encoder_len, :encoder_len].any()
+
+        # Decoder는 미래를 볼 수 없음
+        decoder_mask = mask[encoder_len:, encoder_len:]
+        for i in range(decoder_len):
+            for j in range(decoder_len):
+                if j > i:
+                    assert decoder_mask[i, j] == True

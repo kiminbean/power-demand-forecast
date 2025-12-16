@@ -501,6 +501,449 @@ class TemporalVariableSelection(nn.Module):
 
 
 # ============================================================
+# Positional Encoding
+# ============================================================
+
+class PositionalEncoding(nn.Module):
+    """
+    Positional Encoding for Temporal Sequences
+
+    시퀀스의 위치 정보를 인코딩합니다. 시계열에서 시간적 순서를 학습에 반영합니다.
+
+    PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
+    PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+
+    Args:
+        d_model: 임베딩 차원
+        max_len: 최대 시퀀스 길이
+        dropout: Dropout 비율
+
+    Example:
+        >>> pe = PositionalEncoding(d_model=64, max_len=100)
+        >>> x = torch.randn(32, 48, 64)  # (batch, seq_len, d_model)
+        >>> output = pe(x)
+        >>> print(output.shape)  # (32, 48, 64)
+    """
+
+    def __init__(self, d_model: int, max_len: int = 5000, dropout: float = 0.1):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        # Create positional encoding matrix
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
+
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        # Add batch dimension: (1, max_len, d_model)
+        pe = pe.unsqueeze(0)
+
+        # Register as buffer (not a parameter, but saved with model)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        순전파
+
+        Args:
+            x: 입력 텐서 (batch, seq_len, d_model)
+
+        Returns:
+            output: 위치 인코딩이 추가된 텐서 (batch, seq_len, d_model)
+        """
+        seq_len = x.size(1)
+        x = x + self.pe[:, :seq_len, :]
+        return self.dropout(x)
+
+
+# ============================================================
+# Interpretable Multi-Head Attention
+# ============================================================
+
+class InterpretableMultiHeadAttention(nn.Module):
+    """
+    Interpretable Multi-Head Attention (TFT 논문)
+
+    일반적인 Multi-Head Attention과 달리, 모든 헤드가 Value를 공유합니다.
+    이를 통해 Attention weight가 직접 해석 가능해집니다.
+
+    Standard MHA: Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V
+    TFT MHA: 모든 헤드가 동일한 V 사용 → 가중치 평균 가능
+
+    수식:
+        InterpretableMultiHead(Q, K, V) = (1/H) Σ_h Attention_h(Q, K, V) W^O
+
+    Args:
+        d_model: 모델 차원 (입력/출력)
+        num_heads: Attention head 수
+        dropout: Dropout 비율
+
+    Example:
+        >>> attn = InterpretableMultiHeadAttention(d_model=64, num_heads=4)
+        >>> x = torch.randn(32, 48, 64)  # (batch, seq_len, d_model)
+        >>> output, weights = attn(x, x, x)
+        >>> print(output.shape)   # (32, 48, 64)
+        >>> print(weights.shape)  # (32, 48, 48) - average attention weights
+    """
+
+    def __init__(self, d_model: int, num_heads: int, dropout: float = 0.0):
+        super().__init__()
+
+        assert d_model % num_heads == 0, \
+            f"d_model ({d_model}) must be divisible by num_heads ({num_heads})"
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads  # dimension per head
+
+        # Query projections for each head
+        self.W_q = nn.Linear(d_model, d_model)
+
+        # Key projections for each head
+        self.W_k = nn.Linear(d_model, d_model)
+
+        # Single Value projection (shared across heads for interpretability)
+        self.W_v = nn.Linear(d_model, d_model)
+
+        # Output projection
+        self.W_o = nn.Linear(d_model, d_model)
+
+        # Dropout
+        self.dropout = nn.Dropout(dropout)
+
+        # Scale factor
+        self.scale = math.sqrt(self.d_k)
+
+    def forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        mask: torch.Tensor = None,
+        return_attention: bool = True
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        순전파
+
+        Args:
+            query: Query 텐서 (batch, seq_len_q, d_model)
+            key: Key 텐서 (batch, seq_len_k, d_model)
+            value: Value 텐서 (batch, seq_len_v, d_model)
+            mask: Attention mask (batch, seq_len_q, seq_len_k) or (seq_len_q, seq_len_k)
+                  True인 위치는 마스킹됨 (-inf로 대체)
+            return_attention: Attention weight 반환 여부
+
+        Returns:
+            output: Attention 결과 (batch, seq_len_q, d_model)
+            attention_weights: 평균 Attention 가중치 (batch, seq_len_q, seq_len_k)
+                              return_attention=False면 None
+        """
+        batch_size = query.size(0)
+        seq_len_q = query.size(1)
+        seq_len_k = key.size(1)
+
+        # Linear projections
+        # Q, K: (batch, seq_len, num_heads, d_k)
+        Q = self.W_q(query).view(batch_size, seq_len_q, self.num_heads, self.d_k)
+        K = self.W_k(key).view(batch_size, seq_len_k, self.num_heads, self.d_k)
+
+        # V: (batch, seq_len, d_model) - shared across heads
+        V = self.W_v(value)
+
+        # Transpose for attention: (batch, num_heads, seq_len, d_k)
+        Q = Q.transpose(1, 2)
+        K = K.transpose(1, 2)
+
+        # Compute attention scores: (batch, num_heads, seq_len_q, seq_len_k)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
+
+        # Apply mask if provided
+        if mask is not None:
+            if mask.dim() == 2:
+                # (seq_len_q, seq_len_k) -> (1, 1, seq_len_q, seq_len_k)
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            elif mask.dim() == 3:
+                # (batch, seq_len_q, seq_len_k) -> (batch, 1, seq_len_q, seq_len_k)
+                mask = mask.unsqueeze(1)
+
+            scores = scores.masked_fill(mask, float('-inf'))
+
+        # Attention weights: (batch, num_heads, seq_len_q, seq_len_k)
+        attention_weights = F.softmax(scores, dim=-1)
+        attention_weights = self.dropout(attention_weights)
+
+        # Average attention across heads: (batch, seq_len_q, seq_len_k)
+        avg_attention = attention_weights.mean(dim=1)
+
+        # Apply attention to shared values
+        # avg_attention: (batch, seq_len_q, seq_len_k)
+        # V: (batch, seq_len_v, d_model)
+        # output: (batch, seq_len_q, d_model)
+        output = torch.matmul(avg_attention, V)
+
+        # Final projection
+        output = self.W_o(output)
+
+        if return_attention:
+            return output, avg_attention
+        return output, None
+
+
+# ============================================================
+# Temporal Self-Attention Layer
+# ============================================================
+
+class TemporalSelfAttention(nn.Module):
+    """
+    Temporal Self-Attention Layer
+
+    시계열 데이터의 장기 의존성을 학습하는 Self-Attention 레이어입니다.
+    GRN으로 감싸진 Attention을 사용하여 정보 흐름을 제어합니다.
+
+    Architecture:
+        1. Positional Encoding (선택적)
+        2. Interpretable Multi-Head Attention
+        3. GRN (Gate + Residual + LayerNorm)
+
+    Args:
+        d_model: 모델 차원
+        num_heads: Attention head 수
+        dropout: Dropout 비율
+        use_positional_encoding: 위치 인코딩 사용 여부
+
+    Example:
+        >>> layer = TemporalSelfAttention(d_model=64, num_heads=4)
+        >>> x = torch.randn(32, 48, 64)
+        >>> output, attention = layer(x)
+        >>> print(output.shape)     # (32, 48, 64)
+        >>> print(attention.shape)  # (32, 48, 48)
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        dropout: float = 0.1,
+        use_positional_encoding: bool = True
+    ):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.use_positional_encoding = use_positional_encoding
+
+        # Positional Encoding
+        if use_positional_encoding:
+            self.positional_encoding = PositionalEncoding(
+                d_model=d_model,
+                dropout=dropout
+            )
+
+        # Pre-attention GRN
+        self.pre_attention_grn = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            dropout=dropout
+        )
+
+        # Interpretable Multi-Head Attention
+        self.attention = InterpretableMultiHeadAttention(
+            d_model=d_model,
+            num_heads=num_heads,
+            dropout=dropout
+        )
+
+        # Post-attention GRN (Gated skip connection)
+        self.post_attention_grn = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            dropout=dropout
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask: torch.Tensor = None,
+        return_attention: bool = True
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        순전파
+
+        Args:
+            x: 입력 텐서 (batch, seq_len, d_model)
+            mask: Attention mask (batch, seq_len, seq_len)
+            return_attention: Attention weight 반환 여부
+
+        Returns:
+            output: Self-Attention 결과 (batch, seq_len, d_model)
+            attention_weights: Attention 가중치 (batch, seq_len, seq_len)
+        """
+        # Add positional encoding
+        if self.use_positional_encoding:
+            x_pe = self.positional_encoding(x)
+        else:
+            x_pe = x
+
+        # Pre-attention GRN
+        x_grn = self.pre_attention_grn(x_pe)
+
+        # Self-Attention
+        attn_output, attention_weights = self.attention(
+            query=x_grn,
+            key=x_grn,
+            value=x_grn,
+            mask=mask,
+            return_attention=return_attention
+        )
+
+        # Post-attention GRN with residual from input
+        # output = LayerNorm(x + GLU(attn_output))
+        output = self.post_attention_grn(attn_output)
+
+        # Add residual connection from original input
+        output = output + x
+
+        return output, attention_weights
+
+
+# ============================================================
+# Causal Mask Generator
+# ============================================================
+
+def generate_causal_mask(seq_len: int, device: torch.device = None) -> torch.Tensor:
+    """
+    인과적 마스크 생성 (미래 정보 차단)
+
+    시퀀스의 각 위치에서 미래 위치에 접근하지 못하도록 마스킹합니다.
+    디코더나 자기회귀 모델에서 사용됩니다.
+
+    Args:
+        seq_len: 시퀀스 길이
+        device: 텐서를 생성할 디바이스
+
+    Returns:
+        mask: 인과적 마스크 (seq_len, seq_len)
+              True인 위치는 마스킹됨 (Attention에서 -inf로 대체)
+
+    Example:
+        >>> mask = generate_causal_mask(4)
+        >>> print(mask)
+        tensor([[False,  True,  True,  True],
+                [False, False,  True,  True],
+                [False, False, False,  True],
+                [False, False, False, False]])
+    """
+    # Upper triangular matrix (excluding diagonal)
+    mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
+
+    if device is not None:
+        mask = mask.to(device)
+
+    return mask
+
+
+def generate_encoder_decoder_mask(
+    encoder_len: int,
+    decoder_len: int,
+    device: torch.device = None
+) -> torch.Tensor:
+    """
+    Encoder-Decoder용 Attention 마스크 생성
+
+    Encoder에서는 과거 시점만 보고 (causal mask),
+    Decoder에서는 전체 Encoder 출력과 과거 Decoder 위치만 봅니다.
+
+    Args:
+        encoder_len: Encoder 시퀀스 길이
+        decoder_len: Decoder 시퀀스 길이
+        device: 텐서를 생성할 디바이스
+
+    Returns:
+        mask: 통합 마스크 (encoder_len + decoder_len, encoder_len + decoder_len)
+
+    Example:
+        >>> mask = generate_encoder_decoder_mask(3, 2)
+        >>> # Encoder (3) can see all encoder positions
+        >>> # Decoder (2) can see all encoder + causal decoder positions
+    """
+    total_len = encoder_len + decoder_len
+
+    # Start with all visible
+    mask = torch.zeros(total_len, total_len, dtype=torch.bool)
+
+    # Encoder: causal mask (optional, can see all for bidirectional)
+    # For TFT, encoder typically sees all past
+
+    # Decoder: causal mask for decoder positions
+    decoder_mask = torch.triu(
+        torch.ones(decoder_len, decoder_len),
+        diagonal=1
+    ).bool()
+
+    mask[encoder_len:, encoder_len:] = decoder_mask
+
+    if device is not None:
+        mask = mask.to(device)
+
+    return mask
+
+
+# ============================================================
+# Static Enrichment Layer
+# ============================================================
+
+class StaticEnrichmentLayer(nn.Module):
+    """
+    Static Enrichment Layer
+
+    정적 컨텍스트 정보를 시간적 표현에 통합합니다.
+    GRN을 사용하여 정적 정보가 시간적 특성에 미치는 영향을 학습합니다.
+
+    Args:
+        d_model: 모델 차원
+        dropout: Dropout 비율
+
+    Example:
+        >>> layer = StaticEnrichmentLayer(d_model=64)
+        >>> temporal = torch.randn(32, 48, 64)
+        >>> static_context = torch.randn(32, 64)
+        >>> output = layer(temporal, static_context)
+        >>> print(output.shape)  # (32, 48, 64)
+    """
+
+    def __init__(self, d_model: int, dropout: float = 0.1):
+        super().__init__()
+
+        self.enrichment_grn = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            dropout=dropout,
+            context_size=d_model  # Static context size
+        )
+
+    def forward(
+        self,
+        temporal_features: torch.Tensor,
+        static_context: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        순전파
+
+        Args:
+            temporal_features: 시간적 특성 (batch, seq_len, d_model)
+            static_context: 정적 컨텍스트 (batch, d_model)
+
+        Returns:
+            enriched: 정적 정보가 통합된 특성 (batch, seq_len, d_model)
+        """
+        return self.enrichment_grn(temporal_features, static_context)
+
+
+# ============================================================
 # 테스트 및 검증 함수
 # ============================================================
 
@@ -625,16 +1068,177 @@ def test_static_encoder():
     return True
 
 
+def test_positional_encoding():
+    """Positional Encoding 테스트"""
+    print("Testing Positional Encoding...")
+
+    batch_size, seq_len, d_model = 32, 48, 64
+
+    pe = PositionalEncoding(d_model=d_model)
+    x = torch.randn(batch_size, seq_len, d_model)
+    output = pe(x)
+
+    assert output.shape == x.shape, f"Expected {x.shape}, got {output.shape}"
+    print(f"  Input: {x.shape} -> Output: {output.shape}")
+
+    # Check that positional encoding is added (output != input)
+    assert not torch.allclose(x, output), "Output should differ from input"
+    print("  Positional encoding is properly added")
+
+    print("  Positional Encoding tests passed!")
+    return True
+
+
+def test_interpretable_attention():
+    """Interpretable Multi-Head Attention 테스트"""
+    print("Testing Interpretable Multi-Head Attention...")
+
+    batch_size, seq_len, d_model = 32, 48, 64
+    num_heads = 4
+
+    attn = InterpretableMultiHeadAttention(d_model=d_model, num_heads=num_heads)
+    x = torch.randn(batch_size, seq_len, d_model)
+
+    # Self-attention
+    output, weights = attn(x, x, x)
+
+    assert output.shape == (batch_size, seq_len, d_model), \
+        f"Expected {(batch_size, seq_len, d_model)}, got {output.shape}"
+    assert weights.shape == (batch_size, seq_len, seq_len), \
+        f"Expected {(batch_size, seq_len, seq_len)}, got {weights.shape}"
+    print(f"  Self-attention: input {x.shape} -> output {output.shape}, weights {weights.shape}")
+
+    # Check attention weights sum to 1
+    weight_sums = weights.sum(dim=-1)
+    assert torch.allclose(weight_sums, torch.ones_like(weight_sums), atol=1e-5), \
+        "Attention weights should sum to 1"
+    print("  Attention weights sum to 1: OK")
+
+    # With mask
+    mask = generate_causal_mask(seq_len)
+    output_masked, weights_masked = attn(x, x, x, mask=mask)
+    assert output_masked.shape == output.shape
+    print(f"  With causal mask: output {output_masked.shape}")
+
+    # Check that future positions are masked (weights should be 0)
+    # For position 0, only position 0 should have non-zero weight
+    first_pos_weights = weights_masked[:, 0, :]  # (batch, seq_len)
+    assert first_pos_weights[:, 1:].sum() < 1e-5, "Future positions should have ~0 weight"
+    print("  Causal masking verified: future weights are ~0")
+
+    print("  Interpretable Multi-Head Attention tests passed!")
+    return True
+
+
+def test_temporal_self_attention():
+    """Temporal Self-Attention Layer 테스트"""
+    print("Testing Temporal Self-Attention...")
+
+    batch_size, seq_len, d_model = 32, 48, 64
+    num_heads = 4
+
+    layer = TemporalSelfAttention(d_model=d_model, num_heads=num_heads)
+    x = torch.randn(batch_size, seq_len, d_model)
+
+    output, attention = layer(x)
+
+    assert output.shape == (batch_size, seq_len, d_model), \
+        f"Expected {(batch_size, seq_len, d_model)}, got {output.shape}"
+    assert attention.shape == (batch_size, seq_len, seq_len), \
+        f"Expected {(batch_size, seq_len, seq_len)}, got {attention.shape}"
+    print(f"  Output: {output.shape}, Attention: {attention.shape}")
+
+    # With mask
+    mask = generate_causal_mask(seq_len)
+    output_masked, _ = layer(x, mask=mask)
+    assert output_masked.shape == output.shape
+    print(f"  With causal mask: output {output_masked.shape}")
+
+    # Without positional encoding
+    layer_no_pe = TemporalSelfAttention(
+        d_model=d_model,
+        num_heads=num_heads,
+        use_positional_encoding=False
+    )
+    output_no_pe, _ = layer_no_pe(x)
+    assert output_no_pe.shape == output.shape
+    print(f"  Without positional encoding: output {output_no_pe.shape}")
+
+    print("  Temporal Self-Attention tests passed!")
+    return True
+
+
+def test_causal_mask():
+    """Causal Mask 테스트"""
+    print("Testing Causal Mask...")
+
+    seq_len = 5
+    mask = generate_causal_mask(seq_len)
+
+    assert mask.shape == (seq_len, seq_len), f"Expected {(seq_len, seq_len)}, got {mask.shape}"
+    print(f"  Mask shape: {mask.shape}")
+
+    # Check structure
+    expected = torch.tensor([
+        [False, True, True, True, True],
+        [False, False, True, True, True],
+        [False, False, False, True, True],
+        [False, False, False, False, True],
+        [False, False, False, False, False],
+    ])
+    assert torch.equal(mask, expected), "Causal mask structure incorrect"
+    print("  Mask structure verified:")
+    print(f"    {mask[0].tolist()}")
+    print(f"    {mask[1].tolist()}")
+    print("    ...")
+
+    print("  Causal Mask tests passed!")
+    return True
+
+
+def test_static_enrichment():
+    """Static Enrichment Layer 테스트"""
+    print("Testing Static Enrichment Layer...")
+
+    batch_size, seq_len, d_model = 32, 48, 64
+
+    layer = StaticEnrichmentLayer(d_model=d_model)
+    temporal = torch.randn(batch_size, seq_len, d_model)
+    static_context = torch.randn(batch_size, d_model)
+
+    output = layer(temporal, static_context)
+
+    assert output.shape == (batch_size, seq_len, d_model), \
+        f"Expected {(batch_size, seq_len, d_model)}, got {output.shape}"
+    print(f"  Temporal: {temporal.shape}, Static: {static_context.shape} -> Output: {output.shape}")
+
+    print("  Static Enrichment Layer tests passed!")
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("TFT Components Test Suite")
     print("=" * 60)
 
+    # Subtask 1.2 tests
     test_grn()
     print()
     test_vsn()
     print()
     test_static_encoder()
+    print()
+
+    # Subtask 1.3 tests
+    test_positional_encoding()
+    print()
+    test_interpretable_attention()
+    print()
+    test_temporal_self_attention()
+    print()
+    test_causal_mask()
+    print()
+    test_static_enrichment()
 
     print()
     print("=" * 60)
