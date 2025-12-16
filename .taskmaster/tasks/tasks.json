@@ -6,7 +6,7 @@
         "title": "Transformer 기반 시계열 모델 구현",
         "description": "Temporal Fusion Transformer (TFT) 모델을 구현하여 Attention 메커니즘으로 시간적 패턴 학습을 강화하고 다중 시간대 예측 성능을 향상시킵니다.",
         "details": "1. TFT 아키텍처 설계 및 구현\n2. Variable Selection Network 구현\n3. Temporal Self-Attention 레이어 구현\n4. 기존 LSTM 대비 성능 비교 실험\n5. 하이퍼파라미터 튜닝",
-        "status": "in-progress",
+        "status": "done",
         "priority": "high",
         "dependencies": [],
         "tags": [
@@ -117,8 +117,8 @@
             "id": 1.1,
             "title": "Production 통합 및 문서화",
             "description": "TFT 모델을 프로덕션 코드에 통합하고 문서를 작성합니다.",
-            "details": "1. src/models/transformer.py 파일 생성\n2. 기존 inference 코드와 통합\n3. API 엔드포인트 추가 (model_type='tft')\n4. 테스트 케이스 작성\n5. 사용법 문서 작성",
-            "status": "pending",
+            "details": "1. src/models/transformer.py 파일 생성\n2. 기존 inference 코드와 통합\n3. API 엔드포인트 추가 (model_type='tft')\n4. 테스트 케이스 작성\n5. 사용법 문서 작성\n\n[2025-12-16] 완료:\n- src/models/__init__.py: TFT 모든 컴포넌트 export\n- create_tft_model(): TFT 모델 팩토리 함수 추가\n- docs/architecture/tft_design.md: 사용법 문서 업데이트\n  - 기본 사용법 예제\n  - LSTM vs TFT 비교 실험 명령어\n  - 하이퍼파라미터 튜닝 사용법\n  - Attention 시각화 예제\n- 656개 통합 테스트 통과",
+            "status": "done",
             "dependencies": [
               "1.8",
               "1.9"

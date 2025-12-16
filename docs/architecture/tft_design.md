@@ -333,7 +333,111 @@ src/models/
 
 ---
 
-## 7. 참고 자료
+## 7. 사용법
+
+### 7.1 기본 사용
+
+```python
+from src.models import create_tft_model, TemporalFusionTransformer, QuantileLoss
+from src.training.train_tft import TFTTrainer, prepare_tft_data_pipeline
+
+# 1. 데이터 준비
+pipeline = prepare_tft_data_pipeline(
+    data_path='data/processed/jeju_hourly_merged.csv',
+    encoder_length=48,
+    decoder_length=24,
+    batch_size=64
+)
+
+# 2. 모델 생성
+model = create_tft_model(
+    num_known_vars=pipeline['num_known'],
+    num_unknown_vars=pipeline['num_unknown'],
+    hidden_size=64,
+    lstm_layers=2,
+    num_attention_heads=4,
+    encoder_length=48,
+    decoder_length=24
+)
+
+# 3. 학습
+trainer = TFTTrainer(model, optimizer, device)
+history = trainer.fit(
+    pipeline['train_loader'],
+    pipeline['val_loader'],
+    epochs=100,
+    patience=15
+)
+
+# 4. 예측
+result = trainer.predict(pipeline['test_loader'])
+median_pred = result['median']  # 중앙값 예측
+lower = result['lower']         # 10% quantile
+upper = result['upper']         # 90% quantile
+```
+
+### 7.2 LSTM vs TFT 비교
+
+```bash
+# 비교 실험 실행
+python -m src.experiments.compare_lstm_tft --epochs 100 --horizons 1,6,12,24
+
+# 빠른 테스트
+python -m src.experiments.compare_lstm_tft --quick
+```
+
+### 7.3 하이퍼파라미터 튜닝
+
+```bash
+# Optuna 기반 튜닝
+python -m src.experiments.tune_tft --n_trials 50
+
+# 빠른 테스트
+python -m src.experiments.tune_tft --quick
+```
+
+### 7.4 Attention 시각화
+
+```python
+from src.visualization.attention_viz import (
+    plot_attention_heatmap,
+    plot_variable_importance,
+    create_attention_report
+)
+
+# 종합 리포트 생성
+saved_files = create_attention_report(
+    model=model,
+    data_loader=test_loader,
+    feature_names={'known': known_features, 'unknown': unknown_features},
+    device=device,
+    output_dir='results/attention'
+)
+```
+
+---
+
+## 8. 구현 상태
+
+| Subtask | 제목 | 상태 | 날짜 |
+|---------|------|------|------|
+| 1.1 | TFT 아키텍처 연구 및 설계 | ✅ Done | 2025-12-16 |
+| 1.2 | Variable Selection Network | ✅ Done | 2025-12-16 |
+| 1.3 | Temporal Self-Attention | ✅ Done | 2025-12-16 |
+| 1.4 | Encoder-Decoder 구조 통합 | ✅ Done | 2025-12-16 |
+| 1.5 | Quantile Output Layer | ✅ Done | 2025-12-16 |
+| 1.6 | 학습 파이프라인 구축 | ✅ Done | 2025-12-16 |
+| 1.7 | LSTM vs TFT 성능 비교 | ✅ Done | 2025-12-16 |
+| 1.8 | 하이퍼파라미터 튜닝 | ✅ Done | 2025-12-16 |
+| 1.9 | Attention 시각화 도구 | ✅ Done | 2025-12-16 |
+| 1.10 | Production 통합 및 문서화 | ✅ Done | 2025-12-16 |
+
+**총 테스트:** 103개 통과
+**모델 파라미터:** ~677K (기본 설정)
+
+---
+
+## 9. 참고 자료
 
 ### 논문
 - [TFT Paper (arXiv)](https://arxiv.org/abs/1912.09363)
@@ -345,4 +449,8 @@ src/models/
 
 ### 코드 참조
 - 기존 LSTM: `src/models/lstm.py`
-- 피처 정의: `src/features/time_features.py`, `src/features/weather_features.py`
+- TFT 구현: `src/models/transformer.py`
+- 학습 파이프라인: `src/training/train_tft.py`
+- 비교 실험: `src/experiments/compare_lstm_tft.py`
+- 튜닝: `src/experiments/tune_tft.py`
+- 시각화: `src/visualization/attention_viz.py`

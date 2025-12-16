@@ -8,6 +8,7 @@ MODEL-003: LSTM
 MODEL-004: BiLSTM
 MODEL-005: Multi-horizon LSTM
 MODEL-006: Conditional Predictor (겨울철 변곡점 특화)
+MODEL-007: Temporal Fusion Transformer (TFT)
 """
 
 from .lstm import (
@@ -32,6 +33,28 @@ from .conditional import (
     create_conditional_predictor,
 )
 
+from .transformer import (
+    # TFT 컴포넌트
+    GatedLinearUnit,
+    GatedResidualNetwork,
+    VariableSelectionNetwork,
+    StaticCovariateEncoder,
+    TemporalVariableSelection,
+    PositionalEncoding,
+    InterpretableMultiHeadAttention,
+    TemporalSelfAttention,
+    StaticEnrichmentLayer,
+    LSTMEncoder,
+    LSTMDecoder,
+    # TFT 모델
+    TemporalFusionTransformer,
+    # 손실 함수
+    QuantileLoss,
+    # 유틸리티
+    generate_causal_mask,
+    generate_encoder_decoder_mask,
+)
+
 __all__ = [
     # MODEL-003: LSTM
     'LSTMModel',
@@ -47,4 +70,73 @@ __all__ = [
     'ConditionalPredictor',
     'AdaptiveConditionalPredictor',
     'create_conditional_predictor',
+    # MODEL-007: TFT
+    'GatedLinearUnit',
+    'GatedResidualNetwork',
+    'VariableSelectionNetwork',
+    'StaticCovariateEncoder',
+    'TemporalVariableSelection',
+    'PositionalEncoding',
+    'InterpretableMultiHeadAttention',
+    'TemporalSelfAttention',
+    'StaticEnrichmentLayer',
+    'LSTMEncoder',
+    'LSTMDecoder',
+    'TemporalFusionTransformer',
+    'QuantileLoss',
+    'generate_causal_mask',
+    'generate_encoder_decoder_mask',
 ]
+
+
+def create_tft_model(
+    num_known_vars: int,
+    num_unknown_vars: int,
+    hidden_size: int = 64,
+    lstm_layers: int = 2,
+    num_attention_heads: int = 4,
+    dropout: float = 0.1,
+    encoder_length: int = 48,
+    decoder_length: int = 24,
+    quantiles: list = None,
+    num_static_vars: int = 0
+) -> TemporalFusionTransformer:
+    """
+    TFT 모델 팩토리 함수
+
+    Args:
+        num_known_vars: Known 변수 수 (시간 관련 피처)
+        num_unknown_vars: Unknown 변수 수 (기상/수요 피처)
+        hidden_size: Hidden 차원
+        lstm_layers: LSTM 레이어 수
+        num_attention_heads: Attention head 수
+        dropout: Dropout 비율
+        encoder_length: Encoder 시퀀스 길이
+        decoder_length: Decoder 시퀀스 길이
+        quantiles: Quantile 출력 리스트
+        num_static_vars: Static 변수 수
+
+    Returns:
+        TemporalFusionTransformer 모델
+
+    Example:
+        >>> model = create_tft_model(
+        ...     num_known_vars=8,
+        ...     num_unknown_vars=25,
+        ...     hidden_size=64,
+        ...     encoder_length=48,
+        ...     decoder_length=24
+        ... )
+    """
+    return TemporalFusionTransformer(
+        num_static_vars=num_static_vars,
+        num_known_vars=num_known_vars,
+        num_unknown_vars=num_unknown_vars,
+        hidden_size=hidden_size,
+        lstm_layers=lstm_layers,
+        num_attention_heads=num_attention_heads,
+        dropout=dropout,
+        encoder_length=encoder_length,
+        decoder_length=decoder_length,
+        quantiles=quantiles
+    )
