@@ -9,6 +9,7 @@ MODEL-004: BiLSTM
 MODEL-005: Multi-horizon LSTM
 MODEL-006: Conditional Predictor (겨울철 변곡점 특화)
 MODEL-007: Temporal Fusion Transformer (TFT)
+MODEL-011: Ensemble (Weighted Average, Stacking, Blending)
 """
 
 from .lstm import (
@@ -55,6 +56,23 @@ from .transformer import (
     generate_encoder_decoder_mask,
 )
 
+from .ensemble import (
+    # 앙상블 설정
+    EnsembleConfig,
+    # 앙상블 모델
+    BaseEnsemble,
+    WeightedAverageEnsemble,
+    StackingEnsemble,
+    BlendingEnsemble,
+    UncertaintyEnsemble,
+    # 최적화
+    EnsembleOptimizer,
+    # 팩토리 및 유틸리티
+    create_ensemble,
+    evaluate_ensemble,
+    compare_with_individual,
+)
+
 __all__ = [
     # MODEL-003: LSTM
     'LSTMModel',
@@ -86,6 +104,17 @@ __all__ = [
     'QuantileLoss',
     'generate_causal_mask',
     'generate_encoder_decoder_mask',
+    # MODEL-011: Ensemble
+    'EnsembleConfig',
+    'BaseEnsemble',
+    'WeightedAverageEnsemble',
+    'StackingEnsemble',
+    'BlendingEnsemble',
+    'UncertaintyEnsemble',
+    'EnsembleOptimizer',
+    'create_ensemble',
+    'evaluate_ensemble',
+    'compare_with_individual',
 ]
 
 
