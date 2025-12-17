@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-1423%20passed-brightgreen.svg)](#테스트)
+[![Tests](https://img.shields.io/badge/Tests-1436%20passed-brightgreen.svg)](#테스트)
 
 ## 프로젝트 개요
 
@@ -80,6 +80,20 @@
 | **Locust** | 부하 테스트 |
 | **Docker** | 컨테이너화 배포 |
 
+### 📡 실시간 데이터 크롤러
+| 크롤러 | 데이터 소스 | 설명 |
+|--------|-------------|------|
+| **EPSIS Crawler** | 전력통계정보시스템 | 전국 실시간 전력수급 (5분 간격) |
+| **Jeju Power Crawler** | 공공데이터포털 | 제주 전력수급현황 (시간별 실측) |
+
+### 📊 Streamlit 대시보드
+| 기능 | 설명 |
+|------|------|
+| **EPSIS 실시간** | 전국/제주 전력수급 현황 |
+| **제주 실측 데이터** | 공공데이터포털 실측 데이터 시각화 |
+| **예측 시각화** | 24시간 전력 수요 예측 |
+| **시나리오 분석** | 폭염/한파 시나리오 시뮬레이션 |
+
 ---
 
 ## 빠른 시작
@@ -143,6 +157,36 @@ response = requests.post("http://localhost:8000/predict", json={
 })
 
 predictions = response.json()["predictions"]
+```
+
+### 대시보드 실행
+
+```bash
+# EPSIS 실시간 대시보드 (권장)
+streamlit run src/dashboard/app_v1.py
+
+# API 연동 대시보드
+streamlit run src/dashboard/app.py
+```
+
+### 제주 전력수급 크롤러 사용
+
+```python
+from tools.crawlers.jeju_power_crawler import JejuPowerCrawler
+
+# 크롤러 초기화
+crawler = JejuPowerCrawler()
+
+# ZIP 파일에서 데이터 로드 (공공데이터포털)
+data = crawler.load_from_zip("data/jeju_power_supply.zip")
+
+# 최신 데이터 확인
+latest = data[-1]
+print(f"계통수요: {latest.system_demand:.1f} MW")
+print(f"공급능력: {latest.supply_capacity:.1f} MW")
+print(f"예비율: {latest.reserve_rate:.1f}%")
+
+crawler.close()
 ```
 
 ---
@@ -265,6 +309,14 @@ best_model, results = automl.run(
 | `jeju_temp_hourly_*.csv` | 시간별 기상관측 데이터 | 2013-2024 | 기상청 ASOS |
 | `jeju_CAR_daily_*.csv` | 일별 전기차 등록대수 | 2013-2024 | 제주도 |
 | `jejudo_daily_visitors_*.csv` | 일별 입도객 수 | 2013-2025 | 제주관광공사 |
+| `jeju_power_supply.zip` | 제주 전력수급현황 (시간별) | 2023-2025 | 공공데이터포털 |
+
+### 실시간 데이터 소스
+
+| 소스 | URL | 데이터 | 주기 |
+|------|-----|--------|------|
+| **EPSIS** | epsis.kpx.or.kr | 전국 전력수급 | 5분 |
+| **공공데이터포털** | data.go.kr/data/15125113 | 제주 전력수급 | 시간별 |
 
 ---
 
@@ -278,6 +330,10 @@ power-demand-forecast/
 │   │   ├── main.py             # API 엔드포인트
 │   │   ├── docs.py             # API 문서 및 모델 카드
 │   │   └── schemas.py          # Pydantic 스키마
+│   │
+│   ├── dashboard/              # Streamlit 대시보드
+│   │   ├── app.py              # API 연동 대시보드
+│   │   └── app_v1.py           # EPSIS 실시간 대시보드
 │   │
 │   ├── models/                 # 딥러닝 모델
 │   │   ├── lstm.py             # LSTM 모델
@@ -303,8 +359,15 @@ power-demand-forecast/
 │   │
 │   └── pipeline.py             # 통합 파이프라인 (Task 25)
 │
-├── tests/                      # 테스트 (1423 tests)
+├── tools/
+│   └── crawlers/               # 데이터 크롤러
+│       ├── epsis_crawler.py    # EPSIS 전국 실시간 크롤러
+│       └── jeju_power_crawler.py  # 제주 전력수급 크롤러
+│
+├── tests/                      # 테스트 (1436 tests)
 │   ├── test_pipeline.py        # 파이프라인 테스트
+│   ├── test_jeju_crawler.py    # 제주 크롤러 테스트
+│   ├── test_dashboard.py       # 대시보드 테스트
 │   ├── test_anomaly_detection.py
 │   ├── test_explainability.py
 │   ├── test_scenario_analysis.py
@@ -337,7 +400,7 @@ pytest tests/test_anomaly_detection.py -v
 pytest tests/ --cov=src --cov-report=html
 ```
 
-**테스트 현황**: ✅ 1423 passed, 3 skipped
+**테스트 현황**: ✅ 1436 passed, 3 skipped
 
 ---
 
@@ -452,7 +515,8 @@ model = model.to(device)
 ### 데이터 출처
 - [한국전력거래소](https://www.kpx.or.kr/) - 전력거래량 데이터
 - [기상청 기상자료개방포털](https://data.kma.go.kr/) - ASOS 기상관측 데이터
-- [공공데이터포털](https://www.data.go.kr/) - 기상청 ASOS API
+- [공공데이터포털](https://www.data.go.kr/) - 기상청 ASOS API, 제주 전력수급현황
+- [전력통계정보시스템 (EPSIS)](https://epsis.kpx.or.kr/) - 실시간 전력수급 데이터
 
 ---
 
@@ -470,4 +534,4 @@ MIT License
 
 ---
 
-*Last Updated: 2025-12-16 | v1.0.0*
+*Last Updated: 2025-12-17 | v1.1.0*
