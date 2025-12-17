@@ -41,6 +41,24 @@ import io
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+
+# EPSIS 크롤러 import (직접 임포트로 다른 크롤러 의존성 회피)
+try:
+    import importlib.util
+    epsis_spec = importlib.util.spec_from_file_location(
+        "epsis_crawler",
+        PROJECT_ROOT / "tools" / "crawlers" / "epsis_crawler.py"
+    )
+    epsis_module = importlib.util.module_from_spec(epsis_spec)
+    epsis_spec.loader.exec_module(epsis_module)
+    EPSISCrawler = epsis_module.EPSISCrawler
+    JejuEstimator = epsis_module.JejuEstimator
+    PowerSupplyData = epsis_module.PowerSupplyData
+    EPSIS_AVAILABLE = True
+except Exception as e:
+    EPSIS_AVAILABLE = False
+    print(f"EPSIS crawler import failed: {e}")
 
 
 # ============================================================================
@@ -446,6 +464,49 @@ class DataManager:
             "status": status,
             "status_text": status_text
         }
+
+    @staticmethod
+    @st.cache_data(ttl=60)  # 1분 캐시
+    def fetch_epsis_realtime() -> Optional[Dict[str, Any]]:
+        """EPSIS 실시간 전력 수급 데이터 조회"""
+        if not EPSIS_AVAILABLE:
+            return None
+
+        try:
+            crawler = EPSISCrawler(timeout=15, max_retries=2)
+            jeju_estimator = JejuEstimator()
+
+            # 오늘 데이터 조회
+            data = crawler.fetch_realtime_data()
+            crawler.close()
+
+            if not data:
+                return None
+
+            # 최신 데이터 추출
+            latest_national = data[-1]
+            latest_jeju = jeju_estimator.estimate_jeju_demand(latest_national)
+
+            # 최근 24시간 데이터 (5분 간격 = 288건 중 최근 288건)
+            recent_data = data[-288:] if len(data) >= 288 else data
+            jeju_data = [jeju_estimator.estimate_jeju_demand(d) for d in recent_data]
+
+            return {
+                'national': {
+                    'latest': latest_national,
+                    'history': recent_data,
+                },
+                'jeju': {
+                    'latest': latest_jeju,
+                    'history': jeju_data,
+                },
+                'fetched_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'data_count': len(data),
+            }
+
+        except Exception as e:
+            st.warning(f"EPSIS 데이터 조회 실패: {e}")
+            return None
 
     @staticmethod
     def create_sample_weather(
@@ -1207,61 +1268,213 @@ def render_supply_status_page(
     """실시간 수급 현황 페이지 렌더링"""
     st.header("📊 실시간 수급 현황")
 
-    # 현재 수요 계산 (최근 데이터 기반)
+    # EPSIS 실시간 데이터 섹션
+    if EPSIS_AVAILABLE:
+        st.subheader("🔴 EPSIS 실시간 데이터")
+
+        # EPSIS 데이터 가져오기
+        with st.spinner("EPSIS 데이터 조회 중..."):
+            epsis_data = DataManager.fetch_epsis_realtime()
+
+        if epsis_data:
+            # 데이터 소스 정보
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.caption(f"🕐 조회 시점: {epsis_data['fetched_at']}")
+            with col_info2:
+                st.caption(f"📊 데이터 건수: {epsis_data['data_count']}건")
+            with col_info3:
+                if st.button("🔄 새로고침", key="epsis_refresh"):
+                    DataManager.fetch_epsis_realtime.clear()
+                    st.rerun()
+
+            # 전국 vs 제주 탭
+            epsis_tab1, epsis_tab2 = st.tabs(["🇰🇷 전국 현황", "🏝️ 제주 추정"])
+
+            with epsis_tab1:
+                national = epsis_data['national']['latest']
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    fig = GaugeComponents.create_supply_gauge(
+                        national.supply_capacity,
+                        max_value=120000
+                    )
+                    fig.update_layout(title={'text': "공급능력 (전국)"})
+                    st.plotly_chart(fig, use_container_width=True, key="nat_supply")
+                with col2:
+                    fig = GaugeComponents.create_demand_gauge(
+                        national.current_demand,
+                        national.supply_capacity,
+                        max_value=120000
+                    )
+                    fig.update_layout(title={'text': "현재수요 (전국)"})
+                    st.plotly_chart(fig, use_container_width=True, key="nat_demand")
+                with col3:
+                    st.metric(
+                        "예비력",
+                        f"{national.reserve_power:,.0f} MW",
+                        help="공급능력 - 현재수요"
+                    )
+                with col4:
+                    st.metric(
+                        "예비율",
+                        f"{national.reserve_rate:.1f}%",
+                        delta=f"{'안정' if national.reserve_rate >= 10 else '주의'}",
+                        delta_color="normal" if national.reserve_rate >= 10 else "inverse"
+                    )
+
+                st.caption(f"📅 데이터 시점: {national.timestamp}")
+
+            with epsis_tab2:
+                jeju = epsis_data['jeju']['latest']
+
+                # 제주 추정치 4개 게이지
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    fig = GaugeComponents.create_supply_gauge(jeju.supply_capacity)
+                    st.plotly_chart(fig, use_container_width=True, key="jeju_supply")
+                with col2:
+                    fig = GaugeComponents.create_demand_gauge(
+                        jeju.current_demand,
+                        jeju.supply_capacity
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key="jeju_demand")
+                with col3:
+                    fig = GaugeComponents.create_reserve_gauge(jeju.reserve_power)
+                    st.plotly_chart(fig, use_container_width=True, key="jeju_reserve")
+                with col4:
+                    fig = GaugeComponents.create_reserve_rate_gauge(jeju.reserve_rate)
+                    st.plotly_chart(fig, use_container_width=True, key="jeju_rate")
+
+                # 상태 메시지
+                status = "safe" if jeju.reserve_rate >= 10 else "warning" if jeju.reserve_rate >= 5 else "danger"
+                status_text = "정상" if jeju.reserve_rate >= 10 else "주의" if jeju.reserve_rate >= 5 else "위험"
+                status_class = f"status-{status}"
+
+                st.markdown(f"""
+                <div style="text-align: center; padding: 10px; background: #F8FAFC; border-radius: 8px; margin: 10px 0;">
+                    <span style="font-size: 1.1rem;">제주 수급 상태 (추정): </span>
+                    <span class="{status_class}" style="font-size: 1.3rem; font-weight: bold;">
+                        {status_text}
+                    </span>
+                    <span style="color: #64748B; margin-left: 20px;">
+                        이용률: {jeju.utilization_rate:.1f}%
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.info("⚠️ 제주 데이터는 전국 데이터 기반 **추정치**입니다. (계절별 비율 적용)")
+
+            # EPSIS 실시간 추이 차트
+            st.markdown("---")
+            st.subheader("📈 EPSIS 실시간 수급 추이")
+
+            jeju_history = epsis_data['jeju']['history']
+            if jeju_history:
+                # 데이터프레임 변환
+                chart_data = pd.DataFrame([
+                    {
+                        'timestamp': d.timestamp,
+                        '현재수요': d.current_demand,
+                        '공급능력': d.supply_capacity,
+                        '예비력': d.reserve_power,
+                    }
+                    for d in jeju_history
+                ])
+                chart_data['timestamp'] = pd.to_datetime(chart_data['timestamp'])
+                chart_data = chart_data.sort_values('timestamp')
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=chart_data['timestamp'],
+                    y=chart_data['공급능력'],
+                    mode='lines',
+                    name='공급능력',
+                    line=dict(color=Config.COLORS['supply'], width=2)
+                ))
+                fig.add_trace(go.Scatter(
+                    x=chart_data['timestamp'],
+                    y=chart_data['현재수요'],
+                    mode='lines',
+                    name='현재수요',
+                    line=dict(color=Config.COLORS['demand'], width=2),
+                    fill='tozeroy',
+                    fillcolor='rgba(255, 0, 0, 0.1)'
+                ))
+                fig.add_trace(go.Scatter(
+                    x=chart_data['timestamp'],
+                    y=chart_data['예비력'],
+                    mode='lines',
+                    name='예비력',
+                    line=dict(color=Config.COLORS['reserve'], width=1, dash='dot')
+                ))
+
+                fig.update_layout(
+                    title="제주 전력 수급 추이 (EPSIS 기반 추정, 5분 간격)",
+                    xaxis_title="시간",
+                    yaxis_title="전력 (MW)",
+                    height=400,
+                    template="plotly_white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                )
+                st.plotly_chart(fig, use_container_width=True, key="epsis_trend")
+
+            # EPSIS 상세 데이터
+            with st.expander("📋 EPSIS 시간별 데이터 (제주 추정)"):
+                if jeju_history:
+                    df_epsis = pd.DataFrame([
+                        {
+                            '시간': d.timestamp,
+                            '공급능력(MW)': d.supply_capacity,
+                            '현재수요(MW)': d.current_demand,
+                            '예비력(MW)': d.reserve_power,
+                            '예비율(%)': d.reserve_rate,
+                        }
+                        for d in jeju_history[-48:]  # 최근 48건 (4시간)
+                    ])
+                    st.dataframe(df_epsis.round(1), use_container_width=True, hide_index=True)
+
+        else:
+            st.warning("EPSIS 데이터를 불러올 수 없습니다. 과거 데이터를 표시합니다.")
+
+    else:
+        st.info("💡 EPSIS 크롤러가 비활성화되어 있습니다. 과거 데이터만 표시됩니다.")
+
+    # 기존 과거 데이터 섹션
+    st.markdown("---")
+    st.subheader("📚 과거 데이터 기반 분석")
+
     if historical_df is not None and len(historical_df) > 0:
         current_demand = historical_df['power_demand'].iloc[-1]
         supply_status = DataManager.calculate_supply_status(current_demand)
 
-        # 4개 게이지 표시
+        # 과거 데이터 요약
         col1, col2, col3, col4 = st.columns(4)
-
         with col1:
-            fig = GaugeComponents.create_supply_gauge(supply_status['supply_capacity'])
-            st.plotly_chart(fig, use_container_width=True, key="supply_gauge")
-
+            st.metric("최근 수요", f"{current_demand:.0f} MW")
         with col2:
-            fig = GaugeComponents.create_demand_gauge(
-                supply_status['current_demand'],
-                supply_status['supply_capacity']
-            )
-            st.plotly_chart(fig, use_container_width=True, key="demand_gauge")
-
+            avg_24h = historical_df['power_demand'].tail(24).mean()
+            st.metric("24h 평균", f"{avg_24h:.0f} MW")
         with col3:
-            fig = GaugeComponents.create_reserve_gauge(supply_status['reserve_power'])
-            st.plotly_chart(fig, use_container_width=True, key="reserve_gauge")
-
+            max_24h = historical_df['power_demand'].tail(24).max()
+            st.metric("24h 최대", f"{max_24h:.0f} MW")
         with col4:
-            fig = GaugeComponents.create_reserve_rate_gauge(supply_status['reserve_rate'])
-            st.plotly_chart(fig, use_container_width=True, key="rate_gauge")
-
-        # 상태 메시지
-        status_class = f"status-{supply_status['status']}"
-        st.markdown(f"""
-        <div style="text-align: center; padding: 10px; background: #F8FAFC; border-radius: 8px; margin: 10px 0;">
-            <span style="font-size: 1.1rem;">현재 수급 상태: </span>
-            <span class="{status_class}" style="font-size: 1.3rem; font-weight: bold;">
-                {supply_status['status_text']}
-            </span>
-            <span style="color: #64748B; margin-left: 20px;">
-                이용률: {supply_status['utilization']:.1f}%
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
+            min_24h = historical_df['power_demand'].tail(24).min()
+            st.metric("24h 최소", f"{min_24h:.0f} MW")
 
         # 실시간 수급 추이 차트
-        st.subheader("24시간 수급 추이")
+        st.subheader("24시간 수급 추이 (과거 데이터)")
         fig = Charts.create_supply_status_chart(historical_df, supply_status['supply_capacity'])
         st.plotly_chart(fig, use_container_width=True, key="supply_chart")
 
         # 데이터 그리드
-        with st.expander("📋 시간별 상세 데이터"):
+        with st.expander("📋 시간별 상세 데이터 (과거)"):
             recent_24h = historical_df.tail(24)[['power_demand', '기온', '습도', '풍속']].copy()
             recent_24h.columns = ['전력수요(MW)', '기온(°C)', '습도(%)', '풍속(m/s)']
             st.dataframe(recent_24h.round(1), use_container_width=True)
     else:
-        st.warning("데이터를 불러올 수 없습니다.")
+        st.warning("과거 데이터를 불러올 수 없습니다.")
 
 
 def render_prediction_page(
