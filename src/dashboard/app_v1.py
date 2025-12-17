@@ -1354,7 +1354,7 @@ def render_supply_status_page(
                         y=chart_data_nat['공급능력'],
                         mode='lines',
                         name='공급능력',
-                        line=dict(color=Config.COLORS['supply'], width=2)
+                        line=dict(color=Config.COLORS['supply'], width=3)
                     ), secondary_y=False)
 
                     fig_nat.add_trace(go.Scatter(
@@ -1362,9 +1362,7 @@ def render_supply_status_page(
                         y=chart_data_nat['현재수요'],
                         mode='lines',
                         name='현재수요',
-                        line=dict(color=Config.COLORS['demand'], width=2),
-                        fill='tozeroy',
-                        fillcolor='rgba(255, 0, 0, 0.1)'
+                        line=dict(color=Config.COLORS['demand'], width=3)
                     ), secondary_y=False)
 
                     fig_nat.add_trace(go.Scatter(
@@ -1372,7 +1370,7 @@ def render_supply_status_page(
                         y=chart_data_nat['예비력'],
                         mode='lines',
                         name='예비력',
-                        line=dict(color=Config.COLORS['reserve'], width=2, dash='dot')
+                        line=dict(color=Config.COLORS['reserve'], width=3)
                     ), secondary_y=False)
 
                     # 예비율(%) - 보조 Y축
@@ -1381,7 +1379,7 @@ def render_supply_status_page(
                         y=chart_data_nat['예비율'],
                         mode='lines',
                         name='예비율(%)',
-                        line=dict(color='#9C27B0', width=2, dash='dash')
+                        line=dict(color='#9C27B0', width=3, dash='dash')
                     ), secondary_y=True)
 
                     fig_nat.update_layout(
@@ -1480,7 +1478,7 @@ def render_supply_status_page(
                     y=chart_data['공급능력'],
                     mode='lines',
                     name='공급능력',
-                    line=dict(color=Config.COLORS['supply'], width=2)
+                    line=dict(color=Config.COLORS['supply'], width=3)
                 ), secondary_y=False)
 
                 fig.add_trace(go.Scatter(
@@ -1488,9 +1486,7 @@ def render_supply_status_page(
                     y=chart_data['현재수요'],
                     mode='lines',
                     name='현재수요',
-                    line=dict(color=Config.COLORS['demand'], width=2),
-                    fill='tozeroy',
-                    fillcolor='rgba(255, 0, 0, 0.1)'
+                    line=dict(color=Config.COLORS['demand'], width=3)
                 ), secondary_y=False)
 
                 fig.add_trace(go.Scatter(
@@ -1498,7 +1494,7 @@ def render_supply_status_page(
                     y=chart_data['예비력'],
                     mode='lines',
                     name='예비력',
-                    line=dict(color=Config.COLORS['reserve'], width=2, dash='dot')
+                    line=dict(color=Config.COLORS['reserve'], width=3)
                 ), secondary_y=False)
 
                 # 예비율(%) - 보조 Y축
@@ -1507,7 +1503,7 @@ def render_supply_status_page(
                     y=chart_data['예비율'],
                     mode='lines',
                     name='예비율(%)',
-                    line=dict(color='#9C27B0', width=2, dash='dash')
+                    line=dict(color='#9C27B0', width=3, dash='dash')
                 ), secondary_y=True)
 
                 fig.update_layout(
