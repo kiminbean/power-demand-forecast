@@ -1327,6 +1327,90 @@ def render_supply_status_page(
 
                 st.caption(f"📅 데이터 시점: {national['timestamp']}")
 
+                # 전국 실시간 추이 차트
+                st.markdown("---")
+                st.subheader("📈 전국 실시간 수급 추이")
+
+                national_history = epsis_data['national']['history']
+                if national_history:
+                    chart_data_nat = pd.DataFrame([
+                        {
+                            'timestamp': d['timestamp'],
+                            '현재수요': d['current_demand'],
+                            '공급능력': d['supply_capacity'],
+                            '예비력': d['reserve_power'],
+                            '예비율': d['reserve_rate'],
+                        }
+                        for d in national_history
+                    ])
+                    chart_data_nat['timestamp'] = pd.to_datetime(chart_data_nat['timestamp'])
+                    chart_data_nat = chart_data_nat.sort_values('timestamp')
+
+                    # 보조 Y축(예비율%)을 포함한 차트 생성
+                    fig_nat = make_subplots(specs=[[{"secondary_y": True}]])
+
+                    fig_nat.add_trace(go.Scatter(
+                        x=chart_data_nat['timestamp'],
+                        y=chart_data_nat['공급능력'],
+                        mode='lines',
+                        name='공급능력',
+                        line=dict(color=Config.COLORS['supply'], width=2)
+                    ), secondary_y=False)
+
+                    fig_nat.add_trace(go.Scatter(
+                        x=chart_data_nat['timestamp'],
+                        y=chart_data_nat['현재수요'],
+                        mode='lines',
+                        name='현재수요',
+                        line=dict(color=Config.COLORS['demand'], width=2),
+                        fill='tozeroy',
+                        fillcolor='rgba(255, 0, 0, 0.1)'
+                    ), secondary_y=False)
+
+                    fig_nat.add_trace(go.Scatter(
+                        x=chart_data_nat['timestamp'],
+                        y=chart_data_nat['예비력'],
+                        mode='lines',
+                        name='예비력',
+                        line=dict(color=Config.COLORS['reserve'], width=2, dash='dot')
+                    ), secondary_y=False)
+
+                    # 예비율(%) - 보조 Y축
+                    fig_nat.add_trace(go.Scatter(
+                        x=chart_data_nat['timestamp'],
+                        y=chart_data_nat['예비율'],
+                        mode='lines',
+                        name='예비율(%)',
+                        line=dict(color='#9C27B0', width=2, dash='dash')
+                    ), secondary_y=True)
+
+                    fig_nat.update_layout(
+                        title="전국 전력 수급 추이 (EPSIS 실시간, 5분 간격)",
+                        xaxis_title="시간",
+                        height=450,
+                        template="plotly_white",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center")
+                    )
+                    fig_nat.update_yaxes(title_text="전력 (MW)", secondary_y=False)
+                    fig_nat.update_yaxes(title_text="예비율 (%)", secondary_y=True)
+
+                    st.plotly_chart(fig_nat, use_container_width=True, key="epsis_national_trend")
+
+                # 전국 상세 데이터
+                with st.expander("📋 전국 시간별 데이터"):
+                    if national_history:
+                        df_nat = pd.DataFrame([
+                            {
+                                '시간': d['timestamp'],
+                                '공급능력(MW)': d['supply_capacity'],
+                                '현재수요(MW)': d['current_demand'],
+                                '예비력(MW)': d['reserve_power'],
+                                '예비율(%)': d['reserve_rate'],
+                            }
+                            for d in national_history[-48:]  # 최근 48건 (4시간)
+                        ])
+                        st.dataframe(df_nat.round(1), use_container_width=True, hide_index=True)
+
             with epsis_tab2:
                 jeju = epsis_data['jeju']['latest']
 
