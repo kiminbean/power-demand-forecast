@@ -1301,7 +1301,7 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "공급능력 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_supply")
+                    st.plotly_chart(fig, width="stretch", key="nat_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
                         national.current_demand,
@@ -1309,7 +1309,7 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "현재수요 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_demand")
+                    st.plotly_chart(fig, width="stretch", key="nat_demand")
                 with col3:
                     st.metric(
                         "예비력",
@@ -1333,19 +1333,19 @@ def render_supply_status_page(
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     fig = GaugeComponents.create_supply_gauge(jeju.supply_capacity)
-                    st.plotly_chart(fig, use_container_width=True, key="jeju_supply")
+                    st.plotly_chart(fig, width="stretch", key="jeju_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
                         jeju.current_demand,
                         jeju.supply_capacity
                     )
-                    st.plotly_chart(fig, use_container_width=True, key="jeju_demand")
+                    st.plotly_chart(fig, width="stretch", key="jeju_demand")
                 with col3:
                     fig = GaugeComponents.create_reserve_gauge(jeju.reserve_power)
-                    st.plotly_chart(fig, use_container_width=True, key="jeju_reserve")
+                    st.plotly_chart(fig, width="stretch", key="jeju_reserve")
                 with col4:
                     fig = GaugeComponents.create_reserve_rate_gauge(jeju.reserve_rate)
-                    st.plotly_chart(fig, use_container_width=True, key="jeju_rate")
+                    st.plotly_chart(fig, width="stretch", key="jeju_rate")
 
                 # 상태 메시지
                 status = "safe" if jeju.reserve_rate >= 10 else "warning" if jeju.reserve_rate >= 5 else "danger"
@@ -1418,7 +1418,7 @@ def render_supply_status_page(
                     template="plotly_white",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02)
                 )
-                st.plotly_chart(fig, use_container_width=True, key="epsis_trend")
+                st.plotly_chart(fig, width="stretch", key="epsis_trend")
 
             # EPSIS 상세 데이터
             with st.expander("📋 EPSIS 시간별 데이터 (제주 추정)"):
@@ -1433,7 +1433,7 @@ def render_supply_status_page(
                         }
                         for d in jeju_history[-48:]  # 최근 48건 (4시간)
                     ])
-                    st.dataframe(df_epsis.round(1), use_container_width=True, hide_index=True)
+                    st.dataframe(df_epsis.round(1), width="stretch", hide_index=True)
 
         else:
             st.warning("EPSIS 데이터를 불러올 수 없습니다. 과거 데이터를 표시합니다.")
@@ -1466,13 +1466,13 @@ def render_supply_status_page(
         # 실시간 수급 추이 차트
         st.subheader("24시간 수급 추이 (과거 데이터)")
         fig = Charts.create_supply_status_chart(historical_df, supply_status['supply_capacity'])
-        st.plotly_chart(fig, use_container_width=True, key="supply_chart")
+        st.plotly_chart(fig, width="stretch", key="supply_chart")
 
         # 데이터 그리드
         with st.expander("📋 시간별 상세 데이터 (과거)"):
             recent_24h = historical_df.tail(24)[['power_demand', '기온', '습도', '풍속']].copy()
             recent_24h.columns = ['전력수요(MW)', '기온(°C)', '습도(%)', '풍속(m/s)']
-            st.dataframe(recent_24h.round(1), use_container_width=True)
+            st.dataframe(recent_24h.round(1), width="stretch")
     else:
         st.warning("과거 데이터를 불러올 수 없습니다.")
 
@@ -1493,7 +1493,7 @@ def render_prediction_page(
         st.subheader("예측 설정")
 
         # 예측 실행 버튼
-        if st.button("🚀 예측 실행", type="primary", use_container_width=True):
+        if st.button("🚀 예측 실행", type="primary", width="stretch"):
             with st.spinner("예측 중..."):
                 # 기상 조건 수정 적용
                 modified_data = DataManager.apply_weather_modification(
@@ -1542,7 +1542,7 @@ def render_prediction_page(
                 pred_time,
                 result.get('model_used', 'unknown')
             )
-            st.plotly_chart(fig, use_container_width=True, key="pred_chart")
+            st.plotly_chart(fig, width="stretch", key="pred_chart")
         else:
             st.info("오른쪽의 '예측 실행' 버튼을 클릭하여 예측을 시작하세요.")
 
@@ -1563,7 +1563,7 @@ def render_prediction_page(
                 height=400,
                 template="plotly_white"
             )
-            st.plotly_chart(fig, use_container_width=True, key="default_chart")
+            st.plotly_chart(fig, width="stretch", key="default_chart")
 
     # 시나리오 분석 섹션
     st.markdown("---")
@@ -1619,11 +1619,11 @@ def render_prediction_page(
 
             with col1:
                 fig = Charts.create_scenario_comparison_chart(results)
-                st.plotly_chart(fig, use_container_width=True, key="scenario_chart")
+                st.plotly_chart(fig, width="stretch", key="scenario_chart")
 
             with col2:
                 fig = Charts.create_scenario_heatmap(results)
-                st.plotly_chart(fig, use_container_width=True, key="scenario_heatmap")
+                st.plotly_chart(fig, width="stretch", key="scenario_heatmap")
 
             # 통계 테이블
             st.subheader("시나리오 비교 통계")
@@ -1642,7 +1642,7 @@ def render_prediction_page(
                     })
 
             if comparison_data:
-                st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(comparison_data), width="stretch", hide_index=True)
 
 
 def render_renewable_page(
@@ -1681,7 +1681,7 @@ def render_renewable_page(
         input_humidity = st.number_input("습도 (%)", value=60.0, min_value=0.0, max_value=100.0)
         input_wind_speed = st.number_input("풍속 (m/s)", value=5.0, min_value=0.0, max_value=50.0)
 
-        if st.button("🚀 신재생 발전량 예측", type="primary", use_container_width=True):
+        if st.button("🚀 신재생 발전량 예측", type="primary", width="stretch"):
             with st.spinner("예측 중..."):
                 base_dt = datetime.now().replace(minute=0, second=0, microsecond=0)
                 weather_data = DataManager.create_sample_weather(
@@ -1724,7 +1724,7 @@ def render_renewable_page(
             predictions = result.get('predictions', [])
             if predictions:
                 fig = Charts.create_renewable_chart(predictions, energy_type)
-                st.plotly_chart(fig, use_container_width=True, key="renewable_chart")
+                st.plotly_chart(fig, width="stretch", key="renewable_chart")
 
             # 구성 비율
             col_pie1, col_pie2 = st.columns(2)
@@ -1733,7 +1733,7 @@ def render_renewable_page(
                 total_solar = solar_stats.get('total_mwh', 0)
                 total_wind = wind_stats.get('total_mwh', 0)
                 fig = Charts.create_renewable_pie_chart(total_solar, total_wind)
-                st.plotly_chart(fig, use_container_width=True, key="renewable_pie")
+                st.plotly_chart(fig, width="stretch", key="renewable_pie")
 
             with col_pie2:
                 st.markdown("### 📋 상세 통계")
@@ -1753,7 +1753,7 @@ def render_renewable_page(
                         "총량 (MWh)": f"{wind_stats.get('total_mwh', 0):.1f}",
                     })
                 if stats_table:
-                    st.dataframe(pd.DataFrame(stats_table), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(stats_table), width="stretch", hide_index=True)
         else:
             st.info("👈 오른쪽에서 기상 조건을 입력하고 '신재생 발전량 예측' 버튼을 클릭하세요.")
 
@@ -1807,15 +1807,15 @@ def render_historical_page(historical_df: pd.DataFrame, date_range: Tuple):
                 height=400,
                 template="plotly_white"
             )
-            st.plotly_chart(fig, use_container_width=True, key="hist_trend")
+            st.plotly_chart(fig, width="stretch", key="hist_trend")
 
         with col2:
             fig = Charts.create_hourly_pattern_chart(filtered_data)
-            st.plotly_chart(fig, use_container_width=True, key="hist_hourly")
+            st.plotly_chart(fig, width="stretch", key="hist_hourly")
 
         # 요일별 패턴
         fig = Charts.create_weekly_pattern_chart(filtered_data)
-        st.plotly_chart(fig, use_container_width=True, key="hist_weekly")
+        st.plotly_chart(fig, width="stretch", key="hist_weekly")
 
         # 데이터 다운로드
         st.markdown("---")
@@ -1850,7 +1850,7 @@ def render_historical_page(historical_df: pd.DataFrame, date_range: Tuple):
             display_cols = ['power_demand']
             if '기온' in filtered_data.columns:
                 display_cols.extend(['기온', '습도', '풍속'])
-            st.dataframe(filtered_data[display_cols].round(2), use_container_width=True)
+            st.dataframe(filtered_data[display_cols].round(2), width="stretch")
     else:
         st.warning("선택한 기간에 데이터가 없습니다.")
 
@@ -1933,7 +1933,7 @@ def render_system_info_page(
             {"Method": "POST", "Endpoint": "/predict/conditional", "설명": "조건부 예측"},
             {"Method": "POST", "Endpoint": "/predict/batch", "설명": "배치 예측"},
         ]
-        st.dataframe(pd.DataFrame(endpoints), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(endpoints), width="stretch", hide_index=True)
 
     with col2:
         st.subheader("📡 신재생에너지 API 엔드포인트")
@@ -1943,7 +1943,7 @@ def render_system_info_page(
             {"Method": "POST", "Endpoint": "/predict", "설명": "단일 예측"},
             {"Method": "POST", "Endpoint": "/predict/batch", "설명": "배치 예측"},
         ]
-        st.dataframe(pd.DataFrame(endpoints), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(endpoints), width="stretch", hide_index=True)
 
 
 # ============================================================================
