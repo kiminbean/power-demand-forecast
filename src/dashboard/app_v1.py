@@ -1302,7 +1302,7 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "공급능력 (전국)"})
-                    st.plotly_chart(fig, width="stretch", key="nat_supply")
+                    st.plotly_chart(fig, use_container_width=True, key="nat_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
                         national['current_demand'],
@@ -1310,20 +1310,20 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "현재수요 (전국)"})
-                    st.plotly_chart(fig, width="stretch", key="nat_demand")
+                    st.plotly_chart(fig, use_container_width=True, key="nat_demand")
                 with col3:
-                    st.metric(
-                        "예비력",
-                        f"{national['reserve_power']:,.0f} MW",
-                        help="공급능력 - 현재수요"
+                    fig = GaugeComponents.create_reserve_gauge(
+                        national['reserve_power'],
+                        max_value=50000
                     )
+                    fig.update_layout(title={'text': "예비력 (전국)"})
+                    st.plotly_chart(fig, use_container_width=True, key="nat_reserve")
                 with col4:
-                    st.metric(
-                        "예비율",
-                        f"{national['reserve_rate']:.1f}%",
-                        delta=f"{'안정' if national['reserve_rate'] >= 10 else '주의'}",
-                        delta_color="normal" if national['reserve_rate'] >= 10 else "inverse"
+                    fig = GaugeComponents.create_reserve_rate_gauge(
+                        national['reserve_rate']
                     )
+                    fig.update_layout(title={'text': "예비율 (전국)"})
+                    st.plotly_chart(fig, use_container_width=True, key="nat_rate")
 
                 st.caption(f"📅 데이터 시점: {national['timestamp']}")
 
