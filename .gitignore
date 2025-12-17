@@ -82,3 +82,16 @@ htmlcov/
 .env.local
 credentials.json
 secrets.json
+
+# === Temporary/Generated Data ===
+# EPSIS crawler test outputs
+data/epsis*.json
+
+# Extracted ZIP contents
+data/jeju_extract/
+
+# Pipeline reports (generated during testing)
+results/pipeline_report_*.json
+
+# Full requirements (generated)
+requirements-full.txt
