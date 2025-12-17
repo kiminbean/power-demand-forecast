@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-12-17
+
+### Added
+
+#### Data Crawlers
+- **Jeju Power Crawler** (`tools/crawlers/jeju_power_crawler.py`):
+  - `JejuPowerData`: Dataclass for Jeju power supply data
+  - `JejuPowerCrawler`: Crawler for 공공데이터포털 (data.go.kr)
+  - `JejuPowerDataStore`: CSV/JSON data persistence
+  - ZIP file processing (5 CSVs: 계통수요, 공급능력, 공급예비력, 예측수요, 운영예비력)
+  - 14,592 hourly records (2023-09-01 ~ 2025-04-30)
+
+#### Dashboard Enhancements
+- **제주 실측 Tab** (`src/dashboard/app_v1.py`):
+  - Real Jeju power supply data visualization
+  - 4 gauge charts (공급능력, 계통수요, 공급예비력, 예비율)
+  - 7-day trend chart with secondary Y-axis for reserve rate
+  - Detailed data table (last 48 hours)
+  - Data source info and refresh functionality
+
+#### Tests
+- **Jeju Crawler Tests** (`tests/test_jeju_crawler.py`):
+  - 33 comprehensive tests
+  - JejuPowerData dataclass tests
+  - ZIP processing tests
+  - Data parsing tests
+  - Integration tests with real data
+  - Edge case tests
+
+### Changed
+- Updated test count: 1,423 → 1,436 tests
+- Updated README.md with crawler and dashboard documentation
+- Updated PROJECT_STATUS.md with v1.1.0 progress
+
+### Fixed
+- **EPSIS AttributeError**: Fixed dict access syntax (`d['timestamp']` instead of `d.timestamp`)
+- **Chart Visibility**: Removed `fill='tozeroy'` and increased line width for reserve power/rate charts
+- **National Tab Gauges**: Changed from `st.metric()` to gauge charts for reserve power and rate
+- **Streamlit Deprecation**: Replaced `use_container_width=True` with `width="stretch"` (53 occurrences)
+
+---
+
 ## [1.0.0] - 2025-12-16
 
 ### Added
@@ -140,5 +182,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v1.1.0...HEAD
