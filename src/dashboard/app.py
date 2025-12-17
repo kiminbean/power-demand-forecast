@@ -1185,7 +1185,7 @@ uvicorn api.main:app --port 8001
             with col2:
                 st.subheader("예측 실행")
 
-                if st.button("🚀 예측 실행", type="primary", use_container_width=True):
+                if st.button("🚀 예측 실행", type="primary", width="stretch"):
                     with st.spinner("예측 중..."):
                         # 기상 조건 수정 적용
                         modified_data = apply_weather_modification(
@@ -1239,7 +1239,7 @@ uvicorn api.main:app --port 8001
                         pred_time,
                         result.get('model_used', 'unknown')
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                 else:
                     st.info("오른쪽의 '예측 실행' 버튼을 클릭하여 예측을 시작하세요.")
 
@@ -1260,7 +1260,7 @@ uvicorn api.main:app --port 8001
                         height=400,
                         template="plotly_white"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
     # ==========================================================================
     # 탭 2: 시나리오 분석
@@ -1330,7 +1330,7 @@ uvicorn api.main:app --port 8001
                 if results:
                     # 비교 차트
                     fig = Charts.create_scenario_comparison_chart(results)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
                     # 통계 테이블
                     st.subheader("시나리오 비교 통계")
@@ -1353,7 +1353,7 @@ uvicorn api.main:app --port 8001
                     if comparison_data:
                         st.dataframe(
                             pd.DataFrame(comparison_data),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
 
@@ -1399,7 +1399,7 @@ uvicorn api.main:app --port 8001
                 input_solar_rad = st.number_input("일사량 (MJ/m²)", value=2.0, min_value=0.0, max_value=5.0)
 
                 # 예측 실행 버튼
-                if st.button("🚀 신재생 발전량 예측", type="primary", use_container_width=True):
+                if st.button("🚀 신재생 발전량 예측", type="primary", width="stretch"):
                     with st.spinner("신재생에너지 발전량 예측 중..."):
                         # 기상 데이터 생성
                         base_dt = datetime.now().replace(minute=0, second=0, microsecond=0)
@@ -1521,7 +1521,7 @@ uvicorn api.main:app --port 8001
                             hovermode="x unified"
                         )
 
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
 
                     # 구성 비율 파이 차트
                     col_pie1, col_pie2 = st.columns(2)
@@ -1531,7 +1531,7 @@ uvicorn api.main:app --port 8001
                         total_wind = wind_stats.get('total_mwh', 0)
 
                         fig_pie = Charts.create_renewable_pie_chart(total_solar, total_wind)
-                        st.plotly_chart(fig_pie, use_container_width=True)
+                        st.plotly_chart(fig_pie, width="stretch")
 
                     with col_pie2:
                         # 통계 테이블
@@ -1554,7 +1554,7 @@ uvicorn api.main:app --port 8001
                                 "총량 (MWh)": f"{wind_stats.get('total_mwh', 0):.1f}",
                             })
                         if stats_table:
-                            st.dataframe(pd.DataFrame(stats_table), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(stats_table), width="stretch", hide_index=True)
 
                 else:
                     st.info("👈 오른쪽에서 기상 조건을 입력하고 '신재생 발전량 예측' 버튼을 클릭하세요.")
@@ -1682,7 +1682,7 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
                     demand_preds,
                     renewable_result.get('predictions', [])
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 # 에너지 현황 차트
                 col_chart1, col_chart2 = st.columns(2)
@@ -1691,7 +1691,7 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
                     fig_overview = Charts.create_energy_overview_chart(
                         avg_demand, avg_solar, avg_wind
                     )
-                    st.plotly_chart(fig_overview, use_container_width=True)
+                    st.plotly_chart(fig_overview, width="stretch")
 
                 with col_chart2:
                     # 순수요 분석
@@ -1766,18 +1766,18 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
                     height=400,
                     template="plotly_white"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             with col2:
                 # 시간대별 패턴
                 fig = Charts.create_hourly_pattern_chart(filtered_data)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             # 상세 데이터
             with st.expander("상세 데이터 보기"):
                 st.dataframe(
                     filtered_data[['power_demand', '기온', '습도', '풍속']].round(2),
-                    use_container_width=True
+                    width="stretch"
                 )
         else:
             st.warning("선택한 기간에 데이터가 없습니다.")
@@ -1815,7 +1815,7 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
 
                 # 모델 비교 차트
                 fig = Charts.create_model_performance_chart(model_info)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 st.info(f"기본 모델: **{model_info.get('default_model', 'conditional')}**")
         else:
@@ -1869,7 +1869,7 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
                 {"Method": "POST", "Endpoint": "/predict/conditional", "설명": "조건부 예측"},
                 {"Method": "POST", "Endpoint": "/predict/batch", "설명": "배치 예측"},
             ]
-            st.dataframe(pd.DataFrame(demand_endpoints), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(demand_endpoints), width="stretch", hide_index=True)
 
         with col_ep2:
             st.subheader("🌞🌬️ 신재생에너지 API 엔드포인트")
@@ -1881,7 +1881,7 @@ cd ../kpx-demand-forecast && uvicorn api.main:app --port 8001
                 {"Method": "POST", "Endpoint": "/predict", "설명": "단일 예측 (태양광/풍력)"},
                 {"Method": "POST", "Endpoint": "/predict/batch", "설명": "배치 예측 (최대 168h)"},
             ]
-            st.dataframe(pd.DataFrame(renewable_endpoints), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(renewable_endpoints), width="stretch", hide_index=True)
 
         st.markdown("---")
 

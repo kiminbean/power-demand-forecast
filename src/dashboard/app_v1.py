@@ -1360,7 +1360,7 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "공급능력 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_supply")
+                    st.plotly_chart(fig, width="stretch", key="nat_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
                         national['current_demand'],
@@ -1368,20 +1368,20 @@ def render_supply_status_page(
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "현재수요 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_demand")
+                    st.plotly_chart(fig, width="stretch", key="nat_demand")
                 with col3:
                     fig = GaugeComponents.create_reserve_gauge(
                         national['reserve_power'],
                         max_value=50000
                     )
                     fig.update_layout(title={'text': "예비력 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_reserve")
+                    st.plotly_chart(fig, width="stretch", key="nat_reserve")
                 with col4:
                     fig = GaugeComponents.create_reserve_rate_gauge(
                         national['reserve_rate']
                     )
                     fig.update_layout(title={'text': "예비율 (전국)"})
-                    st.plotly_chart(fig, use_container_width=True, key="nat_rate")
+                    st.plotly_chart(fig, width="stretch", key="nat_rate")
 
                 st.caption(f"📅 데이터 시점: {national['timestamp']}")
 
@@ -1450,7 +1450,7 @@ def render_supply_status_page(
                     fig_nat.update_yaxes(title_text="전력 (MW)", secondary_y=False)
                     fig_nat.update_yaxes(title_text="예비율 (%)", secondary_y=True)
 
-                    st.plotly_chart(fig_nat, use_container_width=True, key="epsis_national_trend")
+                    st.plotly_chart(fig_nat, width="stretch", key="epsis_national_trend")
 
                 # 전국 상세 데이터
                 with st.expander("📋 전국 시간별 데이터"):
@@ -1465,7 +1465,7 @@ def render_supply_status_page(
                             }
                             for d in national_history[-48:]  # 최근 48건 (4시간)
                         ])
-                        st.dataframe(df_nat.round(1), use_container_width=True, hide_index=True)
+                        st.dataframe(df_nat.round(1), width="stretch", hide_index=True)
 
             with epsis_tab2:
                 jeju = epsis_data['jeju']['latest']
@@ -1632,7 +1632,7 @@ def render_supply_status_page(
                         fig_actual.update_yaxes(title_text="전력 (MW)", secondary_y=False)
                         fig_actual.update_yaxes(title_text="예비율 (%)", secondary_y=True)
 
-                        st.plotly_chart(fig_actual, use_container_width=True, key="jeju_actual_trend")
+                        st.plotly_chart(fig_actual, width="stretch", key="jeju_actual_trend")
 
                     # 제주 실측 상세 데이터
                     with st.expander("📋 제주 실측 시간별 데이터"):
@@ -1649,7 +1649,7 @@ def render_supply_status_page(
                                 }
                                 for d in jeju_actual_history[-48:]  # 최근 48건 (48시간)
                             ])
-                            st.dataframe(df_jeju_actual.round(1), use_container_width=True, hide_index=True)
+                            st.dataframe(df_jeju_actual.round(1), width="stretch", hide_index=True)
 
                     st.success("✅ 제주 실측 데이터 표시 완료 (공공데이터포털)")
 
@@ -1730,7 +1730,7 @@ def render_supply_status_page(
                 fig.update_yaxes(title_text="전력 (MW)", secondary_y=False)
                 fig.update_yaxes(title_text="예비율 (%)", secondary_y=True)
 
-                st.plotly_chart(fig, use_container_width=True, key="epsis_trend")
+                st.plotly_chart(fig, width="stretch", key="epsis_trend")
 
             # EPSIS 상세 데이터
             with st.expander("📋 EPSIS 시간별 데이터 (제주 추정)"):
