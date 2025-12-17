@@ -1381,20 +1381,24 @@ def render_supply_status_page(
                         '현재수요': d['current_demand'],
                         '공급능력': d['supply_capacity'],
                         '예비력': d['reserve_power'],
+                        '예비율': d['reserve_rate'],
                     }
                     for d in jeju_history
                 ])
                 chart_data['timestamp'] = pd.to_datetime(chart_data['timestamp'])
                 chart_data = chart_data.sort_values('timestamp')
 
-                fig = go.Figure()
+                # 보조 Y축(예비율%)을 포함한 차트 생성
+                fig = make_subplots(specs=[[{"secondary_y": True}]])
+
                 fig.add_trace(go.Scatter(
                     x=chart_data['timestamp'],
                     y=chart_data['공급능력'],
                     mode='lines',
                     name='공급능력',
                     line=dict(color=Config.COLORS['supply'], width=2)
-                ))
+                ), secondary_y=False)
+
                 fig.add_trace(go.Scatter(
                     x=chart_data['timestamp'],
                     y=chart_data['현재수요'],
@@ -1403,24 +1407,36 @@ def render_supply_status_page(
                     line=dict(color=Config.COLORS['demand'], width=2),
                     fill='tozeroy',
                     fillcolor='rgba(255, 0, 0, 0.1)'
-                ))
+                ), secondary_y=False)
+
                 fig.add_trace(go.Scatter(
                     x=chart_data['timestamp'],
                     y=chart_data['예비력'],
                     mode='lines',
                     name='예비력',
-                    line=dict(color=Config.COLORS['reserve'], width=1, dash='dot')
-                ))
+                    line=dict(color=Config.COLORS['reserve'], width=2, dash='dot')
+                ), secondary_y=False)
+
+                # 예비율(%) - 보조 Y축
+                fig.add_trace(go.Scatter(
+                    x=chart_data['timestamp'],
+                    y=chart_data['예비율'],
+                    mode='lines',
+                    name='예비율(%)',
+                    line=dict(color='#9C27B0', width=2, dash='dash')
+                ), secondary_y=True)
 
                 fig.update_layout(
                     title="제주 전력 수급 추이 (EPSIS 기반 추정, 5분 간격)",
                     xaxis_title="시간",
-                    yaxis_title="전력 (MW)",
-                    height=400,
+                    height=450,
                     template="plotly_white",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center")
                 )
-                st.plotly_chart(fig, width="stretch", key="epsis_trend")
+                fig.update_yaxes(title_text="전력 (MW)", secondary_y=False)
+                fig.update_yaxes(title_text="예비율 (%)", secondary_y=True)
+
+                st.plotly_chart(fig, use_container_width=True, key="epsis_trend")
 
             # EPSIS 상세 데이터
             with st.expander("📋 EPSIS 시간별 데이터 (제주 추정)"):
