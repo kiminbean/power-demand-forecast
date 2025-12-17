@@ -491,14 +491,15 @@ class DataManager:
             recent_data = data[-288:] if len(data) >= 288 else data
             jeju_data = [jeju_estimator.estimate_jeju_demand(d) for d in recent_data]
 
+            # dataclass를 dict로 변환 (pickle 직렬화 가능하도록)
             return {
                 'national': {
-                    'latest': latest_national,
-                    'history': recent_data,
+                    'latest': latest_national.to_dict(),
+                    'history': [d.to_dict() for d in recent_data],
                 },
                 'jeju': {
-                    'latest': latest_jeju,
-                    'history': jeju_data,
+                    'latest': latest_jeju.to_dict(),
+                    'history': [d.to_dict() for d in jeju_data],
                 },
                 'fetched_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'data_count': len(data),
@@ -1297,15 +1298,15 @@ def render_supply_status_page(
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     fig = GaugeComponents.create_supply_gauge(
-                        national.supply_capacity,
+                        national['supply_capacity'],
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "공급능력 (전국)"})
                     st.plotly_chart(fig, width="stretch", key="nat_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
-                        national.current_demand,
-                        national.supply_capacity,
+                        national['current_demand'],
+                        national['supply_capacity'],
                         max_value=120000
                     )
                     fig.update_layout(title={'text': "현재수요 (전국)"})
@@ -1313,18 +1314,18 @@ def render_supply_status_page(
                 with col3:
                     st.metric(
                         "예비력",
-                        f"{national.reserve_power:,.0f} MW",
+                        f"{national['reserve_power']:,.0f} MW",
                         help="공급능력 - 현재수요"
                     )
                 with col4:
                     st.metric(
                         "예비율",
-                        f"{national.reserve_rate:.1f}%",
-                        delta=f"{'안정' if national.reserve_rate >= 10 else '주의'}",
-                        delta_color="normal" if national.reserve_rate >= 10 else "inverse"
+                        f"{national['reserve_rate']:.1f}%",
+                        delta=f"{'안정' if national['reserve_rate'] >= 10 else '주의'}",
+                        delta_color="normal" if national['reserve_rate'] >= 10 else "inverse"
                     )
 
-                st.caption(f"📅 데이터 시점: {national.timestamp}")
+                st.caption(f"📅 데이터 시점: {national['timestamp']}")
 
             with epsis_tab2:
                 jeju = epsis_data['jeju']['latest']
@@ -1332,24 +1333,25 @@ def render_supply_status_page(
                 # 제주 추정치 4개 게이지
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    fig = GaugeComponents.create_supply_gauge(jeju.supply_capacity)
+                    fig = GaugeComponents.create_supply_gauge(jeju['supply_capacity'])
                     st.plotly_chart(fig, width="stretch", key="jeju_supply")
                 with col2:
                     fig = GaugeComponents.create_demand_gauge(
-                        jeju.current_demand,
-                        jeju.supply_capacity
+                        jeju['current_demand'],
+                        jeju['supply_capacity']
                     )
                     st.plotly_chart(fig, width="stretch", key="jeju_demand")
                 with col3:
-                    fig = GaugeComponents.create_reserve_gauge(jeju.reserve_power)
+                    fig = GaugeComponents.create_reserve_gauge(jeju['reserve_power'])
                     st.plotly_chart(fig, width="stretch", key="jeju_reserve")
                 with col4:
-                    fig = GaugeComponents.create_reserve_rate_gauge(jeju.reserve_rate)
+                    fig = GaugeComponents.create_reserve_rate_gauge(jeju['reserve_rate'])
                     st.plotly_chart(fig, width="stretch", key="jeju_rate")
 
-                # 상태 메시지
-                status = "safe" if jeju.reserve_rate >= 10 else "warning" if jeju.reserve_rate >= 5 else "danger"
-                status_text = "정상" if jeju.reserve_rate >= 10 else "주의" if jeju.reserve_rate >= 5 else "위험"
+                # 상태 메시지 및 이용률 계산
+                utilization_rate = (jeju['current_demand'] / jeju['supply_capacity'] * 100) if jeju['supply_capacity'] > 0 else 0
+                status = "safe" if jeju['reserve_rate'] >= 10 else "warning" if jeju['reserve_rate'] >= 5 else "danger"
+                status_text = "정상" if jeju['reserve_rate'] >= 10 else "주의" if jeju['reserve_rate'] >= 5 else "위험"
                 status_class = f"status-{status}"
 
                 st.markdown(f"""
@@ -1359,7 +1361,7 @@ def render_supply_status_page(
                         {status_text}
                     </span>
                     <span style="color: #64748B; margin-left: 20px;">
-                        이용률: {jeju.utilization_rate:.1f}%
+                        이용률: {utilization_rate:.1f}%
                     </span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1375,10 +1377,10 @@ def render_supply_status_page(
                 # 데이터프레임 변환
                 chart_data = pd.DataFrame([
                     {
-                        'timestamp': d.timestamp,
-                        '현재수요': d.current_demand,
-                        '공급능력': d.supply_capacity,
-                        '예비력': d.reserve_power,
+                        'timestamp': d['timestamp'],
+                        '현재수요': d['current_demand'],
+                        '공급능력': d['supply_capacity'],
+                        '예비력': d['reserve_power'],
                     }
                     for d in jeju_history
                 ])
@@ -1425,11 +1427,11 @@ def render_supply_status_page(
                 if jeju_history:
                     df_epsis = pd.DataFrame([
                         {
-                            '시간': d.timestamp,
-                            '공급능력(MW)': d.supply_capacity,
-                            '현재수요(MW)': d.current_demand,
-                            '예비력(MW)': d.reserve_power,
-                            '예비율(%)': d.reserve_rate,
+                            '시간': d['timestamp'],
+                            '공급능력(MW)': d['supply_capacity'],
+                            '현재수요(MW)': d['current_demand'],
+                            '예비력(MW)': d['reserve_power'],
+                            '예비율(%)': d['reserve_rate'],
                         }
                         for d in jeju_history[-48:]  # 최근 48건 (4시간)
                     ])
