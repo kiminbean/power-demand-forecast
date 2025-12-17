@@ -8,7 +8,8 @@ font = "sans serif"
 [server]
 headless = true
 port = 8501
-enableCORS = false
+# enableCORS는 enableXsrfProtection=true와 호환되지 않아 제거
+# XSRF 보호 활성화 (CORS는 자동으로 true로 설정됨)
 enableXsrfProtection = true
 
 [browser]
