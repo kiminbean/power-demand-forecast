@@ -60,6 +60,21 @@ except Exception as e:
     EPSIS_AVAILABLE = False
     print(f"EPSIS crawler import failed: {e}")
 
+# 제주 전력수급현황 크롤러 import
+try:
+    jeju_spec = importlib.util.spec_from_file_location(
+        "jeju_power_crawler",
+        PROJECT_ROOT / "tools" / "crawlers" / "jeju_power_crawler.py"
+    )
+    jeju_module = importlib.util.module_from_spec(jeju_spec)
+    jeju_spec.loader.exec_module(jeju_module)
+    JejuPowerCrawler = jeju_module.JejuPowerCrawler
+    JejuPowerData = jeju_module.JejuPowerData
+    JEJU_CRAWLER_AVAILABLE = True
+except Exception as e:
+    JEJU_CRAWLER_AVAILABLE = False
+    print(f"Jeju power crawler import failed: {e}")
+
 
 # ============================================================================
 # 페이지 설정
@@ -507,6 +522,49 @@ class DataManager:
 
         except Exception as e:
             st.warning(f"EPSIS 데이터 조회 실패: {e}")
+            return None
+
+    @staticmethod
+    @st.cache_data(ttl=3600)  # 1시간 캐시
+    def fetch_jeju_actual_data() -> Optional[Dict[str, Any]]:
+        """제주 실측 전력수급 데이터 로드 (공공데이터포털)"""
+        if not JEJU_CRAWLER_AVAILABLE:
+            return None
+
+        try:
+            # ZIP 파일 경로 (data 디렉토리)
+            zip_path = PROJECT_ROOT / "data" / "jeju_power_supply.zip"
+
+            if not zip_path.exists():
+                return None
+
+            crawler = JejuPowerCrawler()
+            data = crawler.load_from_zip(zip_path)
+            crawler.close()
+
+            if not data:
+                return None
+
+            # 최신 데이터 추출
+            latest = data[-1]
+
+            # 최근 7일 데이터 (168시간)
+            recent_data = data[-168:] if len(data) >= 168 else data
+
+            return {
+                'latest': latest.to_dict(),
+                'history': [d.to_dict() for d in recent_data],
+                'total_records': len(data),
+                'date_range': {
+                    'start': data[0].timestamp,
+                    'end': data[-1].timestamp,
+                },
+                'fetched_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'source': 'data.go.kr (한국전력거래소_제주 전력수급현황)',
+            }
+
+        except Exception as e:
+            st.warning(f"제주 실측 데이터 로드 실패: {e}")
             return None
 
     @staticmethod
@@ -1290,7 +1348,7 @@ def render_supply_status_page(
                     st.rerun()
 
             # 전국 vs 제주 탭
-            epsis_tab1, epsis_tab2 = st.tabs(["🇰🇷 전국 현황", "🏝️ 제주 추정"])
+            epsis_tab1, epsis_tab2, epsis_tab3 = st.tabs(["🇰🇷 전국 현황", "🏝️ 제주 추정", "📊 제주 실측"])
 
             with epsis_tab1:
                 national = epsis_data['national']['latest']
@@ -1449,6 +1507,162 @@ def render_supply_status_page(
                 """, unsafe_allow_html=True)
 
                 st.info("⚠️ 제주 데이터는 전국 데이터 기반 **추정치**입니다. (계절별 비율 적용)")
+
+            with epsis_tab3:
+                # 제주 실측 데이터 (공공데이터포털)
+                st.markdown("#### 📊 제주 실측 전력수급 현황")
+                st.caption("데이터 출처: 공공데이터포털 (한국전력거래소_제주 전력수급현황)")
+
+                jeju_actual = DataManager.fetch_jeju_actual_data()
+
+                if jeju_actual:
+                    # 데이터 정보
+                    col_info1, col_info2, col_info3 = st.columns(3)
+                    with col_info1:
+                        st.caption(f"📊 총 데이터: {jeju_actual['total_records']:,}건")
+                    with col_info2:
+                        st.caption(f"📅 기간: {jeju_actual['date_range']['start'][:10]} ~ {jeju_actual['date_range']['end'][:10]}")
+                    with col_info3:
+                        if st.button("🔄 새로고침", key="jeju_actual_refresh"):
+                            DataManager.fetch_jeju_actual_data.clear()
+                            st.rerun()
+
+                    latest_jeju = jeju_actual['latest']
+
+                    # 4개 게이지
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        fig = GaugeComponents.create_supply_gauge(latest_jeju['supply_capacity'])
+                        st.plotly_chart(fig, width="stretch", key="jeju_actual_supply")
+                    with col2:
+                        fig = GaugeComponents.create_demand_gauge(
+                            latest_jeju['system_demand'],
+                            latest_jeju['supply_capacity']
+                        )
+                        fig.update_layout(title={'text': "계통수요"})
+                        st.plotly_chart(fig, width="stretch", key="jeju_actual_demand")
+                    with col3:
+                        fig = GaugeComponents.create_reserve_gauge(latest_jeju['supply_reserve'])
+                        fig.update_layout(title={'text': "공급예비력"})
+                        st.plotly_chart(fig, width="stretch", key="jeju_actual_reserve")
+                    with col4:
+                        fig = GaugeComponents.create_reserve_rate_gauge(latest_jeju['reserve_rate'])
+                        st.plotly_chart(fig, width="stretch", key="jeju_actual_rate")
+
+                    # 추가 메트릭
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("예측수요", f"{latest_jeju['forecast_demand']:.1f} MW")
+                    with col2:
+                        st.metric("운영예비력", f"{latest_jeju['operation_reserve']:.1f} MW")
+
+                    st.caption(f"📅 데이터 시점: {latest_jeju['timestamp']}")
+
+                    # 제주 실측 추이 차트
+                    st.markdown("---")
+                    st.subheader("📈 제주 실측 수급 추이 (최근 7일)")
+
+                    jeju_actual_history = jeju_actual['history']
+                    if jeju_actual_history:
+                        chart_data_actual = pd.DataFrame([
+                            {
+                                'timestamp': d['timestamp'],
+                                '계통수요': d['system_demand'],
+                                '공급능력': d['supply_capacity'],
+                                '공급예비력': d['supply_reserve'],
+                                '예측수요': d['forecast_demand'],
+                                '예비율': d['reserve_rate'],
+                            }
+                            for d in jeju_actual_history
+                        ])
+                        chart_data_actual['timestamp'] = pd.to_datetime(chart_data_actual['timestamp'])
+                        chart_data_actual = chart_data_actual.sort_values('timestamp')
+
+                        # 보조 Y축(예비율%)을 포함한 차트 생성
+                        fig_actual = make_subplots(specs=[[{"secondary_y": True}]])
+
+                        fig_actual.add_trace(go.Scatter(
+                            x=chart_data_actual['timestamp'],
+                            y=chart_data_actual['공급능력'],
+                            mode='lines',
+                            name='공급능력',
+                            line=dict(color=Config.COLORS['supply'], width=3)
+                        ), secondary_y=False)
+
+                        fig_actual.add_trace(go.Scatter(
+                            x=chart_data_actual['timestamp'],
+                            y=chart_data_actual['계통수요'],
+                            mode='lines',
+                            name='계통수요',
+                            line=dict(color=Config.COLORS['demand'], width=3)
+                        ), secondary_y=False)
+
+                        fig_actual.add_trace(go.Scatter(
+                            x=chart_data_actual['timestamp'],
+                            y=chart_data_actual['공급예비력'],
+                            mode='lines',
+                            name='공급예비력',
+                            line=dict(color=Config.COLORS['reserve'], width=3)
+                        ), secondary_y=False)
+
+                        fig_actual.add_trace(go.Scatter(
+                            x=chart_data_actual['timestamp'],
+                            y=chart_data_actual['예측수요'],
+                            mode='lines',
+                            name='예측수요',
+                            line=dict(color='#FF9800', width=2, dash='dot')
+                        ), secondary_y=False)
+
+                        # 예비율(%) - 보조 Y축
+                        fig_actual.add_trace(go.Scatter(
+                            x=chart_data_actual['timestamp'],
+                            y=chart_data_actual['예비율'],
+                            mode='lines',
+                            name='예비율(%)',
+                            line=dict(color='#9C27B0', width=3, dash='dash')
+                        ), secondary_y=True)
+
+                        fig_actual.update_layout(
+                            title="제주 전력 수급 추이 (공공데이터포털 실측, 1시간 간격)",
+                            xaxis_title="시간",
+                            height=450,
+                            template="plotly_white",
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center")
+                        )
+                        fig_actual.update_yaxes(title_text="전력 (MW)", secondary_y=False)
+                        fig_actual.update_yaxes(title_text="예비율 (%)", secondary_y=True)
+
+                        st.plotly_chart(fig_actual, use_container_width=True, key="jeju_actual_trend")
+
+                    # 제주 실측 상세 데이터
+                    with st.expander("📋 제주 실측 시간별 데이터"):
+                        if jeju_actual_history:
+                            df_jeju_actual = pd.DataFrame([
+                                {
+                                    '시간': d['timestamp'],
+                                    '계통수요(MW)': d['system_demand'],
+                                    '공급능력(MW)': d['supply_capacity'],
+                                    '공급예비력(MW)': d['supply_reserve'],
+                                    '예측수요(MW)': d['forecast_demand'],
+                                    '운영예비력(MW)': d['operation_reserve'],
+                                    '예비율(%)': d['reserve_rate'],
+                                }
+                                for d in jeju_actual_history[-48:]  # 최근 48건 (48시간)
+                            ])
+                            st.dataframe(df_jeju_actual.round(1), use_container_width=True, hide_index=True)
+
+                    st.success("✅ 제주 실측 데이터 표시 완료 (공공데이터포털)")
+
+                else:
+                    st.warning("⚠️ 제주 실측 데이터를 로드할 수 없습니다.")
+                    st.info("""
+                    **제주 실측 데이터 사용 방법:**
+                    1. 공공데이터포털에서 '한국전력거래소_제주 전력수급현황' 검색
+                    2. ZIP 파일 다운로드 후 `data/jeju_power_supply.zip` 으로 저장
+                    3. 대시보드 새로고침
+
+                    [📥 공공데이터포털 바로가기](https://www.data.go.kr/data/15125113/fileData.do)
+                    """)
 
             # EPSIS 실시간 추이 차트
             st.markdown("---")
