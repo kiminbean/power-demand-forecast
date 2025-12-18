@@ -41,6 +41,16 @@ from .schemas import (
 )
 from .service import get_prediction_service, initialize_service, PredictionService
 
+# SMP/Bidding 라우터 (v2.0)
+try:
+    from .smp_routes import router as smp_router
+    from .bidding_routes import router as bidding_router
+    SMP_ROUTES_AVAILABLE = True
+except ImportError as e:
+    SMP_ROUTES_AVAILABLE = False
+    smp_router = None
+    bidding_router = None
+
 # 로깅 설정
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),
@@ -100,6 +110,11 @@ app.add_middleware(
     allow_methods=settings.CORS_ALLOW_METHODS.split(",") if settings.CORS_ALLOW_METHODS != "*" else ["*"],
     allow_headers=settings.CORS_ALLOW_HEADERS.split(",") if settings.CORS_ALLOW_HEADERS != "*" else ["*"],
 )
+
+# SMP/Bidding 라우터 등록 (v2.0)
+if SMP_ROUTES_AVAILABLE:
+    app.include_router(smp_router)
+    app.include_router(bidding_router)
 
 
 # ============================================================
