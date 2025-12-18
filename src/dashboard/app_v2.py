@@ -49,9 +49,12 @@ try:
         GenerationPredictor,
         PlantConfig,
     )
+    from src.smp.models.smp_predictor import SMPPredictor, get_smp_predictor
     SMP_AVAILABLE = True
+    SMP_MODEL_AVAILABLE = True
 except ImportError as e:
     SMP_AVAILABLE = False
+    SMP_MODEL_AVAILABLE = False
     print(f"SMP module import failed: {e}")
 
 
@@ -242,9 +245,46 @@ st.markdown("""
 class DemoDataGenerator:
     """데모용 데이터 생성"""
 
+    # SMP 예측기 캐시
+    _smp_predictor = None
+
+    @classmethod
+    def get_smp_predictor(cls) -> Optional[Any]:
+        """SMP 예측기 싱글톤 반환"""
+        if cls._smp_predictor is None and SMP_MODEL_AVAILABLE:
+            try:
+                cls._smp_predictor = get_smp_predictor()
+            except Exception as e:
+                print(f"SMP 예측기 로드 실패: {e}")
+                cls._smp_predictor = None
+        return cls._smp_predictor
+
+    @classmethod
+    def generate_smp_predictions(cls, hours: int = 24) -> Dict[str, np.ndarray]:
+        """24시간 SMP 예측 데이터 생성
+
+        실제 LSTM 모델이 사용 가능하면 모델 예측을 사용하고,
+        그렇지 않으면 데모 데이터를 생성합니다.
+        """
+        # 실제 모델 사용 시도
+        predictor = cls.get_smp_predictor()
+        if predictor is not None and predictor.is_ready():
+            try:
+                result = predictor.predict_24h()
+                # 모델 사용 표시를 세션 상태에 저장
+                if 'model_used' not in st.session_state:
+                    st.session_state['model_used'] = result.get('model_used', 'unknown')
+                return result
+            except Exception as e:
+                print(f"모델 예측 실패, 데모 데이터 사용: {e}")
+
+        # 폴백: 데모 데이터 생성
+        st.session_state['model_used'] = 'demo'
+        return cls._generate_demo_smp(hours)
+
     @staticmethod
-    def generate_smp_predictions(hours: int = 24) -> Dict[str, np.ndarray]:
-        """24시간 SMP 예측 데이터 생성"""
+    def _generate_demo_smp(hours: int = 24) -> Dict[str, np.ndarray]:
+        """데모용 SMP 예측 데이터 생성 (폴백)"""
         base_time = datetime.now().replace(minute=0, second=0, microsecond=0)
         times = [base_time + timedelta(hours=i) for i in range(hours)]
 
@@ -272,6 +312,7 @@ class DemoDataGenerator:
             'q10': smp_q10,
             'q50': smp_q50,
             'q90': smp_q90,
+            'model_used': 'demo'
         }
 
     @staticmethod
@@ -308,9 +349,46 @@ class DemoDataGenerator:
         generation = capacity_kw * np.clip(pattern_shifted + noise, 0, 1)
         return generation
 
+    @classmethod
+    def generate_historical_smp(cls, days: int = 7) -> pd.DataFrame:
+        """과거 SMP 데이터 로드 또는 생성
+
+        실제 데이터 파일이 있으면 로드하고, 없으면 데모 데이터 생성
+        """
+        # 실제 데이터 로드 시도
+        data_path = PROJECT_ROOT / "data/smp/smp_history_real.csv"
+        if data_path.exists():
+            try:
+                df = pd.read_csv(data_path)
+                # 유효 데이터만
+                df = df[df['smp_mainland'] > 0].copy()
+
+                # datetime 변환
+                def fix_hour_24(timestamp):
+                    if ' 24:00' in str(timestamp):
+                        date_part = str(timestamp).replace(' 24:00', '')
+                        dt = pd.to_datetime(date_part) + pd.Timedelta(days=1)
+                        return dt
+                    return pd.to_datetime(timestamp)
+
+                df['datetime'] = df['timestamp'].apply(fix_hour_24)
+                df = df.sort_values('datetime').reset_index(drop=True)
+
+                # 필요한 컬럼만 선택
+                result_df = df[['datetime', 'hour', 'smp_mainland', 'smp_jeju']].copy()
+
+                if len(result_df) > 0:
+                    return result_df
+
+            except Exception as e:
+                print(f"실제 데이터 로드 실패: {e}")
+
+        # 폴백: 데모 데이터 생성
+        return cls._generate_demo_historical_smp(days)
+
     @staticmethod
-    def generate_historical_smp(days: int = 7) -> pd.DataFrame:
-        """과거 SMP 데이터 생성"""
+    def _generate_demo_historical_smp(days: int = 7) -> pd.DataFrame:
+        """데모용 과거 SMP 데이터 생성"""
         dates = pd.date_range(end=datetime.now(), periods=days*24, freq='h')
 
         data = []
@@ -777,7 +855,20 @@ def render_bidding_page():
         latitude = st.number_input("위도", value=33.5, min_value=33.0, max_value=34.0)
         longitude = st.number_input("경도", value=126.5, min_value=126.0, max_value=127.0)
 
-    # 데이터 생성
+        # 모델 상태 표시
+        st.markdown("---")
+        st.markdown("### 🤖 예측 모델")
+        predictor = DemoDataGenerator.get_smp_predictor()
+        if predictor is not None and predictor.is_ready():
+            model_info = predictor.get_model_info()
+            st.success("✅ LSTM 모델 활성")
+            st.caption(f"파라미터: {model_info.get('parameters', 0):,}개")
+            st.caption(f"디바이스: {model_info.get('device', 'cpu')}")
+        else:
+            st.warning("⚠️ 데모 모드")
+            st.caption("실제 모델 미연결")
+
+    # 데이터 생성 (실제 모델 또는 데모)
     smp_predictions = DemoDataGenerator.generate_smp_predictions(24)
 
     if energy_type == 'solar':
