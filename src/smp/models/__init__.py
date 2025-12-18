@@ -30,6 +30,16 @@ from .smp_tft import (
     model_summary as tft_model_summary,
 )
 
+from .generation_predictor import (
+    PlantConfig,
+    GenerationPrediction,
+    SolarPowerCalculator,
+    WindPowerCalculator,
+    GenerationPredictor,
+    GenerationLSTM,
+    create_generation_predictor,
+)
+
 # 통합 model_summary 함수
 def model_summary(model):
     """모델 요약 (LSTM/TFT 공통)"""
@@ -47,6 +57,14 @@ __all__ = [
     "SMPTFTModel",
     "SMPTFTQuantileLoss",
     "create_smp_tft_model",
+    # Generation Predictor
+    "PlantConfig",
+    "GenerationPrediction",
+    "SolarPowerCalculator",
+    "WindPowerCalculator",
+    "GenerationPredictor",
+    "GenerationLSTM",
+    "create_generation_predictor",
     # Common
     "model_summary",
     "get_device",
