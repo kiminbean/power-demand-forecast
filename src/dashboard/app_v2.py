@@ -1298,7 +1298,8 @@ def render_xai_page():
         result = DemoDataGenerator.generate_smp_predictions(24, use_advanced=True, return_attention=True)
 
         if 'attention' in result and result['attention'] is not None:
-            attention = result['attention']
+            # list를 numpy 배열로 변환
+            attention = np.array(result['attention'])
 
             # Attention 히트맵
             col_left, col_right = st.columns([2, 1])
