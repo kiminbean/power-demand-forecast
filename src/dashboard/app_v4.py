@@ -257,6 +257,16 @@ st.markdown("""
 # EPSIS 실제 데이터 로딩 함수
 # ============================================================================
 
+def _fix_timestamp_24h(df: pd.DataFrame) -> pd.DataFrame:
+    """Fix 24:00 timestamp format (convert to 00:00 of next day)"""
+    if 'timestamp' in df.columns:
+        # Replace 24:00 with 00:00 (pandas will handle as string first)
+        df['timestamp'] = df['timestamp'].astype(str).str.replace(' 24:00', ' 00:00')
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df = df.dropna(subset=['timestamp'])
+    return df
+
+
 @st.cache_data(ttl=3600)
 def load_smp_history() -> pd.DataFrame:
     """EPSIS SMP 히스토리 데이터 로드"""
@@ -265,16 +275,18 @@ def load_smp_history() -> pd.DataFrame:
         smp_file = SMP_DATA_PATH / "smp_real_epsis.csv"
         if smp_file.exists():
             df = pd.read_csv(smp_file, encoding='utf-8-sig')
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['date'] = pd.to_datetime(df['date'])
+            df = _fix_timestamp_24h(df)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'], errors='coerce')
             return df
 
         # 대체 파일
         smp_file = SMP_DATA_PATH / "smp_5years_epsis.csv"
         if smp_file.exists():
             df = pd.read_csv(smp_file, encoding='utf-8-sig')
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['date'] = pd.to_datetime(df['date'])
+            df = _fix_timestamp_24h(df)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'], errors='coerce')
             return df
 
     except Exception as e:
