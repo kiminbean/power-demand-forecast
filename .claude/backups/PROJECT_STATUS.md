@@ -1,11 +1,44 @@
 # Project Status Backup
-> Last Updated: 2025-12-18 23:30 KST
+> Last Updated: 2025-12-19 00:15 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.0 (Released + Bug Fixes)
+- **Version**: v4.0.1 (KPX Realtime Integration)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.0
+
+---
+
+## KPX Realtime Integration (2025-12-19)
+
+### New Feature: Live Power Data
+Dashboard now shows **real-time power supply/demand** from KPX (한국전력거래소):
+
+| Data Item | Source | Update Interval |
+|-----------|--------|-----------------|
+| Current Demand | KPX 실시간 | 5 minutes |
+| Supply Capacity | KPX 실시간 | 5 minutes |
+| Reserve Rate | KPX 실시간 | 5 minutes |
+| Plant Generation | Distributed from KPX total | 60 seconds cache |
+
+### Data Priority
+1. **KPX 실시간** (Primary) - Live from https://www.kpx.or.kr
+2. **EPSIS 파일** (Secondary) - Historical file data
+3. **시뮬레이션** (Fallback) - Simulated values
+
+### Verified KPX Data
+```
+KPX 제주 실시간 데이터 수집 완료: 724 MW (예비율: 66.0%)
+```
+
+### Recent Commits
+```
+d8bb7db feat: Integrate KPX realtime data for power supply/demand display
+687ed4c data: Update Jeju power plant data to Dec 2025
+abe73b3 docs: Update PROJECT_STATUS with test results and bug fixes
+2da33d4 fix: Replace deprecated use_container_width with width="stretch"
+69d2484 fix: Handle 24:00 timestamp format in SMP data loading
+```
 
 ---
 
@@ -21,15 +54,6 @@
 | Passed | 1,488 |
 | Skipped | 3 |
 | Warnings | 16 (deprecation only) |
-
-### Recent Commits
-```
-2da33d4 fix: Replace deprecated use_container_width with width="stretch"
-69d2484 fix: Handle 24:00 timestamp format in SMP data loading
-0906704 fix: Replace float.clip() with min/max for utilization calc
-c3f0f82 docs: Update PROJECT_STATUS with v4.0.0 release info
-7efa70d docs: Add v4.0.0 release notes to CHANGELOG
-```
 
 ### Bug Fixes Applied
 1. **float.clip() Error** - Changed to `min(max(...))` for utilization calculation
@@ -66,15 +90,21 @@ Confidence Interval: ±17.9 won/kWh
 
 ---
 
-## Dashboard v4.0
+## Dashboard v4.0.1
 
 ### Features
 1. 60hz.io style dark theme
 2. Interactive Jeju map with power plants (Folium)
-3. Real-time EPSIS data integration
+3. **🔴 KPX realtime data integration** (NEW)
 4. SMP prediction with v3.1 model
 5. 24-hour forecast with confidence intervals
 6. XAI analysis tab (attention weights)
+7. Data source indicator in header
+
+### Data Source Indicators
+- 🔴 **KPX 실시간 연동** - Live KPX data active
+- 📊 **EPSIS 데이터 연동** - Using EPSIS files
+- ⚠️ **시뮬레이션 모드** - Fallback simulation
 
 ### Run Command
 ```bash
@@ -82,13 +112,13 @@ PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4
 ```
 
 ### Verified Tabs
-- ✅ Main Dashboard (Jeju map, power plants)
+- ✅ Main Dashboard (Jeju map, KPX realtime)
 - ✅ SMP Prediction (24h forecast, confidence bands)
 - ✅ XAI Analysis (attention heatmap)
 
 ---
 
-## Key Files (v4.0.0)
+## Key Files (v4.0.1)
 
 ```
 # SMP Model v3.1
@@ -97,13 +127,17 @@ models/smp_v3/smp_v3_model.pt         - Trained model (250K params)
 models/smp_v3/smp_v3_metrics.json     - Performance metrics
 models/smp_v3/smp_v3_scaler.npy       - Feature scaler
 
-# Dashboard v4
-src/dashboard/app_v4.py              - Main dashboard
+# Dashboard v4.0.1
+src/dashboard/app_v4.py              - Main dashboard (KPX realtime)
 src/smp/models/smp_predictor.py      - Prediction interface (v3.1 support)
+
+# Crawlers
+tools/crawlers/jeju_realtime_crawler.py  - KPX realtime data crawler
+src/smp/crawlers/epsis_crawler.py        - EPSIS SMP crawler
 
 # Data
 data/smp/smp_5years_epsis.csv        - 5 years EPSIS data (26,240 records)
-data/jeju_plants/jeju_power_plants.json  - Plant locations
+data/jeju_plants/jeju_power_plants.json  - Plant locations (Dec 2025)
 
 # Documentation
 docs/screenshots/                     - Dashboard screenshots
@@ -140,7 +174,9 @@ For next session:
 - EPSIS real data: 2020-12-19 ~ 2025-12-18
 
 ## Notes
+- v4.0.1 includes KPX realtime integration
 - v4.0.0 release includes all bug fixes
 - All 1,488 tests passing
-- Dashboard fully functional (no errors/warnings)
-- Tag updated to include bug fix commits
+- Dashboard fully functional with live data
+- Power plant data updated to Dec 2025
+- KPX realtime verified: 724 MW, 66% reserve
