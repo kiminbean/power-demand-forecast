@@ -96,6 +96,22 @@
 
 ---
 
+## 📸 스크린샷
+
+### 메인 대시보드
+![Main Dashboard](docs/screenshots/01_main_dashboard.png)
+*60hz.io 스타일 다크 테마 대시보드 - 제주도 전력 발전소 위치 및 실시간 전력수급 현황*
+
+### SMP 예측
+![SMP Prediction](docs/screenshots/02_smp_prediction.png)
+*BiLSTM + Attention 모델 기반 24시간 SMP(계통한계가격) 예측 및 신뢰구간*
+
+### 시스템 아키텍처
+![System Architecture](docs/screenshots/05_system_architecture.png)
+*전체 시스템 구성도 - 데이터 수집, 모델 학습, 예측, 대시보드*
+
+---
+
 ## 빠른 시작
 
 ### 설치
@@ -534,4 +550,4 @@ MIT License
 
 ---
 
-*Last Updated: 2025-12-17 | v1.1.0*
+*Last Updated: 2025-12-18 | v4.0.0*
