@@ -87,6 +87,9 @@ secrets.json
 # EPSIS crawler test outputs
 data/epsis*.json
 
+# SMP crawler test outputs
+data/smp/
+
 # Extracted ZIP contents
 data/jeju_extract/
 
