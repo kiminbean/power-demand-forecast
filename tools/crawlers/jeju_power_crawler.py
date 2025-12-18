@@ -373,6 +373,42 @@ class JejuPowerCrawler:
             logger.error(f"ZIP 다운로드 실패: {e}")
             return None
 
+    def _get_data_dir(self) -> Path:
+        """데이터 디렉토리 경로 반환"""
+        return Path(__file__).parent.parent.parent / "data"
+
+    def _check_cached_zip(
+        self,
+        zip_path: Path,
+        max_age_days: int = 7,
+        min_size: int = 1000
+    ) -> bool:
+        """
+        캐시된 ZIP 파일 유효성 검사
+
+        Args:
+            zip_path: ZIP 파일 경로
+            max_age_days: 최대 캐시 유효 기간 (일)
+            min_size: 최소 파일 크기 (bytes)
+
+        Returns:
+            유효하면 True, 아니면 False
+        """
+        if not zip_path.exists():
+            return False
+
+        # 파일 크기 검사
+        file_size = zip_path.stat().st_size
+        if file_size < min_size:
+            return False
+
+        # 파일 나이 검사
+        file_age_days = (datetime.now().timestamp() - zip_path.stat().st_mtime) / 86400
+        if file_age_days >= max_age_days:
+            return False
+
+        return True
+
     def auto_download(self, force: bool = False) -> Optional[Path]:
         """
         자동 다운로드 (캐시 확인 후 필요시 다운로드)
@@ -384,17 +420,17 @@ class JejuPowerCrawler:
             ZIP 파일 경로 또는 None
         """
         # 기본 데이터 디렉토리
-        data_dir = Path(__file__).parent.parent.parent / "data"
+        data_dir = self._get_data_dir()
         zip_path = data_dir / "jeju_power_supply.zip"
 
         # 이미 파일이 있고 force가 아니면 기존 파일 사용
-        if zip_path.exists() and not force:
+        if not force and self._check_cached_zip(zip_path):
             file_age_days = (datetime.now().timestamp() - zip_path.stat().st_mtime) / 86400
-            if file_age_days < 7:  # 7일 이내 파일은 재사용
-                logger.info(f"기존 ZIP 파일 사용 (생성: {file_age_days:.1f}일 전)")
-                return zip_path
-            else:
-                logger.info(f"ZIP 파일이 오래됨 ({file_age_days:.1f}일). 새로 다운로드 시도...")
+            logger.info(f"기존 ZIP 파일 사용 (생성: {file_age_days:.1f}일 전)")
+            return zip_path
+        elif zip_path.exists() and not force:
+            file_age_days = (datetime.now().timestamp() - zip_path.stat().st_mtime) / 86400
+            logger.info(f"ZIP 파일이 오래됨 ({file_age_days:.1f}일). 새로 다운로드 시도...")
 
         # 다운로드 시도
         logger.info("공공데이터포털에서 제주 전력수급 데이터 다운로드 시도...")

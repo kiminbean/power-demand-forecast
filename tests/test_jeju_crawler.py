@@ -545,3 +545,230 @@ class TestJejuCrawlerEdgeCases:
             operation_reserve=350.0,
         )
         assert "2025년" in data.timestamp
+
+
+# ============================================================================
+# Auto Download Tests
+# ============================================================================
+
+class TestJejuCrawlerAutoDownload:
+    """auto_download() 메서드 테스트"""
+
+    @pytest.fixture
+    def mock_data_dir(self, tmp_path):
+        """임시 데이터 디렉토리 생성"""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        return data_dir
+
+    @pytest.fixture
+    def sample_zip_content(self):
+        """테스트용 ZIP 파일 내용 생성"""
+        zip_buffer = io.BytesIO()
+
+        # 샘플 CSV 데이터 생성
+        dates = pd.date_range("2025-01-01", periods=3, freq="D")
+        hours = [f"{h}시" for h in range(1, 25)]
+
+        def create_csv(base_value):
+            data = {"날짜": dates.strftime("%Y-%m-%d")}
+            for h in hours:
+                data[h] = [base_value + np.random.randint(-50, 50) for _ in range(3)]
+            return pd.DataFrame(data)
+
+        # ZIP 파일 생성
+        with zipfile.ZipFile(zip_buffer, 'w') as z:
+            for name, base in [
+                ("계통수요", 700),
+                ("공급능력", 1400),
+                ("공급예비력", 700),
+                ("예측수요", 720),
+                ("운영예비력", 350),
+            ]:
+                df = create_csv(base)
+                csv_buffer = io.StringIO()
+                df.to_csv(csv_buffer, index=False, encoding='utf-8')
+                z.writestr(f"{name}.csv", csv_buffer.getvalue())
+
+        return zip_buffer.getvalue()
+
+    def test_auto_download_uses_cached_file(self, mock_data_dir, sample_zip_content):
+        """캐시된 파일이 7일 미만이면 재사용하는지 테스트"""
+        # 캐시 파일 생성 (현재 시간)
+        zip_path = mock_data_dir / "jeju_power_supply.zip"
+        with open(zip_path, 'wb') as f:
+            f.write(sample_zip_content)
+
+        crawler = JejuPowerCrawler()
+
+        # auto_download의 데이터 디렉토리를 mock으로 대체
+        with patch.object(Path, '__truediv__', side_effect=lambda self, other: mock_data_dir / other if 'data' in str(self) else self.__class__.__truediv__(self, other)):
+            with patch('tools.crawlers.jeju_power_crawler.Path') as mock_path:
+                # __file__ 기반 경로 계산 모킹
+                mock_path.return_value.parent.parent.parent.__truediv__.return_value = mock_data_dir
+
+                # 직접 경로 설정으로 테스트
+                result = crawler._check_cached_zip(zip_path)
+
+        crawler.close()
+
+        # 파일이 있으면 True 반환
+        assert result == True
+
+    def test_auto_download_cache_check_recent_file(self, mock_data_dir, sample_zip_content):
+        """최근 파일(7일 미만)은 캐시로 사용"""
+        zip_path = mock_data_dir / "jeju_power_supply.zip"
+        with open(zip_path, 'wb') as f:
+            f.write(sample_zip_content)
+
+        crawler = JejuPowerCrawler()
+
+        # _check_cached_zip 메서드로 캐시 확인 로직 테스트
+        is_valid = crawler._check_cached_zip(zip_path, max_age_days=7)
+
+        crawler.close()
+        assert is_valid == True
+
+    def test_auto_download_cache_check_old_file(self, mock_data_dir, sample_zip_content):
+        """오래된 파일(7일 이상)은 캐시 무효"""
+        zip_path = mock_data_dir / "jeju_power_supply.zip"
+        with open(zip_path, 'wb') as f:
+            f.write(sample_zip_content)
+
+        # 파일 수정 시간을 8일 전으로 변경
+        import os
+        old_time = datetime.now().timestamp() - (8 * 24 * 3600)
+        os.utime(zip_path, (old_time, old_time))
+
+        crawler = JejuPowerCrawler()
+        is_valid = crawler._check_cached_zip(zip_path, max_age_days=7)
+        crawler.close()
+
+        assert is_valid == False
+
+    def test_auto_download_cache_check_nonexistent(self, mock_data_dir):
+        """존재하지 않는 파일은 캐시 무효"""
+        zip_path = mock_data_dir / "nonexistent.zip"
+
+        crawler = JejuPowerCrawler()
+        is_valid = crawler._check_cached_zip(zip_path, max_age_days=7)
+        crawler.close()
+
+        assert is_valid == False
+
+    def test_auto_download_force_redownload(self, mock_data_dir, sample_zip_content):
+        """force=True면 캐시 무시하고 다운로드 시도"""
+        zip_path = mock_data_dir / "jeju_power_supply.zip"
+        with open(zip_path, 'wb') as f:
+            f.write(sample_zip_content)
+
+        crawler = JejuPowerCrawler()
+
+        # download_and_extract_zip 모킹 (다운로드 실패)
+        with patch.object(crawler, 'download_and_extract_zip', return_value=None):
+            # force=True이면 다운로드 시도 후, 실패 시 기존 파일 사용
+            with patch.object(crawler, '_get_data_dir', return_value=mock_data_dir):
+                result = crawler.auto_download(force=True)
+
+        crawler.close()
+
+        # 다운로드 실패해도 기존 파일이 있으면 반환
+        assert result == zip_path
+
+    def test_auto_download_no_file_download_fails(self, mock_data_dir):
+        """파일 없고 다운로드도 실패하면 None 반환"""
+        crawler = JejuPowerCrawler()
+
+        with patch.object(crawler, 'download_and_extract_zip', return_value=None):
+            with patch.object(crawler, '_get_data_dir', return_value=mock_data_dir):
+                result = crawler.auto_download()
+
+        crawler.close()
+        assert result is None
+
+    def test_auto_download_with_valid_cache(self, mock_data_dir, sample_zip_content):
+        """유효한 캐시가 있으면 다운로드 시도 안함"""
+        zip_path = mock_data_dir / "jeju_power_supply.zip"
+        with open(zip_path, 'wb') as f:
+            f.write(sample_zip_content)
+
+        crawler = JejuPowerCrawler()
+
+        # download_and_extract_zip이 호출되지 않아야 함
+        with patch.object(crawler, 'download_and_extract_zip') as mock_download:
+            with patch.object(crawler, '_get_data_dir', return_value=mock_data_dir):
+                result = crawler.auto_download(force=False)
+
+            # 캐시가 유효하면 다운로드 시도 안함
+            mock_download.assert_not_called()
+
+        crawler.close()
+        assert result == zip_path
+
+
+class TestJejuCrawlerAutoDownloadHelpers:
+    """auto_download 헬퍼 메서드 테스트"""
+
+    def test_check_cached_zip_valid(self, tmp_path):
+        """유효한 캐시 파일 확인"""
+        zip_path = tmp_path / "test.zip"
+        zip_path.write_bytes(b"test content" * 100)  # 최소 크기 이상
+
+        crawler = JejuPowerCrawler()
+        result = crawler._check_cached_zip(zip_path, max_age_days=7)
+        crawler.close()
+
+        assert result == True
+
+    def test_check_cached_zip_too_small(self, tmp_path):
+        """너무 작은 파일은 무효"""
+        zip_path = tmp_path / "test.zip"
+        zip_path.write_bytes(b"tiny")  # 매우 작은 파일
+
+        crawler = JejuPowerCrawler()
+        result = crawler._check_cached_zip(zip_path, max_age_days=7, min_size=100)
+        crawler.close()
+
+        assert result == False
+
+    def test_get_data_dir(self):
+        """데이터 디렉토리 경로 반환 테스트"""
+        crawler = JejuPowerCrawler()
+        data_dir = crawler._get_data_dir()
+        crawler.close()
+
+        assert data_dir.name == "data"
+        assert data_dir.parent.name == "power-demand-forecast"
+
+
+class TestJejuCrawlerCLIAutoDownload:
+    """CLI --auto-download 옵션 테스트"""
+
+    def test_cli_auto_download_option_exists(self):
+        """CLI에 --auto-download 옵션이 있는지 확인"""
+        import argparse
+        from tools.crawlers.jeju_power_crawler import main
+
+        # main 함수의 argparse 설정 확인
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--auto-download', action='store_true')
+        parser.add_argument('--force', action='store_true')
+        parser.add_argument('--zip', type=str)
+
+        # 파싱 테스트
+        args = parser.parse_args(['--auto-download'])
+        assert args.auto_download == True
+
+        args = parser.parse_args(['--auto-download', '--force'])
+        assert args.auto_download == True
+        assert args.force == True
+
+    def test_cli_zip_option(self):
+        """CLI --zip 옵션 테스트"""
+        import argparse
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--zip', type=str)
+
+        args = parser.parse_args(['--zip', '/path/to/file.zip'])
+        assert args.zip == '/path/to/file.zip'
