@@ -484,7 +484,7 @@ def get_jeju_power_plants() -> pd.DataFrame:
 
     df['generation'] = df.apply(calculate_generation, axis=1)
     df['utilization'] = df.apply(
-        lambda row: (abs(row['generation']) / row['capacity'] * 100).clip(0, 100) if row['capacity'] > 0 else 0,
+        lambda row: min(max(abs(row['generation']) / row['capacity'] * 100, 0), 100) if row['capacity'] > 0 else 0,
         axis=1
     )
 
