@@ -4,30 +4,37 @@
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.0 (Released)
+- **Version**: v4.0.0 (Released + Bug Fixes)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.0
 
 ---
 
-## v4.0.0 Release Complete (2025-12-18)
+## v4.0.0 Release Status (2025-12-18)
 
-### Release Summary
+### Test Results
+```
+1488 passed, 3 skipped, 16 warnings in 25.30s
+```
 
-**Completed Tasks:**
-- ✅ SMP Model v3.1 training (MAPE 7.83%, R² 0.74)
-- ✅ Dashboard v4 with 60hz.io dark theme
-- ✅ Screenshots added to README
-- ✅ CHANGELOG updated with v4.0.0 release notes
-- ✅ GitHub release tag v4.0.0 created
+| Status | Count |
+|--------|-------|
+| Passed | 1,488 |
+| Skipped | 3 |
+| Warnings | 16 (deprecation only) |
 
 ### Recent Commits
 ```
+2da33d4 fix: Replace deprecated use_container_width with width="stretch"
+69d2484 fix: Handle 24:00 timestamp format in SMP data loading
+0906704 fix: Replace float.clip() with min/max for utilization calc
+c3f0f82 docs: Update PROJECT_STATUS with v4.0.0 release info
 7efa70d docs: Add v4.0.0 release notes to CHANGELOG
-a3300e8 docs: Add screenshots to README
-7c15dbf feat: Add SMP v3.1 model and Dashboard v4.0
-f7f9e9c docs: Add Korean text bug workaround for Claude Code v2.0.72
-f42affc fix: Convert attention list to numpy array in XAI page
 ```
+
+### Bug Fixes Applied
+1. **float.clip() Error** - Changed to `min(max(...))` for utilization calculation
+2. **24:00 Timestamp** - Added `_fix_timestamp_24h()` helper for SMP data loading
+3. **Streamlit Deprecation** - Replaced `use_container_width=True` with `width="stretch"`
 
 ---
 
@@ -49,10 +56,13 @@ f42affc fix: Convert attention list to numpy array in XAI page
 - Quantile outputs: Q10, Q50, Q90
 - Huber + Quantile Loss
 
-### v3.0 Failure Root Cause
-- `torch.clamp(pred, min=-10, max=10)` disrupted gradient flow
-- Complex loss function with disabled components
-- Fixed in v3.1 with simplified architecture
+### Prediction Test Results
+```
+Average SMP: 135.07 won/kWh
+Min SMP: 103.08 won/kWh (01:00)
+Max SMP: 161.40 won/kWh (08:00)
+Confidence Interval: ±17.9 won/kWh
+```
 
 ---
 
@@ -64,17 +74,17 @@ f42affc fix: Convert attention list to numpy array in XAI page
 3. Real-time EPSIS data integration
 4. SMP prediction with v3.1 model
 5. 24-hour forecast with confidence intervals
-6. XAI analysis tab
+6. XAI analysis tab (attention weights)
 
 ### Run Command
 ```bash
 PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
 ```
 
-### Screenshots
-- `docs/screenshots/01_main_dashboard.png`
-- `docs/screenshots/02_smp_prediction.png`
-- `docs/screenshots/05_system_architecture.png`
+### Verified Tabs
+- ✅ Main Dashboard (Jeju map, power plants)
+- ✅ SMP Prediction (24h forecast, confidence bands)
+- ✅ XAI Analysis (attention heatmap)
 
 ---
 
@@ -125,11 +135,12 @@ For next session:
 ---
 
 ## Environment
-- Python 3.11+, PyTorch 2.0+
+- Python 3.13, PyTorch 2.0+
 - Apple Silicon MPS (M1 MacBook Pro 32GB)
-- EPSIS real data: 2022-01-01 ~ 2024-12-31
+- EPSIS real data: 2020-12-19 ~ 2025-12-18
 
 ## Notes
-- v4.0.0 is a major release with all target metrics achieved
-- Dashboard v4 integrates v3.1 model for production use
-- All documentation updated (README, CHANGELOG, screenshots)
+- v4.0.0 release includes all bug fixes
+- All 1,488 tests passing
+- Dashboard fully functional (no errors/warnings)
+- Tag updated to include bug fix commits
