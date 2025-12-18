@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2025-12-18
+
+### Highlights
+- 🎯 **SMP Model v3.1**: Significantly improved prediction accuracy (MAPE 7.83%)
+- 🎨 **Dashboard v4**: New 60hz.io-style dark theme with interactive Jeju map
+- 📡 **Real-time Integration**: EPSIS data integration for live power market data
+
+### Added
+
+#### SMP Model v3.1 (`src/smp/models/train_smp_v3_fixed.py`)
+- **BiLSTM + Stable Attention** architecture (4 heads)
+- **Quantile Regression** outputs (Q10, Q50, Q90) for uncertainty estimation
+- **22 engineered features** including temporal, price lags, and technical indicators
+- **Noise Injection** for robustness (std=0.02, prob=0.5)
+- **Walk-forward Validation** for realistic evaluation
+- Model: 249,952 parameters
+
+#### Dashboard v4 (`src/dashboard/app_v4.py`)
+- **60hz.io-style dark theme** with professional UI
+- **Interactive Jeju map** showing power plant locations (Folium)
+- **Real-time EPSIS data** integration
+- **24-hour SMP forecast** with confidence intervals
+- **XAI analysis tab** for model interpretability
+
+#### SMP Predictor Updates (`src/smp/models/smp_predictor.py`)
+- Multi-version model support (v2.1, v3.1)
+- `use_advanced=True` for v3.1 model
+- `use_v2=True` for legacy v2.1 support
+- Automatic feature engineering for each version
+
+#### Documentation
+- **Screenshots** added to README (`docs/screenshots/`)
+- Main dashboard, SMP prediction, system architecture images
+
+### Model Performance
+
+| Metric | v2.1 (Previous) | v3.1 (Current) | Target | Status |
+|--------|-----------------|----------------|--------|--------|
+| MAPE | 10.68% | **7.83%** | <10% | ✅ |
+| R² | 0.59 | **0.74** | >0.65 | ✅ |
+| Coverage | 82.5% | **89.4%** | >85% | ✅ |
+| MAE | 11.27 | **8.93** | - | ✅ |
+| RMSE | 14.67 | **12.02** | - | ✅ |
+
+### Fixed
+- **v3.0 Training Failure**: Removed incorrect `torch.clamp()` that disrupted gradient flow
+- **Loss Function**: Simplified from complex multi-component to Huber + Quantile
+- **Normalization**: Changed from custom normalization to StandardScaler
+
+### Key Files
+```
+src/smp/models/train_smp_v3_fixed.py  - Training pipeline
+src/smp/models/smp_predictor.py       - Prediction interface
+src/dashboard/app_v4.py               - Dashboard v4
+models/smp_v3/smp_v3_model.pt         - Trained model
+models/smp_v3/smp_v3_scaler.npy       - Feature scaler
+models/smp_v3/smp_v3_metrics.json     - Performance metrics
+data/smp/smp_5years_epsis.csv         - 5 years EPSIS data (26,240 records)
+```
+
+### Run Dashboard
+```bash
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
+```
+
+---
+
 ## [1.1.2] - 2025-12-18
 
 ### Added
@@ -243,8 +310,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.0.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.0
 [1.1.2]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.2
 [1.1.1]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.1
 [1.1.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v4.0.0...HEAD
