@@ -1,0 +1,17 @@
+{
+  "version": "3.1.0",
+  "mape": 7.830782234668732,
+  "mae": 8.93182373046875,
+  "rmse": 12.024883270263672,
+  "r2": 0.7359565496444702,
+  "coverage_80": 89.40059891808346,
+  "parameters": 249952,
+  "features": 22,
+  "improvements": [
+    "BiLSTM + Stable Attention",
+    "Huber Loss + Quantile Loss",
+    "Noise Injection",
+    "Gradient Clipping"
+  ],
+  "timestamp": "2025-12-18T22:46:36.219257"
+}

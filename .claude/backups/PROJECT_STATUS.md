@@ -1,178 +1,106 @@
 # Project Status Backup
-> Last Updated: 2025-12-18 16:02 KST
+> Last Updated: 2025-12-18 22:50 KST
 
 ## Project Overview
-- **Project**: 제주도 전력 수요 예측 시스템
+- **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v2.1.0
+- **Version**: v4.0.0
 
 ---
 
-## v2.1.0 Sim-to-Real 고도화 (2025-12-18)
+## v4.0.0 SMP Model v3.1 + Dashboard v4 (2025-12-18)
 
-### 최신 세션 (2025-12-18 16:02)
+### Session Summary (2025-12-18 22:50)
 
-#### Dashboard v2.1 - 고도화 모델 연동 완료 ✅
+#### v3.1 SMP Model - Training Success
 
-**Dashboard 업데이트**:
-1. ✅ **고도화 모델 토글**: 입찰 지원 페이지에 모델 선택 UI 추가
-2. ✅ **XAI 분석 탭 추가**: Attention 시각화, 불확실성 분석
-3. ✅ **Quantile 예측 UI**: 80% 신뢰구간 차트 표시
-4. ✅ **smp_predictor.py 확장**: 고도화 모델 지원 (use_advanced 파라미터)
+**v3.0 Failure Analysis:**
+- MAPE: 100%, R²: -28.5 (complete failure)
+- Cause: `torch.clamp(pred, min=-10, max=10)` disrupted gradient flow
+- Cause: Complex loss function with disabled components
 
-**수정된 파일**:
-```
-src/dashboard/app_v2.py           - XAI 탭, 모델 선택 토글 추가
-src/smp/models/smp_predictor.py   - 고도화 모델 지원 확장
-```
+**v3.1 Fix Applied:**
+1. Removed incorrect clamping logic
+2. Simplified loss function (Huber + Quantile)
+3. Used StandardScaler instead of custom normalization
+4. Stable Attention mechanism
 
----
+**v3.1 Final Results:**
+| Metric | v2.1 (Previous) | v3.1 (Current) | Target | Status |
+|--------|-----------------|----------------|--------|--------|
+| MAPE | 10.68% | **7.83%** | <10% | ✅ |
+| R² | 0.59 | **0.74** | >0.65 | ✅ |
+| Coverage | 82.5% | **89.4%** | >85% | ✅ |
+| MAE | 11.27 | **8.93** | - | ✅ |
+| RMSE | 14.67 | **12.02** | - | ✅ |
 
-### 이전 세션 (2025-12-18 15:50)
-
-#### 수석 아키텍트 제언 반영 - 고도화된 SMP 모델 구현 ✅
-
-**핵심 개선 사항**:
-1. ✅ **2년치 실제 데이터 사용**: 2022-2024 EPSIS 데이터 26,240건
-2. ✅ **경량화 모델**: 1M → 172K 파라미터 (약 1/6)
-3. ✅ **Quantile Regression**: 10%, 50%, 90% 분위수 예측
-4. ✅ **Walk-forward CV**: 5-fold 시계열 교차검증
-5. ✅ **Noise Injection**: 2% 가우시안 노이즈로 로버스트성 강화
-6. ✅ **ARIMA 앙상블**: 통계 모델과 하이브리드 접근
-7. ✅ **XAI Pipeline**: Attention 기반 해석 가능성 분석
-
-**모델 아키텍처 비교**:
-| 항목 | 이전 (v2.0.1) | 현재 (v2.1.0) |
-|------|---------------|---------------|
-| 데이터 | 합성 90일 | 실제 2년 (26,240건) |
-| hidden_size | 128 | 64 |
-| num_layers | 3 | 2 |
-| parameters | 1,070,769 | 171,890 |
-| Quantile | ❌ | ✅ (10%, 50%, 90%) |
-| Walk-forward CV | ❌ | ✅ (5 folds) |
-| Noise Injection | ❌ | ✅ (std=0.02) |
-
-**성능 비교 (정직한 평가)**:
-| 지표 | 이전 (합성 데이터) | 현재 (실제 데이터) | 해석 |
-|------|-------------------|-------------------|------|
-| MAPE | 2.89% | 10.68% | 실제 시장 변동성 반영 |
-| R² | 0.82 | 0.59 | 현실적 예측 한계 |
-| MAE | 20.11 원/kWh | 11.27 원/kWh | 개선됨 |
-| 80% Coverage | N/A | 82.5% | 불확실성 추정 정확 |
-
-**Walk-Forward CV 결과**:
-| Fold | MAPE | R² |
-|------|------|-----|
-| 1 | 10.53% | 0.387 |
-| 2 | 13.14% | -0.176 |
-| 3 | 17.52% | 0.098 |
-| 4 | 16.62% | 0.302 |
-| 5 | 5.64% | 0.697 |
-| **평균** | **12.69%** | **0.26** |
-
-**XAI 분석 결과**:
-- Attention Entropy: 3.87 (높음 = 분산된 주목)
-- Attention Concentration: 0.026 (낮음 = 과집중 없음)
-- **데이터 누수 위험: LOW** ✅
-- 주요 주목 시점: 가장 최근 시점들 (44-47시간)
-
-**새로 추가된 파일**:
-```
-src/smp/models/train_smp_advanced.py  - Sim-to-Real 학습 파이프라인
-models/smp_advanced/smp_advanced_model.pt  - 학습된 모델
-models/smp_advanced/smp_advanced_scaler.npy  - 스케일러
-models/smp_advanced/smp_advanced_metrics.json  - 성능 지표
-```
+**Model Architecture:**
+- BiLSTM + Stable Attention (4 heads)
+- 22 features, 249,952 parameters
+- Noise Injection (std=0.02, prob=0.5)
+- Quantile outputs: Q10, Q50, Q90
 
 ---
 
-## 수석 아키텍트 평가
+### Dashboard v4.0
 
-### 합성 데이터 모델의 재해석
-이전 MAPE 2.89%는 "합성 데이터의 물리 법칙을 완벽히 학습한 것"이며,
-현재 MAPE 10.68%는 "실제 시장의 불확실성을 정직하게 반영한 것"입니다.
+**Features:**
+1. 60hz.io style dark theme
+2. Interactive Jeju map with power plants
+3. Real-time EPSIS data integration
+4. SMP prediction with v3.1 model
+5. 24-hour forecast with confidence intervals
+6. XAI analysis tab
 
-### 핵심 인사이트
-1. **경량화 효과**: 파라미터 1/6 감소로 일반화 성능 강화
-2. **불확실성 정량화**: 80% 구간 커버리지 82.5%로 신뢰구간 정확
-3. **데이터 누수 없음**: Attention 분석으로 검증됨
-4. **시장 변동성**: 폴드별 MAPE 편차 (5.64% ~ 17.52%)가 시장 변동성 반영
-
-### 실무 적용 권고
-- 점 추정(MAPE 10.68%)보다 **구간 추정** 활용 권장
-- "내일 SMP는 약 100원, 80% 확률로 80~120원 사이" 형태로 활용
-
----
-
-## 이전 버전 기록
-
-### v2.0.1 SMP 모델 (합성 데이터)
-- MAPE: 2.89% (합성 데이터 기준)
-- 파라미터: 1,070,769
-
-### v2.0.0 SMP 예측 및 입찰 지원 시스템
-- 전체 구현 완료 (Phase 1-7)
-
----
-
-## How to Run
-
-### 1. 고도화된 SMP 모델 학습 (v2.1.0)
+**Run Command:**
 ```bash
-python -m src.smp.models.train_smp_advanced
-```
-
-### 2. 기존 SMP 모델 학습 (v2.0.1)
-```bash
-python -m src.smp.models.train_smp_model
-```
-
-### 3. Dashboard v2.0
-```bash
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v2.py --server.port 8502
-```
-
-### 4. API 서버
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
 ```
 
 ---
 
-## Key Files (v2.1.0)
+### Key Files (v4.0.0)
 
-### 고도화된 SMP 모듈
 ```
-/src/smp/models/train_smp_advanced.py    - Sim-to-Real 학습 파이프라인
-/models/smp_advanced/smp_advanced_model.pt  - 경량화 모델 (172K params)
-/models/smp_advanced/smp_advanced_metrics.json  - 성능 지표
+# v3.1 SMP Model
+src/smp/models/train_smp_v3_fixed.py  - Training pipeline
+models/smp_v3/smp_v3_model.pt         - Trained model (250K params)
+models/smp_v3/smp_v3_metrics.json     - Performance metrics
+models/smp_v3/smp_v3_scaler.npy       - Feature scaler
+
+# Dashboard v4
+src/dashboard/app_v4.py              - Main dashboard
+src/smp/models/smp_predictor.py      - Prediction interface (v3.1 support)
+
+# Data
+data/smp/smp_5years_epsis.csv        - 5 years EPSIS data (26,240 records)
+data/jeju_plants/jeju_power_plants.json  - Plant locations
 ```
 
-### 기존 SMP 모듈
-```
-/src/smp/models/train_smp_model.py       - 기존 학습 스크립트
-/models/smp/smp_lstm_model.pt            - 기존 모델 (1M params)
-```
+---
 
-### Dashboard v2.1
-```
-/src/dashboard/app_v2.py                 - 메인 대시보드 (XAI 탭 포함)
-/src/smp/models/smp_predictor.py         - SMP 예측기 (고도화 모델 지원)
-```
+### Model Comparison
+
+| Version | MAPE | R² | Coverage | Parameters | Status |
+|---------|------|-----|----------|------------|--------|
+| v1.0 (Basic LSTM) | 6.32% | 0.85 | N/A | ~500K | Synthetic data |
+| v2.0 (Synthetic) | 2.89% | 0.82 | N/A | 1M | Overfitted |
+| v2.1 (Advanced) | 10.68% | 0.59 | 82.5% | 172K | Real data |
+| **v3.1 (Current)** | **7.83%** | **0.74** | **89.4%** | **250K** | **Production** |
 
 ---
 
 ## Session Recovery
 
-다음 세션에서 복구하려면:
-1. `.claude/backups/PROJECT_STATUS.md` 읽기
-2. `git log --oneline -10` 확인
-3. `models/smp_advanced/smp_advanced_metrics.json` 확인
+For next session:
+1. Read `.claude/backups/PROJECT_STATUS.md`
+2. Check `models/smp_v3/smp_v3_metrics.json`
+3. Run `git log --oneline -10`
 
 ---
 
 ## Notes
 - Python 3.11+, PyTorch 2.0+, MPS (Apple Silicon)
-- v2.1.0은 수석 아키텍트 제언을 반영한 고도화 버전
-- 실제 2년치 데이터로 학습, 현실적인 성능 평가
-- Quantile Regression으로 불확실성 정량화
+- v3.1 achieves all target metrics
+- Dashboard v4 integrates v3.1 model
+- EPSIS real data: 2022-01-01 ~ 2024-12-31

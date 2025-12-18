@@ -3,19 +3,22 @@ SMP 예측기 (Dashboard 연동용)
 =============================
 
 학습된 LSTM 모델을 사용하여 SMP를 예측합니다.
-v2.1: 고도화된 Quantile 모델 지원
+v3.1: 고도화된 Quantile + Attention 모델 지원
 
 Usage:
     predictor = SMPPredictor()
     predictions = predictor.predict_24h()
 
-    # 고도화 모델 사용
+    # 고도화 모델 사용 (v3.1)
     predictor = SMPPredictor(use_advanced=True)
     predictions = predictor.predict_24h()  # Quantile + Attention
 
+    # v2.1 레거시 모델
+    predictor = SMPPredictor(use_v2=True)
+
 Author: Claude Code
 Date: 2025-12
-Version: 2.1.0
+Version: 3.1.0
 """
 
 import logging
@@ -37,17 +40,20 @@ class SMPPredictor:
     """SMP 예측기
 
     학습된 LSTM 모델을 로드하여 24시간 SMP를 예측합니다.
-    v2.1: 고도화된 Quantile 모델 지원 (use_advanced=True)
+    v3.1: 고도화된 Quantile + Attention 모델 지원 (use_advanced=True, 기본값)
 
     Example:
         >>> predictor = SMPPredictor()
         >>> result = predictor.predict_24h()
         >>> print(result['q50'])  # 중앙값 예측
 
-        # 고도화 모델 사용
+        # 고도화 모델 사용 (v3.1 기본)
         >>> predictor = SMPPredictor(use_advanced=True)
         >>> result = predictor.predict_24h()
         >>> print(result['coverage'])  # 80% 커버리지
+
+        # v2.1 레거시 모델 사용
+        >>> predictor = SMPPredictor(use_v2=True)
     """
 
     def __init__(
@@ -55,7 +61,8 @@ class SMPPredictor:
         model_path: Optional[str] = None,
         scaler_path: Optional[str] = None,
         data_path: Optional[str] = None,
-        use_advanced: bool = False
+        use_advanced: bool = False,
+        use_v2: bool = False
     ):
         """초기화
 
@@ -63,20 +70,28 @@ class SMPPredictor:
             model_path: 모델 파일 경로
             scaler_path: 스케일러 파일 경로
             data_path: SMP 데이터 파일 경로
-            use_advanced: 고도화 모델 사용 여부 (Quantile + Attention)
+            use_advanced: 고도화 모델 사용 여부 (v3.1 Quantile + Attention)
+            use_v2: v2.1 레거시 모델 사용 여부
         """
         self.use_advanced = use_advanced
+        self.use_v2 = use_v2
+        self.model_version = '3.1' if use_advanced else ('2.1' if use_v2 else 'standard')
 
         # 모델 경로 설정
         if use_advanced:
+            # v3.1 고도화 모델 (기본)
+            self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp_v3/smp_v3_model.pt"
+            self.scaler_path = Path(scaler_path) if scaler_path else PROJECT_ROOT / "models/smp_v3/smp_v3_scaler.npy"
+            self.data_path = Path(data_path) if data_path else PROJECT_ROOT / "data/smp/smp_5years_epsis.csv"
+        elif use_v2:
+            # v2.1 레거시 모델
             self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp_advanced/smp_advanced_model.pt"
             self.scaler_path = Path(scaler_path) if scaler_path else PROJECT_ROOT / "models/smp_advanced/smp_advanced_scaler.npy"
-            # 5년치 EPSIS 데이터 사용
             self.data_path = Path(data_path) if data_path else PROJECT_ROOT / "data/smp/smp_5years_epsis.csv"
         else:
+            # 기본 LSTM 모델
             self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp/smp_lstm_model.pt"
             self.scaler_path = Path(scaler_path) if scaler_path else PROJECT_ROOT / "models/smp/smp_scaler.npy"
-            # 확장된 데이터 우선 사용
             extended_path = PROJECT_ROOT / "data/smp/smp_history_extended.csv"
             real_path = PROJECT_ROOT / "data/smp/smp_history_real.csv"
             self.data_path = Path(data_path) if data_path else (extended_path if extended_path.exists() else real_path)
@@ -86,6 +101,8 @@ class SMPPredictor:
         self.config = None
         self.device = self._get_device()
         self.feature_names = []
+        self.target_mean = None
+        self.target_std = None
 
         self._load_model()
 
@@ -109,7 +126,30 @@ class SMPPredictor:
             self.config = checkpoint.get('config', {})
 
             if self.use_advanced:
-                # 고도화 모델 로드 (LightweightSMPModel)
+                # v3.1 고도화 모델 로드 (SMPModelV31)
+                from src.smp.models.train_smp_v3_fixed import SMPModelV31
+
+                model_kwargs = checkpoint.get('model_kwargs', {})
+                self.model = SMPModelV31(
+                    input_size=model_kwargs.get('input_size', 22),
+                    hidden_size=model_kwargs.get('hidden_size', 64),
+                    num_layers=model_kwargs.get('num_layers', 2),
+                    dropout=model_kwargs.get('dropout', 0.3),
+                    bidirectional=model_kwargs.get('bidirectional', True),
+                    n_heads=model_kwargs.get('n_heads', 4),
+                    prediction_hours=model_kwargs.get('prediction_hours', 24),
+                    quantiles=model_kwargs.get('quantiles', [0.1, 0.5, 0.9])
+                )
+
+                # 메트릭 저장
+                self.metrics = checkpoint.get('metrics', {})
+
+                # Target 통계 저장 (v3.1용)
+                self.target_mean = checkpoint.get('target_mean', 0)
+                self.target_std = checkpoint.get('target_std', 1)
+
+            elif self.use_v2:
+                # v2.1 레거시 모델 로드 (LightweightSMPModel)
                 from src.smp.models.train_smp_advanced import LightweightSMPModel
 
                 model_kwargs = checkpoint.get('model_kwargs', {})
@@ -123,7 +163,6 @@ class SMPPredictor:
                     quantiles=model_kwargs.get('quantiles', [0.1, 0.5, 0.9])
                 )
 
-                # 메트릭 및 XAI 분석 저장
                 self.metrics = checkpoint.get('metrics', {})
                 self.xai_analysis = checkpoint.get('xai_analysis', {})
             else:
@@ -143,7 +182,7 @@ class SMPPredictor:
             self.model.to(self.device)
             self.model.eval()
 
-            model_type = "Advanced (Quantile)" if self.use_advanced else "Standard (LSTM)"
+            model_type = f"v{self.model_version}"
             logger.info(f"모델 로드 완료: {model_type} - {self.model_path}")
 
             # 스케일러 로드
@@ -151,6 +190,10 @@ class SMPPredictor:
                 self.scaler_info = np.load(self.scaler_path, allow_pickle=True).item()
                 if 'feature_names' in self.scaler_info:
                     self.feature_names = self.scaler_info['feature_names']
+                # v3.1 target 통계
+                if 'target_mean' in self.scaler_info:
+                    self.target_mean = self.scaler_info['target_mean']
+                    self.target_std = self.scaler_info['target_std']
                 logger.info(f"스케일러 로드 완료: {self.scaler_path}")
 
         except Exception as e:
@@ -218,6 +261,8 @@ class SMPPredictor:
             피처 배열 (n_samples, n_features)
         """
         if self.use_advanced:
+            return self._create_v31_features(df)
+        elif self.use_v2:
             return self._create_advanced_features(df)
         else:
             return self._create_standard_features(df)
@@ -258,8 +303,68 @@ class SMPPredictor:
 
         return np.column_stack(features)
 
+    def _create_v31_features(self, df: pd.DataFrame) -> np.ndarray:
+        """v3.1 모델용 피처 (22개) - train_smp_v3_fixed.py와 동일"""
+        features = []
+        smp = df['smp_mainland'].values
+
+        # === 1. Base price features (4) ===
+        features.append(smp)
+        features.append(df['smp_jeju'].values)
+        features.append(df['smp_max'].values)
+        features.append(df['smp_min'].values)
+
+        # === 2. Time cyclical features (6) ===
+        hour = df['hour'].values
+        features.append(np.sin(2 * np.pi * hour / 24))
+        features.append(np.cos(2 * np.pi * hour / 24))
+
+        day_of_week = df['datetime'].dt.dayofweek.values
+        features.append(np.sin(2 * np.pi * day_of_week / 7))
+        features.append(np.cos(2 * np.pi * day_of_week / 7))
+        features.append((day_of_week >= 5).astype(float))
+
+        month = df['datetime'].dt.month.values
+        features.append(np.sin(2 * np.pi * month / 12))
+        features.append(np.cos(2 * np.pi * month / 12))
+
+        # === 3. Season/Peak features (6) ===
+        is_summer = ((month >= 6) & (month <= 8)).astype(float)
+        is_winter = ((month == 12) | (month <= 2)).astype(float)
+        features.append(is_summer)
+        features.append(is_winter)
+
+        peak_morning = ((hour >= 9) & (hour <= 12)).astype(float)
+        peak_evening = ((hour >= 17) & (hour <= 21)).astype(float)
+        off_peak = ((hour >= 1) & (hour <= 6)).astype(float)
+        features.append(peak_morning)
+        features.append(peak_evening)
+        features.append(off_peak)
+
+        # === 4. Statistical features (4) ===
+        smp_ma24 = pd.Series(smp).rolling(24, min_periods=1).mean().values
+        smp_std24 = pd.Series(smp).rolling(24, min_periods=1).std().fillna(0).values
+        features.append(smp_ma24)
+        features.append(smp_std24)
+
+        smp_diff = np.diff(smp, prepend=smp[0])
+        smp_range = df['smp_max'].values - df['smp_min'].values
+        features.append(smp_diff)
+        features.append(smp_range)
+
+        # === 5. Lag features (2) ===
+        smp_lag_24 = pd.Series(smp).shift(24).bfill().values
+        smp_lag_168 = pd.Series(smp).shift(168).bfill().values
+        features.append(smp_lag_24)
+        features.append(smp_lag_168)
+
+        feature_array = np.column_stack(features)
+        feature_array = np.nan_to_num(feature_array, nan=0.0, posinf=0.0, neginf=0.0)
+
+        return feature_array
+
     def _create_advanced_features(self, df: pd.DataFrame) -> np.ndarray:
-        """고도화 모델용 피처 (25개) - train_smp_advanced.py와 동일"""
+        """v2.1 고도화 모델용 피처 (25개) - train_smp_advanced.py와 동일"""
         features = []
         smp = df['smp_mainland'].values
 
@@ -300,7 +405,7 @@ class SMPPredictor:
         # 6. Lag 피처 (4)
         smp_series = pd.Series(smp)
         for lag in [1, 6, 12, 24]:
-            lag_values = smp_series.shift(lag).fillna(method='bfill').values
+            lag_values = smp_series.shift(lag).bfill().values
             features.append(lag_values)
 
         # 7. 이동 평균/표준편차/변화량 (5)
@@ -325,23 +430,37 @@ class SMPPredictor:
         if self.scaler_info is None:
             return data
 
-        data_min = self.scaler_info['data_min_']
-        data_max = self.scaler_info['data_max_']
+        # v3.1 스케일러 형식 (StandardScaler)
+        if 'feature_scaler_mean' in self.scaler_info:
+            mean = self.scaler_info['feature_scaler_mean']
+            scale = self.scaler_info['feature_scaler_scale']
+            return (data - mean) / (scale + 1e-8)
+
+        # v2.x 스케일러 형식 (MinMaxScaler)
+        data_min = self.scaler_info.get('data_min_', np.zeros(data.shape[1]))
+        data_max = self.scaler_info.get('data_max_', np.ones(data.shape[1]))
         scale = data_max - data_min
-        scale[scale == 0] = 1  # 0으로 나누기 방지
+        scale[scale == 0] = 1
 
         return (data - data_min) / scale
 
     def _denormalize_smp(self, normalized_smp: np.ndarray) -> np.ndarray:
-        """SMP 역정규화 (첫 번째 피처가 육지 SMP)"""
+        """SMP 역정규화"""
         if self.scaler_info is None:
             return normalized_smp
 
-        smp_min = self.scaler_info['data_min_'][0]
-        smp_max = self.scaler_info['data_max_'][0]
-        smp_range = smp_max - smp_min
+        # v3.1 형식 (StandardScaler for target)
+        if self.target_mean is not None and self.target_std is not None:
+            return normalized_smp * self.target_std + self.target_mean
 
-        return normalized_smp * smp_range + smp_min
+        # v2.x 형식 (MinMaxScaler)
+        if 'data_min_' in self.scaler_info:
+            smp_min = self.scaler_info['data_min_'][0]
+            smp_max = self.scaler_info['data_max_'][0]
+            smp_range = smp_max - smp_min
+            return normalized_smp * smp_range + smp_min
+
+        return normalized_smp
 
     def predict_24h(self, return_raw: bool = False, return_attention: bool = False) -> Dict[str, Any]:
         """24시간 SMP 예측
@@ -369,8 +488,8 @@ class SMPPredictor:
             return self._generate_fallback_predictions(times)
 
         try:
-            # 입력 시퀀스 길이 (고도화 모델은 48시간, 기존 모델은 24시간)
-            input_hours = 48 if self.use_advanced else 24
+            # 입력 시퀀스 길이 (v3.1/v2.1: 48시간, 기본 모델: 24시간)
+            input_hours = 48 if (self.use_advanced or self.use_v2) else 24
 
             # 최근 데이터 로드
             recent_df = self._load_recent_data(input_hours)
@@ -387,12 +506,8 @@ class SMPPredictor:
             # 예측
             with torch.no_grad():
                 if self.use_advanced:
-                    # 고도화 모델: Quantile 예측 + Attention
-                    result = self.model(
-                        input_tensor,
-                        return_attention=return_attention,
-                        return_quantiles=True
-                    )
+                    # v3.1 고도화 모델: Quantile 예측 + Attention
+                    result = self.model(input_tensor, return_attention=return_attention)
 
                     # 점 추정 (중앙값)
                     q50_norm = result['point'].cpu().numpy()[0]
@@ -409,7 +524,29 @@ class SMPPredictor:
                     if return_attention and 'attention' in result:
                         attention_weights = result['attention'].cpu().numpy()[0]
 
-                    model_used = 'advanced'
+                    model_used = f'v{self.model_version}'
+
+                elif self.use_v2:
+                    # v2.1 레거시 모델: Quantile 예측 + Attention
+                    result = self.model(
+                        input_tensor,
+                        return_attention=return_attention,
+                        return_quantiles=True
+                    )
+
+                    q50_norm = result['point'].cpu().numpy()[0]
+                    q50 = self._denormalize_smp(q50_norm)
+
+                    q10_norm = result['quantiles']['q10'].cpu().numpy()[0]
+                    q90_norm = result['quantiles']['q90'].cpu().numpy()[0]
+                    q10 = self._denormalize_smp(q10_norm)
+                    q90 = self._denormalize_smp(q90_norm)
+
+                    attention_weights = None
+                    if return_attention and 'attention' in result:
+                        attention_weights = result['attention'].cpu().numpy()[0]
+
+                    model_used = 'v2.1'
                 else:
                     # 기존 모델
                     output = self.model(input_tensor)
@@ -441,10 +578,11 @@ class SMPPredictor:
             }
 
             # 고도화 모델 추가 정보
-            if self.use_advanced:
+            if self.use_advanced or self.use_v2:
                 result['interval_width'] = float(np.mean(q90 - q10))
-                result['coverage'] = getattr(self, 'metrics', {}).get('coverage_80', 82.5)
-                result['mape'] = getattr(self, 'metrics', {}).get('mape', 10.68)
+                result['coverage'] = getattr(self, 'metrics', {}).get('coverage_80', getattr(self, 'metrics', {}).get('coverage', 89.4))
+                result['mape'] = getattr(self, 'metrics', {}).get('mape', 7.83)
+                result['model_version'] = self.model_version
 
                 if attention_weights is not None:
                     result['attention'] = attention_weights.tolist()

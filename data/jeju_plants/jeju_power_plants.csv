@@ -1,0 +1,27 @@
+id,name,name_en,type,subtype,latitude,longitude,capacity_mw,operator,status,address,source
+wind_001,한경풍력발전단지,Hangyeong Wind Farm,wind,onshore,33.339417,126.169222,21.0,한국남부발전,운영중,제주시 한경면 두모리,thewindpower.net
+wind_002,상명풍력발전단지,Jeju Sangmyung Wind Farm,wind,onshore,33.339250,126.289556,21.0,제주에너지공사,운영중,제주시 한림읍,thewindpower.net
+wind_003,가시리풍력발전단지,Gasi-ri Wind Farm,wind,onshore,33.3576,126.7461,30.0,제주에너지공사,운영중,서귀포시 표선면 가시리,공공데이터포털
+wind_004,김녕풍력발전단지,Gimnyeong Wind Farm,wind,onshore,33.5560,126.7480,30.0,제주에너지공사,운영중,제주시 구좌읍 김녕리,공공데이터포털
+wind_005,행원풍력발전단지,Haengwon Wind Farm,wind,onshore,33.5490,126.7990,8.385,제주에너지공사,운영중,제주시 구좌읍 행원리 563,thewindpower.net
+wind_006,삼달풍력발전단지,Samdal Wind Farm,wind,onshore,33.3790,126.8630,33.0,제주에너지공사,운영중,서귀포시 성산읍 삼달리,thewindpower.net
+wind_007,성산1풍력발전단지,Seongsan 1 Wind Farm,wind,onshore,33.4399,126.9229,12.0,제주에너지공사,운영중,서귀포시 성산읍,thewindpower.net
+wind_008,성산2풍력발전단지,Seongsan 2 Wind Farm,wind,onshore,33.4350,126.9180,8.0,제주에너지공사,운영중,서귀포시 성산읍,thewindpower.net
+wind_009,신창풍력발전단지,Sinchang Wind Farm,wind,onshore,33.3650,126.1740,1.7,한국남부발전,운영중,제주시 한경면 신창리,thewindpower.net
+wind_010,월정풍력발전단지,Woljeong Wind Farm,wind,onshore,33.5556,126.7925,1.5,제주도청,운영중,제주시 구좌읍 월정리,thewindpower.net
+wind_011,탐라해상풍력발전단지,Tamra Offshore Wind Farm,wind,offshore,33.2942,126.1631,30.0,탐라해상풍력발전(주),운영중,제주시 한경면 해상,thewindpower.net
+wind_012,가파도풍력발전단지,Gapado Wind Farm,wind,island,33.1637,126.2742,0.5,제주에너지공사,운영중,서귀포시 대정읍 가파리,thewindpower.net
+wind_013,월령풍력발전단지,Wollyeong Wind Farm,wind,onshore,33.4170,126.2330,2.0,한국남부발전,운영중,제주시 한림읍 월령리,thewindpower.net
+wind_014,제주음풍력발전단지,Jeju Eum Wind Farm,wind,onshore,33.4800,126.5500,21.0,제주에너지공사,운영중,제주시,thewindpower.net
+solar_001,구좌태양광발전소,Gujwa Solar Farm,solar,ground-mounted,33.5200,126.8500,0.75,제주에너지공사,운영중,제주시 구좌읍,제주에너지공사
+solar_002,삼도태양광발전소,Samdo Solar Farm,solar,ground-mounted,33.5100,126.5200,1.7,제주에너지공사,운영중,제주시 삼도동,제주에너지공사
+solar_003,용담태양광발전소,Yongdam Solar Farm,solar,ground-mounted,33.5050,126.5100,0.4152,제주에너지공사,운영중,제주시 용담동,제주에너지공사
+solar_004,시민참여태양광발전소,Community Energy Solar Farm,solar,community,33.4900,126.5300,0.49,제주에너지공사,운영중,제주시,제주에너지공사
+solar_005,한경태양광발전소,Hangyeong Solar Farm,solar,ground-mounted,33.3400,126.1800,0.4968,제주에너지공사,운영중,제주시 한경면,제주에너지공사
+solar_006,표선태양광발전소,Pyoseon Solar Farm,solar,ground-mounted,33.3200,126.8300,1.0,민간사업자,운영중,서귀포시 표선면,공공데이터포털
+ess_001,제주 변동성완화 ESS 1,Jeju RE Stabilization ESS 1,ess,utility-scale,33.5100,126.5400,30.0,한국전력공사,운영중,제주시 변전소,공공데이터포털
+ess_002,제주 피크저감 ESS,Jeju Peak Shaving ESS,ess,utility-scale,33.4500,126.5600,20.0,한국전력공사,운영중,제주시,공공데이터포털
+ess_003,한경풍력 연계 ESS,Hangyeong Wind-Coupled ESS,ess,renewable-coupled,33.3400,126.1700,10.0,한국남부발전,운영중,제주시 한경면,공공데이터포털
+ess_004,가시리풍력 연계 ESS,Gasi-ri Wind-Coupled ESS,ess,renewable-coupled,33.3576,126.7500,15.0,제주에너지공사,운영중,서귀포시 표선면 가시리,공공데이터포털
+thermal_001,제주화력발전소,Jeju Thermal Power Plant,thermal,combined-cycle,33.4920,126.4750,410.0,한국남부발전,운영중,제주시 화북동,한국남부발전
+thermal_002,남제주화력발전소,South Jeju Thermal Power Plant,thermal,combined-cycle,33.2670,126.5150,300.0,한국남부발전,운영중,서귀포시 안덕면,한국남부발전
