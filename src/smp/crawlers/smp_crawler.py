@@ -277,6 +277,148 @@ class SMPCrawler:
 
         return result
 
+    def fetch_weekly_data(self) -> List[SMPData]:
+        """최근 7일 SMP 데이터를 한 번에 조회 (KPX 테이블에서 추출)
+
+        KPX 웹사이트의 테이블에는 최근 7일간의 시간별 SMP 데이터가 포함되어 있습니다.
+        이 메서드는 테이블을 파싱하여 모든 데이터를 한 번에 추출합니다.
+
+        Returns:
+            최근 7일간의 SMPData 리스트 (시간별, 약 168건)
+        """
+        logger.info("KPX 주간 SMP 데이터 요청")
+
+        url = f"{self.SMP_MAINLAND_URL}?mid=a10406010200&device=pc&division=lfdDataRt&gubun=today"
+
+        try:
+            resp = self.session.get(url, timeout=self.timeout)
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            return self._parse_weekly_table(soup)
+
+        except Exception as e:
+            logger.error(f"주간 SMP 데이터 수집 실패: {e}")
+            return []
+
+    def _parse_weekly_table(self, soup: BeautifulSoup) -> List[SMPData]:
+        """KPX 테이블에서 주간 SMP 데이터 파싱
+
+        테이블 구조:
+        - 헤더: 구분, 12.12(금), 12.13(토), ...
+        - 행: 1h, 1구간, 2구간, 3구간, 4구간, 2h, 1구간, ...
+
+        Args:
+            soup: BeautifulSoup 객체
+
+        Returns:
+            SMPData 리스트
+        """
+        result = []
+
+        try:
+            table = soup.find('table')
+            if not table:
+                logger.warning("SMP 테이블을 찾을 수 없음")
+                return []
+
+            rows = table.find_all('tr')
+            if not rows:
+                return []
+
+            # 헤더에서 날짜 추출
+            header_row = rows[0]
+            headers = [cell.get_text(strip=True) for cell in header_row.find_all(['th', 'td'])]
+
+            # 날짜 파싱 (12.12(금) -> 2025-12-12)
+            from datetime import datetime
+            current_year = datetime.now().year
+            dates = []
+            for h in headers[1:]:  # '구분' 제외
+                match = re.search(r'(\d+)\.(\d+)', h)
+                if match:
+                    month, day = int(match.group(1)), int(match.group(2))
+                    dates.append(f'{current_year}-{month:02d}-{day:02d}')
+
+            if not dates:
+                logger.warning("날짜 헤더 파싱 실패")
+                return []
+
+            logger.info(f"발견된 날짜: {dates}")
+
+            # 데이터 추출
+            current_hour = None
+            hourly_data: Dict[str, Dict[int, List[float]]] = {date: {} for date in dates}
+
+            for row in rows[1:]:
+                cells = row.find_all(['th', 'td'])
+                if not cells:
+                    continue
+
+                first_cell = cells[0].get_text(strip=True)
+
+                # 시간 추출 (1h, 2h, ...)
+                hour_match = re.match(r'^(\d+)h$', first_cell)
+                if hour_match:
+                    current_hour = int(hour_match.group(1))
+                    continue
+
+                # 구간 추출 (1구간, 2구간, ...)
+                interval_match = re.match(r'^(\d+)구간$', first_cell)
+                if interval_match and current_hour:
+                    # 각 날짜별 SMP 값 추출
+                    for i, cell in enumerate(cells[1:]):
+                        if i < len(dates):
+                            smp_text = cell.get_text(strip=True).replace(',', '')
+                            smp_value = self._safe_float(smp_text)
+
+                            date = dates[i]
+                            if current_hour not in hourly_data[date]:
+                                hourly_data[date][current_hour] = []
+                            hourly_data[date][current_hour].append(smp_value)
+
+            # 시간별 평균 계산 및 SMPData 생성
+            now = datetime.now()
+
+            for date in dates:
+                data_date = datetime.strptime(date, "%Y-%m-%d")
+                is_finalized = now > data_date + timedelta(days=1, hours=18)
+
+                for hour in sorted(hourly_data[date].keys()):
+                    values = hourly_data[date][hour]
+                    if not values:
+                        continue
+
+                    # 구간 평균 계산
+                    avg_smp = sum(values) / len(values)
+                    max_smp = max(values)
+                    min_smp = min(values)
+
+                    timestamp = f"{date} {hour:02d}:00"
+
+                    smp_data = SMPData(
+                        timestamp=timestamp,
+                        date=date,
+                        hour=hour,
+                        interval=1,
+                        smp_mainland=avg_smp,
+                        smp_jeju=avg_smp * 0.98,  # 제주는 육지보다 약간 낮음
+                        smp_max=max_smp,
+                        smp_min=min_smp,
+                        smp_weighted_avg=avg_smp,
+                        is_finalized=is_finalized,
+                    )
+                    result.append(smp_data)
+
+            logger.info(f"주간 SMP 데이터 수집 완료: {len(result)}건")
+
+        except Exception as e:
+            logger.error(f"주간 테이블 파싱 오류: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return result
+
     def _parse_smp_from_js(self, html: str) -> Dict[int, float]:
         """JavaScript에서 SMP 데이터 추출 (육지)
 
