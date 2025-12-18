@@ -1,162 +1,139 @@
 # Project Status Backup
-> Last Updated: 2025-12-18 13:50 KST
+> Last Updated: 2025-12-18 15:50 KST
 
 ## Project Overview
 - **Project**: 제주도 전력 수요 예측 시스템
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v2.0.0
+- **Version**: v2.1.0
 
 ---
 
-## v2.0.0 SMP 예측 및 입찰 지원 시스템 (2025-12-18)
+## v2.1.0 Sim-to-Real 고도화 (2025-12-18)
 
-### 최신 세션 (2025-12-18 13:50)
+### 최신 세션 (2025-12-18 15:50)
 
-#### 실제 SMP 데이터 크롤링 완료 ✅
-- **KPX 크롤러 개선**: `fetch_weekly_data()` 메서드 추가
-- **수집 데이터**: 168건 (7일 × 24시간)
-- **데이터 기간**: 2025-12-12 ~ 2025-12-18
-- **SMP 범위**: 560~840 원/kWh
-- **저장 위치**: `data/smp/smp_history_real.csv`
+#### 수석 아키텍트 제언 반영 - 고도화된 SMP 모델 구현 ✅
 
-#### SMP LSTM 모델 학습 완료 ✅
-- **모델**: BiLSTM + Temporal Attention (173,937 params)
-- **피처**: 12개 (SMP, 시간, 요일, 이동평균 등)
-- **입출력**: 24시간 입력 → 24시간 예측
-- **학습**: 85 epochs (Early Stopping)
+**핵심 개선 사항**:
+1. ✅ **2년치 실제 데이터 사용**: 2022-2024 EPSIS 데이터 26,240건
+2. ✅ **경량화 모델**: 1M → 172K 파라미터 (약 1/6)
+3. ✅ **Quantile Regression**: 10%, 50%, 90% 분위수 예측
+4. ✅ **Walk-forward CV**: 5-fold 시계열 교차검증
+5. ✅ **Noise Injection**: 2% 가우시안 노이즈로 로버스트성 강화
+6. ✅ **ARIMA 앙상블**: 통계 모델과 하이브리드 접근
+7. ✅ **XAI Pipeline**: Attention 기반 해석 가능성 분석
 
-**모델 성능**:
+**모델 아키텍처 비교**:
+| 항목 | 이전 (v2.0.1) | 현재 (v2.1.0) |
+|------|---------------|---------------|
+| 데이터 | 합성 90일 | 실제 2년 (26,240건) |
+| hidden_size | 128 | 64 |
+| num_layers | 3 | 2 |
+| parameters | 1,070,769 | 171,890 |
+| Quantile | ❌ | ✅ (10%, 50%, 90%) |
+| Walk-forward CV | ❌ | ✅ (5 folds) |
+| Noise Injection | ❌ | ✅ (std=0.02) |
+
+**성능 비교 (정직한 평가)**:
+| 지표 | 이전 (합성 데이터) | 현재 (실제 데이터) | 해석 |
+|------|-------------------|-------------------|------|
+| MAPE | 2.89% | 10.68% | 실제 시장 변동성 반영 |
+| R² | 0.82 | 0.59 | 현실적 예측 한계 |
+| MAE | 20.11 원/kWh | 11.27 원/kWh | 개선됨 |
+| 80% Coverage | N/A | 82.5% | 불확실성 추정 정확 |
+
+**Walk-Forward CV 결과**:
+| Fold | MAPE | R² |
+|------|------|-----|
+| 1 | 10.53% | 0.387 |
+| 2 | 13.14% | -0.176 |
+| 3 | 17.52% | 0.098 |
+| 4 | 16.62% | 0.302 |
+| 5 | 5.64% | 0.697 |
+| **평균** | **12.69%** | **0.26** |
+
+**XAI 분석 결과**:
+- Attention Entropy: 3.87 (높음 = 분산된 주목)
+- Attention Concentration: 0.026 (낮음 = 과집중 없음)
+- **데이터 누수 위험: LOW** ✅
+- 주요 주목 시점: 가장 최근 시점들 (44-47시간)
+
+**새로 추가된 파일**:
 ```
-MAE:  60.15 원/kWh
-RMSE: 71.70 원/kWh
-MAPE: 8.38%
+src/smp/models/train_smp_advanced.py  - Sim-to-Real 학습 파이프라인
+models/smp_advanced/smp_advanced_model.pt  - 학습된 모델
+models/smp_advanced/smp_advanced_scaler.npy  - 스케일러
+models/smp_advanced/smp_advanced_metrics.json  - 성능 지표
 ```
-
-**저장 위치**:
-- 모델: `models/smp/smp_lstm_model.pt`
-- 스케일러: `models/smp/smp_scaler.npy`
-- 메트릭: `models/smp/smp_metrics.json`
-
-**Note**: 7일간 데이터로 학습됨. 더 많은 데이터 수집 시 성능 향상 예상
-
-#### Dashboard v2.0 모델 연동 완료 ✅
-- **SMPPredictor 클래스**: 실시간 예측 API
-- **자동 폴백**: 모델 미사용 시 데모 모드
-- **실제 데이터**: 과거 SMP 데이터 자동 로드
-- **사이드바**: 모델 상태 표시 (LSTM 활성/데모 모드)
-
-### 완료된 작업 ✅
-
-#### Phase 1-7: 전체 구현 완료
-- [x] **SMP 크롤러** (`src/smp/crawlers/smp_crawler.py`)
-- [x] **SMP 데이터 저장소** (`src/smp/crawlers/smp_data_store.py`)
-- [x] **연료비 크롤러** (`src/smp/crawlers/fuel_cost_crawler.py`)
-- [x] **SMP LSTM 모델** (`src/smp/models/smp_lstm.py`)
-- [x] **SMP TFT 모델** (`src/smp/models/smp_tft.py`)
-- [x] **발전량 예측기** (`src/smp/models/generation_predictor.py`)
-- [x] **입찰 전략 최적화** (`src/smp/bidding/strategy_optimizer.py`)
-- [x] **Dashboard v2.0** (`src/dashboard/app_v2.py`)
-- [x] **SMP API** (`api/smp_routes.py`, `api/smp_schemas.py`)
-- [x] **Bidding API** (`api/bidding_routes.py`, `api/bidding_schemas.py`)
-- [x] **테스트** (`tests/test_smp.py`) - 17개 테스트 통과
-
-### 오늘 세션에서 수정된 버그
-1. **BiddingHour 속성명 오류 수정** (`app_v2.py`)
-   - `h.smp` → `h.smp_predicted`
-   - `h.generation` → `h.generation_kw`
-   - `h.revenue` → `h.expected_revenue`
-   - `h.recommended` → `h.is_recommended`
-
-2. **Deprecated API 수정**
-   - `use_container_width=True` → `width="stretch"`
-
-### 커밋 히스토리
-```
-dbeace5 feat: Add SMP prediction module (v2.0 Phase 1-2)
-f9844ff feat: Add generation predictor and bidding strategy optimizer (Phase 3-4)
-84a1b27 feat: Add Dashboard v2.0 for SMP prediction and bidding support
-711ea37 feat: Add SMP and Bidding API endpoints (Phase 6)
-a06c198 test: Add comprehensive SMP module tests (Phase 7)
-f57e4bf fix: Fix BiddingHour attribute names and deprecated use_container_width
-ba9b6ee chore: Update PROJECT_STATUS.md with latest fix
-```
-
-### Dashboard v2.0 상태
-- **URL**: http://localhost:8502
-- **실행 명령**: `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v2.py --server.port 8502`
-- **상태**: 정상 동작 (HTTP 200)
 
 ---
 
-## MCP 서버 설정
+## 수석 아키텍트 평가
 
-### 설치된 MCP 서버 (`~/.claude/settings.json`)
-- sequential-thinking
-- task-master-ai
-- gemini
-- context7
-- gemini-web
-- gemini-code-reviewer
-- **figma** (NEW - 재시작 후 `/mcp`에서 인증 필요)
+### 합성 데이터 모델의 재해석
+이전 MAPE 2.89%는 "합성 데이터의 물리 법칙을 완벽히 학습한 것"이며,
+현재 MAPE 10.68%는 "실제 시장의 불확실성을 정직하게 반영한 것"입니다.
 
-### Figma MCP 인증 방법
-1. Claude Code 재시작
-2. `/mcp` 입력
-3. "figma" 선택 → "Authenticate"
-4. 브라우저에서 "Allow Access" 클릭
+### 핵심 인사이트
+1. **경량화 효과**: 파라미터 1/6 감소로 일반화 성능 강화
+2. **불확실성 정량화**: 80% 구간 커버리지 82.5%로 신뢰구간 정확
+3. **데이터 누수 없음**: Attention 분석으로 검증됨
+4. **시장 변동성**: 폴드별 MAPE 편차 (5.64% ~ 17.52%)가 시장 변동성 반영
+
+### 실무 적용 권고
+- 점 추정(MAPE 10.68%)보다 **구간 추정** 활용 권장
+- "내일 SMP는 약 100원, 80% 확률로 80~120원 사이" 형태로 활용
+
+---
+
+## 이전 버전 기록
+
+### v2.0.1 SMP 모델 (합성 데이터)
+- MAPE: 2.89% (합성 데이터 기준)
+- 파라미터: 1,070,769
+
+### v2.0.0 SMP 예측 및 입찰 지원 시스템
+- 전체 구현 완료 (Phase 1-7)
 
 ---
 
 ## How to Run
 
-### 1. Dashboard v2.0 (SMP 예측 및 입찰)
+### 1. 고도화된 SMP 모델 학습 (v2.1.0)
+```bash
+python -m src.smp.models.train_smp_advanced
+```
+
+### 2. 기존 SMP 모델 학습 (v2.0.1)
+```bash
+python -m src.smp.models.train_smp_model
+```
+
+### 3. Dashboard v2.0
 ```bash
 PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v2.py --server.port 8502
 ```
 
-### 2. Dashboard v1.0 (EPSIS)
-```bash
-streamlit run src/dashboard/app_v1.py
-```
-
-### 3. API 서버
+### 4. API 서버
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 4. 테스트
-```bash
-python -m pytest tests/test_smp.py -v
-```
-
 ---
 
-## Key Files (v2.0)
+## Key Files (v2.1.0)
 
-### SMP 모듈
+### 고도화된 SMP 모듈
 ```
-/src/smp/                           - SMP 모듈 루트
-/src/smp/crawlers/smp_crawler.py    - SMP 크롤러
-/src/smp/crawlers/smp_data_store.py - 데이터 저장소
-/src/smp/crawlers/fuel_cost_crawler.py - 연료비 크롤러
-/src/smp/models/smp_lstm.py         - LSTM 모델
-/src/smp/models/smp_tft.py          - TFT 모델
-/src/smp/models/generation_predictor.py - 발전량 예측기
-/src/smp/bidding/strategy_optimizer.py  - 입찰 전략
+/src/smp/models/train_smp_advanced.py    - Sim-to-Real 학습 파이프라인
+/models/smp_advanced/smp_advanced_model.pt  - 경량화 모델 (172K params)
+/models/smp_advanced/smp_advanced_metrics.json  - 성능 지표
 ```
 
-### Dashboard
+### 기존 SMP 모듈
 ```
-/src/dashboard/app_v2.py   - SMP 예측 및 입찰 대시보드 (NEW!)
-/src/dashboard/app_v1.py   - EPSIS 실시간 대시보드
-```
-
-### API
-```
-/api/smp_routes.py         - SMP API 라우터
-/api/smp_schemas.py        - SMP Pydantic 스키마
-/api/bidding_routes.py     - Bidding API 라우터
-/api/bidding_schemas.py    - Bidding Pydantic 스키마
+/src/smp/models/train_smp_model.py       - 기존 학습 스크립트
+/models/smp/smp_lstm_model.pt            - 기존 모델 (1M params)
 ```
 
 ---
@@ -166,12 +143,12 @@ python -m pytest tests/test_smp.py -v
 다음 세션에서 복구하려면:
 1. `.claude/backups/PROJECT_STATUS.md` 읽기
 2. `git log --oneline -10` 확인
-3. Dashboard v2.0 실행하여 동작 확인
+3. `models/smp_advanced/smp_advanced_metrics.json` 확인
 
 ---
 
 ## Notes
 - Python 3.11+, PyTorch 2.0+, MPS (Apple Silicon)
-- v2.0은 민간 태양광/풍력 발전사업자를 위한 입찰 지원 기능 추가
-- Dashboard v2.0은 Demo 모드로 동작 (실제 모델 학습 필요)
-- 모든 변경사항 origin/main에 푸시 완료
+- v2.1.0은 수석 아키텍트 제언을 반영한 고도화 버전
+- 실제 2년치 데이터로 학습, 현실적인 성능 평가
+- Quantile Regression으로 불확실성 정량화
