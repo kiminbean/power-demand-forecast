@@ -317,45 +317,129 @@ class JejuPowerCrawler:
         try:
             # 데이터 페이지에서 다운로드 링크 추출
             file_url = f"{self.DATA_PORTAL_BASE}/data/{self.JEJU_SUPPLY_DATASET_ID}/fileData.do"
+            logger.info(f"데이터 페이지 접근: {file_url}")
+
             response = self.session.get(file_url, timeout=self.timeout)
             response.raise_for_status()
 
-            # 다운로드 링크 추출
-            pattern = r'fileDownload\.do\?[^"\']+atchFileId=[^"\'&]+'
-            matches = re.findall(pattern, response.text)
+            # 다운로드 링크 추출 (여러 패턴 시도)
+            patterns = [
+                r'fileDownload\.do\?[^"\']+atchFileId=[^"\'&]+',
+                r'/cmm/cmm/fileDownload\.do[^"\']*',
+                r'data-file-url=["\']([^"\']+)["\']',
+            ]
 
-            if not matches:
-                logger.error("다운로드 링크를 찾을 수 없습니다.")
+            download_url = None
+            for pattern in patterns:
+                matches = re.findall(pattern, response.text)
+                if matches:
+                    match = matches[0]
+                    if not match.startswith('http'):
+                        download_url = f"{self.DATA_PORTAL_BASE}/cmm/cmm/{match}" if 'fileDownload' in match else f"{self.DATA_PORTAL_BASE}{match}"
+                    else:
+                        download_url = match
+                    break
+
+            if not download_url:
+                logger.warning("다운로드 링크를 찾을 수 없습니다. 수동 다운로드가 필요합니다.")
+                logger.info(f"다운로드 페이지: {file_url}")
                 return None
 
-            download_url = f"{self.DATA_PORTAL_BASE}/cmm/cmm/{matches[0]}"
             logger.info(f"다운로드 URL: {download_url}")
 
             # 파일 다운로드
             self.session.headers['Referer'] = file_url
-            resp = self.session.get(download_url, timeout=60)
+            resp = self.session.get(download_url, timeout=120, stream=True)
             resp.raise_for_status()
 
             # ZIP 파일 저장
             zip_path = save_dir / "jeju_power_supply.zip"
             with open(zip_path, 'wb') as f:
-                f.write(resp.content)
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
-            logger.info(f"ZIP 파일 저장: {zip_path} ({len(resp.content)} bytes)")
+            file_size = zip_path.stat().st_size
+            logger.info(f"ZIP 파일 저장: {zip_path} ({file_size:,} bytes)")
+
+            # ZIP 파일 유효성 검사
+            if file_size < 1000:
+                logger.error("다운로드된 파일이 너무 작습니다. 인증이 필요할 수 있습니다.")
+                zip_path.unlink()
+                return None
+
             return zip_path
 
         except Exception as e:
             logger.error(f"ZIP 다운로드 실패: {e}")
             return None
 
-    def fetch_realtime_data(self) -> List[JejuPowerData]:
+    def auto_download(self, force: bool = False) -> Optional[Path]:
         """
-        실시간 데이터 조회 (캐시된 데이터 또는 다운로드)
+        자동 다운로드 (캐시 확인 후 필요시 다운로드)
+
+        Args:
+            force: True면 캐시 무시하고 강제 다운로드
+
+        Returns:
+            ZIP 파일 경로 또는 None
+        """
+        # 기본 데이터 디렉토리
+        data_dir = Path(__file__).parent.parent.parent / "data"
+        zip_path = data_dir / "jeju_power_supply.zip"
+
+        # 이미 파일이 있고 force가 아니면 기존 파일 사용
+        if zip_path.exists() and not force:
+            file_age_days = (datetime.now().timestamp() - zip_path.stat().st_mtime) / 86400
+            if file_age_days < 7:  # 7일 이내 파일은 재사용
+                logger.info(f"기존 ZIP 파일 사용 (생성: {file_age_days:.1f}일 전)")
+                return zip_path
+            else:
+                logger.info(f"ZIP 파일이 오래됨 ({file_age_days:.1f}일). 새로 다운로드 시도...")
+
+        # 다운로드 시도
+        logger.info("공공데이터포털에서 제주 전력수급 데이터 다운로드 시도...")
+        downloaded = self.download_and_extract_zip(data_dir)
+
+        if downloaded:
+            return downloaded
+
+        # 다운로드 실패 시 기존 파일이 있으면 사용
+        if zip_path.exists():
+            logger.warning("다운로드 실패. 기존 파일 사용.")
+            return zip_path
+
+        # 수동 다운로드 안내
+        logger.error("자동 다운로드 실패. 수동 다운로드가 필요합니다.")
+        print("\n" + "=" * 60)
+        print("제주 전력수급 데이터 수동 다운로드 방법:")
+        print("=" * 60)
+        print("1. 공공데이터포털 접속:")
+        print("   https://www.data.go.kr/data/15125113/fileData.do")
+        print("\n2. '파일데이터' 섹션에서 ZIP 파일 다운로드")
+        print(f"\n3. 다운로드한 파일을 다음 경로에 저장:")
+        print(f"   {zip_path}")
+        print("=" * 60 + "\n")
+
+        return None
+
+    def fetch_realtime_data(self, auto_download: bool = True) -> List[JejuPowerData]:
+        """
+        실시간 데이터 조회 (자동 다운로드 기능 포함)
+
+        Args:
+            auto_download: True면 auto_download() 메서드 사용
 
         Returns:
             JejuPowerData 리스트
         """
-        # 먼저 캐시된 ZIP 파일 확인
+        if auto_download:
+            # 자동 다운로드 기능 사용
+            zip_path = self.auto_download()
+            if zip_path:
+                return self.load_from_zip(zip_path)
+            return []
+
+        # 기존 방식: 캐시된 ZIP 파일 확인
         cached_zip = self.cache_dir / "jeju_power_supply.zip"
 
         if cached_zip.exists():
@@ -686,7 +770,10 @@ def main():
     """CLI 메인 함수"""
     parser = argparse.ArgumentParser(description='제주 전력수급현황 크롤러')
     parser.add_argument('--download', action='store_true', help='공공데이터포털에서 다운로드')
+    parser.add_argument('--auto-download', action='store_true', help='자동 다운로드 (캐시 확인 후 필요시 다운로드)')
+    parser.add_argument('--force', action='store_true', help='캐시 무시하고 강제 다운로드')
     parser.add_argument('--file', type=str, help='로컬 파일에서 로드')
+    parser.add_argument('--zip', type=str, help='ZIP 파일에서 로드')
     parser.add_argument('--latest', action='store_true', help='최신 데이터 출력')
     parser.add_argument('--start', type=str, help='시작 날짜 (YYYY-MM-DD)')
     parser.add_argument('--end', type=str, help='종료 날짜 (YYYY-MM-DD)')
@@ -700,9 +787,17 @@ def main():
     try:
         data = []
 
-        if args.file:
+        if args.zip:
+            # ZIP 파일에서 로드
+            data = crawler.load_from_zip(args.zip)
+        elif args.file:
             # 로컬 파일에서 로드
             data = crawler.fetch_from_local_file(args.file)
+        elif args.auto_download:
+            # 자동 다운로드 (캐시 확인 후 필요시)
+            zip_path = crawler.auto_download(force=args.force)
+            if zip_path:
+                data = crawler.load_from_zip(zip_path)
         elif args.download:
             # 공공데이터포털에서 다운로드
             df = crawler.download_csv_data()
@@ -717,9 +812,13 @@ def main():
         if not data:
             print("데이터가 없습니다.")
             print("\n사용 예시:")
-            print("  # 로컬 CSV 파일 로드")
-            print("  python jeju_power_crawler.py --file data/jeju_power_supply.csv")
-            print("\n  # 공공데이터포털에서 다운로드 (수동 다운로드 권장)")
+            print("  # ZIP 파일에서 로드")
+            print("  python jeju_power_crawler.py --zip data/jeju_power_supply.zip")
+            print("\n  # 자동 다운로드 (권장)")
+            print("  python jeju_power_crawler.py --auto-download")
+            print("\n  # 강제 다운로드 (캐시 무시)")
+            print("  python jeju_power_crawler.py --auto-download --force")
+            print("\n  # 수동 다운로드:")
             print("  # https://www.data.go.kr/data/15125113/fileData.do")
             return
 

@@ -527,18 +527,20 @@ class DataManager:
     @staticmethod
     @st.cache_data(ttl=3600)  # 1시간 캐시
     def fetch_jeju_actual_data() -> Optional[Dict[str, Any]]:
-        """제주 실측 전력수급 데이터 로드 (공공데이터포털)"""
+        """제주 실측 전력수급 데이터 로드 (공공데이터포털, 자동 다운로드 지원)"""
         if not JEJU_CRAWLER_AVAILABLE:
             return None
 
         try:
-            # ZIP 파일 경로 (data 디렉토리)
-            zip_path = PROJECT_ROOT / "data" / "jeju_power_supply.zip"
+            crawler = JejuPowerCrawler()
 
-            if not zip_path.exists():
+            # 자동 다운로드 시도 (캐시 확인 후 필요시 다운로드)
+            zip_path = crawler.auto_download()
+
+            if not zip_path or not zip_path.exists():
+                crawler.close()
                 return None
 
-            crawler = JejuPowerCrawler()
             data = crawler.load_from_zip(zip_path)
             crawler.close()
 
