@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2025-12-18 15:50 KST
+> Last Updated: 2025-12-18 16:02 KST
 
 ## Project Overview
 - **Project**: 제주도 전력 수요 예측 시스템
@@ -10,7 +10,25 @@
 
 ## v2.1.0 Sim-to-Real 고도화 (2025-12-18)
 
-### 최신 세션 (2025-12-18 15:50)
+### 최신 세션 (2025-12-18 16:02)
+
+#### Dashboard v2.1 - 고도화 모델 연동 완료 ✅
+
+**Dashboard 업데이트**:
+1. ✅ **고도화 모델 토글**: 입찰 지원 페이지에 모델 선택 UI 추가
+2. ✅ **XAI 분석 탭 추가**: Attention 시각화, 불확실성 분석
+3. ✅ **Quantile 예측 UI**: 80% 신뢰구간 차트 표시
+4. ✅ **smp_predictor.py 확장**: 고도화 모델 지원 (use_advanced 파라미터)
+
+**수정된 파일**:
+```
+src/dashboard/app_v2.py           - XAI 탭, 모델 선택 토글 추가
+src/smp/models/smp_predictor.py   - 고도화 모델 지원 확장
+```
+
+---
+
+### 이전 세션 (2025-12-18 15:50)
 
 #### 수석 아키텍트 제언 반영 - 고도화된 SMP 모델 구현 ✅
 
@@ -134,6 +152,12 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 /src/smp/models/train_smp_model.py       - 기존 학습 스크립트
 /models/smp/smp_lstm_model.pt            - 기존 모델 (1M params)
+```
+
+### Dashboard v2.1
+```
+/src/dashboard/app_v2.py                 - 메인 대시보드 (XAI 탭 포함)
+/src/smp/models/smp_predictor.py         - SMP 예측기 (고도화 모델 지원)
 ```
 
 ---
