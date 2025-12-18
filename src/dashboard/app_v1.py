@@ -60,7 +60,7 @@ except Exception as e:
     EPSIS_AVAILABLE = False
     print(f"EPSIS crawler import failed: {e}")
 
-# 제주 전력수급현황 크롤러 import
+# 제주 전력수급현황 크롤러 import (과거 데이터)
 try:
     jeju_spec = importlib.util.spec_from_file_location(
         "jeju_power_crawler",
@@ -74,6 +74,21 @@ try:
 except Exception as e:
     JEJU_CRAWLER_AVAILABLE = False
     print(f"Jeju power crawler import failed: {e}")
+
+# 제주 실시간 크롤러 import (KPX 실시간)
+try:
+    jeju_rt_spec = importlib.util.spec_from_file_location(
+        "jeju_realtime_crawler",
+        PROJECT_ROOT / "tools" / "crawlers" / "jeju_realtime_crawler.py"
+    )
+    jeju_rt_module = importlib.util.module_from_spec(jeju_rt_spec)
+    jeju_rt_spec.loader.exec_module(jeju_rt_module)
+    JejuRealtimeCrawler = jeju_rt_module.JejuRealtimeCrawler
+    JejuRealtimeData = jeju_rt_module.JejuRealtimeData
+    JEJU_REALTIME_AVAILABLE = True
+except Exception as e:
+    JEJU_REALTIME_AVAILABLE = False
+    print(f"Jeju realtime crawler import failed: {e}")
 
 
 # ============================================================================
@@ -525,9 +540,56 @@ class DataManager:
             return None
 
     @staticmethod
+    @st.cache_data(ttl=60)  # 1분 캐시 (5분마다 업데이트되는 실시간 데이터)
+    def fetch_jeju_realtime() -> Optional[Dict[str, Any]]:
+        """제주 실시간 전력수급 데이터 (KPX 크롤링)"""
+        if not JEJU_REALTIME_AVAILABLE:
+            return None
+
+        try:
+            crawler = JejuRealtimeCrawler()
+            data = crawler.fetch_realtime()
+            crawler.close()
+
+            if not data:
+                return None
+
+            # 상태 판단
+            if data.reserve_rate >= 15:
+                status = 'safe'
+                status_text = '정상'
+            elif data.reserve_rate >= 10:
+                status = 'normal'
+                status_text = '관심'
+            elif data.reserve_rate >= 5:
+                status = 'warning'
+                status_text = '주의'
+            else:
+                status = 'danger'
+                status_text = '위험'
+
+            return {
+                'timestamp': data.timestamp,
+                'supply_capacity': data.supply_capacity,
+                'current_demand': data.current_demand,
+                'supply_reserve': data.supply_reserve,
+                'operation_reserve': data.operation_reserve,
+                'reserve_rate': data.reserve_rate,
+                'utilization_rate': data.utilization_rate,
+                'status': status,
+                'status_text': status_text,
+                'fetched_at': data.fetched_at,
+                'source': 'kpx.or.kr (한국전력거래소 실시간)',
+            }
+
+        except Exception as e:
+            st.warning(f"제주 실시간 데이터 로드 실패: {e}")
+            return None
+
+    @staticmethod
     @st.cache_data(ttl=3600)  # 1시간 캐시
     def fetch_jeju_actual_data() -> Optional[Dict[str, Any]]:
-        """제주 실측 전력수급 데이터 로드 (공공데이터포털, 자동 다운로드 지원)"""
+        """제주 실측 전력수급 데이터 로드 (공공데이터포털, 과거 데이터)"""
         if not JEJU_CRAWLER_AVAILABLE:
             return None
 
@@ -1470,8 +1532,74 @@ def render_supply_status_page(
                         st.dataframe(df_nat.round(1), width="stretch", hide_index=True)
 
             with epsis_tab2:
-                # 제주 실측 데이터 (공공데이터포털)
-                st.markdown("#### 📊 제주 실측 전력수급 현황")
+                # ===== 제주 실시간 데이터 (KPX) =====
+                st.markdown("#### ⚡ 제주 실시간 전력수급 현황")
+
+                jeju_realtime = DataManager.fetch_jeju_realtime()
+
+                if jeju_realtime:
+                    # 상태 표시
+                    status_colors = {
+                        'safe': '#22C55E',
+                        'normal': '#3B82F6',
+                        'warning': '#F59E0B',
+                        'danger': '#EF4444'
+                    }
+                    status_color = status_colors.get(jeju_realtime['status'], '#64748B')
+
+                    col_rt1, col_rt2, col_rt3 = st.columns([2, 1, 1])
+                    with col_rt1:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, {status_color}20, {status_color}10);
+                                    border-left: 4px solid {status_color};
+                                    padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 1.5rem; font-weight: bold; color: {status_color};">
+                                {jeju_realtime['status_text']}
+                            </span>
+                            <span style="margin-left: 15px; color: #64748B;">
+                                예비율 {jeju_realtime['reserve_rate']:.1f}% | 이용률 {jeju_realtime['utilization_rate']:.1f}%
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_rt2:
+                        st.caption(f"📅 {jeju_realtime['timestamp']}")
+                    with col_rt3:
+                        if st.button("🔄 새로고침", key="jeju_realtime_refresh"):
+                            DataManager.fetch_jeju_realtime.clear()
+                            st.rerun()
+
+                    # 4개 게이지 (실시간)
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        fig = GaugeComponents.create_supply_gauge(jeju_realtime['supply_capacity'])
+                        st.plotly_chart(fig, width="stretch", key="jeju_rt_supply")
+                    with col2:
+                        fig = GaugeComponents.create_demand_gauge(
+                            jeju_realtime['current_demand'],
+                            jeju_realtime['supply_capacity']
+                        )
+                        fig.update_layout(title={'text': "현재부하"})
+                        st.plotly_chart(fig, width="stretch", key="jeju_rt_demand")
+                    with col3:
+                        fig = GaugeComponents.create_reserve_gauge(jeju_realtime['supply_reserve'])
+                        fig.update_layout(title={'text': "공급예비력"})
+                        st.plotly_chart(fig, width="stretch", key="jeju_rt_reserve")
+                    with col4:
+                        fig = GaugeComponents.create_reserve_rate_gauge(jeju_realtime['reserve_rate'])
+                        st.plotly_chart(fig, width="stretch", key="jeju_rt_rate")
+
+                    # 운영예비력 표시
+                    st.metric("운영예비력", f"{jeju_realtime['operation_reserve']:.0f} MW")
+
+                    st.caption(f"🔗 데이터 출처: {jeju_realtime['source']}")
+                    st.success("✅ 실시간 데이터 (5분 간격 자동 업데이트)")
+
+                else:
+                    st.warning("⚠️ 제주 실시간 데이터를 불러올 수 없습니다.")
+
+                # ===== 제주 과거 데이터 (공공데이터포털) =====
+                st.markdown("---")
+                st.markdown("#### 📊 제주 과거 전력수급 데이터")
                 st.caption("데이터 출처: 공공데이터포털 (한국전력거래소_제주 전력수급현황)")
 
                 jeju_actual = DataManager.fetch_jeju_actual_data()
@@ -1484,40 +1612,31 @@ def render_supply_status_page(
                     with col_info2:
                         st.caption(f"📅 기간: {jeju_actual['date_range']['start'][:10]} ~ {jeju_actual['date_range']['end'][:10]}")
                     with col_info3:
-                        if st.button("🔄 새로고침", key="jeju_actual_refresh"):
+                        if st.button("🔄 과거데이터 새로고침", key="jeju_actual_refresh"):
                             DataManager.fetch_jeju_actual_data.clear()
                             st.rerun()
 
                     latest_jeju = jeju_actual['latest']
 
-                    # 4개 게이지
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        fig = GaugeComponents.create_supply_gauge(latest_jeju['supply_capacity'])
-                        st.plotly_chart(fig, width="stretch", key="jeju_actual_supply")
-                    with col2:
-                        fig = GaugeComponents.create_demand_gauge(
-                            latest_jeju['system_demand'],
-                            latest_jeju['supply_capacity']
-                        )
-                        fig.update_layout(title={'text': "계통수요"})
-                        st.plotly_chart(fig, width="stretch", key="jeju_actual_demand")
-                    with col3:
-                        fig = GaugeComponents.create_reserve_gauge(latest_jeju['supply_reserve'])
-                        fig.update_layout(title={'text': "공급예비력"})
-                        st.plotly_chart(fig, width="stretch", key="jeju_actual_reserve")
-                    with col4:
-                        fig = GaugeComponents.create_reserve_rate_gauge(latest_jeju['reserve_rate'])
-                        st.plotly_chart(fig, width="stretch", key="jeju_actual_rate")
+                    # 최신 데이터 요약 (과거 데이터 기준)
+                    with st.expander("📋 과거 데이터 최신 시점 상세", expanded=False):
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("공급능력", f"{latest_jeju['supply_capacity']:.0f} MW")
+                        with col2:
+                            st.metric("계통수요", f"{latest_jeju['system_demand']:.0f} MW")
+                        with col3:
+                            st.metric("공급예비력", f"{latest_jeju['supply_reserve']:.0f} MW")
+                        with col4:
+                            st.metric("예비율", f"{latest_jeju['reserve_rate']:.1f}%")
 
-                    # 추가 메트릭
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("예측수요", f"{latest_jeju['forecast_demand']:.1f} MW")
-                    with col2:
-                        st.metric("운영예비력", f"{latest_jeju['operation_reserve']:.1f} MW")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("예측수요", f"{latest_jeju['forecast_demand']:.1f} MW")
+                        with col2:
+                            st.metric("운영예비력", f"{latest_jeju['operation_reserve']:.1f} MW")
 
-                    st.caption(f"📅 데이터 시점: {latest_jeju['timestamp']}")
+                        st.caption(f"📅 데이터 시점: {latest_jeju['timestamp']}")
 
                     # 제주 실측 추이 차트
                     st.markdown("---")
