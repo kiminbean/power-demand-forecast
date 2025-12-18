@@ -499,9 +499,9 @@ class Charts:
         revenues = []
 
         for h in strategy.hourly_details:
-            smp_values.append(h.smp)
-            recommended.append(h.recommended)
-            revenues.append(h.revenue)
+            smp_values.append(h.smp_predicted)
+            recommended.append(h.is_recommended)
+            revenues.append(h.expected_revenue)
 
         fig = make_subplots(
             rows=2, cols=1,
@@ -513,7 +513,7 @@ class Charts:
 
         # 추천 시간대 배경
         for i, h in enumerate(strategy.hourly_details):
-            if h.recommended:
+            if h.is_recommended:
                 fig.add_vrect(
                     x0=h.hour - 0.5,
                     x1=h.hour + 0.5,
@@ -849,13 +849,13 @@ def render_bidding_page():
         # SMP 예측 차트
         st.plotly_chart(
             Charts.create_smp_prediction_chart(smp_predictions),
-            use_container_width=True
+            width="stretch"
         )
 
         # 입찰 전략 차트
         st.plotly_chart(
             Charts.create_bidding_strategy_chart(strategy, generation),
-            use_container_width=True
+            width="stretch"
         )
 
     with col_right:
@@ -866,13 +866,13 @@ def render_bidding_page():
                 predicted_smp=avg_predicted,
                 title="현재 SMP"
             ),
-            use_container_width=True
+            width="stretch"
         )
 
         # 수익 시뮬레이션
         st.plotly_chart(
             Charts.create_revenue_simulation_chart(simulation),
-            use_container_width=True
+            width="stretch"
         )
 
         # 추천 요약
@@ -896,15 +896,15 @@ def render_bidding_page():
     for h in strategy.hourly_details:
         detail_data.append({
             '시간': f"{h.hour}시",
-            'SMP (원/kWh)': f"{h.smp:.1f}",
-            '발전량 (kW)': f"{h.generation:.0f}",
-            '예상 수익 (원)': f"{h.revenue:,.0f}",
+            'SMP (원/kWh)': f"{h.smp_predicted:.1f}",
+            '발전량 (kW)': f"{h.generation_kw:.0f}",
+            '예상 수익 (원)': f"{h.expected_revenue:,.0f}",
             '순위': h.rank,
-            '추천': '✅' if h.recommended else ''
+            '추천': '✅' if h.is_recommended else ''
         })
 
     df_details = pd.DataFrame(detail_data)
-    st.dataframe(df_details, use_container_width=True, height=400)
+    st.dataframe(df_details, height=400)
 
 
 def render_smp_analysis_page():
@@ -942,13 +942,13 @@ def render_smp_analysis_page():
     with col_left:
         st.plotly_chart(
             Charts.create_smp_comparison_chart(historical_df),
-            use_container_width=True
+            width="stretch"
         )
 
     with col_right:
         st.plotly_chart(
             Charts.create_smp_heatmap(historical_df),
-            use_container_width=True
+            width="stretch"
         )
 
     # 통계 분석
@@ -964,7 +964,7 @@ def render_smp_analysis_page():
         '제주_평균', '제주_표준편차', '제주_최저', '제주_최고'
     ]
 
-    st.dataframe(hourly_stats, use_container_width=True)
+    st.dataframe(hourly_stats, width="stretch")
 
 
 def render_generation_page():
@@ -1057,7 +1057,7 @@ def render_generation_page():
     # 발전량 차트
     st.plotly_chart(
         Charts.create_generation_prediction_chart(solar_gen, wind_gen, 24),
-        use_container_width=True
+        width="stretch"
     )
 
     # 시간별 상세
@@ -1073,7 +1073,7 @@ def render_generation_page():
             '합계 (kW)': f"{solar_gen[i] + wind_gen[i]:.0f}",
         })
 
-    st.dataframe(pd.DataFrame(detail_data), use_container_width=True, height=400)
+    st.dataframe(pd.DataFrame(detail_data), width="stretch", height=400)
 
 
 def render_supply_status_page():
