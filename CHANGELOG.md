@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-12-18
+
+### Added
+
+#### Jeju Realtime Crawler
+- **Jeju Realtime Crawler** (`tools/crawlers/jeju_realtime_crawler.py`):
+  - KPX 제주 실시간 전력수급 페이지 크롤링 (5분 간격 업데이트)
+  - `JejuRealtimeData`: 실시간 전력수급 데이터 클래스
+  - `JejuRealtimeCrawler`: KPX 웹페이지 크롤러
+  - 데이터: 공급능력, 현재부하, 공급예비력, 운영예비력, 예비율
+  - 상태 판단: 정상(≥15%), 관심(≥10%), 주의(≥5%), 위험(<5%)
+
+#### Dashboard Integration
+- **실시간 데이터 표시** (`src/dashboard/app_v1.py`):
+  - 제주 실측 탭 상단에 KPX 실시간 데이터 표시
+  - 60초 캐시 TTL (5분 업데이트 주기에 맞춤)
+  - 4개 게이지 차트 (공급능력, 현재부하, 공급예비력, 예비율)
+  - 상태 색상 표시 (녹색/노랑/주황/빨강)
+
+#### Tests
+- **Realtime Crawler Tests** (`tests/test_jeju_realtime_crawler.py`):
+  - 23 comprehensive tests for realtime crawler
+  - JejuRealtimeData tests (reserve_rate, utilization_rate, to_dict)
+  - JejuRealtimeCrawler tests (fetch, timestamp extraction, status)
+  - Total tests: 1,448 → 1,471
+
+---
+
 ## [1.1.1] - 2025-12-18
 
 ### Added
@@ -215,6 +243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.1.2]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.2
+[1.1.1]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.1
 [1.1.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kiminbean/power-demand-forecast/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/kiminbean/power-demand-forecast/compare/v1.1.2...HEAD

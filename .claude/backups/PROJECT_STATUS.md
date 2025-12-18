@@ -1,16 +1,28 @@
 # Project Status Backup
-> Last Updated: 2025-12-18 09:10 KST
+> Last Updated: 2025-12-18 10:35 KST
 
 ## Project Overview
 - **Project**: 제주도 전력 수요 예측 시스템
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v1.1.1
+- **Version**: v1.1.2
 
 ---
 
 ## Recent Changes (2025-12-18)
 
 ### New Features
+- [x] **제주 실시간 크롤러** (`tools/crawlers/jeju_realtime_crawler.py`) - NEW!
+  - KPX 제주 실시간 전력수급 페이지 크롤링
+  - URL: https://www.kpx.or.kr/powerinfoJeju.es?mid=a10404040000
+  - 5분 간격 업데이트 (60초 캐시 TTL)
+  - 데이터: 공급능력, 현재부하, 공급예비력, 운영예비력, 예비율
+  - 상태 판단: 정상(≥15%) / 관심(≥10%) / 주의(≥5%) / 위험(<5%)
+
+- [x] **대시보드 실시간 데이터 연동** (`src/dashboard/app_v1.py`)
+  - 제주 실측 탭 상단에 실시간 데이터 표시
+  - 4개 게이지 (공급능력, 현재부하, 공급예비력, 예비율)
+  - 상태 색상 표시 (녹색/노랑/주황/빨강)
+
 - [x] **제주 크롤러 자동 다운로드 기능** (`tools/crawlers/jeju_power_crawler.py`)
   - `auto_download()` 메서드 추가
   - 캐시 관리 (7일 TTL)
@@ -25,13 +37,17 @@
 
 ### Commits
 ```
+43cbef3 feat: Add Jeju realtime power crawler with KPX integration
+73e5889 docs: Update CHANGELOG.md for v1.1.1 release
+32c4810 refactor: Remove redundant Jeju estimation tab from dashboard
+fa971d5 test: Add comprehensive tests for auto_download functionality
 31d086e feat: Add auto-download functionality to Jeju power crawler
 ```
 
 ### Tests
+- [x] 제주 실시간 크롤러 테스트 완료 (`tests/test_jeju_realtime_crawler.py`, 23개)
 - [x] 자동 다운로드 기능 테스트 완료
-- [x] 기존 ZIP 파일 캐시 재사용 확인 (0.4일 전 생성 → 재사용)
-- [x] 14,592건 데이터 로드 정상
+- [x] 전체 테스트: **1,471 passed**
 
 ---
 
@@ -73,7 +89,8 @@
 - [x] Monitoring System
 - [x] EPSIS 크롤러 (전국 실시간 데이터)
 - [x] 제주 전력수급 크롤러 (공공데이터포털 + 자동 다운로드)
-- [x] All tests passing (1,448 tests)
+- [x] 제주 실시간 크롤러 (KPX 5분 간격)
+- [x] All tests passing (1,471 tests)
 
 ### Frontend (100% Complete)
 - [x] Streamlit Dashboard (app.py - API 연동)
@@ -99,6 +116,12 @@
 - **URL**: epsis.kpx.or.kr
 - **Data**: 전국 실시간 전력수급 (5분 간격)
 - **Fields**: 공급능력, 현재수요, 예비력, 예비율
+
+### KPX 제주 실시간 (NEW!)
+- **URL**: kpx.or.kr/powerinfoJeju.es
+- **Data**: 제주 실시간 전력수급 (5분 간격)
+- **Fields**: 공급능력, 현재부하, 공급예비력, 운영예비력, 예비율
+- **Cache TTL**: 60초
 
 ### 공공데이터포털 (제주)
 - **URL**: data.go.kr/data/15125113
@@ -151,8 +174,9 @@ streamlit run src/dashboard/app.py
 
 ### Crawlers
 ```
-/tools/crawlers/epsis_crawler.py      - EPSIS 전국 실시간 크롤러
-/tools/crawlers/jeju_power_crawler.py - 제주 전력수급 크롤러 (자동 다운로드)
+/tools/crawlers/epsis_crawler.py          - EPSIS 전국 실시간 크롤러
+/tools/crawlers/jeju_power_crawler.py     - 제주 전력수급 크롤러 (자동 다운로드)
+/tools/crawlers/jeju_realtime_crawler.py  - 제주 실시간 크롤러 (KPX 5분 간격) - NEW!
 ```
 
 ### Dashboard
@@ -170,8 +194,9 @@ streamlit run src/dashboard/app.py
 
 ### Tests
 ```
-/tests/test_jeju_crawler.py   - 제주 크롤러 테스트 (33 tests)
-/tests/test_dashboard.py      - 대시보드 테스트 (23 tests)
+/tests/test_jeju_crawler.py          - 제주 크롤러 테스트 (45 tests)
+/tests/test_jeju_realtime_crawler.py - 제주 실시간 크롤러 테스트 (23 tests) - NEW!
+/tests/test_dashboard.py             - 대시보드 테스트 (23 tests)
 ```
 
 ---
