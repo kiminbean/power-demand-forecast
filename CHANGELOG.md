@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-12-18
+
+### Added
+
+#### Auto Download Feature
+- **Jeju Crawler Auto Download** (`tools/crawlers/jeju_power_crawler.py`):
+  - `auto_download()` method with cache management (7-day TTL)
+  - `_check_cached_zip()` helper for cache validation
+  - `_get_data_dir()` helper for data directory resolution
+  - CLI options: `--auto-download`, `--force`, `--zip`
+  - Streaming download for memory efficiency
+  - ZIP file validation (minimum size check)
+
+#### Tests
+- **Auto Download Tests** (`tests/test_jeju_crawler.py`):
+  - 12 new tests for auto_download functionality
+  - Cache reuse/invalidation tests
+  - Force download behavior tests
+  - CLI option parsing tests
+  - Total tests: 1,436 → 1,448
+
+### Changed
+- Dashboard uses `auto_download()` for Jeju actual data loading
+- No manual ZIP path configuration required
+
+### Removed
+- **제주 추정 Tab**: Removed redundant EPSIS-based Jeju estimation tab
+  - Actual measured data from data.go.kr is more accurate
+  - Dashboard now has 2 tabs: "전국 현황", "제주 실측"
+  - Removed ~125 lines of estimation code
+
+---
+
 ## [1.1.0] - 2025-12-17
 
 ### Added
