@@ -1,14 +1,41 @@
 # Project Status Backup
-> Last Updated: 2025-12-17 23:10 KST
+> Last Updated: 2025-12-18 09:10 KST
 
 ## Project Overview
 - **Project**: 제주도 전력 수요 예측 시스템
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v1.1.0
+- **Version**: v1.1.1
 
 ---
 
-## Recent Changes (2025-12-17)
+## Recent Changes (2025-12-18)
+
+### New Features
+- [x] **제주 크롤러 자동 다운로드 기능** (`tools/crawlers/jeju_power_crawler.py`)
+  - `auto_download()` 메서드 추가
+  - 캐시 관리 (7일 TTL)
+  - CLI 옵션 추가: `--auto-download`, `--force`, `--zip`
+  - 다운로드 링크 추출 패턴 확장 (3가지)
+  - 스트리밍 다운로드 (메모리 효율)
+  - ZIP 파일 유효성 검사
+
+- [x] **대시보드 자동 다운로드 연동** (`src/dashboard/app_v1.py`)
+  - 제주 실측 탭에서 `auto_download()` 사용
+  - 수동 ZIP 경로 지정 불필요
+
+### Commits
+```
+31d086e feat: Add auto-download functionality to Jeju power crawler
+```
+
+### Tests
+- [x] 자동 다운로드 기능 테스트 완료
+- [x] 기존 ZIP 파일 캐시 재사용 확인 (0.4일 전 생성 → 재사용)
+- [x] 14,592건 데이터 로드 정상
+
+---
+
+## Previous Changes (2025-12-17)
 
 ### New Features
 - [x] **제주 전력수급현황 크롤러** (`tools/crawlers/jeju_power_crawler.py`)
@@ -31,19 +58,7 @@
 
 ### Tests
 - [x] 제주 크롤러 테스트 추가 (`tests/test_jeju_crawler.py`, 33개)
-- [x] 전체 테스트: **1,436 passed**, 3 skipped
-
-### Commits
-```
-0f75f78 fix: Replace deprecated use_container_width with width parameter
-84ed6fe test: Add comprehensive tests for Jeju power crawler
-a218d66 feat: Add Jeju power supply crawler with actual data from data.go.kr
-4ec4e8c fix: Update dashboard tests to match current app.py structure
-9f4ef40 feat: Add reserve power and rate gauges to national EPSIS tab
-aaa2696 fix: Remove fill area and increase line width for better visibility
-8ce7e56 feat: Add national power supply trend chart to EPSIS tab
-15ec296 feat: Add reserve rate (%) to EPSIS chart with secondary Y-axis
-```
+- [x] 전체 테스트: **1,448 passed**, 3 skipped
 
 ---
 
@@ -57,8 +72,8 @@ aaa2696 fix: Remove fill area and increase line width for better visibility
 - [x] API Server (FastAPI)
 - [x] Monitoring System
 - [x] EPSIS 크롤러 (전국 실시간 데이터)
-- [x] 제주 전력수급 크롤러 (공공데이터포털)
-- [x] All tests passing (1,436 tests)
+- [x] 제주 전력수급 크롤러 (공공데이터포털 + 자동 다운로드)
+- [x] All tests passing (1,448 tests)
 
 ### Frontend (100% Complete)
 - [x] Streamlit Dashboard (app.py - API 연동)
@@ -91,6 +106,7 @@ aaa2696 fix: Remove fill area and increase line width for better visibility
 - **Period**: 2023-09-01 ~ 2025-04-30
 - **Records**: 14,592건
 - **Fields**: 계통수요, 공급능력, 공급예비력, 예측수요, 운영예비력
+- **Auto-download**: 7일 캐시 TTL
 
 ### 기상청/한전
 - **Data**: 시간별 기상 데이터, 전력 수요
@@ -117,7 +133,7 @@ streamlit run src/dashboard/app_v1.py
 
 # Status
 - URL: http://localhost:8501
-- Features: EPSIS 실시간, 제주 실측
+- Features: EPSIS 실시간, 제주 실측 (자동 다운로드)
 ```
 
 ### Dashboard (API 연동)
@@ -136,7 +152,7 @@ streamlit run src/dashboard/app.py
 ### Crawlers
 ```
 /tools/crawlers/epsis_crawler.py      - EPSIS 전국 실시간 크롤러
-/tools/crawlers/jeju_power_crawler.py - 제주 전력수급 크롤러 (NEW)
+/tools/crawlers/jeju_power_crawler.py - 제주 전력수급 크롤러 (자동 다운로드)
 ```
 
 ### Dashboard
@@ -174,12 +190,18 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 streamlit run src/dashboard/app_v1.py
 ```
 
-### 3. 테스트 실행
+### 3. 제주 데이터 자동 다운로드
+```bash
+python tools/crawlers/jeju_power_crawler.py --auto-download
+python tools/crawlers/jeju_power_crawler.py --auto-download --force  # 강제 다운로드
+```
+
+### 4. 테스트 실행
 ```bash
 python -m pytest tests/ -v
 ```
 
-### 4. 브라우저 접속
+### 5. 브라우저 접속
 - Dashboard: http://localhost:8501
 - API Docs: http://localhost:8000/docs
 
@@ -188,5 +210,5 @@ python -m pytest tests/ -v
 ## Notes
 - Python 3.13, PyTorch 2.0+, MPS (Apple Silicon)
 - Protobuf 환경변수 필요: `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`
-- 제주 실측 데이터 사용 시 `data/jeju_power_supply.zip` 필요
+- 제주 실측 데이터: 자동 다운로드 지원 (7일 캐시)
 - EPSIS 크롤러는 실시간 웹 크롤링
