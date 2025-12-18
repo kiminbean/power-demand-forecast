@@ -21,7 +21,7 @@ Date: 2025-12
 
 import numpy as np
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from datetime import datetime
 from enum import Enum
 
@@ -123,18 +123,17 @@ class BiddingStrategyOptimizer:
 
     def optimize(
         self,
-        smp_predictions: Dict[str, List[float]],
-        generation_predictions: List[float],
+        smp_predictions: Union[np.ndarray, Dict[str, List[float]]],
+        generation_predictions: Union[np.ndarray, List[float]],
         capacity_kw: float = 1000.0,
         risk_tolerance: float = 0.5
     ) -> BiddingStrategy:
         """최적 입찰 전략 계산
 
         Args:
-            smp_predictions: SMP 예측값 딕셔너리
-                - 'q50': 중앙값 예측 (필수)
-                - 'q10': 하위 10% (선택)
-                - 'q90': 상위 90% (선택)
+            smp_predictions: SMP 예측값 (다음 형식 지원)
+                - np.ndarray: 단일 예측값 (q50으로 사용)
+                - Dict: {'q50': ..., 'q10': ..., 'q90': ...}
             generation_predictions: 시간별 발전량 예측 (kW)
             capacity_kw: 설비용량 (kW)
             risk_tolerance: 리스크 허용도 (0=보수적, 1=공격적)
@@ -142,10 +141,15 @@ class BiddingStrategyOptimizer:
         Returns:
             BiddingStrategy: 최적화된 입찰 전략
         """
-        # 입력 검증
-        q50 = smp_predictions.get('q50', smp_predictions.get('q_50', []))
-        q10 = smp_predictions.get('q10', smp_predictions.get('q_10', q50))
-        q90 = smp_predictions.get('q90', smp_predictions.get('q_90', q50))
+        # 입력 형식 처리 (numpy array 또는 dict 지원)
+        if isinstance(smp_predictions, np.ndarray):
+            q50 = smp_predictions
+            q10 = smp_predictions * 0.85
+            q90 = smp_predictions * 1.15
+        else:
+            q50 = smp_predictions.get('q50', smp_predictions.get('q_50', []))
+            q10 = smp_predictions.get('q10', smp_predictions.get('q_10', q50))
+            q90 = smp_predictions.get('q90', smp_predictions.get('q_90', q50))
 
         hours = len(q50)
         if hours == 0:
@@ -270,14 +274,16 @@ class RevenueCalculator:
 
     def simulate(
         self,
-        smp_scenarios: Dict[str, List[float]],
-        generation: List[float],
+        smp_scenarios: Union[np.ndarray, Dict[str, List[float]]],
+        generation: Union[np.ndarray, List[float]],
         hours: int = 24
     ) -> Dict[str, Any]:
         """수익 시뮬레이션
 
         Args:
-            smp_scenarios: SMP 시나리오 (q10, q50, q90)
+            smp_scenarios: SMP 시나리오
+                - np.ndarray: shape (3, hours) - [q10, q50, q90]
+                - Dict: {'q10': [...], 'q50': [...], 'q90': [...]}
             generation: 발전량 예측 (kW)
             hours: 시간 수
 
@@ -285,6 +291,17 @@ class RevenueCalculator:
             시나리오별 수익 정보
         """
         results = {}
+
+        # numpy array를 dict로 변환
+        if isinstance(smp_scenarios, np.ndarray):
+            if smp_scenarios.ndim == 1:
+                smp_scenarios = {'q50': smp_scenarios}
+            else:
+                smp_scenarios = {
+                    'q10': smp_scenarios[0],
+                    'q50': smp_scenarios[1],
+                    'q90': smp_scenarios[2],
+                }
 
         for scenario_name, smp_values in smp_scenarios.items():
             hourly_revenue = []
@@ -320,6 +337,12 @@ class RevenueCalculator:
             'revenue_range': best_case - worst_case,
             'risk_adjusted': expected * 0.9,  # 10% 리스크 할인
         }
+
+        # 편의를 위해 top-level 키도 추가
+        results['expected'] = expected
+        results['best_case'] = best_case
+        results['worst_case'] = worst_case
+        results['risk_adjusted'] = expected * 0.9
 
         return results
 
