@@ -1,18 +1,22 @@
 {
   "metadata": {
-    "description": "제주도 발전소 데이터 (태양광, 풍력, ESS)",
+    "description": "제주도 발전소 데이터 (태양광, 풍력, ESS, 화력)",
     "sources": [
+      "한국남부발전 (KOSPO) 발전설비현황",
+      "한국중부발전 (KOMIPO) 제주발전본부",
       "공공데이터포털 - 제주특별자치도_풍력발전현황",
-      "공공데이터포털 - 제주에너지공사_발전시설 현황",
-      "공공데이터포털 - 한국에너지공단_풍력기 위치정보",
-      "The Wind Power (thewindpower.net)",
-      "제주에너지공사 주요시설"
+      "공공데이터포털 - 한국전력거래소_신재생연계ESS",
+      "제주에너지공사 데이터개방",
+      "전력통계정보시스템 (EPSIS)"
     ],
-    "last_updated": "2024-12-18",
+    "last_updated": "2025-12-18",
+    "data_reference": "2024년 기준 최신 데이터",
     "coordinate_system": "WGS84",
-    "total_wind_capacity_mw": 220.385,
-    "total_solar_capacity_mw": 4.852,
-    "total_ess_capacity_mwh": 200
+    "total_wind_capacity_mw": 417.8,
+    "total_solar_capacity_mw": 562.6,
+    "total_thermal_capacity_mw": 598.8,
+    "total_ess_capacity_mwh": 460,
+    "total_hvdc_capacity_mw": 900
   },
   "wind_farms": [
     {
@@ -29,7 +33,7 @@
       "status": "운영중",
       "address": "제주시 한경면 두모리",
       "turbine_model": "Vestas V90/3000, Neg Micon NM72c/1500",
-      "source": "thewindpower.net"
+      "commissioning_year": 2007
     },
     {
       "id": "wind_002",
@@ -44,8 +48,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "제주시 한림읍",
-      "turbine_model": "Doosan WinDS3000/91",
-      "source": "thewindpower.net"
+      "turbine_model": "Doosan WinDS3000/91"
     },
     {
       "id": "wind_003",
@@ -61,7 +64,7 @@
       "status": "운영중",
       "address": "서귀포시 표선면 가시리 산68",
       "turbine_model": "Doosan WinDS3000",
-      "source": "공공데이터포털"
+      "commissioning_year": 2011
     },
     {
       "id": "wind_004",
@@ -76,8 +79,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "제주시 구좌읍 김녕리",
-      "turbine_model": "Doosan WinDS3000",
-      "source": "공공데이터포털"
+      "turbine_model": "Doosan WinDS3000"
     },
     {
       "id": "wind_005",
@@ -93,8 +95,7 @@
       "status": "운영중",
       "address": "제주시 구좌읍 행원리 563",
       "turbine_model": "Mixed (Vestas, NEG Micon)",
-      "commissioning_year": 1998,
-      "source": "thewindpower.net, 제주에너지공사"
+      "commissioning_year": 1998
     },
     {
       "id": "wind_006",
@@ -109,8 +110,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "서귀포시 성산읍 삼달리",
-      "turbine_model": "Doosan WinDS3000",
-      "source": "thewindpower.net"
+      "turbine_model": "Doosan WinDS3000"
     },
     {
       "id": "wind_007",
@@ -125,8 +125,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "서귀포시 성산읍",
-      "turbine_model": "Doosan WinDS3000",
-      "source": "thewindpower.net"
+      "turbine_model": "Doosan WinDS3000"
     },
     {
       "id": "wind_008",
@@ -141,8 +140,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "서귀포시 성산읍",
-      "turbine_model": "Unison U93",
-      "source": "thewindpower.net"
+      "turbine_model": "Unison U93"
     },
     {
       "id": "wind_009",
@@ -157,8 +155,7 @@
       "operator": "한국남부발전",
       "status": "운영중",
       "address": "제주시 한경면 신창리",
-      "turbine_model": "Vestas V52",
-      "source": "thewindpower.net"
+      "turbine_model": "Vestas V52"
     },
     {
       "id": "wind_010",
@@ -173,8 +170,7 @@
       "operator": "제주도청",
       "status": "운영중",
       "address": "제주시 구좌읍 월정리",
-      "turbine_model": "Vestas V66",
-      "source": "thewindpower.net"
+      "turbine_model": "Vestas V66"
     },
     {
       "id": "wind_011",
@@ -190,8 +186,7 @@
       "status": "운영중",
       "address": "제주시 한경면 두모리~금등리 해상",
       "turbine_model": "Doosan WinDS3000",
-      "commissioning_year": 2017,
-      "source": "thewindpower.net"
+      "commissioning_year": 2017
     },
     {
       "id": "wind_012",
@@ -206,8 +201,7 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "서귀포시 대정읍 가파리",
-      "turbine_model": "Small wind turbine",
-      "source": "thewindpower.net"
+      "turbine_model": "Small wind turbine"
     },
     {
       "id": "wind_013",
@@ -222,8 +216,7 @@
       "operator": "한국남부발전",
       "status": "운영중",
       "address": "제주시 한림읍 월령리",
-      "turbine_model": "Vestas V52",
-      "source": "thewindpower.net"
+      "turbine_model": "Vestas V52"
     },
     {
       "id": "wind_014",
@@ -238,31 +231,61 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "제주시",
-      "turbine_model": "Doosan WinDS3000",
-      "source": "thewindpower.net"
+      "turbine_model": "Doosan WinDS3000"
     },
     {
       "id": "wind_015",
+      "name": "동복-북촌풍력발전단지",
+      "name_en": "Dongbok-Bukchon Wind Farm",
+      "type": "wind",
+      "subtype": "onshore",
+      "latitude": 33.5300,
+      "longitude": 126.7200,
+      "capacity_mw": 30.0,
+      "turbine_count": 15,
+      "operator": "제주에너지공사",
+      "status": "운영중",
+      "address": "제주시 조천읍 북촌리",
+      "turbine_model": "2MW class",
+      "commissioning_year": 2020
+    },
+    {
+      "id": "wind_016",
+      "name": "대정풍력발전단지",
+      "name_en": "Daejeong Wind Farm",
+      "type": "wind",
+      "subtype": "onshore",
+      "latitude": 33.2200,
+      "longitude": 126.2800,
+      "capacity_mw": 45.0,
+      "turbine_count": 15,
+      "operator": "민간사업자",
+      "status": "운영중",
+      "address": "서귀포시 대정읍",
+      "turbine_model": "3MW class",
+      "commissioning_year": 2022
+    },
+    {
+      "id": "wind_017",
       "name": "한동-평대해상풍력",
-      "name_en": "Handong Pyeongdae Offshore",
+      "name_en": "Handong-Pyeongdae Offshore",
       "type": "wind",
       "subtype": "offshore",
       "latitude": 33.5700,
       "longitude": 126.8600,
-      "capacity_mw": 105.0,
-      "turbine_count": 15,
-      "operator": "제주에너지공사/Terrawatt",
-      "status": "계획중",
+      "capacity_mw": 100.0,
+      "turbine_count": 12,
+      "operator": "제주에너지공사/한국동서발전",
+      "status": "건설중",
       "address": "제주시 구좌읍 해상",
-      "turbine_model": "7MW class",
-      "source": "thewindpower.net"
+      "turbine_model": "8MW class",
+      "expected_completion": 2026
     }
   ],
   "solar_farms": [
     {
       "id": "solar_001",
       "name": "구좌태양광발전소",
-      "name_en": "Gujwa Solar Farm",
       "type": "solar",
       "subtype": "ground-mounted",
       "latitude": 33.5200,
@@ -270,85 +293,65 @@
       "capacity_mw": 0.75,
       "operator": "제주에너지공사",
       "status": "운영중",
-      "address": "제주시 구좌읍",
-      "source": "제주에너지공사"
+      "address": "제주시 구좌읍"
     },
     {
       "id": "solar_002",
-      "name": "삼도태양광발전소",
-      "name_en": "Samdo Solar Farm",
+      "name": "송당리태양광",
       "type": "solar",
       "subtype": "ground-mounted",
-      "latitude": 33.5100,
-      "longitude": 126.5200,
-      "capacity_mw": 1.7,
-      "operator": "제주에너지공사",
+      "latitude": 33.4500,
+      "longitude": 126.7800,
+      "capacity_mw": 1.834,
+      "operator": "한국남부발전",
       "status": "운영중",
-      "address": "제주시 삼도동",
-      "source": "제주에너지공사"
+      "address": "제주시 구좌읍 송당리",
+      "commissioning_year": 2024
     },
     {
       "id": "solar_003",
-      "name": "용담태양광발전소",
-      "name_en": "Yongdam Solar Farm",
+      "name": "서화리태양광",
       "type": "solar",
       "subtype": "ground-mounted",
-      "latitude": 33.5050,
-      "longitude": 126.5100,
-      "capacity_mw": 0.4152,
-      "operator": "제주에너지공사",
+      "latitude": 33.4200,
+      "longitude": 126.7600,
+      "capacity_mw": 1.5,
+      "operator": "한국남부발전",
       "status": "운영중",
-      "address": "제주시 용담동",
-      "source": "제주에너지공사"
+      "address": "서귀포시 표선면 서화리",
+      "commissioning_year": 2023
     },
     {
       "id": "solar_004",
-      "name": "시민참여태양광발전소",
-      "name_en": "Community Energy Solar Farm",
-      "type": "solar",
-      "subtype": "community",
-      "latitude": 33.4900,
-      "longitude": 126.5300,
-      "capacity_mw": 0.49,
-      "operator": "제주에너지공사",
-      "status": "운영중",
-      "address": "제주시",
-      "source": "제주에너지공사"
-    },
-    {
-      "id": "solar_005",
-      "name": "한경태양광발전소",
-      "name_en": "Hangyeong Solar Farm",
+      "name": "가시리태양광",
       "type": "solar",
       "subtype": "ground-mounted",
-      "latitude": 33.3400,
-      "longitude": 126.1800,
-      "capacity_mw": 0.4968,
-      "operator": "제주에너지공사",
+      "latitude": 33.3600,
+      "longitude": 126.7500,
+      "capacity_mw": 1.2,
+      "operator": "한국남부발전",
       "status": "운영중",
-      "address": "제주시 한경면",
-      "source": "제주에너지공사"
+      "address": "서귀포시 표선면 가시리",
+      "commissioning_year": 2022
     },
     {
-      "id": "solar_006",
-      "name": "표선태양광발전소",
-      "name_en": "Pyoseon Solar Farm",
+      "id": "solar_distributed",
+      "name": "분산형 태양광 (주택/상업)",
       "type": "solar",
-      "subtype": "ground-mounted",
-      "latitude": 33.3200,
-      "longitude": 126.8300,
-      "capacity_mw": 1.0,
-      "operator": "민간사업자",
+      "subtype": "distributed",
+      "latitude": 33.4500,
+      "longitude": 126.5500,
+      "capacity_mw": 557.3,
+      "operator": "다수 (1,620개소)",
       "status": "운영중",
-      "address": "서귀포시 표선면",
-      "source": "공공데이터포털"
+      "address": "제주도 전역",
+      "note": "2024년 기준 제주도 전체 태양광 설비의 99%"
     }
   ],
   "ess_facilities": [
     {
       "id": "ess_001",
       "name": "제주 변동성완화 ESS 1",
-      "name_en": "Jeju RE Stabilization ESS 1",
       "type": "ess",
       "subtype": "utility-scale",
       "latitude": 33.5100,
@@ -358,13 +361,11 @@
       "operator": "한국전력공사",
       "status": "운영중",
       "address": "제주시 변전소",
-      "purpose": "재생에너지 변동성 완화",
-      "source": "공공데이터포털"
+      "purpose": "재생에너지 변동성 완화"
     },
     {
       "id": "ess_002",
       "name": "제주 피크저감 ESS",
-      "name_en": "Jeju Peak Shaving ESS",
       "type": "ess",
       "subtype": "utility-scale",
       "latitude": 33.4500,
@@ -374,13 +375,11 @@
       "operator": "한국전력공사",
       "status": "운영중",
       "address": "제주시",
-      "purpose": "피크 수요 저감",
-      "source": "공공데이터포털"
+      "purpose": "피크 수요 저감"
     },
     {
       "id": "ess_003",
       "name": "한경풍력 연계 ESS",
-      "name_en": "Hangyeong Wind-Coupled ESS",
       "type": "ess",
       "subtype": "renewable-coupled",
       "latitude": 33.3400,
@@ -390,13 +389,11 @@
       "operator": "한국남부발전",
       "status": "운영중",
       "address": "제주시 한경면",
-      "purpose": "풍력 출력안정화",
-      "source": "공공데이터포털"
+      "purpose": "풍력 출력안정화"
     },
     {
       "id": "ess_004",
       "name": "가시리풍력 연계 ESS",
-      "name_en": "Gasi-ri Wind-Coupled ESS",
       "type": "ess",
       "subtype": "renewable-coupled",
       "latitude": 33.3576,
@@ -406,47 +403,88 @@
       "operator": "제주에너지공사",
       "status": "운영중",
       "address": "서귀포시 표선면 가시리",
-      "purpose": "풍력 출력안정화",
-      "source": "공공데이터포털"
+      "purpose": "풍력 출력안정화"
+    },
+    {
+      "id": "ess_005",
+      "name": "제주 장주기 ESS (신규)",
+      "type": "ess",
+      "subtype": "long-duration",
+      "latitude": 33.4800,
+      "longitude": 126.4900,
+      "capacity_mw": 65,
+      "capacity_mwh": 260,
+      "operator": "한국전력공사",
+      "status": "건설중",
+      "address": "제주시",
+      "purpose": "재생에너지 출력제어 해소",
+      "expected_completion": 2026,
+      "note": "제10차 전력수급기본계획 반영"
     }
   ],
   "thermal_plants": [
     {
       "id": "thermal_001",
-      "name": "제주화력발전소",
-      "name_en": "Jeju Thermal Power Plant",
+      "name": "남제주화력 1,2호기",
+      "name_en": "South Jeju Thermal Units 1-2",
       "type": "thermal",
-      "subtype": "combined-cycle",
-      "latitude": 33.4920,
-      "longitude": 126.4750,
-      "capacity_mw": 410,
+      "subtype": "steam",
+      "latitude": 33.2670,
+      "longitude": 126.5150,
+      "capacity_mw": 200,
+      "units": [
+        {"unit": 1, "capacity_mw": 100, "commissioned": "2006-09"},
+        {"unit": 2, "capacity_mw": 100, "commissioned": "2007-03"}
+      ],
       "operator": "한국남부발전",
       "status": "운영중",
-      "address": "제주시 화북동",
-      "fuel_type": "LNG",
-      "source": "한국남부발전"
+      "address": "서귀포시 안덕면 화순해안로 106번길 55",
+      "fuel_type": "바이오중유",
+      "role": "중간부하"
     },
     {
       "id": "thermal_002",
-      "name": "남제주화력발전소",
-      "name_en": "South Jeju Thermal Power Plant",
+      "name": "남제주 LNG복합",
+      "name_en": "South Jeju LNG Combined Cycle",
       "type": "thermal",
       "subtype": "combined-cycle",
-      "latitude": 33.2670,
-      "longitude": 126.5150,
-      "capacity_mw": 300,
+      "latitude": 33.2680,
+      "longitude": 126.5160,
+      "capacity_mw": 158.8,
+      "units": [
+        {"unit": "GT1", "capacity_mw": 51.1, "type": "gas_turbine"},
+        {"unit": "GT2", "capacity_mw": 51.1, "type": "gas_turbine"},
+        {"unit": "ST", "capacity_mw": 56.7, "type": "steam_turbine"}
+      ],
       "operator": "한국남부발전",
       "status": "운영중",
       "address": "서귀포시 안덕면",
       "fuel_type": "LNG",
-      "source": "한국남부발전"
+      "commissioning_year": 2020,
+      "role": "첨두부하"
+    },
+    {
+      "id": "thermal_003",
+      "name": "제주 LNG복합화력",
+      "name_en": "Jeju LNG Combined Cycle",
+      "type": "thermal",
+      "subtype": "combined-cycle",
+      "latitude": 33.4920,
+      "longitude": 126.4750,
+      "capacity_mw": 240,
+      "operator": "한국중부발전",
+      "status": "운영중",
+      "address": "제주시 화북동",
+      "fuel_type": "LNG (비상시 경유)",
+      "commissioning_year": 2019,
+      "role": "기저/중간부하",
+      "note": "제주 전력공급의 약 20% 담당"
     }
   ],
   "hvdc_links": [
     {
       "id": "hvdc_001",
       "name": "제주-해남 HVDC 1",
-      "name_en": "Jeju-Haenam HVDC Link 1",
       "type": "hvdc",
       "latitude_jeju": 33.5200,
       "longitude_jeju": 126.5300,
@@ -456,13 +494,11 @@
       "length_km": 101,
       "voltage_kv": 180,
       "commissioning_year": 1998,
-      "status": "운영중",
-      "source": "한국전력공사"
+      "status": "운영중"
     },
     {
       "id": "hvdc_002",
       "name": "제주-해남 HVDC 2",
-      "name_en": "Jeju-Haenam HVDC Link 2",
       "type": "hvdc",
       "latitude_jeju": 33.5200,
       "longitude_jeju": 126.5300,
@@ -472,13 +508,11 @@
       "length_km": 105,
       "voltage_kv": 250,
       "commissioning_year": 2013,
-      "status": "운영중",
-      "source": "한국전력공사"
+      "status": "운영중"
     },
     {
       "id": "hvdc_003",
       "name": "제주-진도 HVDC 3",
-      "name_en": "Jeju-Jindo HVDC Link 3",
       "type": "hvdc",
       "latitude_jeju": 33.4500,
       "longitude_jeju": 126.3000,
@@ -488,8 +522,18 @@
       "length_km": 122,
       "voltage_kv": 150,
       "commissioning_year": 2023,
-      "status": "운영중",
-      "source": "한국전력공사"
+      "status": "운영중"
     }
-  ]
+  ],
+  "summary": {
+    "total_capacity_mw": {
+      "wind": 417.8,
+      "solar": 562.6,
+      "thermal": 598.8,
+      "ess_power": 140,
+      "hvdc": 900
+    },
+    "renewable_share_percent": 50.7,
+    "note": "2024년 5월 기준 EPSIS 통계"
+  }
 }
