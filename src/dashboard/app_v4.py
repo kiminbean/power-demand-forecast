@@ -1287,7 +1287,7 @@ def main():
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### 📈 24시간 SMP 예측")
             fig = create_smp_chart(smp_data)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_summary:
@@ -1343,14 +1343,14 @@ def main():
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### ⚡ 전력 공급 구성")
             fig = create_supply_donut(power_status)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_timeline:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### 📊 시간대별 발전량")
             fig = create_generation_timeline(plants_df)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         # 발전소 상세 테이블
@@ -1378,7 +1378,7 @@ def main():
         display_df['발전량(MW)'] = display_df['발전량(MW)'].round(1)
         display_df['이용률(%)'] = display_df['이용률(%)'].round(1)
 
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width="stretch", hide_index=True)
 
     with tab4:
         # 분석 탭
