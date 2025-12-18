@@ -71,6 +71,26 @@ If conversation is lost, read:
 
 ---
 
+## Korean Text Bug Workaround (Claude Code v2.0.72)
+
+**CRITICAL**: Claude Code CLI has a UTF-8 byte boundary bug with Korean text in UI elements.
+
+**Workaround Rules**:
+1. **TodoWrite tool**: Use **English only** for todo items (content, activeForm)
+   - Bad: `"content": "모델 학습 완료"`
+   - Good: `"content": "Complete model training"`
+
+2. **Status messages**: Avoid Korean in progress indicators
+
+3. **If crash occurs**: Clear todo cache:
+   ```bash
+   mv ~/.claude/todos/*.json ~/.claude/todos_backup/
+   ```
+
+4. **Bug report**: https://github.com/anthropics/claude-code/issues
+
+---
+
 ## Auto Commit Protocol
 
 **IMPORTANT**: Automatically commit changes after completing each task:
