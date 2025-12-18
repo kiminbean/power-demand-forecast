@@ -1350,7 +1350,7 @@ def render_supply_status_page(
                     st.rerun()
 
             # 전국 vs 제주 탭
-            epsis_tab1, epsis_tab2, epsis_tab3 = st.tabs(["🇰🇷 전국 현황", "🏝️ 제주 추정", "📊 제주 실측"])
+            epsis_tab1, epsis_tab2 = st.tabs(["🇰🇷 전국 현황", "📊 제주 실측"])
 
             with epsis_tab1:
                 national = epsis_data['national']['latest']
@@ -1470,47 +1470,6 @@ def render_supply_status_page(
                         st.dataframe(df_nat.round(1), width="stretch", hide_index=True)
 
             with epsis_tab2:
-                jeju = epsis_data['jeju']['latest']
-
-                # 제주 추정치 4개 게이지
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    fig = GaugeComponents.create_supply_gauge(jeju['supply_capacity'])
-                    st.plotly_chart(fig, width="stretch", key="jeju_supply")
-                with col2:
-                    fig = GaugeComponents.create_demand_gauge(
-                        jeju['current_demand'],
-                        jeju['supply_capacity']
-                    )
-                    st.plotly_chart(fig, width="stretch", key="jeju_demand")
-                with col3:
-                    fig = GaugeComponents.create_reserve_gauge(jeju['reserve_power'])
-                    st.plotly_chart(fig, width="stretch", key="jeju_reserve")
-                with col4:
-                    fig = GaugeComponents.create_reserve_rate_gauge(jeju['reserve_rate'])
-                    st.plotly_chart(fig, width="stretch", key="jeju_rate")
-
-                # 상태 메시지 및 이용률 계산
-                utilization_rate = (jeju['current_demand'] / jeju['supply_capacity'] * 100) if jeju['supply_capacity'] > 0 else 0
-                status = "safe" if jeju['reserve_rate'] >= 10 else "warning" if jeju['reserve_rate'] >= 5 else "danger"
-                status_text = "정상" if jeju['reserve_rate'] >= 10 else "주의" if jeju['reserve_rate'] >= 5 else "위험"
-                status_class = f"status-{status}"
-
-                st.markdown(f"""
-                <div style="text-align: center; padding: 10px; background: #F8FAFC; border-radius: 8px; margin: 10px 0;">
-                    <span style="font-size: 1.1rem;">제주 수급 상태 (추정): </span>
-                    <span class="{status_class}" style="font-size: 1.3rem; font-weight: bold;">
-                        {status_text}
-                    </span>
-                    <span style="color: #64748B; margin-left: 20px;">
-                        이용률: {utilization_rate:.1f}%
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.info("⚠️ 제주 데이터는 전국 데이터 기반 **추정치**입니다. (계절별 비율 적용)")
-
-            with epsis_tab3:
                 # 제주 실측 데이터 (공공데이터포털)
                 st.markdown("#### 📊 제주 실측 전력수급 현황")
                 st.caption("데이터 출처: 공공데이터포털 (한국전력거래소_제주 전력수급현황)")
@@ -1665,89 +1624,6 @@ def render_supply_status_page(
 
                     [📥 공공데이터포털 바로가기](https://www.data.go.kr/data/15125113/fileData.do)
                     """)
-
-            # EPSIS 실시간 추이 차트
-            st.markdown("---")
-            st.subheader("📈 EPSIS 실시간 수급 추이")
-
-            jeju_history = epsis_data['jeju']['history']
-            if jeju_history:
-                # 데이터프레임 변환
-                chart_data = pd.DataFrame([
-                    {
-                        'timestamp': d['timestamp'],
-                        '현재수요': d['current_demand'],
-                        '공급능력': d['supply_capacity'],
-                        '예비력': d['reserve_power'],
-                        '예비율': d['reserve_rate'],
-                    }
-                    for d in jeju_history
-                ])
-                chart_data['timestamp'] = pd.to_datetime(chart_data['timestamp'])
-                chart_data = chart_data.sort_values('timestamp')
-
-                # 보조 Y축(예비율%)을 포함한 차트 생성
-                fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-                fig.add_trace(go.Scatter(
-                    x=chart_data['timestamp'],
-                    y=chart_data['공급능력'],
-                    mode='lines',
-                    name='공급능력',
-                    line=dict(color=Config.COLORS['supply'], width=3)
-                ), secondary_y=False)
-
-                fig.add_trace(go.Scatter(
-                    x=chart_data['timestamp'],
-                    y=chart_data['현재수요'],
-                    mode='lines',
-                    name='현재수요',
-                    line=dict(color=Config.COLORS['demand'], width=3)
-                ), secondary_y=False)
-
-                fig.add_trace(go.Scatter(
-                    x=chart_data['timestamp'],
-                    y=chart_data['예비력'],
-                    mode='lines',
-                    name='예비력',
-                    line=dict(color=Config.COLORS['reserve'], width=3)
-                ), secondary_y=False)
-
-                # 예비율(%) - 보조 Y축
-                fig.add_trace(go.Scatter(
-                    x=chart_data['timestamp'],
-                    y=chart_data['예비율'],
-                    mode='lines',
-                    name='예비율(%)',
-                    line=dict(color='#9C27B0', width=3, dash='dash')
-                ), secondary_y=True)
-
-                fig.update_layout(
-                    title="제주 전력 수급 추이 (EPSIS 기반 추정, 5분 간격)",
-                    xaxis_title="시간",
-                    height=450,
-                    template="plotly_white",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center")
-                )
-                fig.update_yaxes(title_text="전력 (MW)", secondary_y=False)
-                fig.update_yaxes(title_text="예비율 (%)", secondary_y=True)
-
-                st.plotly_chart(fig, width="stretch", key="epsis_trend")
-
-            # EPSIS 상세 데이터
-            with st.expander("📋 EPSIS 시간별 데이터 (제주 추정)"):
-                if jeju_history:
-                    df_epsis = pd.DataFrame([
-                        {
-                            '시간': d['timestamp'],
-                            '공급능력(MW)': d['supply_capacity'],
-                            '현재수요(MW)': d['current_demand'],
-                            '예비력(MW)': d['reserve_power'],
-                            '예비율(%)': d['reserve_rate'],
-                        }
-                        for d in jeju_history[-48:]  # 최근 48건 (4시간)
-                    ])
-                    st.dataframe(df_epsis.round(1), width="stretch", hide_index=True)
 
         else:
             st.warning("EPSIS 데이터를 불러올 수 없습니다. 과거 데이터를 표시합니다.")
