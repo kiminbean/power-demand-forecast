@@ -1,26 +1,26 @@
 {
   "metrics": {
-    "mae": 60.151920318603516,
-    "rmse": 71.70236206054688,
-    "mape": 8.381170779466629,
-    "r2": -0.03332793712615967
+    "mae": 20.109676361083984,
+    "rmse": 29.271039962768555,
+    "mape": 2.888118103146553,
+    "r2": 0.8224654048681259
   },
   "config": {
-    "data_path": "data/smp/smp_history_real.csv",
+    "data_path": "data/smp/smp_history_extended.csv",
     "output_dir": "models/smp",
     "input_hours": 24,
     "output_hours": 24,
-    "hidden_size": 64,
-    "num_layers": 2,
-    "dropout": 0.3,
+    "hidden_size": 128,
+    "num_layers": 3,
+    "dropout": 0.2,
     "bidirectional": true,
-    "batch_size": 8,
-    "epochs": 150,
+    "batch_size": 32,
+    "epochs": 200,
     "learning_rate": 0.001,
-    "patience": 20,
-    "test_size": 0.2,
-    "val_size": 0.2,
+    "patience": 25,
+    "test_size": 0.15,
+    "val_size": 0.15,
     "input_size": 12
   },
-  "timestamp": "2025-12-18T13:53:43.274021"
+  "timestamp": "2025-12-18T14:07:20.788028"
 }

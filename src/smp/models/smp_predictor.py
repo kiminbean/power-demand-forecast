@@ -53,7 +53,10 @@ class SMPPredictor:
         """
         self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp/smp_lstm_model.pt"
         self.scaler_path = Path(scaler_path) if scaler_path else PROJECT_ROOT / "models/smp/smp_scaler.npy"
-        self.data_path = Path(data_path) if data_path else PROJECT_ROOT / "data/smp/smp_history_real.csv"
+        # 확장된 데이터 우선 사용
+        extended_path = PROJECT_ROOT / "data/smp/smp_history_extended.csv"
+        real_path = PROJECT_ROOT / "data/smp/smp_history_real.csv"
+        self.data_path = Path(data_path) if data_path else (extended_path if extended_path.exists() else real_path)
 
         self.model = None
         self.scaler_info = None

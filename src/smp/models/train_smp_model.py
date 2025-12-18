@@ -431,20 +431,20 @@ def main():
 
     # 설정
     config = {
-        'data_path': 'data/smp/smp_history_real.csv',
+        'data_path': 'data/smp/smp_history_extended.csv',  # 확장된 데이터셋
         'output_dir': 'models/smp',
         'input_hours': 24,      # 24시간 입력
         'output_hours': 24,     # 24시간 예측
-        'hidden_size': 64,      # 작은 데이터셋에 맞춤
-        'num_layers': 2,
-        'dropout': 0.3,         # 강한 regularization
+        'hidden_size': 128,     # 더 큰 모델
+        'num_layers': 3,        # 레이어 추가
+        'dropout': 0.2,         # 데이터 많아서 드롭아웃 감소
         'bidirectional': True,
-        'batch_size': 8,
-        'epochs': 150,
+        'batch_size': 32,       # 배치 크기 증가
+        'epochs': 200,          # 에폭 증가
         'learning_rate': 0.001,
-        'patience': 20,
-        'test_size': 0.2,
-        'val_size': 0.2,
+        'patience': 25,         # patience 증가
+        'test_size': 0.15,
+        'val_size': 0.15,
     }
 
     print("\n📋 설정:")
