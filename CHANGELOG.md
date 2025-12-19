@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.2] - 2025-12-19
+
+### Highlights
+- 🚨 **Reserve Rate Alert System**: Visual alerts based on KPX standard thresholds
+- 🧪 **Test Mode**: Sidebar toggle to simulate low reserve rate scenarios
+- 📸 **Alert Screenshots**: Documentation for all alert levels
+
+### Added
+
+#### Reserve Rate Alert System (`src/dashboard/app_v4.py`)
+- **KPX Standard Thresholds**:
+  | Reserve Rate | Status | Alert |
+  |--------------|--------|-------|
+  | ≥15% | Normal | None |
+  | 10-15% | 관심 (Caution) | 🟡 Yellow banner |
+  | 5-10% | 주의 (Warning) | 🟠 Orange banner |
+  | <5% | 위험 (Critical) | 🔴 Red pulsing banner |
+
+- **CSS Animations**: Pulsing effect for critical alerts
+- **Alert Banners**: Full-width banners with icons and severity colors
+- **Reserve Badge**: Dynamic color-coded badge in metrics card
+
+#### Test Mode
+- **Sidebar Toggle**: Enable/disable alert test mode
+- **Reserve Rate Slider**: Adjust test reserve rate (0-30%)
+- **Data Source Indicator**: Shows "테스트 모드" when active
+
+#### Screenshots (`docs/screenshots/`)
+- `07_alert_caution.png`: Caution alert at 12% reserve
+- `08_alert_warning.png`: Warning alert at 7% reserve
+- `09_alert_critical.png`: Critical alert at 3% reserve
+
+### Changed
+- **README.md**: Added alert system screenshots in table format
+- **Dashboard Header**: Reserve rate status now integrated with alert system
+
+---
+
 ## [4.0.1] - 2025-12-19
 
 ### Highlights
