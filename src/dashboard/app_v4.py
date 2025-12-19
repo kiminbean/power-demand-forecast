@@ -2392,7 +2392,7 @@ def main():
             # 실시간 전력수급 현황 차트 (메인)
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             fig = create_realtime_power_chart()
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_right:
@@ -2408,7 +2408,7 @@ def main():
                     color='#3b82f6',
                     suffix=' MW'
                 )
-                st.plotly_chart(demand_gauge, use_container_width=True)
+                st.plotly_chart(demand_gauge, width="stretch")
 
             with gauge_col2:
                 # 예비율 게이지
@@ -2420,7 +2420,7 @@ def main():
                     color=reserve_color,
                     suffix='%'
                 )
-                st.plotly_chart(reserve_gauge, use_container_width=True)
+                st.plotly_chart(reserve_gauge, width="stretch")
 
             # 하단: 제주도 지도
             st.markdown('<div class="info-card-title" style="margin-top: 10px;">제주도 발전소 현황</div>', unsafe_allow_html=True)
