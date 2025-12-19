@@ -179,6 +179,65 @@ st.markdown("""
         border: 1px solid rgba(245, 158, 11, 0.3);
     }
 
+    .status-danger {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-critical {
+        background: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        animation: pulse-danger 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-danger {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    /* 알림 배너 */
+    .alert-banner {
+        padding: 1rem 1.5rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .alert-danger {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.3) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        color: #fca5a5;
+    }
+
+    .alert-warning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(180, 83, 9, 0.3) 100%);
+        border: 1px solid rgba(245, 158, 11, 0.5);
+        color: #fcd34d;
+    }
+
+    .alert-icon {
+        font-size: 2rem;
+    }
+
+    .alert-content {
+        flex: 1;
+    }
+
+    .alert-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .alert-message {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
     /* 지도 컨테이너 */
     .map-container {
         background: rgba(30, 41, 59, 0.6);
@@ -1250,15 +1309,74 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # ========== 예비율 알림 시스템 ==========
+    reserve_rate = power_status['reserve_rate']
+
+    # 예비율 상태 판단 (KPX 기준)
+    # - 정상: >= 15%
+    # - 관심: >= 10%, < 15%
+    # - 주의: >= 5%, < 10%
+    # - 위험: < 5%
+    if reserve_rate < 5:
+        reserve_status = "critical"
+        reserve_class = "status-critical"
+        reserve_text = "위험"
+        alert_class = "alert-danger"
+        alert_icon = "🚨"
+        alert_title = "전력 수급 위험 경보"
+        alert_msg = f"예비율 {reserve_rate:.1f}% - 즉각적인 부하 감축 필요"
+        show_alert = True
+    elif reserve_rate < 10:
+        reserve_status = "danger"
+        reserve_class = "status-danger"
+        reserve_text = "주의"
+        alert_class = "alert-danger"
+        alert_icon = "⚠️"
+        alert_title = "전력 수급 주의 경보"
+        alert_msg = f"예비율 {reserve_rate:.1f}% - 전력 수급 상황 주시 필요"
+        show_alert = True
+    elif reserve_rate < 15:
+        reserve_status = "warning"
+        reserve_class = "status-warning"
+        reserve_text = "관심"
+        alert_class = "alert-warning"
+        alert_icon = "📢"
+        alert_title = "전력 수급 관심 단계"
+        alert_msg = f"예비율 {reserve_rate:.1f}% - 전력 사용 절감 협조 요청"
+        show_alert = True
+    else:
+        reserve_status = "normal"
+        reserve_class = "status-online"
+        reserve_text = "정상"
+        show_alert = False
+
+    # 알림 배너 표시
+    if show_alert:
+        st.markdown(f"""
+        <div class="alert-banner {alert_class}">
+            <div class="alert-icon">{alert_icon}</div>
+            <div class="alert-content">
+                <div class="alert-title">{alert_title}</div>
+                <div class="alert-message">{alert_msg}</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 2rem; font-weight: bold;">{reserve_rate:.1f}%</div>
+                <div style="font-size: 0.8rem;">예비율</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # ========== 상단 메트릭 카드 ==========
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="info-card">
             <div class="info-card-title">현재 수요</div>
-            <div class="info-card-value">""" + f"{power_status['demand']}" + """ <span style="font-size: 1rem;">MW</span></div>
-            <div class="info-card-change positive">예비율 """ + f"{power_status['reserve_rate']:.1f}%" + """</div>
+            <div class="info-card-value">{power_status['demand']} <span style="font-size: 1rem;">MW</span></div>
+            <div class="info-card-change">
+                <span class="status-badge {reserve_class}">예비율 {reserve_rate:.1f}% ({reserve_text})</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
