@@ -13,15 +13,38 @@ import {
   FlatList,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
+
+// Conditional imports for native-only features
+let useNavigation: any = null;
+let Ionicons: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    useNavigation = require('@react-navigation/native').useNavigation;
+    Ionicons = require('@expo/vector-icons').Ionicons;
+  } catch (e) {
+    console.log('Native navigation/icons not available');
+  }
+}
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { BiddingStackParamList } from '../navigation/AppNavigator';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Web-compatible alert function
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    // Simple web alert
+    const result = window.confirm(`${title}\n\n${message}\n\nClick OK for DAM Bid, Cancel to dismiss`);
+    if (result && buttons?.[1]?.onPress) {
+      buttons[1].onPress();
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 // Types
 interface BidSummary {
@@ -36,7 +59,7 @@ interface BidSummary {
   filledSegments: number;
 }
 
-type BiddingNavigationProp = NativeStackNavigationProp<BiddingStackParamList, 'BiddingList'>;
+// Navigation type - only used on native
 
 // Mock data
 const mockBids: BidSummary[] = [
@@ -126,6 +149,28 @@ function StatusBadge({ status }: { status: BidSummary['status'] }) {
   );
 }
 
+// Icon component that works on both web and native
+function Icon({ name, size, color }: { name: string; size: number; color: string }) {
+  if (Ionicons) {
+    return <Ionicons name={name as any} size={size} color={color} />;
+  }
+  // Web fallback - emoji icons
+  const iconMap: { [key: string]: string } = {
+    'sunny': '☀️',
+    'cloudy': '💨',
+    'create-outline': '✏️',
+    'sparkles': '✨',
+    'send': '📤',
+    'time-outline': '⏳',
+    'eye-outline': '👁️',
+    'document-outline': '📄',
+    'add': '+',
+  };
+  return (
+    <Text style={{ fontSize: size * 0.8, color }}>{iconMap[name] || '•'}</Text>
+  );
+}
+
 // Bid card component
 function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
   const resourceIcon = bid.resourceType === 'solar' ? 'sunny' : 'cloudy';
@@ -135,7 +180,7 @@ function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
     <TouchableOpacity style={styles.bidCard} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.bidHeader}>
         <View style={styles.resourceInfo}>
-          <Ionicons name={resourceIcon as any} size={20} color={resourceColor} />
+          <Icon name={resourceIcon} size={20} color={resourceColor} />
           <Text style={styles.resourceName}>{bid.resourceName}</Text>
         </View>
         <StatusBadge status={bid.status} />
@@ -179,22 +224,22 @@ function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
         {bid.status === 'draft' && (
           <>
             <TouchableOpacity style={styles.actionBtn}>
-              <Ionicons name="create-outline" size={16} color={colors.text.secondary} />
+              <Icon name="create-outline" size={16} color={colors.text.secondary} />
               <Text style={styles.actionText}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn}>
-              <Ionicons name="sparkles" size={16} color={colors.brand.accent} />
+              <Icon name="sparkles" size={16} color={colors.brand.accent} />
               <Text style={[styles.actionText, { color: colors.brand.accent }]}>Optimize</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.submitBtn]}>
-              <Ionicons name="send" size={16} color={colors.text.inverse} />
+              <Icon name="send" size={16} color={colors.text.inverse} />
               <Text style={[styles.actionText, { color: colors.text.inverse }]}>Submit</Text>
             </TouchableOpacity>
           </>
         )}
         {bid.status === 'pending' && (
           <TouchableOpacity style={styles.actionBtn}>
-            <Ionicons name="time-outline" size={16} color={colors.status.warning} />
+            <Icon name="time-outline" size={16} color={colors.status.warning} />
             <Text style={[styles.actionText, { color: colors.status.warning }]}>
               Awaiting Submission
             </Text>
@@ -202,7 +247,7 @@ function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
         )}
         {(bid.status === 'submitted' || bid.status === 'accepted') && (
           <TouchableOpacity style={styles.actionBtn}>
-            <Ionicons name="eye-outline" size={16} color={colors.text.secondary} />
+            <Icon name="eye-outline" size={16} color={colors.text.secondary} />
             <Text style={styles.actionText}>View Details</Text>
           </TouchableOpacity>
         )}
@@ -260,20 +305,28 @@ function FilterTabs({
 }
 
 export default function BiddingScreen() {
-  const navigation = useNavigation<BiddingNavigationProp>();
+  // Navigation only available on native
+  const navigation = useNavigation ? useNavigation() : null;
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [bids, setBids] = useState<BidSummary[]>(mockBids);
+  const [selectedBid, setSelectedBid] = useState<string | null>(null);
 
   const filteredBids = activeFilter === 'all'
     ? bids
     : bids.filter(bid => bid.status === activeFilter);
 
   const handleBidPress = useCallback((bidId: string) => {
-    navigation.navigate('BidDetail', { bidId });
+    if (Platform.OS === 'web') {
+      // On web, show bid details inline or in modal
+      setSelectedBid(bidId);
+      console.log('Selected bid:', bidId);
+    } else if (navigation) {
+      navigation.navigate('BidDetail', { bidId });
+    }
   }, [navigation]);
 
   const handleCreateBid = useCallback(() => {
-    Alert.alert(
+    showAlert(
       'Create New Bid',
       'Select resource and market to create a new bid.',
       [
@@ -331,7 +384,7 @@ export default function BiddingScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="document-outline" size={48} color={colors.text.muted} />
+            <Icon name="document-outline" size={48} color={colors.text.muted} />
             <Text style={styles.emptyText}>No bids found</Text>
           </View>
         }
@@ -339,7 +392,7 @@ export default function BiddingScreen() {
 
       {/* Floating Action Button */}
       <TouchableOpacity style={styles.fab} onPress={handleCreateBid} activeOpacity={0.8}>
-        <Ionicons name="add" size={28} color={colors.text.primary} />
+        <Icon name="add" size={28} color={colors.text.primary} />
       </TouchableOpacity>
     </View>
   );

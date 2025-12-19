@@ -3,7 +3,7 @@
  * Command Center with SMP Forecast and Key Metrics
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,21 @@ import {
   StyleSheet,
   RefreshControl,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { LineChart } from 'react-native-chart-kit';
-import { Ionicons } from '@expo/vector-icons';
+
+// Conditionally import Ionicons and charts for native only
+let Ionicons: any = null;
+let LineChart: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    Ionicons = require('@expo/vector-icons').Ionicons;
+    LineChart = require('react-native-chart-kit').LineChart;
+  } catch (e) {
+    console.log('Native components not available');
+  }
+}
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 
@@ -45,13 +56,16 @@ interface MetricCardProps {
 function MetricCard({ title, value, unit, trend, trendValue, icon, color }: MetricCardProps) {
   const trendColor = trend === 'up' ? colors.status.success :
                      trend === 'down' ? colors.status.danger : colors.text.muted;
-  const trendIcon = trend === 'up' ? 'arrow-up' :
-                    trend === 'down' ? 'arrow-down' : 'remove';
+  const trendSymbol = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '–';
 
   return (
     <View style={styles.metricCard}>
       <View style={styles.metricHeader}>
-        <Ionicons name={icon as any} size={20} color={color} />
+        {Ionicons ? (
+          <Ionicons name={icon as any} size={20} color={color} />
+        ) : (
+          <View style={[styles.iconPlaceholder, { backgroundColor: color }]} />
+        )}
         <Text style={styles.metricTitle}>{title}</Text>
       </View>
       <View style={styles.metricBody}>
@@ -60,8 +74,7 @@ function MetricCard({ title, value, unit, trend, trendValue, icon, color }: Metr
       </View>
       {trend && trendValue && (
         <View style={styles.metricTrend}>
-          <Ionicons name={trendIcon as any} size={12} color={trendColor} />
-          <Text style={[styles.trendText, { color: trendColor }]}>{trendValue}</Text>
+          <Text style={[styles.trendText, { color: trendColor }]}>{trendSymbol} {trendValue}</Text>
         </View>
       )}
     </View>
@@ -170,38 +183,53 @@ export default function DashboardScreen() {
             <Text style={styles.legendText}>v3.1 Model</Text>
           </View>
         </View>
-        <LineChart
-          data={mockSMPData}
-          width={screenWidth - spacing.lg * 2}
-          height={200}
-          chartConfig={{
-            backgroundColor: colors.background.card,
-            backgroundGradientFrom: colors.background.card,
-            backgroundGradientTo: colors.background.secondary,
-            decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-            labelColor: () => colors.text.muted,
-            style: {
-              borderRadius: borderRadius.lg,
-            },
-            propsForDots: {
-              r: '4',
-              strokeWidth: '2',
-              stroke: colors.brand.primary,
-            },
-            propsForBackgroundLines: {
-              stroke: colors.border.primary,
-              strokeDasharray: '5,5',
-            },
-          }}
-          bezier
-          style={styles.chart}
-          withInnerLines={true}
-          withOuterLines={false}
-          withVerticalLabels={true}
-          withHorizontalLabels={true}
-          fromZero={false}
-        />
+        {Platform.OS === 'web' ? (
+          <View style={[styles.chart, { height: 220, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, padding: spacing.md }]}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 10 }}>
+              {mockSMPData.datasets[0].data.map((val, i) => (
+                <View key={i} style={{ alignItems: 'center', flex: 1 }}>
+                  <Text style={{ color: colors.chart.smp, fontSize: 10, marginBottom: 4, fontWeight: '600' }}>{val}</Text>
+                  <View style={{ height: val * 1.0, width: '70%', maxWidth: 40, backgroundColor: colors.chart.smp, borderRadius: 4 }} />
+                  <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 6 }}>{mockSMPData.labels[i]}h</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={{ color: colors.text.muted, fontSize: 10, textAlign: 'center', marginTop: 8 }}>₩/kWh by Hour</Text>
+          </View>
+        ) : LineChart && (
+          <LineChart
+            data={mockSMPData}
+            width={screenWidth - spacing.lg * 2}
+            height={200}
+            chartConfig={{
+              backgroundColor: colors.background.card,
+              backgroundGradientFrom: colors.background.card,
+              backgroundGradientTo: colors.background.secondary,
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+              labelColor: () => colors.text.muted,
+              style: {
+                borderRadius: borderRadius.lg,
+              },
+              propsForDots: {
+                r: '4',
+                strokeWidth: '2',
+                stroke: colors.brand.primary,
+              },
+              propsForBackgroundLines: {
+                stroke: colors.border.primary,
+                strokeDasharray: '5,5',
+              },
+            }}
+            bezier
+            style={styles.chart}
+            withInnerLines={true}
+            withOuterLines={false}
+            withVerticalLabels={true}
+            withHorizontalLabels={true}
+            fromZero={false}
+          />
+        )}
         <View style={styles.forecastStats}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Min</Text>
@@ -281,7 +309,13 @@ function QuickActionButton({ icon, label, color }: QuickActionButtonProps) {
   return (
     <View style={styles.actionButton}>
       <View style={[styles.actionIconContainer, { backgroundColor: `${color}20` }]}>
-        <Ionicons name={icon as any} size={24} color={color} />
+        {Ionicons ? (
+          <Ionicons name={icon as any} size={24} color={color} />
+        ) : (
+          <Text style={{ color, fontSize: 18, fontWeight: 'bold' }}>
+            {label.charAt(0)}
+          </Text>
+        )}
       </View>
       <Text style={styles.actionLabel}>{label}</Text>
     </View>
@@ -363,7 +397,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   metricCard: {
-    width: (screenWidth - spacing.md * 2 - spacing.sm) / 2 - spacing.sm / 2,
+    // Use percentage for web compatibility
+    width: Platform.OS === 'web' ? '48%' : (screenWidth - spacing.md * 2 - spacing.sm) / 2 - spacing.sm / 2,
+    minWidth: 150,
     backgroundColor: colors.background.card,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -375,6 +411,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginBottom: spacing.sm,
+  },
+  iconPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
   },
   metricTitle: {
     color: colors.text.secondary,

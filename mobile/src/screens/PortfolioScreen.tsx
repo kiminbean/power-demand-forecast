@@ -12,11 +12,43 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { PieChart } from 'react-native-chart-kit';
+
+// Conditional imports for native-only features
+let Ionicons: any = null;
+let PieChart: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    Ionicons = require('@expo/vector-icons').Ionicons;
+    PieChart = require('react-native-chart-kit').PieChart;
+  } catch (e) {
+    console.log('Native components not available');
+  }
+}
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+
+// Icon component with emoji fallback for web
+function Icon({ name, size, color }: { name: string; size: number; color: string }) {
+  if (Ionicons) {
+    return <Ionicons name={name as any} size={size} color={color} />;
+  }
+  const iconMap: { [key: string]: string } = {
+    'sunny': '☀️',
+    'cloudy': '💨',
+    'layers': '📚',
+    'checkmark-circle': '✅',
+    'construct': '🔧',
+    'location-outline': '📍',
+    'flash-outline': '⚡',
+    'wallet-outline': '💰',
+  };
+  return (
+    <Text style={{ fontSize: size * 0.8 }}>{iconMap[name] || '•'}</Text>
+  );
+}
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -148,18 +180,31 @@ function PortfolioSummary({ resources }: { resources: RenewableResource[] }) {
       {/* Pie Chart */}
       <View style={styles.chartContainer}>
         <Text style={styles.chartTitle}>Capacity Mix</Text>
-        <PieChart
-          data={pieData}
-          width={screenWidth - spacing.lg * 2 - spacing.md * 2}
-          height={160}
-          chartConfig={{
-            color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-          }}
-          accessor="capacity"
-          backgroundColor="transparent"
-          paddingLeft="15"
-          absolute
-        />
+        {Platform.OS === 'web' ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 160, gap: 24 }}>
+            {pieData.map((item, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: item.color, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{item.capacity.toFixed(0)}</Text>
+                </View>
+                <Text style={{ color: colors.text.secondary }}>{item.name}</Text>
+              </View>
+            ))}
+          </View>
+        ) : PieChart && (
+          <PieChart
+            data={pieData}
+            width={screenWidth - spacing.lg * 2 - spacing.md * 2}
+            height={160}
+            chartConfig={{
+              color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+            }}
+            accessor="capacity"
+            backgroundColor="transparent"
+            paddingLeft="15"
+            absolute
+          />
+        )}
       </View>
     </View>
   );
@@ -182,14 +227,14 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
       <View style={styles.cardHeader}>
         <View style={styles.resourceInfo}>
           <View style={[styles.resourceIconContainer, { backgroundColor: `${resourceColor}20` }]}>
-            <Ionicons name={resourceIcon as any} size={24} color={resourceColor} />
+            <Icon name={resourceIcon} size={24} color={resourceColor} />
           </View>
           <View>
             <Text style={styles.resourceName}>{resource.name}</Text>
-            <Text style={styles.resourceLocation}>
-              <Ionicons name="location-outline" size={12} color={colors.text.muted} />
-              {' '}{resource.location}
-            </Text>
+            <View style={styles.locationRow}>
+              <Icon name="location-outline" size={12} color={colors.text.muted} />
+              <Text style={styles.resourceLocation}>{resource.location}</Text>
+            </View>
           </View>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: `${statusColors[resource.status]}20` }]}>
@@ -232,13 +277,13 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
       {/* Stats */}
       <View style={styles.cardStats}>
         <View style={styles.cardStatItem}>
-          <Ionicons name="flash-outline" size={16} color={colors.chart.solar} />
+          <Icon name="flash-outline" size={16} color={colors.chart.solar} />
           <Text style={styles.cardStatValue}>{resource.todayGeneration.toFixed(1)}</Text>
           <Text style={styles.cardStatUnit}>MWh today</Text>
         </View>
         <View style={styles.cardStatDivider} />
         <View style={styles.cardStatItem}>
-          <Ionicons name="wallet-outline" size={16} color={colors.brand.accent} />
+          <Icon name="wallet-outline" size={16} color={colors.brand.accent} />
           <Text style={styles.cardStatValue}>₩{resource.monthlyRevenue.toFixed(1)}M</Text>
           <Text style={styles.cardStatUnit}>this month</Text>
         </View>
@@ -281,8 +326,8 @@ function FilterChips({
           ]}
           onPress={() => onFilterChange(filter.key)}
         >
-          <Ionicons
-            name={filter.icon as any}
+          <Icon
+            name={filter.icon}
             size={14}
             color={activeFilter === filter.key ? colors.text.primary : colors.text.muted}
           />
@@ -472,10 +517,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text.primary,
   },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   resourceLocation: {
     fontSize: fontSize.sm,
     color: colors.text.muted,
-    marginTop: 2,
   },
   statusBadge: {
     flexDirection: 'row',

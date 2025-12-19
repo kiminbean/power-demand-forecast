@@ -11,11 +11,44 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+
+// Conditional imports for native-only features
+let Ionicons: any = null;
+let LineChart: any = null;
+let BarChart: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    Ionicons = require('@expo/vector-icons').Ionicons;
+    const chartKit = require('react-native-chart-kit');
+    LineChart = chartKit.LineChart;
+    BarChart = chartKit.BarChart;
+  } catch (e) {
+    console.log('Native components not available');
+  }
+}
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+
+// Icon component with emoji fallback for web
+function Icon({ name, size, color }: { name: string; size: number; color: string }) {
+  if (Ionicons) {
+    return <Ionicons name={name as any} size={size} color={color} />;
+  }
+  const iconMap: { [key: string]: string } = {
+    'cash': '💵',
+    'warning': '⚠️',
+    'wallet': '💰',
+    'analytics': '📊',
+    'arrow-up': '↑',
+    'arrow-down': '↓',
+  };
+  return (
+    <Text style={{ fontSize: size * 0.8 }}>{iconMap[name] || '•'}</Text>
+  );
+}
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -101,7 +134,7 @@ function SummaryCard({
   return (
     <View style={styles.summaryCard}>
       <View style={[styles.summaryIcon, { backgroundColor: `${color}20` }]}>
-        <Ionicons name={icon as any} size={20} color={color} />
+        <Icon name={icon} size={20} color={color} />
       </View>
       <Text style={styles.summaryTitle}>{title}</Text>
       <View style={styles.summaryValueRow}>
@@ -110,7 +143,7 @@ function SummaryCard({
       </View>
       {trend && (
         <View style={styles.trendRow}>
-          <Ionicons
+          <Icon
             name={trend.direction === 'up' ? 'arrow-up' : 'arrow-down'}
             size={12}
             color={trend.direction === 'up' ? colors.status.success : colors.status.danger}
@@ -281,60 +314,83 @@ export default function SettlementScreen() {
       {/* Revenue Chart */}
       <View style={styles.chartCard}>
         <Text style={styles.chartTitle}>Net Revenue Trend</Text>
-        <LineChart
-          data={revenueChartData}
-          width={screenWidth - spacing.lg * 2 - spacing.md * 2}
-          height={180}
-          chartConfig={{
-            backgroundColor: colors.background.card,
-            backgroundGradientFrom: colors.background.card,
-            backgroundGradientTo: colors.background.secondary,
-            decimalPlaces: 1,
-            color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-            labelColor: () => colors.text.muted,
-            propsForDots: {
-              r: '4',
-              strokeWidth: '2',
-              stroke: colors.brand.accent,
-            },
-            propsForBackgroundLines: {
-              stroke: colors.border.primary,
-              strokeDasharray: '5,5',
-            },
-          }}
-          bezier
-          style={styles.chart}
-          withInnerLines={true}
-          withOuterLines={false}
-        />
+        {Platform.OS === 'web' ? (
+          <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 8 }}>
+            {revenueChartData.datasets[0].data.map((val, i) => (
+              <View key={i} style={{ alignItems: 'center' }}>
+                <View style={{ height: val * 8, width: 28, backgroundColor: colors.brand.accent, borderRadius: 4 }} />
+                <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 4 }}>{revenueChartData.labels[i]}</Text>
+              </View>
+            ))}
+          </View>
+        ) : LineChart && (
+          <LineChart
+            data={revenueChartData}
+            width={screenWidth - spacing.lg * 2 - spacing.md * 2}
+            height={180}
+            chartConfig={{
+              backgroundColor: colors.background.card,
+              backgroundGradientFrom: colors.background.card,
+              backgroundGradientTo: colors.background.secondary,
+              decimalPlaces: 1,
+              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+              labelColor: () => colors.text.muted,
+              propsForDots: {
+                r: '4',
+                strokeWidth: '2',
+                stroke: colors.brand.accent,
+              },
+              propsForBackgroundLines: {
+                stroke: colors.border.primary,
+                strokeDasharray: '5,5',
+              },
+            }}
+            bezier
+            style={styles.chart}
+            withInnerLines={true}
+            withOuterLines={false}
+          />
+        )}
       </View>
 
       {/* Generation Chart */}
       <View style={styles.chartCard}>
         <Text style={styles.chartTitle}>Daily Generation (MWh)</Text>
-        <BarChart
-          data={barChartData}
-          width={screenWidth - spacing.lg * 2 - spacing.md * 2}
-          height={180}
-          yAxisLabel=""
-          yAxisSuffix=""
-          chartConfig={{
-            backgroundColor: colors.background.card,
-            backgroundGradientFrom: colors.background.card,
-            backgroundGradientTo: colors.background.secondary,
-            decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-            labelColor: () => colors.text.muted,
-            barPercentage: 0.6,
-            propsForBackgroundLines: {
-              stroke: colors.border.primary,
-              strokeDasharray: '5,5',
-            },
-          }}
-          style={styles.chart}
-          showValuesOnTopOfBars={true}
-          fromZero={true}
-        />
+        {Platform.OS === 'web' ? (
+          <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 8 }}>
+            {barChartData.datasets[0].data.map((val, i) => (
+              <View key={i} style={{ alignItems: 'center' }}>
+                <Text style={{ color: colors.text.muted, fontSize: 10, marginBottom: 4 }}>{val.toFixed(0)}</Text>
+                <View style={{ height: val * 1.2, width: 28, backgroundColor: colors.brand.primary, borderRadius: 4 }} />
+                <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 4 }}>{barChartData.labels[i]}</Text>
+              </View>
+            ))}
+          </View>
+        ) : BarChart && (
+          <BarChart
+            data={barChartData}
+            width={screenWidth - spacing.lg * 2 - spacing.md * 2}
+            height={180}
+            yAxisLabel=""
+            yAxisSuffix=""
+            chartConfig={{
+              backgroundColor: colors.background.card,
+              backgroundGradientFrom: colors.background.card,
+              backgroundGradientTo: colors.background.secondary,
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+              labelColor: () => colors.text.muted,
+              barPercentage: 0.6,
+              propsForBackgroundLines: {
+                stroke: colors.border.primary,
+                strokeDasharray: '5,5',
+              },
+            }}
+            style={styles.chart}
+            showValuesOnTopOfBars={true}
+            fromZero={true}
+          />
+        )}
       </View>
 
       {/* Settlement Table */}
@@ -398,7 +454,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   summaryCard: {
-    width: (screenWidth - spacing.md * 2 - spacing.sm) / 2 - spacing.sm / 2,
+    width: Platform.OS === 'web' ? '48%' : (screenWidth - spacing.md * 2 - spacing.sm) / 2 - spacing.sm / 2,
+    minWidth: 150,
     backgroundColor: colors.background.card,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
