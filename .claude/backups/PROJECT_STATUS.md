@@ -1,41 +1,35 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 10:00 KST
+> Last Updated: 2025-12-19 10:15 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.2 (Reserve Rate Alert System)
+- **Version**: v4.0.2 (Reserve Rate Alert System + Alert History)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.2
 
 ---
 
-## v4.0.2 Release (2025-12-19)
+## Latest Updates (2025-12-19)
 
-### New Feature: Reserve Rate Alert System
-Dashboard now displays visual alerts based on KPX standard reserve rate thresholds.
+### Alert History Feature (NEW)
+- **AlertHistory class** with JSON persistence
+- Stores up to 100 recent alerts
+- Duplicate prevention (same status within 1 minute)
+- Sidebar display with statistics and recent alerts
 
-### KPX Standard Thresholds
-| Reserve Rate | Status | Alert Level |
-|--------------|--------|-------------|
-| ≥15% | Normal | None |
-| 10-15% | 관심 (Caution) | 🟡 Yellow banner |
-| 5-10% | 주의 (Warning) | 🟠 Orange banner |
-| <5% | 위험 (Critical) | 🔴 Red pulsing banner |
-
-### Features Added
-- **Alert Banners**: Full-width banners with icons and severity colors
-- **CSS Animations**: Pulsing effect for critical alerts
-- **Reserve Badge**: Dynamic color-coded badge in metrics card
-- **Test Mode**: Sidebar toggle to simulate low reserve rates
-- **Reserve Slider**: Adjust test reserve rate (0-30%)
-
-### Screenshots
-- `docs/screenshots/07_alert_caution.png` - Caution at 12%
-- `docs/screenshots/08_alert_warning.png` - Warning at 7%
-- `docs/screenshots/09_alert_critical.png` - Critical at 3%
+### Alert History Sidebar
+| Feature | Description |
+|---------|-------------|
+| Statistics | Count of critical/warning/caution alerts |
+| Recent Alerts | Last 10 alerts with timestamps |
+| Persistence | JSON file at `data/alerts/alert_history.json` |
 
 ### Recent Commits
 ```
+812311a docs: Add alert history sidebar screenshot
+ec16077 feat: Add alert history log feature
+c8fd811 test: Add reserve rate alert threshold tests
+32a27ab docs: Update PROJECT_STATUS backup for v4.0.2
 05565a0 docs: Add v4.0.2 release notes to CHANGELOG
 9efa658 docs: Add reserve rate alert screenshots to README
 ad5ebcc docs: Add alert level screenshots for reserve rate system
@@ -48,33 +42,42 @@ bff880e feat: Add reserve rate alert system with KPX thresholds
 ## Test Results (2025-12-19)
 
 ```
-1488 passed, 3 skipped, 16 warnings in 24.92s
+1528 passed, 3 skipped, 16 warnings
 ```
 
 | Status | Count |
 |--------|-------|
-| Passed | 1,488 |
+| Passed | 1,528 |
 | Skipped | 3 |
 | Warnings | 16 (deprecation only) |
 
+### Test Breakdown
+- Alert threshold tests: 28
+- Alert history tests: 12
+- Other tests: 1,488
+
 ---
 
-## KPX Realtime Integration (v4.0.1)
+## v4.0.2 Release (2025-12-19)
 
-### Live Power Data
-Dashboard shows **real-time power supply/demand** from KPX (한국전력거래소):
+### Reserve Rate Alert System
+Dashboard displays visual alerts based on KPX standard reserve rate thresholds.
 
-| Data Item | Source | Update Interval |
-|-----------|--------|-----------------|
-| Current Demand | KPX 실시간 | 5 minutes |
-| Supply Capacity | KPX 실시간 | 5 minutes |
-| Reserve Rate | KPX 실시간 | 5 minutes |
-| Plant Generation | Distributed from KPX total | 60 seconds cache |
+### KPX Standard Thresholds
+| Reserve Rate | Status | Alert Level |
+|--------------|--------|-------------|
+| >=15% | Normal | None |
+| 10-15% | Caution | Yellow banner |
+| 5-10% | Warning | Orange banner |
+| <5% | Critical | Red pulsing banner |
 
-### Data Priority
-1. **KPX 실시간** (Primary) - Live from https://www.kpx.or.kr
-2. **EPSIS 파일** (Secondary) - Historical file data
-3. **시뮬레이션** (Fallback) - Simulated values
+### Features
+- **Alert Banners**: Full-width banners with icons and severity colors
+- **CSS Animations**: Pulsing effect for critical alerts
+- **Reserve Badge**: Dynamic color-coded badge in metrics card
+- **Test Mode**: Sidebar toggle to simulate low reserve rates
+- **Reserve Slider**: Adjust test reserve rate (0-30%)
+- **Alert History**: Sidebar with statistics and recent alerts (NEW)
 
 ---
 
@@ -83,11 +86,11 @@ Dashboard shows **real-time power supply/demand** from KPX (한국전력거래�
 ### Performance Results
 | Metric | v2.1 (Previous) | v3.1 (Current) | Target | Status |
 |--------|-----------------|----------------|--------|--------|
-| MAPE | 10.68% | **7.83%** | <10% | ✅ |
-| R² | 0.59 | **0.74** | >0.65 | ✅ |
-| Coverage | 82.5% | **89.4%** | >85% | ✅ |
-| MAE | 11.27 | **8.93** | - | ✅ |
-| RMSE | 14.67 | **12.02** | - | ✅ |
+| MAPE | 10.68% | **7.83%** | <10% | Pass |
+| R2 | 0.59 | **0.74** | >0.65 | Pass |
+| Coverage | 82.5% | **89.4%** | >85% | Pass |
+| MAE | 11.27 | **8.93** | - | Pass |
+| RMSE | 14.67 | **12.02** | - | Pass |
 
 ### Architecture
 - BiLSTM + Stable Attention (4 heads)
@@ -103,17 +106,13 @@ Dashboard shows **real-time power supply/demand** from KPX (한국전력거래�
 ### Features
 1. 60hz.io style dark theme
 2. Interactive Jeju map with power plants (Folium)
-3. 🔴 KPX realtime data integration
-4. 🚨 Reserve rate alert system (NEW)
-5. 🧪 Test mode for alert simulation (NEW)
-6. SMP prediction with v3.1 model
-7. 24-hour forecast with confidence intervals
-8. XAI analysis tab (attention weights)
-
-### Data Source Indicators
-- 🔴 **KPX 실시간 연동** - Live KPX data active
-- 📊 **EPSIS 데이터 연동** - Using EPSIS files
-- ⚠️ **시뮬레이션 모드** - Fallback simulation
+3. KPX realtime data integration
+4. Reserve rate alert system
+5. Test mode for alert simulation
+6. Alert history sidebar (NEW)
+7. SMP prediction with v3.1 model
+8. 24-hour forecast with confidence intervals
+9. XAI analysis tab (attention weights)
 
 ### Run Command
 ```bash
@@ -121,13 +120,13 @@ PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4
 ```
 
 ### Verified Tabs
-- ✅ Main Dashboard (Jeju map, KPX realtime, alerts)
-- ✅ SMP Prediction (24h forecast, confidence bands)
-- ✅ XAI Analysis (attention heatmap)
+- Main Dashboard (Jeju map, KPX realtime, alerts)
+- SMP Prediction (24h forecast, confidence bands)
+- XAI Analysis (attention heatmap)
 
 ---
 
-## Key Files (v4.0.2)
+## Key Files
 
 ```
 # SMP Model v3.1
@@ -137,16 +136,11 @@ models/smp_v3/smp_v3_metrics.json     - Performance metrics
 models/smp_v3/smp_v3_scaler.npy       - Feature scaler
 
 # Dashboard v4.0.2
-src/dashboard/app_v4.py              - Main dashboard (alerts + KPX)
+src/dashboard/app_v4.py              - Main dashboard (alerts + history)
 src/smp/models/smp_predictor.py      - Prediction interface (v3.1 support)
 
-# Crawlers
-tools/crawlers/jeju_realtime_crawler.py  - KPX realtime data crawler
-src/smp/crawlers/epsis_crawler.py        - EPSIS SMP crawler
-
-# Data
-data/smp/smp_5years_epsis.csv        - 5 years EPSIS data (26,240 records)
-data/jeju_plants/jeju_power_plants.json  - Plant locations (Dec 2025)
+# Alert History
+data/alerts/alert_history.json       - Alert history data (NEW)
 
 # Screenshots
 docs/screenshots/01_main_dashboard.png   - Main dashboard
@@ -155,6 +149,7 @@ docs/screenshots/04_kpx_realtime.png     - KPX realtime
 docs/screenshots/07_alert_caution.png    - Alert caution (12%)
 docs/screenshots/08_alert_warning.png    - Alert warning (7%)
 docs/screenshots/09_alert_critical.png   - Alert critical (3%)
+docs/screenshots/10_alert_history_sidebar.png - Alert history sidebar (NEW)
 
 # Documentation
 CHANGELOG.md                          - Version history
@@ -167,7 +162,7 @@ README.md                             - Project overview (with screenshots)
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| v4.0.2 | 2025-12-19 | Reserve rate alert system |
+| v4.0.2 | 2025-12-19 | Reserve rate alert system + Alert history |
 | v4.0.1 | 2025-12-19 | KPX realtime integration |
 | v4.0.0 | 2025-12-18 | SMP v3.1 + Dashboard v4 |
 | v3.1 | 2025-12-17 | Improved SMP model |
@@ -190,9 +185,7 @@ For next session:
 - EPSIS real data: 2020-12-19 ~ 2025-12-18
 
 ## Notes
-- v4.0.2 includes reserve rate alert system
-- v4.0.1 includes KPX realtime integration
-- v4.0.0 release includes all bug fixes
-- All 1,488 tests passing
+- v4.0.2 includes reserve rate alert system + alert history
+- All 1,528 tests passing
 - Dashboard fully functional with live data and alerts
-- Power plant data updated to Dec 2025
+- Alert history persists to JSON file
