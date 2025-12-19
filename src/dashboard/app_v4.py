@@ -419,6 +419,232 @@ def get_email_notifier() -> EmailNotifier:
 
 
 # ============================================================================
+# Slack Notification System (v4.0.4)
+# ============================================================================
+
+import urllib.request
+import urllib.error
+
+SLACK_LOG_PATH = PROJECT_ROOT / "data" / "alerts" / "slack_log.json"
+
+
+class SlackNotifier:
+    """Slack 웹훅 알림 발송 클래스"""
+
+    # Rate limiting: 같은 상태의 알림은 5분 내 재발송 방지
+    RATE_LIMIT_MINUTES = 5
+
+    def __init__(self):
+        self.webhook_url = os.getenv("SLACK_WEBHOOK_URL", "")
+        self.channel = os.getenv("SLACK_CHANNEL", "#alerts")
+        self.enabled = os.getenv("SLACK_ALERTS_ENABLED", "false").lower() == "true"
+
+        # 발송 로그 (rate limiting용)
+        self.log_path = SLACK_LOG_PATH
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._slack_log: List[Dict] = self._load_log()
+
+    def _load_log(self) -> List[Dict]:
+        """파일에서 로그 로드"""
+        if self.log_path.exists():
+            try:
+                with open(self.log_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save_log(self):
+        """파일에 로그 저장"""
+        try:
+            self._slack_log = self._slack_log[-100:]
+            with open(self.log_path, 'w', encoding='utf-8') as f:
+                json.dump(self._slack_log, f, ensure_ascii=False, indent=2)
+        except IOError as e:
+            print(f"Slack log save failed: {e}")
+
+    def _can_send(self, alert_status: str) -> bool:
+        """Rate limiting 체크"""
+        if not self._slack_log:
+            return True
+
+        now = datetime.now()
+        cutoff = now - timedelta(minutes=self.RATE_LIMIT_MINUTES)
+
+        for log_entry in reversed(self._slack_log):
+            log_time = datetime.fromisoformat(log_entry['timestamp'])
+            if log_time < cutoff:
+                break
+            if log_entry['status'] == alert_status:
+                return False
+        return True
+
+    def _log_message(self, status: str, success: bool, error: str = None):
+        """Slack 발송 로그 기록"""
+        self._slack_log.append({
+            'timestamp': datetime.now().isoformat(),
+            'status': status,
+            'success': success,
+            'error': error
+        })
+        self._save_log()
+
+    def is_configured(self) -> bool:
+        """Slack 설정이 완료되었는지 확인"""
+        return bool(self.enabled and self.webhook_url)
+
+    def send_alert(
+        self,
+        reserve_rate: float,
+        status: str,
+        title: str,
+        message: str,
+        power_data: Dict = None
+    ) -> Tuple[bool, str]:
+        """
+        Slack 알림 발송
+
+        Args:
+            reserve_rate: 현재 예비율 (%)
+            status: 경보 상태 (critical, danger, warning)
+            title: 경보 제목
+            message: 경보 메시지
+            power_data: 추가 전력 데이터 (선택)
+
+        Returns:
+            (성공 여부, 메시지)
+        """
+        # 설정 확인
+        if not self.is_configured():
+            return False, "Slack notification not configured"
+
+        # Rate limiting 체크
+        if not self._can_send(status):
+            return False, f"Rate limited: {status} alert sent within last {self.RATE_LIMIT_MINUTES} minutes"
+
+        # 상태별 이모지 및 색상
+        status_config = {
+            "critical": {"emoji": "🚨", "color": "#ff0000"},
+            "danger": {"emoji": "⚠️", "color": "#ff8800"},
+            "warning": {"emoji": "📢", "color": "#ffcc00"},
+        }
+        config = status_config.get(status, {"emoji": "ℹ️", "color": "#0088ff"})
+
+        # Slack Block Kit 메시지 구성
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"{config['emoji']} {title}",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{message}*"
+                }
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*예비율:*\n{reserve_rate:.1f}%"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*상태:*\n{status.upper()}"
+                    }
+                ]
+            }
+        ]
+
+        # 전력 데이터 추가
+        if power_data:
+            blocks.append({
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*현재 수요:*\n{power_data.get('demand', 'N/A')} MW"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*공급 용량:*\n{power_data.get('supply', 'N/A')} MW"
+                    }
+                ]
+            })
+
+        # 타임스탬프 추가
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 제주 전력 수급 모니터링"
+                }
+            ]
+        })
+
+        # Slack 페이로드
+        payload = {
+            "channel": self.channel,
+            "username": "제주 전력 알림",
+            "icon_emoji": ":zap:",
+            "attachments": [
+                {
+                    "color": config['color'],
+                    "blocks": blocks
+                }
+            ]
+        }
+
+        # 웹훅 전송
+        try:
+            data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(
+                self.webhook_url,
+                data=data,
+                headers={'Content-Type': 'application/json'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    self._log_message(status, True)
+                    return True, "Slack message sent successfully"
+                else:
+                    error_msg = f"Slack API returned status {response.status}"
+                    self._log_message(status, False, error_msg)
+                    return False, error_msg
+
+        except urllib.error.HTTPError as e:
+            error_msg = f"Slack HTTP error: {e.code} {e.reason}"
+            self._log_message(status, False, error_msg)
+            return False, error_msg
+        except urllib.error.URLError as e:
+            error_msg = f"Slack URL error: {e.reason}"
+            self._log_message(status, False, error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Slack send failed: {e}"
+            self._log_message(status, False, error_msg)
+            return False, error_msg
+
+    def get_recent_logs(self, count: int = 10) -> List[Dict]:
+        """최근 Slack 발송 로그 조회"""
+        return self._slack_log[-count:]
+
+
+# 전역 SlackNotifier 인스턴스
+@st.cache_resource
+def get_slack_notifier() -> SlackNotifier:
+    """SlackNotifier 싱글톤 인스턴스 반환"""
+    return SlackNotifier()
+
+
+# ============================================================================
 # 페이지 설정
 # ============================================================================
 
@@ -1799,6 +2025,19 @@ def main():
                 )
                 if success:
                     st.toast(f"📧 이메일 발송 완료", icon="✅")
+
+        # Slack 알림 발송 (모든 경보 레벨)
+        slack_notifier = get_slack_notifier()
+        if slack_notifier.is_configured():
+            success, slack_msg = slack_notifier.send_alert(
+                reserve_rate=reserve_rate,
+                status=reserve_status,
+                title=alert_title,
+                message=alert_msg,
+                power_data=power_status
+            )
+            if success:
+                st.toast(f"💬 Slack 알림 발송 완료", icon="✅")
 
     # 알림 배너 표시
     if show_alert:

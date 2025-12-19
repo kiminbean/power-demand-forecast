@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.4] - 2025-12-19
+
+### Highlights
+- 💬 **Slack Webhook Integration**: Real-time Slack notifications for all alert levels
+- 🎨 **Rich Message Formatting**: Slack Block Kit with color-coded attachments
+
+### Added
+
+#### Slack Notification System (`src/dashboard/app_v4.py`)
+- **SlackNotifier Class**: Webhook-based notifications for all alert levels
+  - Supports critical, danger, and warning alerts
+  - Color-coded messages (red/orange/yellow)
+  - Rich formatting with Slack Block Kit
+  - Rate limiting (5-minute cooldown per alert type)
+  - Message log persistence
+
+- **Environment Configuration** (`.env`):
+  ```
+  SLACK_ALERTS_ENABLED=true
+  SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+  SLACK_CHANNEL=#alerts
+  ```
+
+#### Tests (`tests/test_dashboard.py`)
+- 17 new tests for SlackNotifier:
+  - Configuration tests (4)
+  - Rate limiting tests (4)
+  - Logging tests (5)
+  - Alert level tests (4)
+- Total tests: 1,564 passed
+
+### Changed
+- Dashboard sends Slack notifications for all alert levels (not just critical)
+- Added toast notification on successful Slack send
+
+---
+
 ## [4.0.3] - 2025-12-19
 
 ### Highlights

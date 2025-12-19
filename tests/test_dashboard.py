@@ -969,3 +969,232 @@ class TestEmailNotifierRecipients:
         notifier = EmailNotifierForTest()
         recipients = notifier._parse_recipients("admin@example.com,,other@example.com")
         assert recipients == ["admin@example.com", "other@example.com"]
+
+
+# ============================================================================
+# Slack Notifier Tests (v4.0.4)
+# ============================================================================
+
+class SlackNotifierForTest:
+    """테스트용 SlackNotifier 클래스 (app_v4.py와 동일한 로직)"""
+
+    RATE_LIMIT_MINUTES = 5
+
+    def __init__(self, log_path: Path = None, enabled: bool = False):
+        self.webhook_url = ""
+        self.channel = "#alerts"
+        self.enabled = enabled
+
+        self.log_path = log_path or Path(tempfile.mktemp(suffix='.json'))
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._slack_log: List[Dict] = self._load_log()
+
+    def _load_log(self) -> List[Dict]:
+        if self.log_path.exists():
+            try:
+                with open(self.log_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save_log(self):
+        try:
+            self._slack_log = self._slack_log[-100:]
+            with open(self.log_path, 'w', encoding='utf-8') as f:
+                json.dump(self._slack_log, f, ensure_ascii=False, indent=2)
+        except IOError:
+            pass
+
+    def _can_send(self, alert_status: str) -> bool:
+        if not self._slack_log:
+            return True
+
+        now = datetime.now()
+        cutoff = now - timedelta(minutes=self.RATE_LIMIT_MINUTES)
+
+        for log_entry in reversed(self._slack_log):
+            log_time = datetime.fromisoformat(log_entry['timestamp'])
+            if log_time < cutoff:
+                break
+            if log_entry['status'] == alert_status:
+                return False
+        return True
+
+    def _log_message(self, status: str, success: bool, error: str = None):
+        self._slack_log.append({
+            'timestamp': datetime.now().isoformat(),
+            'status': status,
+            'success': success,
+            'error': error
+        })
+        self._save_log()
+
+    def is_configured(self) -> bool:
+        return bool(self.enabled and self.webhook_url)
+
+    def configure(self, webhook_url: str):
+        """테스트용 설정 메서드"""
+        self.webhook_url = webhook_url
+        self.enabled = True
+
+    def get_recent_logs(self, count: int = 10) -> List[Dict]:
+        return self._slack_log[-count:]
+
+
+class TestSlackNotifierConfiguration:
+    """SlackNotifier 설정 테스트"""
+
+    def test_not_configured_by_default(self):
+        """기본 상태에서는 미설정 상태"""
+        notifier = SlackNotifierForTest()
+        assert not notifier.is_configured()
+
+    def test_configured_after_setup(self):
+        """설정 후 is_configured True"""
+        notifier = SlackNotifierForTest(enabled=True)
+        notifier.configure("https://hooks.slack.com/services/XXX/YYY/ZZZ")
+        assert notifier.is_configured()
+
+    def test_not_configured_without_webhook(self):
+        """웹훅 URL 없으면 미설정"""
+        notifier = SlackNotifierForTest(enabled=True)
+        assert not notifier.is_configured()
+
+    def test_not_configured_when_disabled(self):
+        """비활성화 상태면 미설정"""
+        notifier = SlackNotifierForTest(enabled=False)
+        notifier.webhook_url = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+        assert not notifier.is_configured()
+
+
+class TestSlackNotifierRateLimiting:
+    """SlackNotifier Rate Limiting 테스트"""
+
+    def create_temp_notifier(self) -> SlackNotifierForTest:
+        return SlackNotifierForTest(
+            log_path=Path(tempfile.mktemp(suffix='.json')),
+            enabled=True
+        )
+
+    def test_can_send_when_no_history(self):
+        """이력 없으면 발송 가능"""
+        notifier = self.create_temp_notifier()
+        assert notifier._can_send("critical")
+
+    def test_cannot_send_same_status_within_limit(self):
+        """같은 상태 5분 내 재발송 불가"""
+        notifier = self.create_temp_notifier()
+        notifier._log_message("critical", True)
+        assert not notifier._can_send("critical")
+
+    def test_can_send_different_status(self):
+        """다른 상태는 발송 가능"""
+        notifier = self.create_temp_notifier()
+        notifier._log_message("critical", True)
+        assert notifier._can_send("danger")
+        assert notifier._can_send("warning")
+
+    def test_can_send_after_rate_limit_expires(self):
+        """Rate limit 만료 후 발송 가능"""
+        notifier = self.create_temp_notifier()
+        old_log = {
+            'timestamp': (datetime.now() - timedelta(minutes=6)).isoformat(),
+            'status': 'critical',
+            'success': True
+        }
+        notifier._slack_log.append(old_log)
+        assert notifier._can_send("critical")
+
+
+class TestSlackNotifierLogging:
+    """SlackNotifier 로그 테스트"""
+
+    def create_temp_notifier(self) -> SlackNotifierForTest:
+        return SlackNotifierForTest(
+            log_path=Path(tempfile.mktemp(suffix='.json')),
+            enabled=True
+        )
+
+    def test_log_message_success(self):
+        """성공 로그 기록"""
+        notifier = self.create_temp_notifier()
+        notifier._log_message("critical", True)
+
+        logs = notifier.get_recent_logs()
+        assert len(logs) == 1
+        assert logs[0]['status'] == "critical"
+        assert logs[0]['success'] is True
+
+    def test_log_message_failure(self):
+        """실패 로그 기록"""
+        notifier = self.create_temp_notifier()
+        notifier._log_message("critical", False, "Webhook error")
+
+        logs = notifier.get_recent_logs()
+        assert len(logs) == 1
+        assert logs[0]['success'] is False
+        assert logs[0]['error'] == "Webhook error"
+
+    def test_log_persistence(self):
+        """로그 파일 저장 확인"""
+        log_path = Path(tempfile.mktemp(suffix='.json'))
+        notifier = SlackNotifierForTest(log_path=log_path, enabled=True)
+        notifier._log_message("warning", True)
+
+        notifier2 = SlackNotifierForTest(log_path=log_path, enabled=True)
+        logs = notifier2.get_recent_logs()
+        assert len(logs) == 1
+
+    def test_log_max_limit(self):
+        """로그 최대 100개 제한"""
+        notifier = self.create_temp_notifier()
+        for i in range(150):
+            notifier._log_message("warning", True)
+        assert len(notifier._slack_log) == 100
+
+    def test_get_recent_logs_limit(self):
+        """최근 로그 조회 개수 제한"""
+        notifier = self.create_temp_notifier()
+        for i in range(20):
+            notifier._log_message("warning", True)
+        logs = notifier.get_recent_logs(5)
+        assert len(logs) == 5
+
+
+class TestSlackNotifierAllAlertLevels:
+    """SlackNotifier 모든 경보 레벨 테스트"""
+
+    def create_temp_notifier(self) -> SlackNotifierForTest:
+        return SlackNotifierForTest(
+            log_path=Path(tempfile.mktemp(suffix='.json')),
+            enabled=True
+        )
+
+    def test_can_send_critical(self):
+        """Critical 경보 발송 가능"""
+        notifier = self.create_temp_notifier()
+        assert notifier._can_send("critical")
+
+    def test_can_send_danger(self):
+        """Danger 경보 발송 가능"""
+        notifier = self.create_temp_notifier()
+        assert notifier._can_send("danger")
+
+    def test_can_send_warning(self):
+        """Warning 경보 발송 가능"""
+        notifier = self.create_temp_notifier()
+        assert notifier._can_send("warning")
+
+    def test_independent_rate_limiting(self):
+        """각 경보 레벨별 독립적 rate limiting"""
+        notifier = self.create_temp_notifier()
+
+        notifier._log_message("critical", True)
+        notifier._log_message("danger", True)
+        notifier._log_message("warning", True)
+
+        # 모든 레벨이 rate limited
+        assert not notifier._can_send("critical")
+        assert not notifier._can_send("danger")
+        assert not notifier._can_send("warning")
