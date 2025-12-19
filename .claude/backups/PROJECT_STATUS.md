@@ -1,11 +1,51 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 11:00 KST
+> Last Updated: 2025-12-19 12:55 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.4 (Slack Webhook Notifications)
+- **Version**: v4.0.6 (Reserve Rate Bug Fix)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.4
+
+---
+
+## Latest Changes (2025-12-19)
+
+### Bug Fix: Reserve Rate Display (v4.0.6)
+Fixed reserve rate showing 911% instead of correct ~132-152%.
+
+| Issue | Resolution |
+|-------|------------|
+| Wrong field | Used `supply_reserve` (MW) instead of `reserve_rate` (%) |
+| Value shown | 911% (MW value) |
+| Correct value | ~132-152% (calculated %) |
+
+**Root Cause**: Line 1232 was using `realtime_data.get('supply_reserve', 15.0)` which returns the MW value (911), not the percentage.
+
+**Fix**: Changed to `realtime_data.get('reserve_rate', 15.0)` which returns the correctly calculated percentage: `(supply_capacity - demand) / demand * 100`
+
+### Dashboard Layout (GE Inertia Style)
+New layout with real-time power supply chart and forecast comparison.
+
+### Layout Structure
+| Position | Content |
+|----------|---------|
+| Left (3/4) | Real-time power chart (actual vs forecast) |
+| Right Top | Gauge charts (demand, reserve rate) |
+| Right Bottom | Jeju map (compact) |
+
+### Chart Features
+- 12h past (actual data) + 12h future (forecast)
+- Confidence band for forecast uncertainty
+- Red dashed line marks current time (center)
+- Color coding: Blue (actual), Yellow (forecast)
+
+### Recent Commits
+```
+94f5afb fix: Correct reserve rate display using percentage instead of MW value
+afd6d85 feat: Redesign dashboard layout with real-time power chart
+bee02b8 docs: Update PROJECT_STATUS for v4.0.4 release
+```
 
 ---
 
@@ -79,20 +119,23 @@ e3623bb docs: Update PROJECT_STATUS with alert history feature
 
 ---
 
-## Dashboard v4.0.4
+## Dashboard v4.0.5
 
 ### Features
 1. 60hz.io style dark theme
-2. Interactive Jeju map with power plants
-3. KPX realtime data integration
-4. Reserve rate alert system (KPX thresholds)
-5. Test mode for alert simulation
-6. Alert history sidebar
-7. Email notification (critical alerts)
-8. **Slack webhook (all alerts) - NEW**
-9. SMP prediction with v3.1 model
-10. 24-hour forecast with confidence intervals
-11. XAI analysis tab
+2. **GE Inertia style layout - NEW**
+3. **Real-time power chart (actual vs forecast) - NEW**
+4. **Gauge charts (demand, reserve rate) - NEW**
+5. Interactive Jeju map with power plants
+6. KPX realtime data integration
+7. Reserve rate alert system (KPX thresholds)
+8. Test mode for alert simulation
+9. Alert history sidebar
+10. Email notification (critical alerts)
+11. Slack webhook (all alerts)
+12. SMP prediction with v3.1 model
+13. 24-hour forecast with confidence intervals
+14. XAI analysis tab
 
 ### Run Command
 ```bash
@@ -126,6 +169,8 @@ models/smp_v3/smp_v3_metrics.json    - Performance metrics
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| v4.0.6 | 2025-12-19 | Reserve rate bug fix (911% → 132%) |
+| v4.0.5 | 2025-12-19 | GE Inertia layout, real-time chart |
 | v4.0.4 | 2025-12-19 | Slack webhook notifications |
 | v4.0.3 | 2025-12-19 | Email notification (critical) |
 | v4.0.2 | 2025-12-19 | Reserve rate alert system |
