@@ -75,6 +75,97 @@ except ImportError as e:
 
 
 # ============================================================================
+# Alert History System (v4.0.2)
+# ============================================================================
+
+ALERT_HISTORY_PATH = PROJECT_ROOT / "data" / "alerts" / "alert_history.json"
+
+
+class AlertHistory:
+    """예비율 경보 이력 관리 클래스"""
+
+    MAX_HISTORY = 100  # 최대 저장 이력 수
+
+    def __init__(self, file_path: Path = ALERT_HISTORY_PATH):
+        self.file_path = file_path
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self._history: List[Dict] = self._load()
+
+    def _load(self) -> List[Dict]:
+        """파일에서 이력 로드"""
+        if self.file_path.exists():
+            try:
+                with open(self.file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save(self):
+        """파일에 이력 저장"""
+        try:
+            with open(self.file_path, 'w', encoding='utf-8') as f:
+                json.dump(self._history, f, ensure_ascii=False, indent=2)
+        except IOError as e:
+            print(f"Alert history save failed: {e}")
+
+    def add_alert(self, reserve_rate: float, status: str, title: str, message: str):
+        """새 경보 이력 추가 (중복 방지: 같은 status가 연속되면 추가 안함)"""
+        now = datetime.now()
+
+        # 최근 경보와 같은 status면 스킵 (1분 이내)
+        if self._history:
+            last = self._history[0]
+            last_time = datetime.fromisoformat(last['timestamp'])
+            if last['status'] == status and (now - last_time).seconds < 60:
+                return
+
+        alert = {
+            'timestamp': now.isoformat(),
+            'reserve_rate': round(reserve_rate, 2),
+            'status': status,
+            'title': title,
+            'message': message
+        }
+
+        self._history.insert(0, alert)
+
+        # 최대 개수 유지
+        if len(self._history) > self.MAX_HISTORY:
+            self._history = self._history[:self.MAX_HISTORY]
+
+        self._save()
+
+    def get_recent(self, count: int = 10) -> List[Dict]:
+        """최근 경보 이력 조회"""
+        return self._history[:count]
+
+    def get_stats(self) -> Dict:
+        """경보 통계"""
+        if not self._history:
+            return {'total': 0, 'critical': 0, 'danger': 0, 'warning': 0}
+
+        stats = {'total': len(self._history), 'critical': 0, 'danger': 0, 'warning': 0}
+        for alert in self._history:
+            status = alert.get('status', '')
+            if status in stats:
+                stats[status] += 1
+        return stats
+
+    def clear(self):
+        """이력 초기화"""
+        self._history = []
+        self._save()
+
+
+# 전역 AlertHistory 인스턴스
+@st.cache_resource
+def get_alert_history() -> AlertHistory:
+    """AlertHistory 싱글톤 인스턴스 반환"""
+    return AlertHistory()
+
+
+# ============================================================================
 # 페이지 설정
 # ============================================================================
 
@@ -1295,6 +1386,59 @@ def main():
         st.info(f"전력: {power_status.get('data_source', 'N/A')}")
         st.info(f"SMP: {smp_data.get('data_source', 'N/A')}")
 
+        # ========== 경보 이력 ==========
+        st.markdown("---")
+        st.markdown("### 📜 경보 이력")
+
+        alert_history = get_alert_history()
+        recent_alerts = alert_history.get_recent(10)
+        stats = alert_history.get_stats()
+
+        # 통계 표시
+        if stats['total'] > 0:
+            stat_cols = st.columns(3)
+            with stat_cols[0]:
+                st.metric("🚨 위험", stats['critical'])
+            with stat_cols[1]:
+                st.metric("⚠️ 주의", stats['danger'])
+            with stat_cols[2]:
+                st.metric("📢 관심", stats['warning'])
+
+        # 최근 경보 목록
+        if recent_alerts:
+            for alert in recent_alerts[:5]:
+                timestamp = datetime.fromisoformat(alert['timestamp'])
+                time_str = timestamp.strftime("%m/%d %H:%M")
+                status = alert['status']
+
+                # 상태별 아이콘
+                if status == 'critical':
+                    icon = "🚨"
+                    color = "#ef4444"
+                elif status == 'danger':
+                    icon = "⚠️"
+                    color = "#f97316"
+                else:
+                    icon = "📢"
+                    color = "#eab308"
+
+                st.markdown(f"""
+                <div style="background: rgba(30,41,59,0.5); padding: 8px; border-radius: 8px;
+                            margin-bottom: 5px; border-left: 3px solid {color};">
+                    <div style="font-size: 0.75rem; color: #94a3b8;">{time_str}</div>
+                    <div style="font-size: 0.85rem; color: white;">
+                        {icon} {alert['reserve_rate']}% - {alert['title']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # 이력 초기화 버튼
+            if st.button("🗑️ 이력 초기화", key="clear_history"):
+                alert_history.clear()
+                st.rerun()
+        else:
+            st.caption("경보 이력이 없습니다")
+
     # ========== 헤더 ==========
     # 데이터 출처 확인
     smp_source = smp_data.get('data_source', 'N/A')
@@ -1375,7 +1519,19 @@ def main():
         reserve_status = "normal"
         reserve_class = "status-online"
         reserve_text = "정상"
+        alert_title = None
+        alert_msg = None
         show_alert = False
+
+    # 경보 이력 저장 (테스트 모드가 아닐 때만)
+    if show_alert and not test_alert:
+        alert_history = get_alert_history()
+        alert_history.add_alert(
+            reserve_rate=reserve_rate,
+            status=reserve_status,
+            title=alert_title,
+            message=alert_msg
+        )
 
     # 알림 배너 표시
     if show_alert:

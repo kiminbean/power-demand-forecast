@@ -475,3 +475,226 @@ class TestKPXThresholdConstants:
         assert self.KPX_CRITICAL_THRESHOLD > 0
         assert self.KPX_DANGER_THRESHOLD > 0
         assert self.KPX_WARNING_THRESHOLD > 0
+
+
+# ============================================================================
+# Alert History Tests (v4.0.2)
+# ============================================================================
+
+import tempfile
+import json
+
+
+class AlertHistoryForTest:
+    """테스트용 AlertHistory 클래스 (app_v4.py와 동일한 로직)"""
+
+    MAX_HISTORY = 100
+
+    def __init__(self, file_path: Path):
+        self.file_path = file_path
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self._history = self._load()
+
+    def _load(self):
+        if self.file_path.exists():
+            try:
+                with open(self.file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save(self):
+        try:
+            with open(self.file_path, 'w', encoding='utf-8') as f:
+                json.dump(self._history, f, ensure_ascii=False, indent=2)
+        except IOError:
+            pass
+
+    def add_alert(self, reserve_rate: float, status: str, title: str, message: str):
+        now = datetime.now()
+        if self._history:
+            last = self._history[0]
+            last_time = datetime.fromisoformat(last['timestamp'])
+            if last['status'] == status and (now - last_time).seconds < 60:
+                return
+
+        alert = {
+            'timestamp': now.isoformat(),
+            'reserve_rate': round(reserve_rate, 2),
+            'status': status,
+            'title': title,
+            'message': message
+        }
+        self._history.insert(0, alert)
+        if len(self._history) > self.MAX_HISTORY:
+            self._history = self._history[:self.MAX_HISTORY]
+        self._save()
+
+    def get_recent(self, count: int = 10):
+        return self._history[:count]
+
+    def get_stats(self):
+        if not self._history:
+            return {'total': 0, 'critical': 0, 'danger': 0, 'warning': 0}
+        stats = {'total': len(self._history), 'critical': 0, 'danger': 0, 'warning': 0}
+        for alert in self._history:
+            status = alert.get('status', '')
+            if status in stats:
+                stats[status] += 1
+        return stats
+
+    def clear(self):
+        self._history = []
+        self._save()
+
+
+class TestAlertHistory:
+    """AlertHistory 클래스 테스트"""
+
+    def create_temp_history(self):
+        """테스트용 임시 AlertHistory 생성"""
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "test_alerts.json"
+        return AlertHistoryForTest(file_path=temp_path)
+
+    def test_alert_history_creation(self):
+        """AlertHistory 생성 테스트"""
+        history = self.create_temp_history()
+        assert history is not None
+        assert history._history == []
+
+    def test_add_alert(self):
+        """경보 추가 테스트"""
+        history = self.create_temp_history()
+        history.add_alert(
+            reserve_rate=3.5,
+            status="critical",
+            title="전력 수급 위험 경보",
+            message="예비율 3.5% - 즉각적인 부하 감축 필요"
+        )
+        assert len(history._history) == 1
+        assert history._history[0]['reserve_rate'] == 3.5
+        assert history._history[0]['status'] == "critical"
+
+    def test_add_multiple_alerts(self):
+        """여러 경보 추가 테스트"""
+        history = self.create_temp_history()
+
+        # 첫 번째 경보
+        history.add_alert(3.0, "critical", "위험", "msg1")
+
+        # 다른 status의 경보는 바로 추가
+        history.add_alert(7.0, "danger", "주의", "msg2")
+
+        assert len(history._history) == 2
+        # 최신 경보가 먼저
+        assert history._history[0]['status'] == "danger"
+        assert history._history[1]['status'] == "critical"
+
+    def test_duplicate_alert_prevention(self):
+        """중복 경보 방지 테스트 (같은 status 1분 이내)"""
+        history = self.create_temp_history()
+
+        history.add_alert(3.0, "critical", "위험1", "msg1")
+        history.add_alert(4.0, "critical", "위험2", "msg2")  # 같은 status
+
+        # 같은 status는 1분 이내 중복 추가 안됨
+        assert len(history._history) == 1
+
+    def test_get_recent(self):
+        """최근 경보 조회 테스트"""
+        history = self.create_temp_history()
+
+        # 여러 경보 추가 (다른 status로)
+        history.add_alert(3.0, "critical", "위험", "msg1")
+        history.add_alert(7.0, "danger", "주의", "msg2")
+        history.add_alert(12.0, "warning", "관심", "msg3")
+
+        recent = history.get_recent(2)
+        assert len(recent) == 2
+        assert recent[0]['status'] == "warning"  # 최신
+
+    def test_get_stats(self):
+        """경보 통계 테스트"""
+        history = self.create_temp_history()
+
+        history.add_alert(3.0, "critical", "위험", "msg1")
+        history.add_alert(7.0, "danger", "주의", "msg2")
+        history.add_alert(12.0, "warning", "관심", "msg3")
+
+        stats = history.get_stats()
+        assert stats['total'] == 3
+        assert stats['critical'] == 1
+        assert stats['danger'] == 1
+        assert stats['warning'] == 1
+
+    def test_get_stats_empty(self):
+        """빈 이력 통계 테스트"""
+        history = self.create_temp_history()
+        stats = history.get_stats()
+        assert stats['total'] == 0
+
+    def test_clear_history(self):
+        """이력 초기화 테스트"""
+        history = self.create_temp_history()
+
+        history.add_alert(3.0, "critical", "위험", "msg")
+        assert len(history._history) == 1
+
+        history.clear()
+        assert len(history._history) == 0
+
+    def test_persistence(self):
+        """파일 저장/로드 테스트"""
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "persist_test.json"
+
+        # 첫 번째 인스턴스에서 저장
+        history1 = AlertHistoryForTest(file_path=temp_path)
+        history1.add_alert(5.0, "danger", "주의", "msg")
+
+        # 두 번째 인스턴스에서 로드
+        history2 = AlertHistoryForTest(file_path=temp_path)
+        assert len(history2._history) == 1
+        assert history2._history[0]['reserve_rate'] == 5.0
+
+    def test_max_history_limit(self):
+        """최대 이력 개수 제한 테스트"""
+        history = self.create_temp_history()
+        history.MAX_HISTORY = 5  # 테스트용 제한
+
+        # 다른 status로 6개 추가
+        statuses = ["critical", "danger", "warning", "critical", "danger", "warning"]
+        for i, status in enumerate(statuses):
+            history.add_alert(float(i), status, f"title{i}", f"msg{i}")
+
+        assert len(history._history) <= 5
+
+    def test_alert_timestamp(self):
+        """경보 타임스탬프 테스트"""
+        history = self.create_temp_history()
+        history.add_alert(3.0, "critical", "위험", "msg")
+
+        alert = history._history[0]
+        assert 'timestamp' in alert
+        # ISO format 검증
+        timestamp = datetime.fromisoformat(alert['timestamp'])
+        assert isinstance(timestamp, datetime)
+
+    def test_alert_fields(self):
+        """경보 필드 완전성 테스트"""
+        history = self.create_temp_history()
+        history.add_alert(
+            reserve_rate=7.5,
+            status="danger",
+            title="전력 수급 주의 경보",
+            message="예비율 7.5% - 주시 필요"
+        )
+
+        alert = history._history[0]
+        assert 'timestamp' in alert
+        assert alert['reserve_rate'] == 7.5
+        assert alert['status'] == "danger"
+        assert alert['title'] == "전력 수급 주의 경보"
+        assert alert['message'] == "예비율 7.5% - 주시 필요"
