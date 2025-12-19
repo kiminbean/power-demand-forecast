@@ -1763,9 +1763,22 @@ def create_realtime_power_chart() -> go.Figure:
         else:
             return 0.85  # 심야
 
+    # ===== 태양광/풍력 발전량 계산 함수 =====
+    def get_solar_gen(hour: int) -> float:
+        """태양광 발전량 (MW) - 일출~일몰 사인파 패턴"""
+        if 6 <= hour <= 18:
+            return 150 * np.sin(np.pi * (hour - 6) / 12) * np.random.uniform(0.8, 1.0)
+        return 0
+
+    def get_wind_gen(hour: int) -> float:
+        """풍력 발전량 (MW) - 시간대별 변동"""
+        return 200 * (0.5 + 0.3 * np.sin(np.pi * hour / 24)) * np.random.uniform(0.7, 1.0)
+
     # ===== 과거 실측 데이터 (KPX 실시간 값 기반 일간 패턴 적용) =====
     actual_demand = []
     actual_supply = []
+    actual_solar = []
+    actual_wind = []
 
     # 현재 시간의 일간 패턴 계수 계산 (동일한 함수 사용)
     current_hour = now.hour
@@ -1787,6 +1800,8 @@ def create_realtime_power_chart() -> go.Figure:
 
         actual_demand.append(demand)
         actual_supply.append(supply)
+        actual_solar.append(get_solar_gen(hour))
+        actual_wind.append(get_wind_gen(hour))
 
     # 마지막 값을 현재 실시간 값으로 보정 (패턴이 동일하므로 점프 최소화)
     actual_demand[-1] = current_demand
@@ -1797,6 +1812,8 @@ def create_realtime_power_chart() -> go.Figure:
     forecast_upper = []
     forecast_lower = []
     forecast_supply = []
+    forecast_solar = []
+    forecast_wind = []
 
     for i, h in enumerate(future_hours):
         hour = h.hour
@@ -1806,6 +1823,8 @@ def create_realtime_power_chart() -> go.Figure:
             demand = current_demand
             supply = current_supply
             uncertainty = 0
+            solar = actual_solar[-1] if actual_solar else get_solar_gen(hour)
+            wind = actual_wind[-1] if actual_wind else get_wind_gen(hour)
         else:
             # 동일한 패턴 함수 사용 (Single Source of Truth)
             pattern = get_load_pattern(hour)
@@ -1814,6 +1833,8 @@ def create_realtime_power_chart() -> go.Figure:
             supply = base_supply * pattern
             # 시간이 지날수록 불확실성 증가
             uncertainty = 0.02 + (i * 0.003)
+            solar = get_solar_gen(hour)
+            wind = get_wind_gen(hour)
 
         upper = demand * (1 + uncertainty)
         lower = demand * (1 - uncertainty)
@@ -1822,6 +1843,8 @@ def create_realtime_power_chart() -> go.Figure:
         forecast_upper.append(upper)
         forecast_lower.append(lower)
         forecast_supply.append(supply)
+        forecast_solar.append(solar)
+        forecast_wind.append(wind)
 
     # ===== 예비 전력 계산 =====
     actual_reserve = [s - d for s, d in zip(actual_supply, actual_demand)]
@@ -1907,6 +1930,56 @@ def create_realtime_power_chart() -> go.Figure:
         line=dict(color='#fbbf24', width=3),
         customdata=forecast_reserve,
         hovertemplate='%{x}<br>예측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 과거 태양광 발전 (스택 영역) =====
+    fig.add_trace(go.Scatter(
+        x=past_hours,
+        y=actual_solar,
+        mode='lines',
+        name='태양광 (실측)',
+        fill='tozeroy',
+        fillcolor='rgba(251, 191, 36, 0.4)',  # 노란색
+        line=dict(color='#fbbf24', width=1),
+        hovertemplate='%{x}<br>태양광: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 과거 풍력 발전 (스택 영역) =====
+    fig.add_trace(go.Scatter(
+        x=past_hours,
+        y=[s + w for s, w in zip(actual_solar, actual_wind)],
+        mode='lines',
+        name='풍력 (실측)',
+        fill='tonexty',
+        fillcolor='rgba(59, 130, 246, 0.4)',  # 파란색
+        line=dict(color='#3b82f6', width=1),
+        customdata=actual_wind,
+        hovertemplate='%{x}<br>풍력: %{customdata:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 미래 태양광 발전 (스택 영역) =====
+    fig.add_trace(go.Scatter(
+        x=future_hours,
+        y=forecast_solar,
+        mode='lines',
+        name='태양광 (예측)',
+        fill='tozeroy',
+        fillcolor='rgba(251, 191, 36, 0.25)',  # 연한 노란색
+        line=dict(color='#fbbf24', width=1, dash='dot'),
+        hovertemplate='%{x}<br>태양광 예측: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 미래 풍력 발전 (스택 영역) =====
+    fig.add_trace(go.Scatter(
+        x=future_hours,
+        y=[s + w for s, w in zip(forecast_solar, forecast_wind)],
+        mode='lines',
+        name='풍력 (예측)',
+        fill='tonexty',
+        fillcolor='rgba(59, 130, 246, 0.25)',  # 연한 파란색
+        line=dict(color='#3b82f6', width=1, dash='dot'),
+        customdata=forecast_wind,
+        hovertemplate='%{x}<br>풍력 예측: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 현재 시점 표시 (중앙) =====
