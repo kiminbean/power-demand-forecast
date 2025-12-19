@@ -114,6 +114,13 @@
 ![System Architecture](docs/screenshots/05_system_architecture.png)
 *전체 시스템 구성도 - 데이터 수집, 모델 학습, 예측, 대시보드*
 
+### 예비율 경보 시스템
+| 관심 단계 (10-15%) | 주의 경보 (5-10%) | 위험 경보 (<5%) |
+|:---:|:---:|:---:|
+| ![Caution](docs/screenshots/07_alert_caution.png) | ![Warning](docs/screenshots/08_alert_warning.png) | ![Critical](docs/screenshots/09_alert_critical.png) |
+
+*KPX 기준 예비율 단계별 경보 시스템 - 15% 미만 시 관심, 10% 미만 시 주의, 5% 미만 시 위험 경보 발령*
+
 ---
 
 ## 빠른 시작
@@ -554,4 +561,4 @@ MIT License
 
 ---
 
-*Last Updated: 2025-12-18 | v4.0.0*
+*Last Updated: 2025-12-19 | v4.0.2*
