@@ -1268,6 +1268,33 @@ def main():
     smp_data = get_smp_data()
     weather = get_weather_data()
 
+    # ========== 사이드바: 테스트 모드 ==========
+    with st.sidebar:
+        st.markdown("### ⚙️ 설정")
+
+        # 알림 테스트 모드
+        test_alert = st.checkbox("🧪 알림 테스트 모드", value=False)
+        if test_alert:
+            test_reserve = st.slider(
+                "테스트 예비율 (%)",
+                min_value=0.0,
+                max_value=30.0,
+                value=12.0,
+                step=1.0,
+                help="예비율을 낮춰서 알림 시스템을 테스트합니다"
+            )
+            # 테스트용 예비율 적용
+            power_status = dict(power_status)  # 복사본 생성
+            power_status['reserve_rate'] = test_reserve
+            power_status['data_source'] = '테스트 모드'
+
+            st.warning(f"⚠️ 테스트 모드: 예비율 {test_reserve:.1f}%")
+
+        st.markdown("---")
+        st.markdown("### 📊 데이터 출처")
+        st.info(f"전력: {power_status.get('data_source', 'N/A')}")
+        st.info(f"SMP: {smp_data.get('data_source', 'N/A')}")
+
     # ========== 헤더 ==========
     # 데이터 출처 확인
     smp_source = smp_data.get('data_source', 'N/A')
