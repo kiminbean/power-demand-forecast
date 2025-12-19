@@ -14,7 +14,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-1436%20passed-brightgreen.svg)](#테스트)
+[![Tests](https://img.shields.io/badge/Tests-1564%20passed-brightgreen.svg)](#테스트)
 
 ## 프로젝트 개요
 
@@ -86,13 +86,16 @@
 | **EPSIS Crawler** | 전력통계정보시스템 | 전국 실시간 전력수급 (5분 간격) |
 | **Jeju Power Crawler** | 공공데이터포털 | 제주 전력수급현황 (시간별 실측) |
 
-### 📊 Streamlit 대시보드
+### 📊 Streamlit 대시보드 (v4.0.7)
 | 기능 | 설명 |
 |------|------|
-| **EPSIS 실시간** | 전국/제주 전력수급 현황 |
-| **제주 실측 데이터** | 공공데이터포털 실측 데이터 시각화 |
-| **예측 시각화** | 24시간 전력 수요 예측 |
-| **시나리오 분석** | 폭염/한파 시나리오 시뮬레이션 |
+| **60hz.io 스타일** | GE Inertia 레이아웃 다크 테마 |
+| **KPX 실시간 연동** | 한국전력거래소 실시간 데이터 |
+| **예비율 경보 시스템** | KPX 기준 3단계 경보 (관심/주의/위험) |
+| **Email/Slack 알림** | 위험 단계 이메일, 전체 단계 Slack 알림 |
+| **SMP 예측** | BiLSTM + Attention 모델 기반 가격 예측 |
+| **24시간 예측** | 신뢰구간 포함 전력 수요 예측 |
+| **XAI 분석** | SHAP/Attention 기반 모델 설명 |
 
 ---
 
@@ -193,7 +196,10 @@ predictions = response.json()["predictions"]
 ### 대시보드 실행
 
 ```bash
-# EPSIS 실시간 대시보드 (권장)
+# v4 대시보드 (권장) - KPX 실시간 + 경보 시스템
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
+
+# EPSIS 실시간 대시보드
 streamlit run src/dashboard/app_v1.py
 
 # API 연동 대시보드
@@ -364,7 +370,8 @@ power-demand-forecast/
 │   │
 │   ├── dashboard/              # Streamlit 대시보드
 │   │   ├── app.py              # API 연동 대시보드
-│   │   └── app_v1.py           # EPSIS 실시간 대시보드
+│   │   ├── app_v1.py           # EPSIS 실시간 대시보드
+│   │   └── app_v4.py           # v4 대시보드 (KPX 실시간 + 경보)
 │   │
 │   ├── models/                 # 딥러닝 모델
 │   │   ├── lstm.py             # LSTM 모델
@@ -395,7 +402,7 @@ power-demand-forecast/
 │       ├── epsis_crawler.py    # EPSIS 전국 실시간 크롤러
 │       └── jeju_power_crawler.py  # 제주 전력수급 크롤러
 │
-├── tests/                      # 테스트 (1436 tests)
+├── tests/                      # 테스트 (1564 tests)
 │   ├── test_pipeline.py        # 파이프라인 테스트
 │   ├── test_jeju_crawler.py    # 제주 크롤러 테스트
 │   ├── test_dashboard.py       # 대시보드 테스트
@@ -417,6 +424,44 @@ power-demand-forecast/
 
 ---
 
+## v4.0.7 버그 수정 (2025-12-19)
+
+| 버그 | 원인 | 해결 |
+|------|------|------|
+| **SMP 0.0원 표시** | EPSIS 데이터에서 `smp_jeju=0.0` | `smp_mainland`로 폴백 |
+| **예비율 911% 표시** | `supply_reserve` (MW) 사용 | `reserve_rate` (%) 필드 사용 |
+| **오후 1시 차트 스파이크** | Sine vs Piecewise Linear 모델 충돌 | `get_load_pattern()` 단일 함수로 통일 |
+| **Streamlit 경고** | `use_container_width` 지원 중단 | `width="stretch"` 로 교체 |
+
+### 주요 코드 변경
+
+**단일 부하 패턴 함수 (`src/dashboard/app_v4.py`)**:
+```python
+def get_load_pattern(hour: int) -> float:
+    """제주 전력 수요 일간 패턴 - 단일 함수로 통일"""
+    if 6 <= hour <= 9:
+        return 0.9 + 0.1 * (hour - 6) / 3  # 아침 증가
+    elif 9 <= hour <= 14:
+        return 1.0 - 0.15 * (hour - 9) / 5  # 낮 감소 (태양광)
+    elif 14 <= hour <= 20:
+        return 0.85 + 0.25 * (hour - 14) / 6  # 저녁 피크
+    elif 20 <= hour <= 23:
+        return 1.1 - 0.2 * (hour - 20) / 3  # 야간 감소
+    else:
+        return 0.85  # 심야
+```
+
+**SMP 제로값 처리**:
+```python
+# smp_jeju가 0이면 smp_mainland로 대체
+smp_df['smp_jeju'] = smp_df.apply(
+    lambda row: row['smp_mainland'] if row['smp_jeju'] == 0 else row['smp_jeju'],
+    axis=1
+)
+```
+
+---
+
 ## 테스트
 
 ```bash
@@ -431,7 +476,7 @@ pytest tests/test_anomaly_detection.py -v
 pytest tests/ --cov=src --cov-report=html
 ```
 
-**테스트 현황**: ✅ 1436 passed, 3 skipped
+**테스트 현황**: ✅ 1564 passed, 3 skipped
 
 ---
 
@@ -565,4 +610,4 @@ MIT License
 
 ---
 
-*Last Updated: 2025-12-19 | v4.0.2*
+*Last Updated: 2025-12-19 | v4.0.7*
