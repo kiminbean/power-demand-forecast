@@ -998,6 +998,22 @@ def load_jeju_reserve_data() -> pd.DataFrame:
     return pd.DataFrame()
 
 
+@st.cache_data(ttl=3600)
+def load_jeju_forecast_data() -> pd.DataFrame:
+    """제주 예측수요 데이터 로드"""
+    try:
+        forecast_file = JEJU_DATA_PATH / "예측수요.csv"
+        if forecast_file.exists():
+            df = pd.read_csv(forecast_file, encoding='cp949')
+            df.columns = ['date'] + [f'h{i}' for i in range(1, 25)]
+            df['date'] = pd.to_datetime(df['date'])
+            return df
+    except Exception as e:
+        st.warning(f"예측 데이터 로드 실패: {e}")
+
+    return pd.DataFrame()
+
+
 # ============================================================================
 # 데이터 처리 함수
 # ============================================================================
@@ -1213,7 +1229,8 @@ def get_current_power_status() -> Dict:
     if realtime_data:
         demand = realtime_data.get('current_demand', 800)
         total_supply = realtime_data.get('supply_capacity', demand * 1.15)
-        reserve_rate = realtime_data.get('supply_reserve', 15.0)
+        # reserve_rate 사용 (supply_reserve는 MW 값이므로 사용하지 않음)
+        reserve_rate = realtime_data.get('reserve_rate', 15.0)
         operation_reserve = realtime_data.get('operation_reserve', 0)
 
         # 재생에너지 비율 추정 (실시간 데이터에서 가져오거나 추정)
@@ -1702,28 +1719,56 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
 
 
 def create_realtime_power_chart() -> go.Figure:
-    """제주 실시간 전력수급 현황 차트 (과거 12시간 + 미래 12시간 예측)"""
+    """제주 실시간 전력수급 현황 차트 (과거 12시간 + 미래 12시간 예측) - KPX 실시간 데이터 기반"""
     now = datetime.now()
 
-    # 과거 12시간 (실측 데이터) - 현재 시점 포함
+    # KPX 실시간 데이터 (현재값) - 가장 중요한 데이터 소스
+    realtime_data = fetch_jeju_realtime()
+    current_demand = realtime_data.get('current_demand', 650) if realtime_data else 650
+    current_supply = realtime_data.get('supply_capacity', 1200) if realtime_data else 1200
+    data_source = "KPX 실시간" if realtime_data else "시뮬레이션"
+
+    # 시간 범위 생성
     past_hours = pd.date_range(end=now, periods=24, freq='30min')
-    # 미래 12시간 (예측 데이터) - 현재 시점부터 시작 (연결을 위해)
     future_hours = pd.date_range(start=now, periods=25, freq='30min')
 
-    base_demand = 750
-
-    # ===== 과거 실측 데이터 =====
+    # ===== 과거 실측 데이터 (KPX 실시간 값 기반 일간 패턴 적용) =====
     actual_demand = []
     actual_supply = []
 
+    # 현재 시간의 일간 패턴 계수 계산
+    current_hour = now.hour
+    current_pattern = 1 + 0.25 * np.sin(np.pi * (current_hour - 6) / 12) if 6 <= current_hour <= 22 else 0.85
+
+    # 기준 수요 (현재 실시간 값에서 패턴 제거)
+    base_demand = current_demand / current_pattern if current_pattern > 0 else current_demand
+    base_supply = current_supply / current_pattern if current_pattern > 0 else current_supply
+
     for h in past_hours:
         hour = h.hour
-        daily_pattern = 1 + 0.3 * np.sin(np.pi * (hour - 6) / 12) if 6 <= hour <= 22 else 0.85
-        noise = np.random.uniform(-0.03, 0.03)
-        demand = base_demand * daily_pattern * (1 + noise)
-        supply = demand * (1.12 + np.random.uniform(0, 0.08))
+        # 제주 전력 수요 일간 패턴 (아침/저녁 피크, 낮 태양광으로 수요 감소)
+        if 6 <= hour <= 9:
+            pattern = 0.9 + 0.1 * (hour - 6) / 3  # 아침 증가
+        elif 9 <= hour <= 14:
+            pattern = 1.0 - 0.15 * (hour - 9) / 5  # 낮 감소 (태양광)
+        elif 14 <= hour <= 20:
+            pattern = 0.85 + 0.25 * (hour - 14) / 6  # 저녁 피크
+        elif 20 <= hour <= 23:
+            pattern = 1.1 - 0.2 * (hour - 20) / 3  # 야간 감소
+        else:
+            pattern = 0.85  # 심야
+
+        # 약간의 변동성 추가
+        noise = np.random.uniform(-0.02, 0.02)
+        demand = base_demand * pattern * (1 + noise)
+        supply = base_supply * pattern * (1 + noise * 0.5)
+
         actual_demand.append(demand)
         actual_supply.append(supply)
+
+    # 마지막 값을 현재 실시간 값으로 보정
+    actual_demand[-1] = current_demand
+    actual_supply[-1] = current_supply
 
     # ===== 미래 예측 데이터 =====
     forecast_demand = []
@@ -1731,25 +1776,31 @@ def create_realtime_power_chart() -> go.Figure:
     forecast_lower = []
     forecast_supply = []
 
-    # 마지막 실측값에서 시작 (연결점)
-    last_actual = actual_demand[-1]
-    last_supply = actual_supply[-1]
-
     for i, h in enumerate(future_hours):
         hour = h.hour
-        daily_pattern = 1 + 0.3 * np.sin(np.pi * (hour - 6) / 12) if 6 <= hour <= 22 else 0.85
 
         if i == 0:
-            # 첫 번째 점은 실측값과 동일하게 (연결)
-            demand = last_actual
-            supply = last_supply
+            # 첫 번째 점은 현재 실측값 (연결)
+            demand = current_demand
+            supply = current_supply
             uncertainty = 0
         else:
-            # 예측은 노이즈 없이 패턴만
-            demand = base_demand * daily_pattern
-            supply = demand * 1.15
+            # 일간 패턴 적용
+            if 6 <= hour <= 9:
+                pattern = 0.9 + 0.1 * (hour - 6) / 3
+            elif 9 <= hour <= 14:
+                pattern = 1.0 - 0.15 * (hour - 9) / 5
+            elif 14 <= hour <= 20:
+                pattern = 0.85 + 0.25 * (hour - 14) / 6
+            elif 20 <= hour <= 23:
+                pattern = 1.1 - 0.2 * (hour - 20) / 3
+            else:
+                pattern = 0.85
+
+            demand = base_demand * pattern
+            supply = base_supply * pattern
             # 시간이 지날수록 불확실성 증가
-            uncertainty = 0.03 + (i * 0.005)
+            uncertainty = 0.02 + (i * 0.003)
 
         upper = demand * (1 + uncertainty)
         lower = demand * (1 - uncertainty)
