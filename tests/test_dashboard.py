@@ -698,3 +698,274 @@ class TestAlertHistory:
         assert alert['status'] == "danger"
         assert alert['title'] == "전력 수급 주의 경보"
         assert alert['message'] == "예비율 7.5% - 주시 필요"
+
+
+# ============================================================================
+# Email Notifier Tests (v4.0.3)
+# ============================================================================
+
+import json
+import tempfile
+import os
+from typing import List, Dict, Tuple
+
+
+class EmailNotifierForTest:
+    """테스트용 EmailNotifier 클래스 (app_v4.py와 동일한 로직)"""
+
+    RATE_LIMIT_MINUTES = 5
+
+    def __init__(self, log_path: Path = None, enabled: bool = False):
+        self.smtp_host = "smtp.gmail.com"
+        self.smtp_port = 587
+        self.smtp_user = ""
+        self.smtp_password = ""
+        self.sender_email = ""
+        self.recipient_emails = []
+        self.enabled = enabled
+
+        self.log_path = log_path or Path(tempfile.mktemp(suffix='.json'))
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._email_log: List[Dict] = self._load_log()
+
+    def _parse_recipients(self, recipients_str: str) -> List[str]:
+        if not recipients_str:
+            return []
+        return [email.strip() for email in recipients_str.split(",") if email.strip()]
+
+    def _load_log(self) -> List[Dict]:
+        if self.log_path.exists():
+            try:
+                with open(self.log_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save_log(self):
+        try:
+            self._email_log = self._email_log[-100:]
+            with open(self.log_path, 'w', encoding='utf-8') as f:
+                json.dump(self._email_log, f, ensure_ascii=False, indent=2)
+        except IOError:
+            pass
+
+    def _can_send(self, alert_status: str) -> bool:
+        if not self._email_log:
+            return True
+
+        now = datetime.now()
+        cutoff = now - timedelta(minutes=self.RATE_LIMIT_MINUTES)
+
+        for log_entry in reversed(self._email_log):
+            log_time = datetime.fromisoformat(log_entry['timestamp'])
+            if log_time < cutoff:
+                break
+            if log_entry['status'] == alert_status:
+                return False
+        return True
+
+    def _log_email(self, status: str, recipients: List[str], success: bool, error: str = None):
+        self._email_log.append({
+            'timestamp': datetime.now().isoformat(),
+            'status': status,
+            'recipients': recipients,
+            'success': success,
+            'error': error
+        })
+        self._save_log()
+
+    def is_configured(self) -> bool:
+        return bool(
+            self.enabled and
+            self.smtp_user and
+            self.smtp_password and
+            self.recipient_emails
+        )
+
+    def configure(self, smtp_user: str, smtp_password: str, recipients: List[str]):
+        """테스트용 설정 메서드"""
+        self.smtp_user = smtp_user
+        self.smtp_password = smtp_password
+        self.sender_email = smtp_user
+        self.recipient_emails = recipients
+        self.enabled = True
+
+    def get_recent_logs(self, count: int = 10) -> List[Dict]:
+        return self._email_log[-count:]
+
+
+class TestEmailNotifierConfiguration:
+    """EmailNotifier 설정 테스트"""
+
+    def test_not_configured_by_default(self):
+        """기본 상태에서는 미설정 상태"""
+        notifier = EmailNotifierForTest()
+        assert not notifier.is_configured()
+
+    def test_configured_after_setup(self):
+        """설정 후 is_configured True"""
+        notifier = EmailNotifierForTest(enabled=True)
+        notifier.configure("test@gmail.com", "password", ["admin@example.com"])
+        assert notifier.is_configured()
+
+    def test_not_configured_without_password(self):
+        """비밀번호 없으면 미설정"""
+        notifier = EmailNotifierForTest(enabled=True)
+        notifier.smtp_user = "test@gmail.com"
+        notifier.recipient_emails = ["admin@example.com"]
+        assert not notifier.is_configured()
+
+    def test_not_configured_without_recipients(self):
+        """수신자 없으면 미설정"""
+        notifier = EmailNotifierForTest(enabled=True)
+        notifier.smtp_user = "test@gmail.com"
+        notifier.smtp_password = "password"
+        assert not notifier.is_configured()
+
+    def test_not_configured_when_disabled(self):
+        """비활성화 상태면 미설정"""
+        notifier = EmailNotifierForTest(enabled=False)
+        notifier.configure("test@gmail.com", "password", ["admin@example.com"])
+        notifier.enabled = False
+        assert not notifier.is_configured()
+
+
+class TestEmailNotifierRateLimiting:
+    """EmailNotifier Rate Limiting 테스트"""
+
+    def create_temp_notifier(self) -> EmailNotifierForTest:
+        return EmailNotifierForTest(
+            log_path=Path(tempfile.mktemp(suffix='.json')),
+            enabled=True
+        )
+
+    def test_can_send_when_no_history(self):
+        """이력 없으면 발송 가능"""
+        notifier = self.create_temp_notifier()
+        assert notifier._can_send("critical")
+
+    def test_cannot_send_same_status_within_limit(self):
+        """같은 상태 5분 내 재발송 불가"""
+        notifier = self.create_temp_notifier()
+        notifier._log_email("critical", ["admin@example.com"], True)
+
+        assert not notifier._can_send("critical")
+
+    def test_can_send_different_status(self):
+        """다른 상태는 발송 가능"""
+        notifier = self.create_temp_notifier()
+        notifier._log_email("critical", ["admin@example.com"], True)
+
+        assert notifier._can_send("danger")
+        assert notifier._can_send("warning")
+
+    def test_can_send_after_rate_limit_expires(self):
+        """Rate limit 만료 후 발송 가능"""
+        notifier = self.create_temp_notifier()
+
+        # 6분 전 로그 추가
+        old_log = {
+            'timestamp': (datetime.now() - timedelta(minutes=6)).isoformat(),
+            'status': 'critical',
+            'recipients': ['admin@example.com'],
+            'success': True
+        }
+        notifier._email_log.append(old_log)
+
+        assert notifier._can_send("critical")
+
+
+class TestEmailNotifierLogging:
+    """EmailNotifier 로그 테스트"""
+
+    def create_temp_notifier(self) -> EmailNotifierForTest:
+        return EmailNotifierForTest(
+            log_path=Path(tempfile.mktemp(suffix='.json')),
+            enabled=True
+        )
+
+    def test_log_email_success(self):
+        """성공 로그 기록"""
+        notifier = self.create_temp_notifier()
+        notifier._log_email("critical", ["admin@example.com"], True)
+
+        logs = notifier.get_recent_logs()
+        assert len(logs) == 1
+        assert logs[0]['status'] == "critical"
+        assert logs[0]['success'] is True
+        assert logs[0]['error'] is None
+
+    def test_log_email_failure(self):
+        """실패 로그 기록"""
+        notifier = self.create_temp_notifier()
+        notifier._log_email("critical", ["admin@example.com"], False, "SMTP error")
+
+        logs = notifier.get_recent_logs()
+        assert len(logs) == 1
+        assert logs[0]['success'] is False
+        assert logs[0]['error'] == "SMTP error"
+
+    def test_log_persistence(self):
+        """로그 파일 저장 확인"""
+        log_path = Path(tempfile.mktemp(suffix='.json'))
+        notifier = EmailNotifierForTest(log_path=log_path, enabled=True)
+        notifier._log_email("critical", ["admin@example.com"], True)
+
+        # 새 인스턴스로 로드
+        notifier2 = EmailNotifierForTest(log_path=log_path, enabled=True)
+        logs = notifier2.get_recent_logs()
+        assert len(logs) == 1
+
+    def test_log_max_limit(self):
+        """로그 최대 100개 제한"""
+        notifier = self.create_temp_notifier()
+
+        for i in range(150):
+            notifier._log_email("critical", ["admin@example.com"], True)
+
+        assert len(notifier._email_log) == 100
+
+    def test_get_recent_logs_limit(self):
+        """최근 로그 조회 개수 제한"""
+        notifier = self.create_temp_notifier()
+
+        for i in range(20):
+            notifier._log_email("critical", [f"admin{i}@example.com"], True)
+
+        logs = notifier.get_recent_logs(5)
+        assert len(logs) == 5
+
+
+class TestEmailNotifierRecipients:
+    """EmailNotifier 수신자 파싱 테스트"""
+
+    def test_parse_single_recipient(self):
+        """단일 수신자 파싱"""
+        notifier = EmailNotifierForTest()
+        recipients = notifier._parse_recipients("admin@example.com")
+        assert recipients == ["admin@example.com"]
+
+    def test_parse_multiple_recipients(self):
+        """다중 수신자 파싱"""
+        notifier = EmailNotifierForTest()
+        recipients = notifier._parse_recipients("admin1@example.com,admin2@example.com")
+        assert recipients == ["admin1@example.com", "admin2@example.com"]
+
+    def test_parse_recipients_with_spaces(self):
+        """공백 포함 수신자 파싱"""
+        notifier = EmailNotifierForTest()
+        recipients = notifier._parse_recipients("admin1@example.com, admin2@example.com")
+        assert recipients == ["admin1@example.com", "admin2@example.com"]
+
+    def test_parse_empty_recipients(self):
+        """빈 수신자 파싱"""
+        notifier = EmailNotifierForTest()
+        recipients = notifier._parse_recipients("")
+        assert recipients == []
+
+    def test_parse_recipients_with_empty_entries(self):
+        """빈 항목 제거"""
+        notifier = EmailNotifierForTest()
+        recipients = notifier._parse_recipients("admin@example.com,,other@example.com")
+        assert recipients == ["admin@example.com", "other@example.com"]

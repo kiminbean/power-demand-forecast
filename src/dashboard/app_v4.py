@@ -166,6 +166,259 @@ def get_alert_history() -> AlertHistory:
 
 
 # ============================================================================
+# Email Notification System (v4.0.3)
+# ============================================================================
+
+import smtplib
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv(PROJECT_ROOT / ".env")
+
+EMAIL_LOG_PATH = PROJECT_ROOT / "data" / "alerts" / "email_log.json"
+
+
+class EmailNotifier:
+    """이메일 알림 발송 클래스 (위험 경보용)"""
+
+    # Rate limiting: 같은 상태의 이메일은 5분 내 재발송 방지
+    RATE_LIMIT_MINUTES = 5
+
+    def __init__(self):
+        # SMTP 설정 로드
+        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user = os.getenv("SMTP_USER", "")
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
+        self.sender_email = os.getenv("ALERT_SENDER_EMAIL", self.smtp_user)
+        self.recipient_emails = self._parse_recipients(os.getenv("ALERT_RECIPIENT_EMAILS", ""))
+        self.enabled = os.getenv("EMAIL_ALERTS_ENABLED", "false").lower() == "true"
+
+        # 이메일 발송 로그 (rate limiting용)
+        self.log_path = EMAIL_LOG_PATH
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._email_log: List[Dict] = self._load_log()
+
+    def _parse_recipients(self, recipients_str: str) -> List[str]:
+        """콤마로 구분된 이메일 주소 파싱"""
+        if not recipients_str:
+            return []
+        return [email.strip() for email in recipients_str.split(",") if email.strip()]
+
+    def _load_log(self) -> List[Dict]:
+        """이메일 발송 로그 로드"""
+        if self.log_path.exists():
+            try:
+                with open(self.log_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
+        return []
+
+    def _save_log(self):
+        """이메일 발송 로그 저장"""
+        try:
+            # 최근 100개만 유지
+            self._email_log = self._email_log[-100:]
+            with open(self.log_path, 'w', encoding='utf-8') as f:
+                json.dump(self._email_log, f, ensure_ascii=False, indent=2)
+        except IOError as e:
+            print(f"Email log save failed: {e}")
+
+    def _can_send(self, alert_status: str) -> bool:
+        """Rate limiting 체크: 같은 status의 이메일이 최근 N분 내 발송되었는지 확인"""
+        if not self._email_log:
+            return True
+
+        now = datetime.now()
+        cutoff = now - timedelta(minutes=self.RATE_LIMIT_MINUTES)
+
+        for log_entry in reversed(self._email_log):
+            log_time = datetime.fromisoformat(log_entry['timestamp'])
+            if log_time < cutoff:
+                break
+            if log_entry['status'] == alert_status:
+                return False
+        return True
+
+    def _log_email(self, status: str, recipients: List[str], success: bool, error: str = None):
+        """이메일 발송 로그 기록"""
+        self._email_log.append({
+            'timestamp': datetime.now().isoformat(),
+            'status': status,
+            'recipients': recipients,
+            'success': success,
+            'error': error
+        })
+        self._save_log()
+
+    def is_configured(self) -> bool:
+        """이메일 설정이 완료되었는지 확인"""
+        return bool(
+            self.enabled and
+            self.smtp_user and
+            self.smtp_password and
+            self.recipient_emails
+        )
+
+    def send_critical_alert(
+        self,
+        reserve_rate: float,
+        status: str,
+        title: str,
+        message: str,
+        power_data: Dict = None
+    ) -> Tuple[bool, str]:
+        """
+        위험 경보 이메일 발송
+
+        Args:
+            reserve_rate: 현재 예비율 (%)
+            status: 경보 상태 (critical, danger, warning)
+            title: 경보 제목
+            message: 경보 메시지
+            power_data: 추가 전력 데이터 (선택)
+
+        Returns:
+            (성공 여부, 메시지)
+        """
+        # 설정 확인
+        if not self.is_configured():
+            return False, "Email notification not configured"
+
+        # Critical 경보만 이메일 발송 (옵션으로 danger도 포함 가능)
+        if status not in ["critical"]:
+            return False, f"Email only sent for critical alerts (current: {status})"
+
+        # Rate limiting 체크
+        if not self._can_send(status):
+            return False, f"Rate limited: {status} email sent within last {self.RATE_LIMIT_MINUTES} minutes"
+
+        # 이메일 내용 구성
+        subject = f"🚨 [제주 전력] {title} - 예비율 {reserve_rate:.1f}%"
+
+        # HTML 이메일 본문
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .alert-box {{
+                    background-color: #ff4444;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 10px 0;
+                }}
+                .info-table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+                .info-table th, .info-table td {{
+                    border: 1px solid #ddd;
+                    padding: 12px;
+                    text-align: left;
+                }}
+                .info-table th {{ background-color: #333; color: white; }}
+                .critical {{ color: #ff4444; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="alert-box">
+                <h1>🚨 {title}</h1>
+                <p style="font-size: 18px;">{message}</p>
+                <p style="font-size: 24px; font-weight: bold;">예비율: {reserve_rate:.1f}%</p>
+            </div>
+
+            <h2>전력 수급 현황</h2>
+            <table class="info-table">
+                <tr>
+                    <th>항목</th>
+                    <th>값</th>
+                </tr>
+                <tr>
+                    <td>예비율</td>
+                    <td class="critical">{reserve_rate:.1f}%</td>
+                </tr>
+        """
+
+        if power_data:
+            html_body += f"""
+                <tr>
+                    <td>현재 수요</td>
+                    <td>{power_data.get('demand', 'N/A')} MW</td>
+                </tr>
+                <tr>
+                    <td>공급 용량</td>
+                    <td>{power_data.get('supply', 'N/A')} MW</td>
+                </tr>
+                <tr>
+                    <td>예비력</td>
+                    <td>{power_data.get('reserve', 'N/A')} MW</td>
+                </tr>
+            """
+
+        html_body += f"""
+            </table>
+
+            <p style="margin-top: 20px; color: #666;">
+                발송 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
+                제주 전력 수급 모니터링 시스템
+            </p>
+        </body>
+        </html>
+        """
+
+        # 이메일 발송
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = self.sender_email
+            msg['To'] = ", ".join(self.recipient_emails)
+
+            # HTML 본문 추가
+            msg.attach(MIMEText(html_body, 'html'))
+
+            # SMTP 연결 및 발송
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(
+                    self.sender_email,
+                    self.recipient_emails,
+                    msg.as_string()
+                )
+
+            # 성공 로그
+            self._log_email(status, self.recipient_emails, True)
+            return True, f"Email sent to {len(self.recipient_emails)} recipients"
+
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"SMTP authentication failed: {e}"
+            self._log_email(status, self.recipient_emails, False, error_msg)
+            return False, error_msg
+        except smtplib.SMTPException as e:
+            error_msg = f"SMTP error: {e}"
+            self._log_email(status, self.recipient_emails, False, error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Email send failed: {e}"
+            self._log_email(status, self.recipient_emails, False, error_msg)
+            return False, error_msg
+
+    def get_recent_logs(self, count: int = 10) -> List[Dict]:
+        """최근 이메일 발송 로그 조회"""
+        return self._email_log[-count:]
+
+
+# 전역 EmailNotifier 인스턴스
+@st.cache_resource
+def get_email_notifier() -> EmailNotifier:
+    """EmailNotifier 싱글톤 인스턴스 반환"""
+    return EmailNotifier()
+
+
+# ============================================================================
 # 페이지 설정
 # ============================================================================
 
@@ -1532,6 +1785,20 @@ def main():
             title=alert_title,
             message=alert_msg
         )
+
+        # 위험(critical) 경보일 때 이메일 발송
+        if reserve_status == "critical":
+            email_notifier = get_email_notifier()
+            if email_notifier.is_configured():
+                success, email_msg = email_notifier.send_critical_alert(
+                    reserve_rate=reserve_rate,
+                    status=reserve_status,
+                    title=alert_title,
+                    message=alert_msg,
+                    power_data=power_status
+                )
+                if success:
+                    st.toast(f"📧 이메일 발송 완료", icon="✅")
 
     # 알림 배너 표시
     if show_alert:

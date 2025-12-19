@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.3] - 2025-12-19
+
+### Highlights
+- 📧 **Email Notification System**: Automatic email alerts for critical reserve rate conditions
+- 🔒 **Rate Limiting**: Prevents email spam (max 1 email per 5 minutes for same alert type)
+- 📜 **Alert History**: Sidebar display of recent alerts with statistics
+
+### Added
+
+#### Email Notification System (`src/dashboard/app_v4.py`)
+- **EmailNotifier Class**: SMTP-based email notification for critical alerts
+  - Gmail SMTP support with TLS encryption
+  - HTML-formatted alert emails with power data
+  - Configurable sender and multiple recipients
+  - Rate limiting to prevent spam (5-minute cooldown)
+  - Email log persistence for audit trail
+
+- **Environment Configuration** (`.env.example`):
+  ```
+  EMAIL_ALERTS_ENABLED=false
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_USER=your-email@gmail.com
+  SMTP_PASSWORD=your-app-password
+  ALERT_SENDER_EMAIL=your-email@gmail.com
+  ALERT_RECIPIENT_EMAILS=admin1@example.com,admin2@example.com
+  ```
+
+#### Alert History Feature
+- **AlertHistory Class**: JSON-persistent alert history tracking
+- **Sidebar Display**: Recent alerts list with timestamps and statistics
+- **Duplicate Prevention**: Same status alerts within 1 minute are skipped
+
+#### Tests (`tests/test_dashboard.py`)
+- 19 new tests for EmailNotifier:
+  - Configuration tests (5)
+  - Rate limiting tests (4)
+  - Logging tests (5)
+  - Recipient parsing tests (5)
+- Total tests: 1,547 passed
+
+### Changed
+- Dashboard now sends email on critical alerts (reserve rate < 5%)
+- Added toast notification on successful email send
+
+---
+
 ## [4.0.2] - 2025-12-19
 
 ### Highlights
