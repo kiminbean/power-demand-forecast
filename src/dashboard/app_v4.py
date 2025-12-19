@@ -1701,6 +1701,230 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
     return fig
 
 
+def create_realtime_power_chart() -> go.Figure:
+    """제주 실시간 전력수급 현황 차트 (과거 12시간 + 미래 12시간 예측)"""
+    now = datetime.now()
+
+    # 과거 12시간 (실측 데이터) - 현재 시점 포함
+    past_hours = pd.date_range(end=now, periods=24, freq='30min')
+    # 미래 12시간 (예측 데이터) - 현재 시점부터 시작 (연결을 위해)
+    future_hours = pd.date_range(start=now, periods=25, freq='30min')
+
+    base_demand = 750
+
+    # ===== 과거 실측 데이터 =====
+    actual_demand = []
+    actual_supply = []
+
+    for h in past_hours:
+        hour = h.hour
+        daily_pattern = 1 + 0.3 * np.sin(np.pi * (hour - 6) / 12) if 6 <= hour <= 22 else 0.85
+        noise = np.random.uniform(-0.03, 0.03)
+        demand = base_demand * daily_pattern * (1 + noise)
+        supply = demand * (1.12 + np.random.uniform(0, 0.08))
+        actual_demand.append(demand)
+        actual_supply.append(supply)
+
+    # ===== 미래 예측 데이터 =====
+    forecast_demand = []
+    forecast_upper = []
+    forecast_lower = []
+    forecast_supply = []
+
+    # 마지막 실측값에서 시작 (연결점)
+    last_actual = actual_demand[-1]
+    last_supply = actual_supply[-1]
+
+    for i, h in enumerate(future_hours):
+        hour = h.hour
+        daily_pattern = 1 + 0.3 * np.sin(np.pi * (hour - 6) / 12) if 6 <= hour <= 22 else 0.85
+
+        if i == 0:
+            # 첫 번째 점은 실측값과 동일하게 (연결)
+            demand = last_actual
+            supply = last_supply
+            uncertainty = 0
+        else:
+            # 예측은 노이즈 없이 패턴만
+            demand = base_demand * daily_pattern
+            supply = demand * 1.15
+            # 시간이 지날수록 불확실성 증가
+            uncertainty = 0.03 + (i * 0.005)
+
+        upper = demand * (1 + uncertainty)
+        lower = demand * (1 - uncertainty)
+
+        forecast_demand.append(demand)
+        forecast_upper.append(upper)
+        forecast_lower.append(lower)
+        forecast_supply.append(supply)
+
+    fig = go.Figure()
+
+    # ===== 예측 신뢰구간 (미래 영역만) =====
+    fig.add_trace(go.Scatter(
+        x=list(future_hours) + list(future_hours)[::-1],
+        y=forecast_upper + forecast_lower[::-1],
+        fill='toself',
+        fillcolor='rgba(251, 191, 36, 0.2)',  # 노란색 (예측 구간)
+        line=dict(color='rgba(0,0,0,0)'),
+        name='예측 신뢰구간',
+        showlegend=True,
+        hoverinfo='skip'
+    ))
+
+    # ===== 과거 공급능력 =====
+    fig.add_trace(go.Scatter(
+        x=past_hours,
+        y=actual_supply,
+        mode='lines',
+        name='공급능력 (실측)',
+        line=dict(color='#10b981', width=2),
+        hovertemplate='%{x}<br>공급능력: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 과거 실측 수요 =====
+    fig.add_trace(go.Scatter(
+        x=past_hours,
+        y=actual_demand,
+        mode='lines',
+        name='전력수요 (실측)',
+        line=dict(color='#3b82f6', width=3),
+        hovertemplate='%{x}<br>실측 수요: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 미래 예측 공급능력 =====
+    fig.add_trace(go.Scatter(
+        x=future_hours,
+        y=forecast_supply,
+        mode='lines',
+        name='공급능력 (예측)',
+        line=dict(color='#10b981', width=2, dash='dot'),
+        hovertemplate='%{x}<br>예측 공급: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 미래 예측 수요 =====
+    fig.add_trace(go.Scatter(
+        x=future_hours,
+        y=forecast_demand,
+        mode='lines',
+        name='전력수요 (예측)',
+        line=dict(color='#fbbf24', width=3),
+        hovertemplate='%{x}<br>예측 수요: %{y:.1f} MW<extra></extra>'
+    ))
+
+    # ===== 현재 시점 표시 (중앙) =====
+    # 현재 시점 수직선 (shape으로 직접 추가)
+    current_demand = actual_demand[-1]
+    y_min = min(min(actual_demand), min(forecast_lower)) * 0.95
+    y_max = max(max(actual_supply), max(forecast_upper)) * 1.05
+
+    fig.add_shape(
+        type="line",
+        x0=now, x1=now,
+        y0=y_min, y1=y_max,
+        line=dict(color='#ef4444', width=2, dash='dash'),
+    )
+
+    # 현재 시점 라벨
+    fig.add_annotation(
+        x=now,
+        y=y_max,
+        text="현재",
+        showarrow=False,
+        font=dict(color='#ef4444', size=12),
+        yshift=10
+    )
+
+    # 현재 값 annotation
+    fig.add_annotation(
+        x=now,
+        y=current_demand,
+        text=f"<b>{current_demand:.0f}</b> MW",
+        showarrow=True,
+        arrowhead=2,
+        arrowcolor='#ef4444',
+        font=dict(color='white', size=12),
+        bgcolor='rgba(239, 68, 68, 0.8)',
+        bordercolor='#ef4444'
+    )
+
+    fig.update_layout(
+        title=dict(
+            text='제주 전력수급 현황 - 실측 vs 예측 (MW)',
+            font=dict(size=18, color='white'),
+            x=0.5
+        ),
+        xaxis=dict(
+            title='',
+            showgrid=True,
+            gridcolor='rgba(148, 163, 184, 0.1)',
+            tickformat='%m/%d %H:%M',
+            tickfont=dict(color='#94a3b8'),
+        ),
+        yaxis=dict(
+            title='전력 (MW)',
+            showgrid=True,
+            gridcolor='rgba(148, 163, 184, 0.1)',
+            tickfont=dict(color='#94a3b8'),
+            titlefont=dict(color='#94a3b8'),
+        ),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='left',
+            x=0,
+            font=dict(color='white', size=10),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=60, r=30, t=80, b=50),
+        height=450,
+        hovermode='x unified'
+    )
+
+    return fig
+
+
+def create_gauge_chart(value: float, title: str, max_val: float = 100,
+                       color: str = '#3b82f6', suffix: str = '') -> go.Figure:
+    """게이지 차트 생성"""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        number={'suffix': suffix, 'font': {'size': 36, 'color': color}},
+        title={'text': title, 'font': {'size': 14, 'color': '#94a3b8'}},
+        gauge={
+            'axis': {'range': [0, max_val], 'tickfont': {'color': '#64748b'}},
+            'bar': {'color': color},
+            'bgcolor': 'rgba(30, 41, 59, 0.5)',
+            'borderwidth': 0,
+            'steps': [
+                {'range': [0, max_val * 0.5], 'color': 'rgba(30, 41, 59, 0.3)'},
+                {'range': [max_val * 0.5, max_val * 0.8], 'color': 'rgba(30, 41, 59, 0.2)'},
+            ],
+            'threshold': {
+                'line': {'color': '#ef4444', 'width': 2},
+                'thickness': 0.8,
+                'value': max_val * 0.9
+            }
+        }
+    ))
+
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=30, r=30, t=50, b=20),
+        height=200,
+    )
+
+    return fig
+
+
 def create_supply_donut(power_status: Dict) -> go.Figure:
     """전력 공급 구성 도넛 차트"""
     supply = power_status['supply']
@@ -2111,92 +2335,51 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 탭 생성
-    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ 지도", "📊 SMP 예측", "⚡ 발전 현황", "🔍 분석"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 실시간 현황", "💰 SMP 예측", "⚡ 발전 현황", "🔍 분석"])
 
     with tab1:
-        # 지도 탭
-        col_map, col_info = st.columns([3, 1])
+        # 메인 대시보드 탭 (GE Inertia 스타일)
+        col_chart, col_right = st.columns([3, 1])
 
-        with col_map:
-            st.markdown('<div class="map-container">', unsafe_allow_html=True)
-
-            # 지도 옵션
-            show_heatmap = st.checkbox("발전량 히트맵 표시", value=False)
-
-            # 지도 생성 및 표시
-            jeju_map = create_jeju_map(plants_df, show_heatmap)
-            st_folium(jeju_map, width=None, height=500, returned_objects=[])
-
+        with col_chart:
+            # 실시간 전력수급 현황 차트 (메인)
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            fig = create_realtime_power_chart()
+            st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with col_info:
-            # 발전소 통계
-            st.markdown("""
-            <div class="info-card">
-                <div class="info-card-title">발전소 현황</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with col_right:
+            # 상단: 게이지 차트들
+            gauge_col1, gauge_col2 = st.columns(2)
 
-            solar_plants = plants_df[plants_df['type'] == 'solar']
-            wind_plants = plants_df[plants_df['type'] == 'wind']
-            ess_plants = plants_df[plants_df['type'] == 'ess']
+            with gauge_col1:
+                # 현재 수요 게이지
+                demand_gauge = create_gauge_chart(
+                    value=power_status['demand'],
+                    title='현재 수요 (MW)',
+                    max_val=1200,
+                    color='#3b82f6',
+                    suffix=' MW'
+                )
+                st.plotly_chart(demand_gauge, use_container_width=True)
 
-            st.markdown(f"""
-            <div class="info-card" style="padding: 1rem;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <span style="width: 30px; height: 30px; background: #fbbf24; border-radius: 50%;
-                                display: flex; align-items: center; justify-content: center;">☀️</span>
-                    <div>
-                        <div style="color: #94a3b8; font-size: 0.8rem;">태양광</div>
-                        <div style="color: white; font-weight: bold;">{len(solar_plants)}개소 | {solar_plants['capacity'].sum():.0f} MW</div>
-                        <div style="color: #10b981; font-size: 0.85rem;">발전량: {solar_plants['generation'].sum():.1f} MW</div>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <span style="width: 30px; height: 30px; background: #3b82f6; border-radius: 50%;
-                                display: flex; align-items: center; justify-content: center;">💨</span>
-                    <div>
-                        <div style="color: #94a3b8; font-size: 0.8rem;">풍력</div>
-                        <div style="color: white; font-weight: bold;">{len(wind_plants)}개소 | {wind_plants['capacity'].sum():.0f} MW</div>
-                        <div style="color: #10b981; font-size: 0.85rem;">발전량: {wind_plants['generation'].sum():.1f} MW</div>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="width: 30px; height: 30px; background: #8b5cf6; border-radius: 50%;
-                                display: flex; align-items: center; justify-content: center;">🔋</span>
-                    <div>
-                        <div style="color: #94a3b8; font-size: 0.8rem;">ESS</div>
-                        <div style="color: white; font-weight: bold;">{len(ess_plants)}개소 | {ess_plants['capacity'].sum():.0f} MW</div>
-                        <div style="color: #10b981; font-size: 0.85rem;">충방전: {ess_plants['generation'].sum():.1f} MW</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            with gauge_col2:
+                # 예비율 게이지
+                reserve_color = '#10b981' if power_status['reserve_rate'] >= 15 else '#f59e0b' if power_status['reserve_rate'] >= 10 else '#ef4444'
+                reserve_gauge = create_gauge_chart(
+                    value=power_status['reserve_rate'],
+                    title='예비율 (%)',
+                    max_val=30,
+                    color=reserve_color,
+                    suffix='%'
+                )
+                st.plotly_chart(reserve_gauge, use_container_width=True)
 
-            # 기상 정보
-            st.markdown(f"""
-            <div class="info-card" style="padding: 1rem;">
-                <div class="info-card-title">기상 정보</div>
-                <div style="margin-top: 10px;">
-                    <div style="display: flex; justify-content: space-between; margin: 8px 0; color: white;">
-                        <span style="color: #94a3b8;">일사량</span>
-                        <span>{weather['solar_radiation']:.0f} W/m²</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin: 8px 0; color: white;">
-                        <span style="color: #94a3b8;">풍향</span>
-                        <span>{weather['wind_direction']}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin: 8px 0; color: white;">
-                        <span style="color: #94a3b8;">운량</span>
-                        <span>{weather['cloud_cover']:.0f}%</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin: 8px 0; color: white;">
-                        <span style="color: #94a3b8;">습도</span>
-                        <span>{weather['humidity']:.0f}%</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # 하단: 제주도 지도
+            st.markdown('<div class="info-card-title" style="margin-top: 10px;">제주도 발전소 현황</div>', unsafe_allow_html=True)
+            show_heatmap = st.checkbox("히트맵", value=False, key="map_heatmap")
+            jeju_map = create_jeju_map(plants_df, show_heatmap)
+            st_folium(jeju_map, width=None, height=350, returned_objects=[])
 
     with tab2:
         # SMP 예측 탭
