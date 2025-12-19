@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2025-12-19
+
+### Highlights
+- 🔴 **KPX Realtime Integration**: Live power supply/demand data from 한국전력거래소
+- 🗺️ **Map Enhancement**: Power plant generation distributed based on actual KPX totals
+- 📊 **Updated Power Plants**: December 2025 data with latest Jeju installations
+
+### Added
+
+#### KPX Realtime Data Integration (`src/dashboard/app_v4.py`)
+- **Live data fetching** from KPX (https://www.kpx.or.kr) every 60 seconds
+- **Data priority system**:
+  1. KPX 실시간 (Primary) - Live power data
+  2. EPSIS 파일 (Secondary) - Historical file data
+  3. 시뮬레이션 (Fallback) - Simulated values
+- **Header status indicator** showing current data source:
+  - 🔴 KPX 실시간 연동
+  - 📊 EPSIS 데이터 연동
+  - ⚠️ 시뮬레이션 모드
+
+#### Power Plant Generation Display
+- **Realtime distribution**: Plant-level generation calculated from KPX total demand
+- **Proportional allocation**: Generation distributed by plant capacity ratio
+- **Type-based estimation**: Solar, wind, thermal, ESS with time-of-day factors
+
+#### Updated Power Plant Data (`data/jeju_plants/jeju_power_plants.json`)
+- **Wind**: 417.8 MW total (17 farms including 동복-북촌, 대정, 한동-평대)
+- **Solar**: 562.6 MW (1,620+ distributed sites)
+- **Thermal**: 598.8 MW (남제주 + LNG 복합)
+- **ESS**: 460 MWh (including new long-duration 260 MWh)
+- **HVDC**: 900 MW (3 submarine links)
+
+### Changed
+- `get_current_power_status()`: Now prioritizes KPX realtime data
+- `get_jeju_power_plants()`: Distributes generation based on actual demand
+- Dashboard header: Shows realtime data source status
+
+### Verified
+```
+KPX 제주 실시간 데이터 수집 완료: 724 MW (예비율: 66.0%)
+```
+
+---
+
 ## [4.0.0] - 2025-12-18
 
 ### Highlights
