@@ -106,6 +106,10 @@
 ![SMP Prediction](docs/screenshots/02_smp_prediction.png)
 *BiLSTM + Attention 모델 기반 24시간 SMP(계통한계가격) 예측 및 신뢰구간*
 
+### KPX 실시간 연동
+![KPX Realtime](docs/screenshots/04_kpx_realtime.png)
+*한국전력거래소(KPX) 실시간 전력수급 데이터 연동 - 현재수요, 예비율, 발전소별 출력*
+
 ### 시스템 아키텍처
 ![System Architecture](docs/screenshots/05_system_architecture.png)
 *전체 시스템 구성도 - 데이터 수집, 모델 학습, 예측, 대시보드*
