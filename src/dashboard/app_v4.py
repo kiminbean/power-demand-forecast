@@ -1732,13 +1732,27 @@ def create_realtime_power_chart() -> go.Figure:
     past_hours = pd.date_range(end=now, periods=24, freq='30min')
     future_hours = pd.date_range(start=now, periods=25, freq='30min')
 
+    # ===== 일간 패턴 함수 (단일 진실 공급원) =====
+    def get_load_pattern(hour: int) -> float:
+        """제주 전력 수요 일간 패턴 - 단일 함수로 통일"""
+        if 6 <= hour <= 9:
+            return 0.9 + 0.1 * (hour - 6) / 3  # 아침 증가
+        elif 9 <= hour <= 14:
+            return 1.0 - 0.15 * (hour - 9) / 5  # 낮 감소 (태양광)
+        elif 14 <= hour <= 20:
+            return 0.85 + 0.25 * (hour - 14) / 6  # 저녁 피크
+        elif 20 <= hour <= 23:
+            return 1.1 - 0.2 * (hour - 20) / 3  # 야간 감소
+        else:
+            return 0.85  # 심야
+
     # ===== 과거 실측 데이터 (KPX 실시간 값 기반 일간 패턴 적용) =====
     actual_demand = []
     actual_supply = []
 
-    # 현재 시간의 일간 패턴 계수 계산
+    # 현재 시간의 일간 패턴 계수 계산 (동일한 함수 사용)
     current_hour = now.hour
-    current_pattern = 1 + 0.25 * np.sin(np.pi * (current_hour - 6) / 12) if 6 <= current_hour <= 22 else 0.85
+    current_pattern = get_load_pattern(current_hour)
 
     # 기준 수요 (현재 실시간 값에서 패턴 제거)
     base_demand = current_demand / current_pattern if current_pattern > 0 else current_demand
@@ -1746,17 +1760,8 @@ def create_realtime_power_chart() -> go.Figure:
 
     for h in past_hours:
         hour = h.hour
-        # 제주 전력 수요 일간 패턴 (아침/저녁 피크, 낮 태양광으로 수요 감소)
-        if 6 <= hour <= 9:
-            pattern = 0.9 + 0.1 * (hour - 6) / 3  # 아침 증가
-        elif 9 <= hour <= 14:
-            pattern = 1.0 - 0.15 * (hour - 9) / 5  # 낮 감소 (태양광)
-        elif 14 <= hour <= 20:
-            pattern = 0.85 + 0.25 * (hour - 14) / 6  # 저녁 피크
-        elif 20 <= hour <= 23:
-            pattern = 1.1 - 0.2 * (hour - 20) / 3  # 야간 감소
-        else:
-            pattern = 0.85  # 심야
+        # 동일한 패턴 함수 사용
+        pattern = get_load_pattern(hour)
 
         # 약간의 변동성 추가
         noise = np.random.uniform(-0.02, 0.02)
@@ -1766,7 +1771,7 @@ def create_realtime_power_chart() -> go.Figure:
         actual_demand.append(demand)
         actual_supply.append(supply)
 
-    # 마지막 값을 현재 실시간 값으로 보정
+    # 마지막 값을 현재 실시간 값으로 보정 (패턴이 동일하므로 점프 최소화)
     actual_demand[-1] = current_demand
     actual_supply[-1] = current_supply
 
@@ -1785,17 +1790,8 @@ def create_realtime_power_chart() -> go.Figure:
             supply = current_supply
             uncertainty = 0
         else:
-            # 일간 패턴 적용
-            if 6 <= hour <= 9:
-                pattern = 0.9 + 0.1 * (hour - 6) / 3
-            elif 9 <= hour <= 14:
-                pattern = 1.0 - 0.15 * (hour - 9) / 5
-            elif 14 <= hour <= 20:
-                pattern = 0.85 + 0.25 * (hour - 14) / 6
-            elif 20 <= hour <= 23:
-                pattern = 1.1 - 0.2 * (hour - 20) / 3
-            else:
-                pattern = 0.85
+            # 동일한 패턴 함수 사용 (Single Source of Truth)
+            pattern = get_load_pattern(hour)
 
             demand = base_demand * pattern
             supply = base_supply * pattern
