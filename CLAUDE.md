@@ -71,23 +71,69 @@ If conversation is lost, read:
 
 ---
 
-## Korean Text Bug Workaround (Claude Code v2.0.72)
+## CRITICAL: UTF-8 Crash Prevention (Claude Code v2.0.72+)
 
-**CRITICAL**: Claude Code CLI has a UTF-8 byte boundary bug with Korean text in UI elements.
+**FATAL BUG**: Claude Code CLI crashes when Korean text appears in UI elements.
 
-**Workaround Rules**:
-1. **TodoWrite tool**: Use **English only** for todo items (content, activeForm)
-   - Bad: `"content": "모델 학습 완료"`
-   - Good: `"content": "Complete model training"`
+### Technical Cause
+```
+Rust panic: byte index N is not a char boundary; it is inside '한글' (bytes X..Y)
+```
+- Korean characters = 3 bytes in UTF-8
+- Rust slices by byte index, not character boundary
+- UI truncation cuts mid-character → **IMMEDIATE CRASH**
 
-2. **Status messages**: Avoid Korean in progress indicators
+### Real Crash Example (2024-12-18)
+```
+byte index 5 is not a char boundary; it is inside '화' (bytes 3..6) of `완화)`
+fatal runtime error: failed to initiate panic, error 5, aborting
+```
+- String: "완화)" = 완[0-2] + 화[3-5] + )[6]
+- Rust tried to slice at byte 5 (middle of '화') → PANIC
 
-3. **If crash occurs**: Clear todo cache:
-   ```bash
-   mv ~/.claude/todos/*.json ~/.claude/todos_backup/
+### Crash Triggers
+1. **TodoWrite content/activeForm** with Korean
+2. **Session history** containing Korean in API responses
+3. **Code output** with Korean that gets truncated in status bar
+4. **Error messages** with Korean in stack traces
+
+### MANDATORY RULES
+
+1. **TodoWrite tool - ENGLISH ONLY**
+   ```json
+   // ❌ CRASH: {"content": "모델 학습", "activeForm": "학습 중"}
+   // ✅ SAFE:  {"content": "Train model", "activeForm": "Training"}
    ```
 
-4. **Bug report**: https://github.com/anthropics/claude-code/issues
+2. **All status/progress messages**: English only
+
+3. **Avoid Korean in console output** that may appear in status bar
+
+### Recovery Commands
+
+```bash
+# 1. Quick recovery (move todo files)
+mkdir -p ~/.claude/todos_backup && mv ~/.claude/todos/*.json ~/.claude/todos_backup/
+
+# 2. Full cleanup (if crashes persist)
+rm -rf ~/.claude/todos/*.json
+rm -rf ~/.claude/todos_backup/
+
+# 3. Nuclear option (clear all session data)
+rm -rf ~/.claude/projects/-Users-ibkim-Ormi-1-power-demand-forecast/
+```
+
+### Preventive Checks
+
+```bash
+# Check for Korean in todo files
+grep -l '[가-힣]' ~/.claude/todos/*.json 2>/dev/null && echo "WARNING: Korean found!"
+
+# Check all claude files for Korean
+find ~/.claude -name "*.json" -exec grep -l '[가-힣]' {} \; 2>/dev/null
+```
+
+**Bug report**: https://github.com/anthropics/claude-code/issues
 
 ---
 

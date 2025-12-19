@@ -113,51 +113,86 @@ def load_smp_data(data_path: str) -> pd.DataFrame:
     return df
 
 
-def create_features(df: pd.DataFrame) -> np.ndarray:
+def create_features(df: pd.DataFrame, use_simple: bool = False) -> np.ndarray:
     """피처 엔지니어링
+
+    SMP 예측을 위한 피처를 생성합니다.
+    use_simple=True: 안정적인 기본 피처만 사용 (12개)
+    use_simple=False: 확장 피처 사용 (시계열 성능 개선)
 
     Args:
         df: SMP DataFrame
+        use_simple: 단순 피처 모드 사용 여부
 
     Returns:
         피처 배열 (n_samples, n_features)
     """
     features = []
+    smp = df['smp_mainland'].values
 
-    # 기본 SMP 피처
-    features.append(df['smp_mainland'].values)  # 육지 SMP
+    # 1. 기본 SMP 피처
+    features.append(smp)  # 육지 SMP (타겟)
     features.append(df['smp_jeju'].values)      # 제주 SMP
     features.append(df['smp_max'].values)       # 최고가
     features.append(df['smp_min'].values)       # 최저가
 
-    # 시간 피처
+    # 2. 시간 피처 (순환)
     hour = df['hour'].values
     features.append(np.sin(2 * np.pi * hour / 24))  # 시간 사인
     features.append(np.cos(2 * np.pi * hour / 24))  # 시간 코사인
 
-    # 요일 피처 (datetime에서 추출)
+    # 3. 요일/주말 피처
     day_of_week = df['datetime'].dt.dayofweek.values
     features.append(np.sin(2 * np.pi * day_of_week / 7))  # 요일 사인
     features.append(np.cos(2 * np.pi * day_of_week / 7))  # 요일 코사인
-
-    # 주말 여부
     features.append((day_of_week >= 5).astype(float))  # 주말 = 1
 
-    # SMP 변화율 (lag features)
-    smp = df['smp_mainland'].values
-    smp_diff = np.diff(smp, prepend=smp[0])
-    features.append(smp_diff)  # SMP 변화량
+    # 4. 월/계절 피처
+    month = df['datetime'].dt.month.values
+    features.append(np.sin(2 * np.pi * month / 12))  # 월 사인
+    features.append(np.cos(2 * np.pi * month / 12))  # 월 코사인
 
-    # 이동 평균 (짧은 데이터에 맞춤)
-    smp_ma3 = pd.Series(smp).rolling(3, min_periods=1).mean().values
-    smp_ma6 = pd.Series(smp).rolling(6, min_periods=1).mean().values
-    features.append(smp_ma3)
-    features.append(smp_ma6)
+    # 계절 (여름/겨울 전력 수요 높음)
+    is_summer = ((month >= 6) & (month <= 8)).astype(float)
+    is_winter = ((month == 12) | (month <= 2)).astype(float)
+    features.append(is_summer)
+    features.append(is_winter)
+
+    if not use_simple:
+        # === 확장 피처 (시계열 패턴 캡처) ===
+
+        # 5. 피크/비피크 시간대
+        peak_morning = ((hour >= 9) & (hour <= 12)).astype(float)
+        peak_evening = ((hour >= 17) & (hour <= 21)).astype(float)
+        off_peak = ((hour >= 1) & (hour <= 6)).astype(float)
+        features.append(peak_morning)
+        features.append(peak_evening)
+        features.append(off_peak)
+
+        # 6. SMP 통계 피처 (현재 시점까지의 누적 통계)
+        smp_series = pd.Series(smp)
+
+        # 이동 평균 (최근 트렌드)
+        features.append(smp_series.rolling(6, min_periods=1).mean().values)   # 6시간
+        features.append(smp_series.rolling(24, min_periods=1).mean().values)  # 24시간
+
+        # 이동 표준편차 (변동성)
+        features.append(smp_series.rolling(24, min_periods=1).std().fillna(0).values)
+
+        # 상대 위치 (현재 SMP가 최근 범위에서 어디에 있는지)
+        min_24h = smp_series.rolling(24, min_periods=1).min().values
+        max_24h = smp_series.rolling(24, min_periods=1).max().values
+        range_24h = max_24h - min_24h + 1e-8
+        relative_pos = (smp - min_24h) / range_24h
+        features.append(relative_pos)
 
     # 스택
     feature_array = np.column_stack(features)
 
-    logger.info(f"피처 생성 완료: {feature_array.shape}")
+    # NaN/Inf 처리
+    feature_array = np.nan_to_num(feature_array, nan=0.0, posinf=0.0, neginf=0.0)
+
+    logger.info(f"피처 생성 완료: {feature_array.shape} (simple={use_simple})")
 
     return feature_array
 
