@@ -1,15 +1,25 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 13:20 KST
+> Last Updated: 2025-12-19 13:30 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.7 (Chart Pattern Bug Fix)
-- **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.4
+- **Version**: v4.0.7 (Bug Fixes & Deprecation Fix)
+- **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.7
 
 ---
 
 ## Latest Changes (2025-12-19)
+
+### Streamlit Deprecation Fix (v4.0.7)
+Fixed `use_container_width` deprecation warnings (deadline: 2025-12-31).
+
+| Before | After |
+|--------|-------|
+| `use_container_width=True` | `width="stretch"` |
+
+- 3 occurrences fixed in `st.plotly_chart()` calls
+- No more deprecation warnings in logs
 
 ### Bug Fix: Chart Spike at 1 PM (v4.0.7)
 Fixed sudden spike in power chart around 1 PM caused by model divergence.
@@ -21,41 +31,29 @@ Fixed sudden spike in power chart around 1 PM caused by model divergence.
 | Result | Sudden vertical spike at current time |
 
 **Fix**: Created unified `get_load_pattern(hour)` function (Single Source of Truth)
-- Past data generation: uses `get_load_pattern()`
-- Current pattern calc: uses `get_load_pattern()`
-- Future forecast: uses `get_load_pattern()`
 
 **Verified by**: Gemini cross-check analysis confirmed the bug diagnosis
 
 ### Bug Fix: Reserve Rate Display (v4.0.6)
-Fixed reserve rate showing 911% instead of correct ~132-152%.
+Fixed reserve rate showing 911% instead of correct ~105-132%.
 
 | Issue | Resolution |
 |-------|------------|
 | Wrong field | Used `supply_reserve` (MW) instead of `reserve_rate` (%) |
 | Value shown | 911% (MW value) |
-| Correct value | ~132-152% (calculated %) |
+| Correct value | ~105-132% (calculated %) |
 
 ### Dashboard Layout (GE Inertia Style)
-New layout with real-time power supply chart and forecast comparison.
-
-### Layout Structure
 | Position | Content |
 |----------|---------|
 | Left (3/4) | Real-time power chart (actual vs forecast) |
 | Right Top | Gauge charts (demand, reserve rate) |
 | Right Bottom | Jeju map (compact) |
 
-### Chart Features
-- 12h past (actual data) + 12h future (forecast)
-- Confidence band for forecast uncertainty
-- Red dashed line marks current time (center)
-- Color coding: Blue (actual), Yellow (forecast)
-
 ### Recent Commits
 ```
+5ea791d fix: Replace deprecated use_container_width with width parameter
 4e29b71 fix: Unify load pattern function to eliminate chart spike bug
-188184b docs: Update PROJECT_STATUS for v4.0.6 reserve rate fix
 94f5afb fix: Correct reserve rate display using percentage instead of MW value
 afd6d85 feat: Redesign dashboard layout with real-time power chart
 ```
