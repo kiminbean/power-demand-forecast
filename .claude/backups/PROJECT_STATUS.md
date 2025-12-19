@@ -1,11 +1,11 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 00:15 KST
+> Last Updated: 2025-12-19 09:30 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
 - **Version**: v4.0.1 (KPX Realtime Integration)
-- **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.0
+- **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.1
 
 ---
 
@@ -28,16 +28,18 @@ Dashboard now shows **real-time power supply/demand** from KPX (한국전력거�
 
 ### Verified KPX Data
 ```
-KPX 제주 실시간 데이터 수집 완료: 724 MW (예비율: 66.0%)
+KPX 제주 실시간 데이터 수집 완료: 701 MW (예비율: 531.0%)
 ```
 
 ### Recent Commits
 ```
+1ccb94b chore: Remove pycache from git tracking
+034b94c chore: Update project files and SMP model artifacts
+05183b4 docs: Add KPX realtime screenshot to README
+5928aaf docs: Add KPX realtime dashboard screenshot
+b4215b3 docs: Add v4.0.1 release notes to CHANGELOG
+b575c12 docs: Update PROJECT_STATUS with KPX realtime integration
 d8bb7db feat: Integrate KPX realtime data for power supply/demand display
-687ed4c data: Update Jeju power plant data to Dec 2025
-abe73b3 docs: Update PROJECT_STATUS with test results and bug fixes
-2da33d4 fix: Replace deprecated use_container_width with width="stretch"
-69d2484 fix: Handle 24:00 timestamp format in SMP data loading
 ```
 
 ---
