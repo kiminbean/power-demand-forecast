@@ -1,15 +1,31 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 12:55 KST
+> Last Updated: 2025-12-19 13:20 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.6 (Reserve Rate Bug Fix)
+- **Version**: v4.0.7 (Chart Pattern Bug Fix)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.4
 
 ---
 
 ## Latest Changes (2025-12-19)
+
+### Bug Fix: Chart Spike at 1 PM (v4.0.7)
+Fixed sudden spike in power chart around 1 PM caused by model divergence.
+
+| Issue | Resolution |
+|-------|------------|
+| Root Cause | Two different pattern formulas (Sine vs Piecewise Linear) |
+| 13:00 Discrepancy | Sine=1.24 vs Linear=0.88 (41% difference) |
+| Result | Sudden vertical spike at current time |
+
+**Fix**: Created unified `get_load_pattern(hour)` function (Single Source of Truth)
+- Past data generation: uses `get_load_pattern()`
+- Current pattern calc: uses `get_load_pattern()`
+- Future forecast: uses `get_load_pattern()`
+
+**Verified by**: Gemini cross-check analysis confirmed the bug diagnosis
 
 ### Bug Fix: Reserve Rate Display (v4.0.6)
 Fixed reserve rate showing 911% instead of correct ~132-152%.
@@ -19,10 +35,6 @@ Fixed reserve rate showing 911% instead of correct ~132-152%.
 | Wrong field | Used `supply_reserve` (MW) instead of `reserve_rate` (%) |
 | Value shown | 911% (MW value) |
 | Correct value | ~132-152% (calculated %) |
-
-**Root Cause**: Line 1232 was using `realtime_data.get('supply_reserve', 15.0)` which returns the MW value (911), not the percentage.
-
-**Fix**: Changed to `realtime_data.get('reserve_rate', 15.0)` which returns the correctly calculated percentage: `(supply_capacity - demand) / demand * 100`
 
 ### Dashboard Layout (GE Inertia Style)
 New layout with real-time power supply chart and forecast comparison.
@@ -42,9 +54,10 @@ New layout with real-time power supply chart and forecast comparison.
 
 ### Recent Commits
 ```
+4e29b71 fix: Unify load pattern function to eliminate chart spike bug
+188184b docs: Update PROJECT_STATUS for v4.0.6 reserve rate fix
 94f5afb fix: Correct reserve rate display using percentage instead of MW value
 afd6d85 feat: Redesign dashboard layout with real-time power chart
-bee02b8 docs: Update PROJECT_STATUS for v4.0.4 release
 ```
 
 ---
@@ -169,6 +182,7 @@ models/smp_v3/smp_v3_metrics.json    - Performance metrics
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| v4.0.7 | 2025-12-19 | Chart pattern spike fix (Gemini verified) |
 | v4.0.6 | 2025-12-19 | Reserve rate bug fix (911% → 132%) |
 | v4.0.5 | 2025-12-19 | GE Inertia layout, real-time chart |
 | v4.0.4 | 2025-12-19 | Slack webhook notifications |
