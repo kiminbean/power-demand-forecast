@@ -1823,6 +1823,10 @@ def create_realtime_power_chart() -> go.Figure:
         forecast_lower.append(lower)
         forecast_supply.append(supply)
 
+    # ===== 예비 전력 계산 =====
+    actual_reserve = [s - d for s, d in zip(actual_supply, actual_demand)]
+    forecast_reserve = [s - d for s, d in zip(forecast_supply, forecast_demand)]
+
     fig = go.Figure()
 
     # ===== 예측 신뢰구간 (미래 영역만) =====
@@ -1837,6 +1841,30 @@ def create_realtime_power_chart() -> go.Figure:
         hoverinfo='skip'
     ))
 
+    # ===== 과거 예비전력 (공급-수요 사이 음영) =====
+    fig.add_trace(go.Scatter(
+        x=list(past_hours) + list(past_hours)[::-1],
+        y=list(actual_supply) + list(actual_demand)[::-1],
+        fill='toself',
+        fillcolor='rgba(16, 185, 129, 0.25)',  # 초록색 음영
+        line=dict(color='rgba(0,0,0,0)'),
+        name='예비전력 (실측)',
+        showlegend=True,
+        hoverinfo='skip'
+    ))
+
+    # ===== 미래 예비전력 (공급-수요 사이 음영) =====
+    fig.add_trace(go.Scatter(
+        x=list(future_hours) + list(future_hours)[::-1],
+        y=list(forecast_supply) + list(forecast_demand)[::-1],
+        fill='toself',
+        fillcolor='rgba(16, 185, 129, 0.15)',  # 연한 초록색 음영
+        line=dict(color='rgba(0,0,0,0)'),
+        name='예비전력 (예측)',
+        showlegend=True,
+        hoverinfo='skip'
+    ))
+
     # ===== 과거 공급능력 =====
     fig.add_trace(go.Scatter(
         x=past_hours,
@@ -1844,7 +1872,8 @@ def create_realtime_power_chart() -> go.Figure:
         mode='lines',
         name='공급능력 (실측)',
         line=dict(color='#10b981', width=2),
-        hovertemplate='%{x}<br>공급능력: %{y:.1f} MW<extra></extra>'
+        customdata=actual_reserve,
+        hovertemplate='%{x}<br>공급능력: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 과거 실측 수요 =====
@@ -1854,7 +1883,8 @@ def create_realtime_power_chart() -> go.Figure:
         mode='lines',
         name='전력수요 (실측)',
         line=dict(color='#3b82f6', width=3),
-        hovertemplate='%{x}<br>실측 수요: %{y:.1f} MW<extra></extra>'
+        customdata=actual_reserve,
+        hovertemplate='%{x}<br>실측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 예측 공급능력 =====
@@ -1864,7 +1894,8 @@ def create_realtime_power_chart() -> go.Figure:
         mode='lines',
         name='공급능력 (예측)',
         line=dict(color='#10b981', width=2, dash='dot'),
-        hovertemplate='%{x}<br>예측 공급: %{y:.1f} MW<extra></extra>'
+        customdata=forecast_reserve,
+        hovertemplate='%{x}<br>예측 공급: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 예측 수요 =====
@@ -1874,7 +1905,8 @@ def create_realtime_power_chart() -> go.Figure:
         mode='lines',
         name='전력수요 (예측)',
         line=dict(color='#fbbf24', width=3),
-        hovertemplate='%{x}<br>예측 수요: %{y:.1f} MW<extra></extra>'
+        customdata=forecast_reserve,
+        hovertemplate='%{x}<br>예측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 현재 시점 표시 (중앙) =====
