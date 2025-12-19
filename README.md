@@ -105,6 +105,10 @@
 ![Main Dashboard](docs/screenshots/01_main_dashboard.png)
 *60hz.io 스타일 다크 테마 대시보드 - 제주도 전력 발전소 위치 및 실시간 전력수급 현황*
 
+### 전력수급 차트 (v4.0.7)
+![Power Chart](docs/screenshots/dashboard_v4.0.7_chart.png)
+*예비전력(초록), 태양광(노란), 풍력(파란) 시각화 - 실시간 전력수급 현황 및 24시간 예측*
+
 ### SMP 예측
 ![SMP Prediction](docs/screenshots/02_smp_prediction.png)
 *BiLSTM + Attention 모델 기반 24시간 SMP(계통한계가격) 예측 및 신뢰구간*
