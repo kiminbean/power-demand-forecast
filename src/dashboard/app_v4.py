@@ -1351,25 +1351,42 @@ def get_smp_data() -> Dict:
     smp_df = load_smp_history()
 
     if not smp_df.empty:
+        # smp_jeju가 0이면 smp_mainland로 대체 (데이터 품질 이슈 대응)
+        if 'smp_mainland' in smp_df.columns:
+            smp_df['smp_jeju'] = smp_df.apply(
+                lambda row: row['smp_mainland'] if row['smp_jeju'] == 0 or pd.isna(row['smp_jeju']) else row['smp_jeju'],
+                axis=1
+            )
+
         # 최근 데이터 사용
         recent_df = smp_df.tail(48)  # 최근 48시간
 
-        # 현재 시간대 SMP (가장 최근 동일 시간)
+        # 현재 시간대 SMP (가장 최근 동일 시간, 0이 아닌 값)
         hour_data = smp_df[smp_df['hour'] == (current_hour if current_hour > 0 else 24)]
         if not hour_data.empty:
-            current_smp = float(hour_data['smp_jeju'].iloc[-1])
+            # 0이 아닌 가장 최근 값 찾기
+            valid_data = hour_data[hour_data['smp_jeju'] > 0]
+            if not valid_data.empty:
+                current_smp = float(valid_data['smp_jeju'].iloc[-1])
+            else:
+                current_smp = float(hour_data['smp_jeju'].iloc[-1])
         else:
-            current_smp = float(recent_df['smp_jeju'].mean())
+            current_smp = float(recent_df[recent_df['smp_jeju'] > 0]['smp_jeju'].mean())
 
         # 이전 시간 SMP
         prev_hour_data = smp_df[smp_df['hour'] == ((current_hour - 1) if current_hour > 1 else 24)]
         if not prev_hour_data.empty:
-            prev_smp = float(prev_hour_data['smp_jeju'].iloc[-1])
+            valid_prev = prev_hour_data[prev_hour_data['smp_jeju'] > 0]
+            if not valid_prev.empty:
+                prev_smp = float(valid_prev['smp_jeju'].iloc[-1])
+            else:
+                prev_smp = current_smp * 0.98
         else:
             prev_smp = current_smp * 0.98
 
-        # 시간대별 평균 SMP (실제 데이터 기반)
-        hourly_avg = smp_df.groupby('hour')['smp_jeju'].mean().to_dict()
+        # 시간대별 평균 SMP (0이 아닌 값만)
+        valid_smp = smp_df[smp_df['smp_jeju'] > 0]
+        hourly_avg = valid_smp.groupby('hour')['smp_jeju'].mean().to_dict()
 
         # 24시간 예측 (실제 패턴 + 변동)
         predictions = []
