@@ -1,61 +1,57 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 13:30 KST
+> Last Updated: 2025-12-19 13:40 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.7 (Bug Fixes & Deprecation Fix)
+- **Version**: v4.0.7 (Bug Fixes - Gemini Verified)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.7
 
 ---
 
 ## Latest Changes (2025-12-19)
 
+### Bug Fix: SMP Zero Value (v4.0.7)
+Fixed SMP showing 0.0원 instead of actual price (~141.5원).
+
+| Issue | Resolution |
+|-------|------------|
+| Root Cause | `smp_jeju=0.0` in EPSIS data (2024-12-18 13:00) |
+| Fallback | Use `smp_mainland` when `smp_jeju` is 0 |
+| Result | 0.0원 → 141.5원 |
+
 ### Streamlit Deprecation Fix (v4.0.7)
-Fixed `use_container_width` deprecation warnings (deadline: 2025-12-31).
+Fixed `use_container_width` deprecation warnings.
 
 | Before | After |
 |--------|-------|
 | `use_container_width=True` | `width="stretch"` |
 
-- 3 occurrences fixed in `st.plotly_chart()` calls
-- No more deprecation warnings in logs
-
 ### Bug Fix: Chart Spike at 1 PM (v4.0.7)
-Fixed sudden spike in power chart around 1 PM caused by model divergence.
+Fixed sudden spike caused by model divergence (Sine vs Piecewise Linear).
 
-| Issue | Resolution |
-|-------|------------|
-| Root Cause | Two different pattern formulas (Sine vs Piecewise Linear) |
-| 13:00 Discrepancy | Sine=1.24 vs Linear=0.88 (41% difference) |
-| Result | Sudden vertical spike at current time |
-
-**Fix**: Created unified `get_load_pattern(hour)` function (Single Source of Truth)
-
-**Verified by**: Gemini cross-check analysis confirmed the bug diagnosis
+**Fix**: Created unified `get_load_pattern(hour)` function
 
 ### Bug Fix: Reserve Rate Display (v4.0.6)
-Fixed reserve rate showing 911% instead of correct ~105-132%.
+Fixed reserve rate showing 911% instead of ~121%.
 
-| Issue | Resolution |
-|-------|------------|
-| Wrong field | Used `supply_reserve` (MW) instead of `reserve_rate` (%) |
-| Value shown | 911% (MW value) |
-| Correct value | ~105-132% (calculated %) |
+| Before | After |
+|--------|-------|
+| `supply_reserve` (911 MW) | `reserve_rate` (121.8%) |
 
-### Dashboard Layout (GE Inertia Style)
-| Position | Content |
-|----------|---------|
-| Left (3/4) | Real-time power chart (actual vs forecast) |
-| Right Top | Gauge charts (demand, reserve rate) |
-| Right Bottom | Jeju map (compact) |
+### Dashboard Status (v4.0.7)
+| Metric | Value | Status |
+|--------|-------|--------|
+| 현재 수요 | 651 MW | ✅ |
+| 예비율 | 121.8% | ✅ |
+| SMP | 141.5원 | ✅ |
 
 ### Recent Commits
 ```
+1b25595 fix: Handle zero SMP values by falling back to mainland price
 5ea791d fix: Replace deprecated use_container_width with width parameter
 4e29b71 fix: Unify load pattern function to eliminate chart spike bug
 94f5afb fix: Correct reserve rate display using percentage instead of MW value
-afd6d85 feat: Redesign dashboard layout with real-time power chart
 ```
 
 ---
