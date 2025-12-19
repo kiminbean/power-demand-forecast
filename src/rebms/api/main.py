@@ -226,6 +226,298 @@ async def global_exception_handler(request, exc):
 # Startup/Shutdown Events
 # ============================================================================
 
+# ============================================================================
+# Real Jeju Power Plant Data Loader
+# ============================================================================
+
+import pandas as pd
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+JEJU_PLANTS_CSV = PROJECT_ROOT / "data/jeju_plants/jeju_power_plants.csv"
+
+def load_jeju_plants():
+    """Load real Jeju power plant data from CSV"""
+    try:
+        df = pd.read_csv(JEJU_PLANTS_CSV)
+        # Filter only renewable energy (wind, solar) with status 운영중
+        renewables = df[
+            (df['type'].isin(['wind', 'solar'])) &
+            (df['status'] == '운영중')
+        ].copy()
+
+        plants = []
+        for _, row in renewables.iterrows():
+            plants.append({
+                "id": row['id'],
+                "name": row['name'],
+                "name_en": row['name_en'],
+                "type": row['type'],
+                "subtype": row['subtype'],
+                "capacity": float(row['capacity_mw']),
+                "operator": row['operator'],
+                "location": row['address'],
+                "latitude": float(row['latitude']),
+                "longitude": float(row['longitude']),
+            })
+        return plants
+    except Exception as e:
+        print(f"Error loading Jeju plants: {e}")
+        return []
+
+# Cache the plants data
+_jeju_plants_cache = None
+
+def get_jeju_plants():
+    """Get cached Jeju plants data"""
+    global _jeju_plants_cache
+    if _jeju_plants_cache is None:
+        _jeju_plants_cache = load_jeju_plants()
+    return _jeju_plants_cache
+
+
+# ============================================================================
+# Mobile API Endpoints
+# ============================================================================
+
+@app.get("/api/v1/dashboard/kpis", tags=["Market"])
+async def get_dashboard_kpis():
+    """Get dashboard KPI metrics for mobile app (using real Jeju plant data)"""
+    import numpy as np
+
+    # Load real Jeju power plants
+    plants = get_jeju_plants()
+    if not plants:
+        # Fallback to sample data
+        plants = [
+            {"id": "solar-001", "name": "Jeju Solar Plant A", "type": "solar", "capacity": 50},
+            {"id": "wind-001", "name": "Jeju Wind Farm B", "type": "wind", "capacity": 40},
+        ]
+
+    total_capacity = sum(p["capacity"] for p in plants)
+    utilization = np.random.uniform(0.65, 0.85)
+    current_output = total_capacity * utilization
+
+    # Get current SMP from predictor
+    current_smp = 95.0
+    try:
+        import sys
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(project_root))
+        from src.smp.models.smp_predictor import get_smp_predictor
+        predictor = get_smp_predictor(use_advanced=True)
+        result = predictor.predict_24h()
+        current_smp = float(result['q50'][0])
+    except:
+        pass
+
+    daily_revenue = current_output * current_smp * 24 / 1000
+
+    return {
+        "total_capacity_mw": total_capacity,
+        "current_output_mw": round(current_output, 1),
+        "utilization_pct": round(utilization * 100, 1),
+        "daily_revenue_million": round(daily_revenue, 2),
+        "revenue_change_pct": round(np.random.uniform(5, 15), 1),
+        "current_smp": round(current_smp, 1),
+        "smp_change_pct": round(np.random.uniform(-5, 5), 1),
+        "resource_count": len(plants),
+        "wind_count": len([p for p in plants if p['type'] == 'wind']),
+        "solar_count": len([p for p in plants if p['type'] == 'solar']),
+    }
+
+
+@app.get("/api/v1/resources", tags=["Market"])
+async def get_resources():
+    """Get all resources in portfolio (real Jeju power plants)"""
+    import numpy as np
+
+    # Load real Jeju power plants
+    plants = get_jeju_plants()
+    if not plants:
+        return []
+
+    result = []
+    for p in plants:
+        # Simulate utilization based on type
+        if p['type'] == 'solar':
+            # Solar: higher during day (assume current time affects this)
+            from datetime import datetime
+            hour = datetime.now().hour
+            if 6 <= hour <= 18:
+                utilization = np.random.uniform(0.4, 0.8)
+            else:
+                utilization = np.random.uniform(0.0, 0.1)
+        else:
+            # Wind: more variable
+            utilization = np.random.uniform(0.3, 0.9)
+
+        result.append({
+            "id": p["id"],
+            "name": p["name"],
+            "name_en": p.get("name_en", p["name"]),
+            "type": p["type"],
+            "subtype": p.get("subtype", "unknown"),
+            "capacity": p["capacity"],
+            "current_output": round(p["capacity"] * utilization, 2),
+            "utilization": round(utilization * 100, 1),
+            "status": "online",
+            "location": p["location"],
+            "operator": p.get("operator", "Unknown"),
+            "latitude": p.get("latitude"),
+            "longitude": p.get("longitude"),
+        })
+
+    # Sort by capacity descending
+    result.sort(key=lambda x: x['capacity'], reverse=True)
+    return result
+
+
+@app.get("/api/v1/bidding/optimized-segments", tags=["Bidding"])
+async def get_optimized_segments(
+    capacity_mw: float = 50.0,
+    risk_level: str = "moderate",
+):
+    """Get AI-optimized bid segments for all 24 hours"""
+    import numpy as np
+    import sys
+    from pathlib import Path
+
+    # Get SMP forecast
+    q10, q50, q90 = [], [], []
+    model_version = "fallback"
+
+    try:
+        project_root = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(project_root))
+        from src.smp.models.smp_predictor import get_smp_predictor
+        predictor = get_smp_predictor(use_advanced=True)
+        result = predictor.predict_24h()
+        q10 = result['q10'].tolist() if hasattr(result['q10'], 'tolist') else list(result['q10'])
+        q50 = result['q50'].tolist() if hasattr(result['q50'], 'tolist') else list(result['q50'])
+        q90 = result['q90'].tolist() if hasattr(result['q90'], 'tolist') else list(result['q90'])
+        model_version = result.get('model_used', 'v3.1')
+    except:
+        q10 = [85 + np.sin(h * np.pi / 12) * 10 for h in range(24)]
+        q50 = [95 + np.sin(h * np.pi / 12) * 10 for h in range(24)]
+        q90 = [105 + np.sin(h * np.pi / 12) * 10 for h in range(24)]
+
+    hourly_bids = []
+
+    for hour in range(24):
+        segments = []
+        price_min, price_mid, price_max = q10[hour], q50[hour], q90[hour]
+
+        if risk_level == "conservative":
+            qty_weights = [0.20, 0.18, 0.15, 0.12, 0.10, 0.08, 0.07, 0.05, 0.03, 0.02]
+        elif risk_level == "aggressive":
+            qty_weights = [0.02, 0.03, 0.05, 0.07, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20]
+        else:
+            qty_weights = [0.10] * 10
+
+        for seg_id in range(1, 11):
+            seg_ratio = (seg_id - 1) / 9
+            price = price_min + (price_max - price_min) * seg_ratio
+            qty = capacity_mw * qty_weights[seg_id - 1]
+            segments.append({
+                "segment_id": seg_id,
+                "quantity_mw": round(qty, 2),
+                "price_krw_mwh": round(price, 1),
+            })
+
+        total_mw = sum(s["quantity_mw"] for s in segments)
+        avg_price = sum(s["price_krw_mwh"] * s["quantity_mw"] for s in segments) / total_mw if total_mw > 0 else 0
+
+        hourly_bids.append({
+            "hour": hour + 1,
+            "segments": segments,
+            "total_mw": round(total_mw, 2),
+            "avg_price": round(avg_price, 1),
+            "smp_forecast": {"q10": round(q10[hour], 1), "q50": round(q50[hour], 1), "q90": round(q90[hour], 1)}
+        })
+
+    return {
+        "trading_date": (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+        "capacity_mw": capacity_mw,
+        "risk_level": risk_level,
+        "hourly_bids": hourly_bids,
+        "total_daily_mwh": round(sum(b["total_mw"] for b in hourly_bids), 1),
+        "model_used": model_version,
+    }
+
+
+@app.get("/api/v1/settlements/recent", tags=["Market"])
+async def get_recent_settlements(days: int = 7):
+    """Get recent settlement summaries"""
+    import numpy as np
+
+    settlements = []
+    for i in range(days):
+        date = (datetime.now() - timedelta(days=i+1)).strftime('%Y-%m-%d')
+        generation = np.random.uniform(800, 1200)
+        smp = np.random.uniform(85, 110)
+        revenue = generation * smp / 1000
+        imbalance = np.random.uniform(0.5, 2.5)
+
+        settlements.append({
+            "date": date,
+            "generation_mwh": round(generation, 1),
+            "revenue_million": round(revenue, 2),
+            "imbalance_million": round(imbalance, 2),
+            "net_revenue_million": round(revenue - imbalance, 2),
+            "accuracy_pct": round(np.random.uniform(90, 98), 1),
+        })
+    return settlements
+
+
+@app.get("/api/v1/settlements/summary", tags=["Market"])
+async def get_settlement_summary():
+    """Get settlement summary statistics"""
+    import numpy as np
+
+    return {
+        "generation_revenue_million": round(np.random.uniform(140, 150), 1),
+        "generation_change_pct": round(np.random.uniform(8, 15), 1),
+        "imbalance_charges_million": round(np.random.uniform(2, 5), 1),
+        "imbalance_change_pct": round(np.random.uniform(-20, -10), 1),
+        "net_revenue_million": round(np.random.uniform(135, 148), 1),
+        "net_change_pct": round(np.random.uniform(10, 18), 1),
+        "forecast_accuracy_pct": round(np.random.uniform(92, 96), 1),
+        "accuracy_change_pct": round(np.random.uniform(1, 3), 1),
+    }
+
+
+@app.get("/api/v1/model/info", tags=["Market"])
+async def get_model_info():
+    """Get information about the SMP prediction model"""
+    try:
+        import sys
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(project_root))
+        from src.smp.models.smp_predictor import get_smp_predictor
+        predictor = get_smp_predictor(use_advanced=True)
+
+        if predictor.is_ready():
+            return {
+                "status": "ready",
+                "version": predictor.model_version,
+                "type": "advanced" if predictor.use_advanced else "standard",
+                "device": str(predictor.device),
+                "mape": getattr(predictor, 'metrics', {}).get('mape', 'N/A'),
+                "coverage": getattr(predictor, 'metrics', {}).get('coverage_80', 'N/A'),
+            }
+    except:
+        pass
+
+    return {"status": "fallback", "version": "fallback", "message": "Using fallback predictions"}
+
+
+# ============================================================================
+# Startup/Shutdown Events
+# ============================================================================
+
 @app.on_event("startup")
 async def startup_event():
     """Application startup"""

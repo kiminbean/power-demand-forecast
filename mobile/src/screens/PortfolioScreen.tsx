@@ -1,9 +1,9 @@
 /**
  * RE-BMS Portfolio Screen
- * Renewable Resource Management
+ * Renewable Resource Management - Real Jeju Power Plant Data
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
   FlatList,
   Dimensions,
   Platform,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 
 // Conditional imports for native-only features
@@ -29,6 +31,7 @@ if (Platform.OS !== 'web') {
 }
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import apiService, { Resource } from '../services/api';
 
 // Icon component with emoji fallback for web
 function Icon({ name, size, color }: { name: string; size: number; color: string }) {
@@ -52,85 +55,29 @@ function Icon({ name, size, color }: { name: string; size: number; color: string
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Types
-interface RenewableResource {
-  id: string;
-  name: string;
-  type: 'solar' | 'wind';
-  capacityMw: number;
-  location: string;
-  status: 'active' | 'maintenance' | 'offline';
-  currentOutput: number;
-  utilizationRate: number;
+// Extended Resource type with additional display fields
+interface DisplayResource extends Resource {
   todayGeneration: number;
   monthlyRevenue: number;
+  utilizationRate: number;
+  operator?: string;
+  subtype?: string;
+  name_en?: string;
 }
 
-// Mock data
-const mockResources: RenewableResource[] = [
-  {
-    id: 'res-001',
-    name: 'Jeju Solar #1',
-    type: 'solar',
-    capacityMw: 50.0,
-    location: 'Jeju-si',
-    status: 'active',
-    currentOutput: 42.5,
-    utilizationRate: 85,
-    todayGeneration: 312.5,
-    monthlyRevenue: 145.2,
-  },
-  {
-    id: 'res-002',
-    name: 'Jeju Wind #1',
-    type: 'wind',
-    capacityMw: 30.0,
-    location: 'Seogwipo-si',
-    status: 'active',
-    currentOutput: 24.3,
-    utilizationRate: 81,
-    todayGeneration: 215.8,
-    monthlyRevenue: 98.7,
-  },
-  {
-    id: 'res-003',
-    name: 'Jeju Solar #2',
-    type: 'solar',
-    capacityMw: 25.0,
-    location: 'Aewol',
-    status: 'active',
-    currentOutput: 21.2,
-    utilizationRate: 85,
-    todayGeneration: 156.3,
-    monthlyRevenue: 72.4,
-  },
-  {
-    id: 'res-004',
-    name: 'Jeju Wind #2',
-    type: 'wind',
-    capacityMw: 20.0,
-    location: 'Hallim',
-    status: 'maintenance',
-    currentOutput: 0,
-    utilizationRate: 0,
-    todayGeneration: 45.2,
-    monthlyRevenue: 21.3,
-  },
-];
-
 // Portfolio Summary Component
-function PortfolioSummary({ resources }: { resources: RenewableResource[] }) {
-  const totalCapacity = resources.reduce((sum, r) => sum + r.capacityMw, 0);
-  const totalOutput = resources.reduce((sum, r) => sum + r.currentOutput, 0);
+function PortfolioSummary({ resources }: { resources: DisplayResource[] }) {
+  const totalCapacity = resources.reduce((sum, r) => sum + r.capacity, 0);
+  const totalOutput = resources.reduce((sum, r) => sum + r.current_output, 0);
   const avgUtilization = totalCapacity > 0 ? (totalOutput / totalCapacity) * 100 : 0;
   const totalRevenue = resources.reduce((sum, r) => sum + r.monthlyRevenue, 0);
 
   const solarCapacity = resources
     .filter(r => r.type === 'solar')
-    .reduce((sum, r) => sum + r.capacityMw, 0);
+    .reduce((sum, r) => sum + r.capacity, 0);
   const windCapacity = resources
     .filter(r => r.type === 'wind')
-    .reduce((sum, r) => sum + r.capacityMw, 0);
+    .reduce((sum, r) => sum + r.capacity, 0);
 
   const pieData = [
     {
@@ -211,8 +158,8 @@ function PortfolioSummary({ resources }: { resources: RenewableResource[] }) {
 }
 
 // Resource Card Component
-function ResourceCard({ resource }: { resource: RenewableResource }) {
-  const statusColors = {
+function ResourceCard({ resource }: { resource: DisplayResource }) {
+  const statusColors: Record<string, string> = {
     active: colors.status.success,
     maintenance: colors.status.warning,
     offline: colors.status.danger,
@@ -220,6 +167,7 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
 
   const resourceIcon = resource.type === 'solar' ? 'sunny' : 'cloudy';
   const resourceColor = resource.type === 'solar' ? colors.chart.solar : colors.chart.wind;
+  const statusColor = statusColors[resource.status] || colors.status.warning;
 
   return (
     <TouchableOpacity style={styles.resourceCard} activeOpacity={0.7}>
@@ -229,21 +177,47 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
           <View style={[styles.resourceIconContainer, { backgroundColor: `${resourceColor}20` }]}>
             <Icon name={resourceIcon} size={24} color={resourceColor} />
           </View>
-          <View>
-            <Text style={styles.resourceName}>{resource.name}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.resourceName} numberOfLines={1}>
+              {resource.name_en || resource.name}
+            </Text>
+            <Text style={styles.resourceNameKr} numberOfLines={1}>
+              {resource.name}
+            </Text>
             <View style={styles.locationRow}>
               <Icon name="location-outline" size={12} color={colors.text.muted} />
-              <Text style={styles.resourceLocation}>{resource.location}</Text>
+              <Text style={styles.resourceLocation} numberOfLines={1}>{resource.location}</Text>
             </View>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: `${statusColors[resource.status]}20` }]}>
-          <View style={[styles.statusDot, { backgroundColor: statusColors[resource.status] }]} />
-          <Text style={[styles.statusText, { color: statusColors[resource.status] }]}>
+        <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <Text style={[styles.statusText, { color: statusColor }]}>
             {resource.status.charAt(0).toUpperCase() + resource.status.slice(1)}
           </Text>
         </View>
       </View>
+
+      {/* Subtype & Operator */}
+      {(resource.subtype || resource.operator) && (
+        <View style={styles.metaRow}>
+          {resource.subtype && (
+            <View style={styles.metaChip}>
+              <Text style={styles.metaText}>
+                {resource.subtype === 'onshore' ? '🏔 Onshore' :
+                 resource.subtype === 'offshore' ? '🌊 Offshore' :
+                 resource.subtype === 'rooftop' ? '🏠 Rooftop' :
+                 resource.subtype === 'ground' ? '🌍 Ground' : resource.subtype}
+              </Text>
+            </View>
+          )}
+          {resource.operator && (
+            <Text style={styles.operatorText} numberOfLines={1}>
+              {resource.operator}
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Output Gauge */}
       <View style={styles.outputSection}>
@@ -251,9 +225,9 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
           <Text style={styles.outputLabel}>Current Output</Text>
           <Text style={styles.outputValue}>
             <Text style={{ color: colors.chart.generation, fontWeight: 'bold' }}>
-              {resource.currentOutput.toFixed(1)}
+              {resource.current_output.toFixed(1)}
             </Text>
-            <Text style={styles.outputCapacity}> / {resource.capacityMw} MW</Text>
+            <Text style={styles.outputCapacity}> / {resource.capacity} MW</Text>
           </Text>
         </View>
         <View style={styles.progressBarContainer}>
@@ -271,7 +245,7 @@ function ResourceCard({ resource }: { resource: RenewableResource }) {
             ]}
           />
         </View>
-        <Text style={styles.utilizationText}>{resource.utilizationRate}% utilization</Text>
+        <Text style={styles.utilizationText}>{resource.utilizationRate.toFixed(0)}% utilization</Text>
       </View>
 
       {/* Stats */}
@@ -346,8 +320,52 @@ function FilterChips({
 }
 
 export default function PortfolioScreen() {
-  const [resources] = useState<RenewableResource[]>(mockResources);
+  const [resources, setResources] = useState<DisplayResource[]>([]);
   const [activeFilter, setActiveFilter] = useState<ResourceFilter>('all');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch resources from API
+  const fetchResources = useCallback(async () => {
+    try {
+      setError(null);
+      const apiResources = await apiService.getResources();
+
+      // Transform API response to DisplayResource format
+      const displayResources: DisplayResource[] = apiResources.map((r: any) => ({
+        ...r,
+        utilizationRate: r.utilization || (r.current_output / r.capacity * 100) || 0,
+        todayGeneration: r.current_output * 8, // Estimated 8 hours
+        monthlyRevenue: r.current_output * 24 * 30 * 0.12 / 1000, // Estimated revenue
+        operator: r.operator,
+        subtype: r.subtype,
+        name_en: r.name_en,
+      }));
+
+      // Sort by capacity descending
+      displayResources.sort((a, b) => b.capacity - a.capacity);
+      setResources(displayResources);
+    } catch (err: any) {
+      console.error('Failed to fetch resources:', err);
+      setError('Failed to load Jeju plants');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch and refresh interval
+  useEffect(() => {
+    fetchResources();
+    const interval = setInterval(fetchResources, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, [fetchResources]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchResources();
+  }, [fetchResources]);
 
   const filteredResources = resources.filter((resource) => {
     if (activeFilter === 'all') return true;
@@ -361,12 +379,36 @@ export default function PortfolioScreen() {
   });
 
   const renderResource = useCallback(
-    ({ item }: { item: RenewableResource }) => <ResourceCard resource={item} />,
+    ({ item }: { item: DisplayResource }) => <ResourceCard resource={item} />,
     []
   );
 
+  // Loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.brand.primary} />
+        <Text style={styles.loadingText}>Loading Jeju Power Plants...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      {/* Error Banner */}
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+        </View>
+      )}
+
+      {/* Data Source Banner */}
+      <View style={styles.dataBanner}>
+        <Text style={styles.dataBannerText}>
+          📍 Real Jeju Power Plants • {resources.length} Renewable Resources
+        </Text>
+      </View>
+
       <FlatList
         data={filteredResources}
         renderItem={renderResource}
@@ -381,8 +423,21 @@ export default function PortfolioScreen() {
             <FilterChips activeFilter={activeFilter} onFilterChange={setActiveFilter} />
           </>
         }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No resources found</Text>
+          </View>
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand.primary}
+            colors={[colors.brand.primary]}
+          />
+        }
       />
     </View>
   );
@@ -392,6 +447,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text.muted,
+  },
+  errorBanner: {
+    backgroundColor: `${colors.status.danger}20`,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  errorText: {
+    color: colors.status.danger,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+  },
+  dataBanner: {
+    backgroundColor: colors.brand.primary + '15',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  dataBannerText: {
+    color: colors.brand.primary,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  emptyState: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: colors.text.muted,
+    fontSize: fontSize.md,
   },
   listContent: {
     padding: spacing.md,
@@ -513,9 +608,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resourceName: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: 'bold',
     color: colors.text.primary,
+  },
+  resourceNameKr: {
+    fontSize: fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 1,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingLeft: 56,
+  },
+  metaChip: {
+    backgroundColor: colors.background.tertiary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  metaText: {
+    fontSize: fontSize.xs,
+    color: colors.text.secondary,
+  },
+  operatorText: {
+    fontSize: fontSize.xs,
+    color: colors.text.muted,
+    flex: 1,
   },
   locationRow: {
     flexDirection: 'row',

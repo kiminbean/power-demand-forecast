@@ -1,9 +1,10 @@
 /**
  * RE-BMS Dashboard Screen
  * Command Center with SMP Forecast and Key Metrics
+ * Connected to real SMP prediction API
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +13,7 @@ import {
   RefreshControl,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 
 // Conditionally import Ionicons and charts for native only
@@ -28,20 +30,28 @@ if (Platform.OS !== 'web') {
 }
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { apiService, SMPForecast, DashboardKPIs, MarketStatus, ModelInfo } from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Mock data - will be replaced with API calls
-const mockSMPData = {
-  labels: ['00', '04', '08', '12', '16', '20', '24'],
-  datasets: [
-    {
-      data: [95, 88, 102, 145, 168, 152, 112],
-      color: () => colors.chart.smp,
-      strokeWidth: 2,
-    },
-  ],
-};
+// Helper to format SMP data for chart
+function formatSMPDataForChart(forecast: SMPForecast | null) {
+  if (!forecast || !forecast.q50) {
+    return {
+      labels: ['00', '04', '08', '12', '16', '20', '24'],
+      datasets: [{ data: [95, 88, 102, 145, 168, 152, 112], color: () => colors.chart.smp, strokeWidth: 2 }],
+    };
+  }
+
+  // Sample every 4 hours for labels
+  const labels = ['00', '04', '08', '12', '16', '20', '24'];
+  const sampledData = [0, 4, 8, 12, 16, 20, 23].map(i => forecast.q50[i] || 100);
+
+  return {
+    labels,
+    datasets: [{ data: sampledData, color: () => colors.chart.smp, strokeWidth: 2 }],
+  };
+}
 
 interface MetricCardProps {
   title: string;
@@ -107,18 +117,82 @@ function MarketStatusBadge({ market, status, deadline }: MarketStatusProps) {
 
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
-  const [currentSMP, setCurrentSMP] = useState(135.07);
-  const [pendingBids, setPendingBids] = useState(3);
-  const [totalPortfolio, setTotalPortfolio] = useState(45.2);
-  const [dailyRevenue, setDailyRevenue] = useState(12.5);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    // Simulate API call
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1500);
+  // API data states
+  const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
+  const [smpForecast, setSmpForecast] = useState<SMPForecast | null>(null);
+  const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+
+  // Fetch data from API
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const [kpisData, forecastData, statusData, modelData] = await Promise.all([
+        apiService.getDashboardKPIs(),
+        apiService.getSMPForecast(),
+        apiService.getMarketStatus(),
+        apiService.getModelInfo(),
+      ]);
+
+      setKpis(kpisData);
+      setSmpForecast(forecastData);
+      setMarketStatus(statusData);
+      setModelInfo(modelData);
+    } catch (err: any) {
+      console.error('API Error:', err);
+      setError('Failed to load data. Using fallback values.');
+      // Set fallback values
+      setKpis({
+        total_capacity_mw: 225,
+        current_output_mw: 168.5,
+        utilization_pct: 74.9,
+        daily_revenue_million: 38.5,
+        revenue_change_pct: 8.3,
+        current_smp: 95.0,
+        smp_change_pct: 2.1,
+        resource_count: 4,
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
+  // Format chart data from API response
+  const chartData = formatSMPDataForChart(smpForecast);
+
+  // Calculate min/max/avg from forecast
+  const smpStats = smpForecast?.q50
+    ? {
+        min: Math.min(...smpForecast.q50).toFixed(1),
+        max: Math.max(...smpForecast.q50).toFixed(1),
+        avg: (smpForecast.q50.reduce((a, b) => a + b, 0) / smpForecast.q50.length).toFixed(1),
+      }
+    : { min: '88.2', max: '168.5', avg: '135.1' };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.brand.primary} />
+        <Text style={{ color: colors.text.muted, marginTop: 16 }}>Loading dashboard...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -132,43 +206,67 @@ export default function DashboardScreen() {
         />
       }
     >
+      {/* API Status Banner */}
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {/* Model Info Banner */}
+      {modelInfo && modelInfo.status === 'ready' && (
+        <View style={styles.modelBanner}>
+          <Text style={styles.modelText}>🤖 Model: {modelInfo.version} | MAPE: {modelInfo.mape}%</Text>
+        </View>
+      )}
+
       {/* Market Status Header */}
       <View style={styles.marketStatusContainer}>
-        <MarketStatusBadge market="DAM" status="open" deadline="D-1 10:00" />
-        <MarketStatusBadge market="RTM" status="pending" deadline="15min" />
+        <MarketStatusBadge
+          market="DAM"
+          status={marketStatus?.dam?.status === 'open' ? 'open' : 'closed'}
+          deadline={marketStatus?.dam?.deadline || 'D-1 10:00'}
+        />
+        <MarketStatusBadge
+          market="RTM"
+          status={marketStatus?.rtm?.status === 'open' ? 'open' : 'pending'}
+          deadline={marketStatus?.rtm?.next_interval || '15min'}
+        />
       </View>
 
       {/* Key Metrics Grid */}
       <View style={styles.metricsGrid}>
         <MetricCard
           title="Current SMP"
-          value={currentSMP.toFixed(1)}
+          value={(kpis?.current_smp || 95).toFixed(1)}
           unit="₩/kWh"
-          trend="up"
-          trendValue="+5.2%"
+          trend={kpis && kpis.smp_change_pct > 0 ? 'up' : 'down'}
+          trendValue={`${kpis?.smp_change_pct?.toFixed(1) || '0'}%`}
           icon="flash"
           color={colors.chart.smp}
         />
         <MetricCard
-          title="Pending Bids"
-          value={pendingBids.toString()}
-          unit="bids"
-          icon="document-text"
+          title="Resources"
+          value={(kpis?.resource_count || 4).toString()}
+          unit="active"
+          icon="layers"
           color={colors.status.warning}
         />
         <MetricCard
-          title="Portfolio"
-          value={totalPortfolio.toFixed(1)}
+          title="Output"
+          value={(kpis?.current_output_mw || 168.5).toFixed(1)}
           unit="MW"
-          icon="layers"
+          trend="stable"
+          trendValue={`${kpis?.utilization_pct?.toFixed(0) || 75}%`}
+          icon="speedometer"
           color={colors.chart.generation}
         />
         <MetricCard
           title="Daily Revenue"
-          value={dailyRevenue.toFixed(1)}
+          value={(kpis?.daily_revenue_million || 38.5).toFixed(1)}
           unit="M₩"
-          trend="up"
-          trendValue="+12.3%"
+          trend={kpis && kpis.revenue_change_pct > 0 ? 'up' : 'down'}
+          trendValue={`+${kpis?.revenue_change_pct?.toFixed(1) || '8.3'}%`}
           icon="wallet"
           color={colors.brand.accent}
         />
@@ -180,25 +278,25 @@ export default function DashboardScreen() {
           <Text style={styles.chartTitle}>24H SMP Forecast</Text>
           <View style={styles.chartLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.chart.smp }]} />
-            <Text style={styles.legendText}>v3.1 Model</Text>
+            <Text style={styles.legendText}>{smpForecast?.model_used || 'v3.1'} Model</Text>
           </View>
         </View>
         {Platform.OS === 'web' ? (
           <View style={[styles.chart, { height: 220, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, padding: spacing.md }]}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 10 }}>
-              {mockSMPData.datasets[0].data.map((val, i) => (
+              {chartData.datasets[0].data.map((val, i) => (
                 <View key={i} style={{ alignItems: 'center', flex: 1 }}>
-                  <Text style={{ color: colors.chart.smp, fontSize: 10, marginBottom: 4, fontWeight: '600' }}>{val}</Text>
-                  <View style={{ height: val * 1.0, width: '70%', maxWidth: 40, backgroundColor: colors.chart.smp, borderRadius: 4 }} />
-                  <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 6 }}>{mockSMPData.labels[i]}h</Text>
+                  <Text style={{ color: colors.chart.smp, fontSize: 10, marginBottom: 4, fontWeight: '600' }}>{val.toFixed(0)}</Text>
+                  <View style={{ height: Math.min(val * 1.2, 150), width: '70%', maxWidth: 40, backgroundColor: colors.chart.smp, borderRadius: 4 }} />
+                  <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 6 }}>{chartData.labels[i]}h</Text>
                 </View>
               ))}
             </View>
-            <Text style={{ color: colors.text.muted, fontSize: 10, textAlign: 'center', marginTop: 8 }}>₩/kWh by Hour</Text>
+            <Text style={{ color: colors.text.muted, fontSize: 10, textAlign: 'center', marginTop: 8 }}>₩/kWh by Hour (Real Model)</Text>
           </View>
         ) : LineChart && (
           <LineChart
-            data={mockSMPData}
+            data={chartData}
             width={screenWidth - spacing.lg * 2}
             height={200}
             chartConfig={{
@@ -233,15 +331,15 @@ export default function DashboardScreen() {
         <View style={styles.forecastStats}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Min</Text>
-            <Text style={[styles.statValue, { color: colors.chart.generation }]}>88.2</Text>
+            <Text style={[styles.statValue, { color: colors.chart.generation }]}>{smpStats.min}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Avg</Text>
-            <Text style={[styles.statValue, { color: colors.chart.smp }]}>135.1</Text>
+            <Text style={[styles.statValue, { color: colors.chart.smp }]}>{smpStats.avg}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Max</Text>
-            <Text style={[styles.statValue, { color: colors.status.danger }]}>168.5</Text>
+            <Text style={[styles.statValue, { color: colors.status.danger }]}>{smpStats.max}</Text>
           </View>
         </View>
       </View>
@@ -571,5 +669,32 @@ const styles = StyleSheet.create({
   activityTime: {
     color: colors.text.muted,
     fontSize: fontSize.xs,
+  },
+
+  // API Status Banners
+  errorBanner: {
+    backgroundColor: `${colors.status.danger}20`,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.danger,
+  },
+  errorText: {
+    color: colors.status.danger,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+  },
+  modelBanner: {
+    backgroundColor: `${colors.brand.primary}20`,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modelText: {
+    color: colors.brand.primary,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

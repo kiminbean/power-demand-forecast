@@ -1,9 +1,10 @@
 /**
  * RE-BMS Bidding Screen
  * 10-Segment Bidding Matrix with Monotonic Constraint
+ * Connected to real SMP prediction API for AI optimization
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import {
   Alert,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 
 // Conditional imports for native-only features
@@ -30,6 +32,7 @@ if (Platform.OS !== 'web') {
 }
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { apiService, OptimizedBids, Resource } from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -172,7 +175,17 @@ function Icon({ name, size, color }: { name: string; size: number; color: string
 }
 
 // Bid card component
-function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
+function BidCard({
+  bid,
+  onPress,
+  onOptimize,
+  loading,
+}: {
+  bid: BidSummary;
+  onPress: () => void;
+  onOptimize?: (bidId: string) => void;
+  loading?: boolean;
+}) {
   const resourceIcon = bid.resourceType === 'solar' ? 'sunny' : 'cloudy';
   const resourceColor = bid.resourceType === 'solar' ? colors.chart.solar : colors.chart.wind;
 
@@ -227,9 +240,19 @@ function BidCard({ bid, onPress }: { bid: BidSummary; onPress: () => void }) {
               <Icon name="create-outline" size={16} color={colors.text.secondary} />
               <Text style={styles.actionText}>Edit</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
-              <Icon name="sparkles" size={16} color={colors.brand.accent} />
-              <Text style={[styles.actionText, { color: colors.brand.accent }]}>Optimize</Text>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => onOptimize?.(bid.id)}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.brand.accent} />
+              ) : (
+                <>
+                  <Icon name="sparkles" size={16} color={colors.brand.accent} />
+                  <Text style={[styles.actionText, { color: colors.brand.accent }]}>AI Optimize</Text>
+                </>
+              )}
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.submitBtn]}>
               <Icon name="send" size={16} color={colors.text.inverse} />
@@ -310,6 +333,27 @@ export default function BiddingScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [bids, setBids] = useState<BidSummary[]>(mockBids);
   const [selectedBid, setSelectedBid] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [optimizedBids, setOptimizedBids] = useState<OptimizedBids | null>(null);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [modelInfo, setModelInfo] = useState<string>('');
+
+  // Fetch resources and model info on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [resourcesData, modelData] = await Promise.all([
+          apiService.getResources(),
+          apiService.getModelInfo(),
+        ]);
+        setResources(resourcesData);
+        setModelInfo(modelData.status === 'ready' ? `${modelData.version}` : 'fallback');
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      }
+    };
+    fetchData();
+  }, []);
 
   const filteredBids = activeFilter === 'all'
     ? bids
@@ -325,6 +369,41 @@ export default function BiddingScreen() {
     }
   }, [navigation]);
 
+  // AI Optimize using real SMP model
+  const handleOptimizeBid = useCallback(async (bidId: string, capacity: number = 50) => {
+    setLoading(true);
+    try {
+      const optimized = await apiService.getOptimizedSegments(capacity, 'moderate');
+      setOptimizedBids(optimized);
+
+      // Update the bid with optimized data
+      setBids(prevBids => prevBids.map(bid => {
+        if (bid.id === bidId) {
+          const firstHour = optimized.hourly_bids[0];
+          return {
+            ...bid,
+            status: 'pending' as const,
+            totalQuantity: firstHour.total_mw,
+            avgPrice: firstHour.avg_price,
+            filledSegments: 10,
+          };
+        }
+        return bid;
+      }));
+
+      showAlert(
+        'AI Optimization Complete',
+        `Model: ${optimized.model_used}\nTotal: ${optimized.total_daily_mwh.toFixed(1)} MWh\nRisk: ${optimized.risk_level}`,
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      console.error('Optimization failed:', err);
+      showAlert('Error', 'Failed to optimize bid. API may be unavailable.', [{ text: 'OK' }]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleCreateBid = useCallback(() => {
     showAlert(
       'Create New Bid',
@@ -338,11 +417,23 @@ export default function BiddingScreen() {
   }, []);
 
   const renderBidItem = useCallback(({ item }: { item: BidSummary }) => (
-    <BidCard bid={item} onPress={() => handleBidPress(item.id)} />
-  ), [handleBidPress]);
+    <BidCard
+      bid={item}
+      onPress={() => handleBidPress(item.id)}
+      onOptimize={handleOptimizeBid}
+      loading={loading}
+    />
+  ), [handleBidPress, handleOptimizeBid, loading]);
 
   return (
     <View style={styles.container}>
+      {/* Model Info Banner */}
+      {modelInfo && (
+        <View style={styles.modelBanner}>
+          <Text style={styles.modelText}>🤖 SMP Model: {modelInfo} | Tap "AI Optimize" to use real predictions</Text>
+        </View>
+      )}
+
       {/* Summary Header */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryItem}>
@@ -598,5 +689,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+
+  // Model Banner
+  modelBanner: {
+    backgroundColor: `${colors.brand.primary}20`,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  modelText: {
+    color: colors.brand.primary,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
