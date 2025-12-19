@@ -1,15 +1,27 @@
 # Project Status Backup
-> Last Updated: 2025-12-19 13:40 KST
+> Last Updated: 2025-12-19 14:05 KST
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System
 - **Repository**: https://github.com/kiminbean/power-demand-forecast
-- **Version**: v4.0.7 (Bug Fixes - Gemini Verified)
+- **Version**: v4.0.7 (Bug Fixes + Documentation Update)
 - **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.7
 
 ---
 
 ## Latest Changes (2025-12-19)
+
+### Documentation: README Update (v4.0.7)
+Updated README.md with v4.0.7 bug fixes and documentation.
+
+| Update | Details |
+|--------|---------|
+| Test Badge | 1436 → 1564 passed |
+| Dashboard Section | Added v4.0.7 features table |
+| Run Command | Added v4 dashboard command |
+| Project Structure | Added `app_v4.py` reference |
+| New Section | v4.0.7 버그 수정 with code examples |
+| Version | Updated to v4.0.7 |
 
 ### Bug Fix: SMP Zero Value (v4.0.7)
 Fixed SMP showing 0.0원 instead of actual price (~141.5원).
@@ -48,6 +60,7 @@ Fixed reserve rate showing 911% instead of ~121%.
 
 ### Recent Commits
 ```
+d85f5f1 docs: Update README with v4.0.7 bug fixes
 1b25595 fix: Handle zero SMP values by falling back to mainland price
 5ea791d fix: Replace deprecated use_container_width with width parameter
 4e29b71 fix: Unify load pattern function to eliminate chart spike bug
@@ -176,7 +189,7 @@ models/smp_v3/smp_v3_metrics.json    - Performance metrics
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| v4.0.7 | 2025-12-19 | Chart pattern spike fix (Gemini verified) |
+| v4.0.7 | 2025-12-19 | Bug fixes + README documentation update |
 | v4.0.6 | 2025-12-19 | Reserve rate bug fix (911% → 132%) |
 | v4.0.5 | 2025-12-19 | GE Inertia layout, real-time chart |
 | v4.0.4 | 2025-12-19 | Slack webhook notifications |
@@ -192,7 +205,7 @@ models/smp_v3/smp_v3_metrics.json    - Performance metrics
 For next session:
 1. Read `.claude/backups/PROJECT_STATUS.md`
 2. Run `git log --oneline -10`
-3. View release: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.4
+3. View release: https://github.com/kiminbean/power-demand-forecast/releases/tag/v4.0.7
 
 ---
 
@@ -201,7 +214,8 @@ For next session:
 - Apple Silicon MPS (M1 MacBook Pro 32GB)
 
 ## Notes
-- v4.0.4 adds Slack webhook for all alert levels
+- v4.0.7 includes bug fixes and README documentation update
+- README now includes v4.0.7 bug fixes section with code examples
 - Email only sends for critical alerts (< 5%)
 - Slack sends for all alerts (< 15%)
 - All 1,564 tests passing
