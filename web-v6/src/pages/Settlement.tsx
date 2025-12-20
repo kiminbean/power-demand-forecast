@@ -27,6 +27,7 @@ import {
   Cell,
 } from 'recharts';
 import { useSettlements, useSettlementSummary } from '../hooks/useApi';
+import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 // Generate demo settlement data
@@ -63,6 +64,13 @@ export default function Settlement() {
   useSettlements(30); // Load settlements data
   useSettlementSummary(); // Load summary data
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
+  const { isDark } = useTheme();
+
+  // Theme-aware chart colors
+  const chartColors = {
+    grid: isDark ? '#374151' : '#e5e7eb',
+    axis: isDark ? '#9ca3af' : '#6b7280',
+  };
 
   // Use demo data if no API data
   const settlementData = generateDemoData();
@@ -86,7 +94,7 @@ export default function Settlement() {
       const data = payload[0].payload;
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-xl min-w-[180px]">
-          <p className="text-white font-medium mb-2">{data.date}</p>
+          <p className="text-text-primary font-medium mb-2">{data.date}</p>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-success">수익:</span>
@@ -101,16 +109,16 @@ export default function Settlement() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white">순수익:</span>
+              <span className="text-text-primary">순수익:</span>
               <span className="font-mono font-bold">{data.netRevenue.toFixed(1)}백만</span>
             </div>
             <hr className="border-border my-1" />
             <div className="flex justify-between">
-              <span className="text-gray-400">발전량:</span>
+              <span className="text-text-muted">발전량:</span>
               <span className="font-mono">{data.generation.toLocaleString()} MWh</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">예측정확도:</span>
+              <span className="text-text-muted">예측정확도:</span>
               <span className="font-mono">{data.accuracy.toFixed(1)}%</span>
             </div>
           </div>
@@ -123,12 +131,12 @@ export default function Settlement() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">정산</h1>
-          <p className="text-gray-400 mt-1">수익 및 불균형 정산 현황</p>
+          <h1 className="text-2xl font-bold text-text-primary">정산</h1>
+          <p className="text-text-muted mt-1">수익 및 불균형 정산 현황</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Period Selector */}
           <div className="flex items-center bg-card rounded-lg border border-border p-1">
             {(['week', 'month', 'quarter'] as const).map((p) => (
@@ -136,10 +144,10 @@ export default function Settlement() {
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={clsx(
-                  'px-3 py-1.5 text-sm rounded-md transition-colors',
+                  'px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap',
                   period === p
-                    ? 'bg-primary text-white'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-primary text-text-primary'
+                    : 'text-text-muted hover:text-text-primary'
                 )}
               >
                 {p === 'week' && '1주'}
@@ -148,22 +156,24 @@ export default function Settlement() {
               </button>
             ))}
           </div>
-          <button className="btn-secondary flex items-center gap-2">
+          <button className="btn-secondary flex items-center gap-2 whitespace-nowrap">
             <Calendar className="w-4 h-4" />
-            기간 선택
+            <span className="hidden sm:inline">기간 선택</span>
+            <span className="sm:hidden">기간</span>
           </button>
-          <button className="btn-primary flex items-center gap-2">
+          <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
             <Download className="w-4 h-4" />
-            리포트 다운로드
+            <span className="hidden sm:inline">리포트 다운로드</span>
+            <span className="sm:hidden">다운로드</span>
           </button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">발전 수익</span>
+            <span className="text-sm text-text-muted">발전 수익</span>
             <div className="flex items-center text-success text-xs">
               <ArrowUpRight className="w-3 h-3" />
               5.2%
@@ -171,13 +181,13 @@ export default function Settlement() {
           </div>
           <div className="text-2xl font-bold text-success">
             {totals.revenue.toFixed(1)}
-            <span className="text-sm text-gray-400 ml-1">백만원</span>
+            <span className="text-sm text-text-muted ml-1">백만원</span>
           </div>
         </div>
 
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">불균형 정산</span>
+            <span className="text-sm text-text-muted">불균형 정산</span>
             <div className={clsx(
               'flex items-center text-xs',
               totals.imbalance >= 0 ? 'text-success' : 'text-danger'
@@ -191,13 +201,13 @@ export default function Settlement() {
             totals.imbalance >= 0 ? 'text-success' : 'text-danger'
           )}>
             {totals.imbalance >= 0 ? '+' : ''}{totals.imbalance.toFixed(1)}
-            <span className="text-sm text-gray-400 ml-1">백만원</span>
+            <span className="text-sm text-text-muted ml-1">백만원</span>
           </div>
         </div>
 
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">순 수익</span>
+            <span className="text-sm text-text-muted">순 수익</span>
             <div className="flex items-center text-primary text-xs">
               <ArrowUpRight className="w-3 h-3" />
               6.8%
@@ -205,23 +215,23 @@ export default function Settlement() {
           </div>
           <div className="text-2xl font-bold text-primary">
             {totals.netRevenue.toFixed(1)}
-            <span className="text-sm text-gray-400 ml-1">백만원</span>
+            <span className="text-sm text-text-muted ml-1">백만원</span>
           </div>
         </div>
 
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">총 발전량</span>
+            <span className="text-sm text-text-muted">총 발전량</span>
           </div>
-          <div className="text-2xl font-bold text-white">
+          <div className="text-2xl font-bold text-text-primary">
             {(totals.generation / 1000).toFixed(1)}
-            <span className="text-sm text-gray-400 ml-1">GWh</span>
+            <span className="text-sm text-text-muted ml-1">GWh</span>
           </div>
         </div>
 
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">예측 정확도</span>
+            <span className="text-sm text-text-muted">예측 정확도</span>
             {totals.avgAccuracy >= 90 ? (
               <CheckCircle className="w-4 h-4 text-success" />
             ) : (
@@ -233,16 +243,16 @@ export default function Settlement() {
             totals.avgAccuracy >= 90 ? 'text-success' : 'text-warning'
           )}>
             {totals.avgAccuracy.toFixed(1)}
-            <span className="text-sm text-gray-400 ml-1">%</span>
+            <span className="text-sm text-text-muted ml-1">%</span>
           </div>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue Trend */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">수익 추이</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">수익 추이</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={periodData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -252,19 +262,19 @@ export default function Settlement() {
                     <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                 <XAxis
                   dataKey="displayDate"
-                  stroke="#9ca3af"
+                  stroke={chartColors.axis}
                   fontSize={11}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
-                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} />
+                <YAxis stroke={chartColors.axis} fontSize={12} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend
                   wrapperStyle={{ paddingTop: 10 }}
-                  formatter={(value) => <span className="text-gray-400 text-sm">{value}</span>}
+                  formatter={(value) => <span className="text-text-muted text-sm">{value}</span>}
                 />
                 <Area
                   type="monotone"
@@ -289,23 +299,23 @@ export default function Settlement() {
 
         {/* Imbalance Analysis */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">불균형 정산 분석</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">불균형 정산 분석</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={periodData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                 <XAxis
                   dataKey="displayDate"
-                  stroke="#9ca3af"
+                  stroke={chartColors.axis}
                   fontSize={11}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
-                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} />
+                <YAxis stroke={chartColors.axis} fontSize={12} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend
                   wrapperStyle={{ paddingTop: 10 }}
-                  formatter={(value) => <span className="text-gray-400 text-sm">{value}</span>}
+                  formatter={(value) => <span className="text-text-muted text-sm">{value}</span>}
                 />
                 <Bar
                   dataKey="imbalance"
@@ -325,13 +335,13 @@ export default function Settlement() {
       {/* Settlement Table */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">일별 정산 내역</h3>
-          <span className="text-sm text-gray-400">{periodData.length}일</span>
+          <h3 className="text-lg font-semibold text-text-primary">일별 정산 내역</h3>
+          <span className="text-sm text-text-muted">{periodData.length}일</span>
         </div>
         <div className="overflow-x-auto max-h-[400px]">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="text-gray-400 border-b border-border">
+              <tr className="text-text-muted border-b border-border">
                 <th className="text-left py-3 px-4">날짜</th>
                 <th className="text-right py-3 px-4">발전량 (MWh)</th>
                 <th className="text-right py-3 px-4">평균 SMP</th>
@@ -347,7 +357,7 @@ export default function Settlement() {
                   key={idx}
                   className="border-b border-border/50 hover:bg-background/50 transition-colors"
                 >
-                  <td className="py-3 px-4 font-medium text-white">{row.date}</td>
+                  <td className="py-3 px-4 font-medium text-text-primary">{row.date}</td>
                   <td className="py-3 px-4 text-right font-mono">{row.generation.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right font-mono text-smp">{row.avgSmp} 원</td>
                   <td className="py-3 px-4 text-right font-mono text-success">{row.revenue.toFixed(1)} 백만</td>
@@ -357,7 +367,7 @@ export default function Settlement() {
                   )}>
                     {row.imbalance >= 0 ? '+' : ''}{row.imbalance.toFixed(2)} 백만
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-white">{row.netRevenue.toFixed(1)} 백만</td>
+                  <td className="py-3 px-4 text-right font-mono font-bold text-text-primary">{row.netRevenue.toFixed(1)} 백만</td>
                   <td className="py-3 px-4 text-right">
                     <span className={clsx(
                       'px-2 py-1 text-xs rounded font-mono',

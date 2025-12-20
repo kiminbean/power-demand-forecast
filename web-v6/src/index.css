@@ -7,8 +7,10 @@
    Default: Light Mode
    ============================================ */
 
-:root {
+:root,
+:root.light {
   /* Light Theme Colors (Default) */
+  color-scheme: light;
   --color-background: #f8fafc;
   --color-secondary: #e2e8f0;
   --color-card: #ffffff;
@@ -25,6 +27,7 @@
 
 :root.dark {
   /* Dark Theme Colors */
+  color-scheme: dark;
   --color-background: #0e1117;
   --color-secondary: #1a1f2c;
   --color-card: #1e2530;

@@ -8,7 +8,7 @@ import Sidebar from './Sidebar';
 
 export default function Layout() {
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex flex-col bg-background overflow-hidden transition-colors duration-300">
       {/* Header */}
       <Header />
 
@@ -18,7 +18,7 @@ export default function Layout() {
         <Sidebar />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6 bg-background transition-colors duration-300">
           <Outlet />
         </main>
       </div>

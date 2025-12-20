@@ -22,6 +22,7 @@ import {
   Bar,
 } from 'recharts';
 import { useSMPForecast, useMarketStatus } from '../hooks/useApi';
+import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 interface BidSegment {
@@ -36,6 +37,15 @@ export default function Bidding() {
   const [selectedHour, setSelectedHour] = useState(12);
   const [riskLevel, setRiskLevel] = useState<'conservative' | 'moderate' | 'aggressive'>('moderate');
   const [capacity, setCapacity] = useState(50);
+  const { isDark } = useTheme();
+
+  // Theme-aware chart colors
+  const chartColors = {
+    grid: isDark ? '#374151' : '#e5e7eb',
+    axis: isDark ? '#9ca3af' : '#6b7280',
+    tooltipBg: isDark ? '#1e2530' : '#ffffff',
+    tooltipBorder: isDark ? '#374151' : '#e5e7eb',
+  };
 
   // Generate 10-segment bid structure
   const [segments, setSegments] = useState<BidSegment[]>(() => {
@@ -102,47 +112,49 @@ export default function Bidding() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">입찰 관리</h1>
-          <p className="text-gray-400 mt-1">10-Segment 입찰가격 설정</p>
+          <h1 className="text-2xl font-bold text-text-primary">입찰 관리</h1>
+          <p className="text-text-muted mt-1">10-Segment 입찰가격 설정</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Market Status */}
           <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-lg border border-border">
             <div className={clsx(
               'status-dot',
               marketStatus?.dam.status === 'open' ? 'status-success' : 'status-danger'
             )} />
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-text-muted whitespace-nowrap">
               DAM {marketStatus?.dam.status === 'open' ? '거래 가능' : '마감'}
             </span>
             {marketStatus?.dam.hours_remaining && (
-              <span className="text-xs text-warning">
+              <span className="text-xs text-warning whitespace-nowrap">
                 {marketStatus.dam.hours_remaining}시간 남음
               </span>
             )}
           </div>
-          <button onClick={handleOptimize} className="btn-secondary flex items-center gap-2">
+          <button onClick={handleOptimize} className="btn-secondary flex items-center gap-2 whitespace-nowrap">
             <Sparkles className="w-4 h-4" />
-            AI 최적화
+            <span className="hidden sm:inline">AI 최적화</span>
+            <span className="sm:hidden">최적화</span>
           </button>
-          <button className="btn-primary flex items-center gap-2">
+          <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
             <Send className="w-4 h-4" />
-            KPX 제출
+            <span className="hidden sm:inline">KPX 제출</span>
+            <span className="sm:hidden">제출</span>
           </button>
         </div>
       </div>
 
       {/* Settings Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Hour Selection */}
         <div className="card">
-          <label className="text-sm text-gray-400 block mb-2">거래 시간대</label>
+          <label className="text-sm text-text-muted block mb-2">거래 시간대</label>
           <select
             value={selectedHour}
             onChange={(e) => setSelectedHour(Number(e.target.value))}
-            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-white"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-text-primary"
           >
             {Array.from({ length: 24 }, (_, i) => (
               <option key={i} value={i}>
@@ -154,12 +166,12 @@ export default function Bidding() {
 
         {/* Capacity */}
         <div className="card">
-          <label className="text-sm text-gray-400 block mb-2">입찰 용량 (MW)</label>
+          <label className="text-sm text-text-muted block mb-2">입찰 용량 (MW)</label>
           <input
             type="number"
             value={capacity}
             onChange={(e) => setCapacity(Number(e.target.value))}
-            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-white"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-text-primary"
             min={1}
             max={500}
           />
@@ -167,7 +179,7 @@ export default function Bidding() {
 
         {/* Risk Level */}
         <div className="card">
-          <label className="text-sm text-gray-400 block mb-2">위험 선호도</label>
+          <label className="text-sm text-text-muted block mb-2">위험 선호도</label>
           <div className="flex gap-2">
             {(['conservative', 'moderate', 'aggressive'] as const).map((level) => (
               <button
@@ -176,8 +188,8 @@ export default function Bidding() {
                 className={clsx(
                   'flex-1 px-3 py-2 text-sm rounded-lg transition-colors',
                   riskLevel === level
-                    ? 'bg-primary text-white'
-                    : 'bg-background text-gray-400 hover:bg-background/80'
+                    ? 'bg-primary text-text-primary'
+                    : 'bg-background text-text-muted hover:bg-background/80'
                 )}
               >
                 {level === 'conservative' && '보수적'}
@@ -190,31 +202,31 @@ export default function Bidding() {
 
         {/* SMP Reference */}
         <div className="card">
-          <label className="text-sm text-gray-400 block mb-2">SMP 예측 (원/kWh)</label>
+          <label className="text-sm text-text-muted block mb-2">SMP 예측 (원/kWh)</label>
           <div className="flex items-center justify-between">
             <div className="text-center">
               <div className="text-success text-sm">{smpForHour.q10.toFixed(0)}</div>
-              <div className="text-xs text-gray-500">하한</div>
+              <div className="text-xs text-text-muted">하한</div>
             </div>
             <div className="text-center">
               <div className="text-smp text-xl font-bold">{smpForHour.q50.toFixed(0)}</div>
-              <div className="text-xs text-gray-500">예측</div>
+              <div className="text-xs text-text-muted">예측</div>
             </div>
             <div className="text-center">
               <div className="text-danger text-sm">{smpForHour.q90.toFixed(0)}</div>
-              <div className="text-xs text-gray-500">상한</div>
+              <div className="text-xs text-text-muted">상한</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bid Matrix */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">10-Segment 입찰 매트릭스</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">10-Segment 입찰 매트릭스</h3>
           <div className="space-y-2">
-            <div className="grid grid-cols-4 gap-2 text-xs text-gray-400 font-medium px-2">
+            <div className="grid grid-cols-4 gap-2 text-xs text-text-muted font-medium px-2">
               <span>구간</span>
               <span className="text-right">물량 (MW)</span>
               <span className="text-right">가격 (원/kWh)</span>
@@ -228,7 +240,7 @@ export default function Bidding() {
                   seg.price <= smpForHour.q50 ? 'bg-success/10 border border-success/20' : 'bg-background'
                 )}
               >
-                <span className="text-white font-medium">Seg {seg.id}</span>
+                <span className="text-text-primary font-medium">Seg {seg.id}</span>
                 <input
                   type="number"
                   value={seg.quantity}
@@ -240,15 +252,15 @@ export default function Bidding() {
                       return updated;
                     });
                   }}
-                  className="w-full bg-card border border-border rounded px-2 py-1 text-white text-right text-sm"
+                  className="w-full bg-card border border-border rounded px-2 py-1 text-text-primary text-right text-sm"
                 />
                 <input
                   type="number"
                   value={seg.price}
                   onChange={(e) => updateSegmentPrice(seg.id, Number(e.target.value))}
-                  className="w-full bg-card border border-border rounded px-2 py-1 text-white text-right text-sm"
+                  className="w-full bg-card border border-border rounded px-2 py-1 text-text-primary text-right text-sm"
                 />
-                <span className="text-right text-sm text-gray-400 font-mono">
+                <span className="text-right text-sm text-text-muted font-mono">
                   {((seg.quantity * seg.price) / 1000).toFixed(1)}K
                 </span>
               </div>
@@ -258,13 +270,13 @@ export default function Bidding() {
           {/* Total */}
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex justify-between items-center">
-              <span className="text-gray-400">총 입찰량</span>
-              <span className="text-xl font-bold text-white">
+              <span className="text-text-muted">총 입찰량</span>
+              <span className="text-xl font-bold text-text-primary">
                 {segments.reduce((sum, s) => sum + s.quantity, 0).toFixed(1)} MW
               </span>
             </div>
             <div className="flex justify-between items-center mt-2">
-              <span className="text-gray-400">예상 평균가</span>
+              <span className="text-text-muted">예상 평균가</span>
               <span className="text-xl font-bold text-smp">
                 {(segments.reduce((sum, s) => sum + s.price * s.quantity, 0) /
                   segments.reduce((sum, s) => sum + s.quantity, 0)).toFixed(1)} 원/kWh
@@ -275,33 +287,40 @@ export default function Bidding() {
 
         {/* Bid Curve Chart */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-white mb-4">입찰 곡선 (Step Chart)</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">입찰 곡선 (Step Chart)</h3>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={bidCurveData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <ComposedChart data={bidCurveData} margin={{ top: 20, right: 30, left: 10, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                 <XAxis
                   dataKey="cumulativeQuantity"
-                  stroke="#9ca3af"
-                  fontSize={12}
+                  stroke={chartColors.axis}
+                  fontSize={14}
                   tickLine={false}
-                  label={{ value: '누적 물량 (MW)', position: 'bottom', fill: '#9ca3af' }}
+                  label={{ value: '누적 물량 (MW)', position: 'insideBottom', offset: -10, fill: chartColors.axis, fontSize: 14, fontWeight: 500 }}
                 />
                 <YAxis
-                  stroke="#9ca3af"
-                  fontSize={12}
+                  stroke={chartColors.axis}
+                  fontSize={14}
                   tickLine={false}
-                  label={{ value: '가격 (원/kWh)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}
+                  width={60}
+                  label={{ value: '가격 (원/kWh)', angle: -90, position: 'insideLeft', fill: chartColors.axis, fontSize: 14, fontWeight: 500 }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1e2530',
-                    border: '1px solid #374151',
+                    backgroundColor: chartColors.tooltipBg,
+                    border: `1px solid ${chartColors.tooltipBorder}`,
                     borderRadius: '8px',
+                    fontSize: '15px',
                   }}
-                  labelStyle={{ color: '#fff' }}
+                  labelStyle={{ color: isDark ? '#fff' : '#000', fontSize: '15px', fontWeight: 600 }}
                 />
-                <Legend />
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  wrapperStyle={{ paddingBottom: 10, fontSize: 15 }}
+                  formatter={(value) => <span className="text-text-muted font-medium">{value}</span>}
+                />
 
                 {/* SMP Reference Lines */}
                 <Line
@@ -310,7 +329,7 @@ export default function Bidding() {
                   stroke="#fbbf24"
                   strokeWidth={3}
                   name="입찰가격"
-                  dot={{ fill: '#fbbf24', strokeWidth: 2 }}
+                  dot={{ fill: '#fbbf24', strokeWidth: 2, r: 4 }}
                 />
 
                 {/* Bar for quantity */}
@@ -319,24 +338,25 @@ export default function Bidding() {
                   fill="#6366f1"
                   opacity={0.5}
                   name="구간 물량"
+                  radius={[2, 2, 0, 0]}
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
 
           {/* SMP Reference Overlay */}
-          <div className="mt-4 flex items-center justify-center gap-6">
+          <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-center gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-success" />
-              <span className="text-xs text-gray-400">SMP 하한 ({smpForHour.q10.toFixed(0)})</span>
+              <div className="w-6 h-2 bg-success rounded" />
+              <span className="text-base text-text-muted whitespace-nowrap">SMP 하한 ({smpForHour.q10.toFixed(0)})</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-smp" />
-              <span className="text-xs text-gray-400">SMP 예측 ({smpForHour.q50.toFixed(0)})</span>
+              <div className="w-6 h-2 bg-smp rounded" />
+              <span className="text-base text-text-muted whitespace-nowrap">SMP 예측 ({smpForHour.q50.toFixed(0)})</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-danger" />
-              <span className="text-xs text-gray-400">SMP 상한 ({smpForHour.q90.toFixed(0)})</span>
+              <div className="w-6 h-2 bg-danger rounded" />
+              <span className="text-base text-text-muted whitespace-nowrap">SMP 상한 ({smpForHour.q90.toFixed(0)})</span>
             </div>
           </div>
         </div>
@@ -344,25 +364,27 @@ export default function Bidding() {
 
       {/* Bottom Actions */}
       <div className="card">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-success" />
-              <span className="text-sm text-gray-400">단조성 제약 충족</span>
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+              <span className="text-sm text-text-muted whitespace-nowrap">단조성 제약 충족</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-success" />
-              <span className="text-sm text-gray-400">용량 제한 준수</span>
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+              <span className="text-sm text-text-muted whitespace-nowrap">용량 제한 준수</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="btn-secondary flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button className="btn-secondary flex items-center gap-2 whitespace-nowrap">
               <Save className="w-4 h-4" />
-              임시 저장
+              <span className="hidden sm:inline">임시 저장</span>
+              <span className="sm:hidden">저장</span>
             </button>
-            <button className="btn-primary flex items-center gap-2">
+            <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
               <Send className="w-4 h-4" />
-              입찰 제출
+              <span className="hidden sm:inline">입찰 제출</span>
+              <span className="sm:hidden">제출</span>
             </button>
           </div>
         </div>

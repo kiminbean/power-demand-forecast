@@ -96,16 +96,16 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">대시보드</h1>
           <p className="text-text-muted mt-1">제주 전력 시스템 실시간 현황</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-lg border border-border">
-            <Clock className="w-4 h-4 text-text-muted" />
-            <span className="text-sm text-text-muted">
-              마지막 업데이트: {new Date().toLocaleTimeString('ko-KR')}
+            <Clock className="w-4 h-4 text-text-muted flex-shrink-0" />
+            <span className="text-sm text-text-muted whitespace-nowrap">
+              업데이트: {new Date().toLocaleTimeString('ko-KR')}
             </span>
           </div>
           <button
@@ -113,7 +113,7 @@ export default function Dashboard() {
               refetchKPIs();
               refetchSMP();
             }}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 whitespace-nowrap"
           >
             <Activity className="w-4 h-4" />
             새로고침
@@ -122,7 +122,7 @@ export default function Dashboard() {
       </div>
 
       {/* Market Status */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <MarketBadge
           market="DAM"
           status={marketStatus?.dam.status ?? 'open'}
@@ -137,7 +137,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="현재 SMP"
           value={currentSMP.toFixed(1)}
@@ -171,7 +171,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Power Supply Chart */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -205,7 +205,7 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom Section - Stats & Alerts */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Resource Summary */}
         <div className="card">
           <h3 className="text-lg font-semibold text-text-primary mb-4">발전소 현황</h3>
