@@ -103,7 +103,89 @@ EPSIS (KPX) ─→ 크롤러 ─→ CSV 저장 ─→ LSTM 모델 ─→ API ─
 
 ---
 
-## 7. 실행 방법
+## 7. 딥러닝 모델 (SMP 예측)
+
+### 모델 아키텍처
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  LSTM-Attention v3.1                        │
+├─────────────────────────────────────────────────────────────┤
+│  Input (24h × 22 features)                                  │
+│         ↓                                                   │
+│  ┌─────────────────────────────────────────┐               │
+│  │  BiLSTM Layer 1 (128 hidden × 2)        │               │
+│  │  BiLSTM Layer 2 (128 hidden × 2)        │               │
+│  │  BiLSTM Layer 3 (128 hidden × 2)        │               │
+│  └─────────────────────────────────────────┘               │
+│         ↓                                                   │
+│  ┌─────────────────────────────────────────┐               │
+│  │  Stable Attention Mechanism             │               │
+│  └─────────────────────────────────────────┘               │
+│         ↓                                                   │
+│  ┌─────────────────────────────────────────┐               │
+│  │  Quantile Output (q10, q50, q90)        │               │
+│  └─────────────────────────────────────────┘               │
+│         ↓                                                   │
+│  Output (24h SMP 예측)                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 모델 정보
+| 항목 | 값 |
+|------|-----|
+| **모델명** | LSTM-Attention v3.1 |
+| **아키텍처** | BiLSTM + Stable Attention |
+| **파라미터 수** | 249,952개 |
+| **입력 피처** | 22개 |
+| **학습 장치** | MPS (Apple Silicon) |
+| **데이터 소스** | EPSIS (2024-01 ~ 2024-12) |
+
+### 성능 지표
+| 지표 | 값 | 의미 |
+|------|-----|------|
+| **MAPE** | 7.83% | 평균 절대 백분율 오차 (낮을수록 좋음) |
+| **MAE** | 8.93 원 | 평균 절대 오차 |
+| **RMSE** | 12.02 원 | 평균 제곱근 오차 |
+| **R²** | 0.736 | 결정 계수 (1에 가까울수록 좋음) |
+| **Coverage** | 89.4% | 80% 신뢰구간 커버리지 |
+
+### 입력 피처 (22개)
+```
+시간적 피처:    hour, dayofweek, month, is_weekend, is_holiday
+SMP 피처:      smp_lag_1h ~ smp_lag_24h (24개 래그)
+기상 피처:     temperature, wind_speed, solar_radiation
+수급 피처:     demand, supply, renewable_ratio
+```
+
+### 모델 개선 기법
+| 기법 | 효과 |
+|------|------|
+| BiLSTM | 양방향 시계열 패턴 학습 |
+| Stable Attention | 중요 시점 가중치 부여 |
+| Huber Loss | 이상치에 강건한 학습 |
+| Quantile Loss | 신뢰구간 (q10/q50/q90) 출력 |
+| Noise Injection | 과적합 방지 |
+| Gradient Clipping | 학습 안정화 |
+
+### 학습 설정
+```python
+{
+    "input_hours": 24,       # 입력: 과거 24시간
+    "output_hours": 24,      # 출력: 미래 24시간
+    "hidden_size": 128,
+    "num_layers": 3,
+    "dropout": 0.2,
+    "bidirectional": True,
+    "batch_size": 32,
+    "epochs": 200,
+    "learning_rate": 0.001,
+    "patience": 25           # Early Stopping
+}
+```
+
+---
+
+## 8. 실행 방법
 
 ### 개발 모드
 ```bash
@@ -123,7 +205,7 @@ docker compose -f docker/docker-compose.v6.yml up -d
 
 ---
 
-## 8. 주요 컴포넌트 설명
+## 9. 주요 컴포넌트 설명
 
 ### SMP 예측 차트
 ```tsx
@@ -159,7 +241,7 @@ const { isDark, toggleTheme } = useTheme();
 
 ---
 
-## 9. 배포 아키텍처
+## 10. 배포 아키텍처
 
 ```
                     ┌─────────────────┐
@@ -187,7 +269,7 @@ const { isDark, toggleTheme } = useTheme();
 
 ---
 
-## 10. 브랜딩
+## 11. 브랜딩
 
 - **로고**: eXeco (진한 파란색 #04265E)
 - **테마**: 라이트/다크 모드 지원
