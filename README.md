@@ -13,7 +13,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-1564%20passed-brightgreen.svg)](#테스트)
 
 ## 프로젝트 개요
@@ -760,7 +760,14 @@ model = model.to(device)
 
 ## 라이선스
 
-MIT License
+**Proprietary - All Rights Reserved**
+
+Copyright (c) 2025 kiminbean. 모든 권리 보유.
+
+이 소프트웨어는 저작권법에 의해 보호됩니다. 명시적인 서면 허가 없이는
+복사, 수정, 배포, 상업적 사용이 금지됩니다.
+
+라이선스 문의: kiminbean@gmail.com
 
 ---
 
