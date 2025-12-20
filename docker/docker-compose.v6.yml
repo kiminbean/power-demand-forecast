@@ -4,7 +4,8 @@
 # Usage:
 #   1. Create .env file with credentials (see .env.example)
 #   2. docker-compose -f docker/docker-compose.v6.yml up -d
-#   3. Access: http://localhost:8600 (username/password required)
+#   3. Desktop: http://localhost:8600 (username/password required)
+#   4. Mobile: http://localhost:8601 (username/password required)
 
 services:
   # FastAPI Backend
@@ -30,7 +31,7 @@ services:
     networks:
       - rebms-network
 
-  # React Frontend (Nginx)
+  # React Frontend - Desktop (Nginx)
   web:
     build:
       context: ../web-v6
@@ -39,6 +40,31 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8600}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - NGINX_AUTH_USER=${AUTH_USER:-admin}
+      - NGINX_AUTH_PASS=${AUTH_PASS:-rebms2025}
+    volumes:
+      - ./htpasswd:/etc/nginx/.htpasswd:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rebms-network
+
+  # React Frontend - Mobile (Nginx)
+  mobile:
+    build:
+      context: ../web-v5
+      dockerfile: Dockerfile
+    container_name: rebms-mobile
+    restart: unless-stopped
+    ports:
+      - "${MOBILE_PORT:-8601}:80"
     depends_on:
       api:
         condition: service_healthy

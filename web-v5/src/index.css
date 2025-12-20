@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light mode (default) */
+:root, :root.light {
+  color-scheme: light;
+  --color-background: #f8fafc;
+  --color-secondary: #ffffff;
+  --color-card: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+}
+
+/* Dark mode */
+:root.dark {
+  color-scheme: dark;
+  --color-background: #0e1117;
+  --color-secondary: #161b22;
+  --color-card: #1e2530;
+  --color-border: #30363d;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #c9d1d9;
+  --color-text-muted: #8b949e;
+}
+
+/* Base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safe area for mobile */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile card */
+@layer components {
+  .card {
+    @apply bg-card rounded-xl p-4 border border-border;
+  }
+
+  .btn-primary {
+    @apply px-4 py-3 bg-brand text-white rounded-xl font-medium
+           active:scale-95 transition-transform;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-3 bg-secondary text-text-primary rounded-xl font-medium
+           border border-border active:scale-95 transition-transform;
+  }
+
+  /* Bottom navigation item */
+  .nav-item {
+    @apply flex flex-col items-center justify-center gap-1 py-2 px-4
+           text-text-muted transition-colors;
+  }
+
+  .nav-item.active {
+    @apply text-brand;
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-success {
+    @apply bg-success;
+  }
+
+  .status-warning {
+    @apply bg-warning;
+  }
+
+  .status-danger {
+    @apply bg-danger;
+  }
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+/* Input styles for mobile */
+input, select, textarea {
+  font-size: 16px !important; /* Prevent zoom on iOS */
+}
+
+/* Pull to refresh disable */
+body {
+  overscroll-behavior-y: contain;
+}

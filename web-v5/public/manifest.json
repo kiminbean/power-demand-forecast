@@ -1,0 +1,17 @@
+{
+  "name": "RE-BMS Mobile",
+  "short_name": "RE-BMS",
+  "description": "재생에너지 입찰관리시스템 모바일",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#04265E",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo-dark.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
