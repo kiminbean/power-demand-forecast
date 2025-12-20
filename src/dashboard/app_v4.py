@@ -2032,11 +2032,10 @@ def create_realtime_power_chart() -> go.Figure:
             tickfont=dict(color='#94a3b8'),
         ),
         yaxis=dict(
-            title='전력 (MW)',
+            title=dict(text='전력 (MW)', font=dict(color='#94a3b8')),
             showgrid=True,
             gridcolor='rgba(148, 163, 184, 0.1)',
             tickfont=dict(color='#94a3b8'),
-            titlefont=dict(color='#94a3b8'),
         ),
         legend=dict(
             orientation='h',
