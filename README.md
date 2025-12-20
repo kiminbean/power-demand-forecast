@@ -612,6 +612,8 @@ alerts = manager.check_all(current_metrics)
 
 ## Docker 배포
 
+### 기본 API 서버
+
 ```bash
 # 이미지 빌드
 docker build -t power-demand-forecast .
@@ -622,6 +624,97 @@ docker run -p 8000:8000 power-demand-forecast
 # Docker Compose로 전체 스택 실행
 docker-compose up -d
 ```
+
+### RE-BMS v6.0 Docker 배포 (Private Access)
+
+RE-BMS v6.0은 Basic Authentication을 통해 비공개로 배포할 수 있습니다.
+
+#### 1. 인증 설정
+
+```bash
+# htpasswd 파일 생성 (Apache 형식)
+cd docker
+htpasswd -c htpasswd admin
+# 비밀번호 입력
+
+# 또는 setup-auth.sh 스크립트 사용
+./setup-auth.sh
+```
+
+#### 2. 환경변수 설정
+
+```bash
+# docker/.env 파일 생성
+cat > docker/.env << 'EOF'
+WEB_PORT=8600
+AUTH_USER=admin
+AUTH_PASS=your_secure_password
+API_PORT=8506
+EOF
+```
+
+#### 3. Docker Compose 실행
+
+```bash
+# v6 컨테이너 빌드 및 실행
+docker-compose -f docker/docker-compose.v6.yml up -d
+
+# 로그 확인
+docker logs rebms-api
+docker logs rebms-web
+
+# 상태 확인
+docker ps
+```
+
+#### 4. 접속
+
+```
+URL: http://localhost:8600
+Username: admin
+Password: (htpasswd에 설정한 비밀번호)
+```
+
+#### Docker Compose 구성
+
+| 서비스 | 컨테이너 | 포트 | 설명 |
+|--------|----------|------|------|
+| `api` | rebms-api | 8506 | FastAPI 백엔드 (SMP 예측 API) |
+| `web` | rebms-web | 8600 | React 프론트엔드 (Nginx + Basic Auth) |
+
+#### 주요 명령어
+
+```bash
+# 시작
+docker-compose -f docker/docker-compose.v6.yml up -d
+
+# 중지
+docker-compose -f docker/docker-compose.v6.yml down
+
+# 재빌드 (코드 변경 시)
+docker-compose -f docker/docker-compose.v6.yml up -d --build
+
+# 로그 실시간 확인
+docker-compose -f docker/docker-compose.v6.yml logs -f
+```
+
+#### v6 Docker 스크린샷
+
+| 대시보드 | SMP 예측 |
+|:---:|:---:|
+| ![Dashboard](docs/screenshots/docker_dashboard.png) | ![SMP](docs/screenshots/docker_smp.png) |
+
+| 입찰 관리 | 포트폴리오 |
+|:---:|:---:|
+| ![Bidding](docs/screenshots/docker_bidding.png) | ![Portfolio](docs/screenshots/docker_portfolio.png) |
+
+| 정산 | 제주 지도 |
+|:---:|:---:|
+| ![Settlement](docs/screenshots/docker_settlement.png) | ![Map](docs/screenshots/docker_map.png) |
+
+| 분석 |
+|:---:|
+| ![Analysis](docs/screenshots/docker_analysis.png) |
 
 ---
 
@@ -679,4 +772,4 @@ MIT License
 
 ---
 
-*Last Updated: 2025-12-19 | v4.0.7*
+*Last Updated: 2025-12-20 | v6.0.0*
