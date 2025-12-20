@@ -39,9 +39,8 @@ class ApiService {
   }
 
   // Health check
-  async healthCheck(): Promise<{ status: string; version: string }> {
-    const response = await fetch('/health');
-    return response.json();
+  async healthCheck(): Promise<{ status: string; service: string }> {
+    return this.fetch('/health');
   }
 
   // SMP Forecast (24h predictions with quantiles)
