@@ -61,7 +61,7 @@ export default function KPICard({
               'flex items-center gap-1 text-sm font-medium',
               isPositive && 'text-success',
               isNegative && 'text-danger',
-              !isPositive && !isNegative && 'text-gray-400'
+              !isPositive && !isNegative && 'text-text-muted'
             )}
           >
             <span>
@@ -75,7 +75,7 @@ export default function KPICard({
       </div>
 
       <div>
-        <p className="text-sm text-gray-400 mb-1">{title}</p>
+        <p className="text-sm text-text-muted mb-1">{title}</p>
         <div className="flex items-baseline gap-1">
           <span
             className={clsx(
@@ -88,10 +88,10 @@ export default function KPICard({
           >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </span>
-          {unit && <span className="text-sm text-gray-400">{unit}</span>}
+          {unit && <span className="text-sm text-text-muted">{unit}</span>}
         </div>
         {changeLabel && (
-          <p className="text-xs text-gray-500 mt-1">{changeLabel}</p>
+          <p className="text-xs text-text-muted mt-1">{changeLabel}</p>
         )}
       </div>
     </div>

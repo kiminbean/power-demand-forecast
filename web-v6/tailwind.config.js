@@ -4,13 +4,21 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        background: '#0e1117',
-        secondary: '#1a1f2c',
-        card: '#1e2530',
-        border: '#374151',
+        // Theme-aware colors using CSS variables
+        background: 'var(--color-background)',
+        secondary: 'var(--color-secondary)',
+        card: 'var(--color-card)',
+        border: 'var(--color-border)',
+        text: {
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
+        },
+        // Static colors (same in both themes)
         primary: '#6366f1',
         accent: '#10b981',
         warning: '#f59e0b',

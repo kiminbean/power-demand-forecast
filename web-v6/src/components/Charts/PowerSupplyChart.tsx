@@ -1,5 +1,6 @@
 /**
  * Power Supply/Demand Chart Component - RE-BMS v6.0
+ * Theme-aware chart with light/dark mode support
  */
 
 import {
@@ -15,6 +16,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import type { PowerChartData } from '../../types';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface PowerSupplyChartProps {
   data: PowerChartData[];
@@ -65,7 +67,14 @@ export default function PowerSupplyChart({
   height = 350,
   showForecast = true,
 }: PowerSupplyChartProps) {
+  const { isDark } = useTheme();
   const chartData = data && data.length > 0 ? data : generateDemoData();
+
+  // Theme-aware colors
+  const colors = {
+    grid: isDark ? '#374151' : '#e5e7eb',
+    axis: isDark ? '#9ca3af' : '#6b7280',
+  };
 
   // Split data for actual vs forecast styling
   const currentIndex = chartData.findIndex((d) => d.forecast);
@@ -79,7 +88,7 @@ export default function PowerSupplyChart({
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-xl">
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-white font-medium">{label}</p>
+            <p className="text-text-primary font-medium">{label}</p>
             {isForecast && (
               <span className="px-1.5 py-0.5 text-[10px] bg-warning/20 text-warning rounded">
                 예측
@@ -89,24 +98,24 @@ export default function PowerSupplyChart({
           <div className="space-y-1 text-sm">
             <div className="flex justify-between gap-4">
               <span className="text-supply">공급능력:</span>
-              <span className="text-white font-mono">{data.supply} MW</span>
+              <span className="text-text-primary font-mono">{data.supply} MW</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-demand">전력수요:</span>
-              <span className="text-white font-mono">{data.demand} MW</span>
+              <span className="text-text-primary font-mono">{data.demand} MW</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-400">예비전력:</span>
-              <span className="text-white font-mono">{data.reserve} MW</span>
+              <span className="text-text-muted">예비전력:</span>
+              <span className="text-text-primary font-mono">{data.reserve} MW</span>
             </div>
             <hr className="border-border my-1" />
             <div className="flex justify-between gap-4">
               <span className="text-solar">태양광:</span>
-              <span className="text-white font-mono">{data.solar} MW</span>
+              <span className="text-text-primary font-mono">{data.solar} MW</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-wind">풍력:</span>
-              <span className="text-white font-mono">{data.wind} MW</span>
+              <span className="text-text-primary font-mono">{data.wind} MW</span>
             </div>
           </div>
         </div>
@@ -130,18 +139,18 @@ export default function PowerSupplyChart({
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
 
           <XAxis
             dataKey="time"
-            stroke="#9ca3af"
+            stroke={colors.axis}
             fontSize={12}
             tickLine={false}
             interval={3}
           />
 
           <YAxis
-            stroke="#9ca3af"
+            stroke={colors.axis}
             fontSize={12}
             tickLine={false}
             tickFormatter={(value) => `${value}`}
@@ -153,7 +162,7 @@ export default function PowerSupplyChart({
           <Legend
             wrapperStyle={{ paddingTop: 10 }}
             formatter={(value) => (
-              <span className="text-gray-400 text-sm">{value}</span>
+              <span className="text-text-muted text-sm">{value}</span>
             )}
           />
 

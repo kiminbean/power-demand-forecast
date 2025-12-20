@@ -2,38 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Scrollbar */
+/* ============================================
+   Theme CSS Variables
+   Default: Light Mode
+   ============================================ */
+
+:root {
+  /* Light Theme Colors (Default) */
+  --color-background: #f8fafc;
+  --color-secondary: #e2e8f0;
+  --color-card: #ffffff;
+  --color-border: #cbd5e1;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Scrollbar Light */
+  --scrollbar-track: #e2e8f0;
+  --scrollbar-thumb: #94a3b8;
+  --scrollbar-thumb-hover: #64748b;
+}
+
+:root.dark {
+  /* Dark Theme Colors */
+  --color-background: #0e1117;
+  --color-secondary: #1a1f2c;
+  --color-card: #1e2530;
+  --color-border: #374151;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+
+  /* Scrollbar Dark */
+  --scrollbar-track: #1a1f2c;
+  --scrollbar-thumb: #374151;
+  --scrollbar-thumb-hover: #4b5563;
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1f2c;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: var(--scrollbar-thumb-hover);
 }
 
-/* Base Styles */
+/* ============================================
+   Base Styles
+   ============================================ */
+
 body {
   font-family: 'Noto Sans KR', system-ui, sans-serif;
-  background-color: #0e1117;
-  color: #ffffff;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
   margin: 0;
   padding: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Card Styles */
 @layer components {
   .card {
-    @apply bg-card rounded-xl border border-border p-4;
+    @apply bg-card rounded-xl border border-border p-4 transition-colors duration-200;
   }
 
   .card-hover {
@@ -41,19 +85,19 @@ body {
   }
 
   .metric-value {
-    @apply text-3xl font-bold tabular-nums;
+    @apply text-3xl font-bold tabular-nums text-text-primary;
   }
 
   .metric-label {
-    @apply text-sm text-gray-400;
+    @apply text-sm text-text-muted;
   }
 
   .nav-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-secondary transition-all;
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-primary hover:bg-secondary transition-all;
   }
 
   .nav-link.active {
-    @apply text-white bg-primary/20 border-l-2 border-primary;
+    @apply text-primary bg-primary/10 border-l-2 border-primary;
   }
 
   .btn-primary {
@@ -61,7 +105,7 @@ body {
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-secondary hover:bg-secondary/80 text-white rounded-lg font-medium transition-all border border-border;
+    @apply px-4 py-2 bg-secondary hover:opacity-80 text-text-primary rounded-lg font-medium transition-all border border-border;
   }
 
   .status-dot {
@@ -79,27 +123,47 @@ body {
   .status-danger {
     @apply bg-danger;
   }
+
+  /* Theme-aware text utilities */
+  .text-theme-primary {
+    color: var(--color-text-primary);
+  }
+
+  .text-theme-secondary {
+    color: var(--color-text-secondary);
+  }
+
+  .text-theme-muted {
+    color: var(--color-text-muted);
+  }
 }
 
-/* Chart tooltip styles */
+/* Chart tooltip styles - Theme aware */
 .recharts-tooltip-wrapper {
   z-index: 1000 !important;
 }
 
 .recharts-default-tooltip {
-  background-color: #1e2530 !important;
-  border: 1px solid #374151 !important;
+  background-color: var(--color-card) !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 8px !important;
+  color: var(--color-text-primary) !important;
 }
 
-/* Map styles */
+/* Map styles - Theme aware */
 .leaflet-container {
-  background: #0e1117 !important;
+  background: var(--color-background) !important;
   border-radius: 12px;
 }
 
-.leaflet-tile-pane {
+/* Dark mode: dim map tiles */
+:root.dark .leaflet-tile-pane {
   filter: brightness(0.7) saturate(0.8);
+}
+
+/* Light mode: normal map tiles */
+:root:not(.dark) .leaflet-tile-pane {
+  filter: none;
 }
 
 /* Animations */

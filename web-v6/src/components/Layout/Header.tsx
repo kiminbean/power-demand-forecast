@@ -3,13 +3,15 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Bell, Settings, User, Zap, Activity } from 'lucide-react';
+import { Bell, Settings, User, Zap, Activity, Sun, Moon } from 'lucide-react';
 import { useApiStatus, useModelInfo } from '../../hooks/useApi';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function Header() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const apiStatus = useApiStatus();
   const { data: modelInfo } = useModelInfo();
+  const { toggleTheme, isDark } = useTheme();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -34,7 +36,7 @@ export default function Header() {
   };
 
   return (
-    <header className="h-16 bg-secondary border-b border-border px-6 flex items-center justify-between">
+    <header className="h-16 bg-secondary border-b border-border px-6 flex items-center justify-between transition-colors duration-200">
       {/* Logo & Title */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
@@ -42,8 +44,8 @@ export default function Header() {
             <Zap className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">RE-BMS</h1>
-            <p className="text-xs text-gray-400">v6.0 Desktop</p>
+            <h1 className="text-lg font-bold text-text-primary">RE-BMS</h1>
+            <p className="text-xs text-text-muted">v6.0 Desktop</p>
           </div>
         </div>
       </div>
@@ -51,10 +53,10 @@ export default function Header() {
       {/* Center - Time Display */}
       <div className="flex items-center gap-6">
         <div className="text-center">
-          <div className="text-2xl font-mono font-bold text-white tabular-nums">
+          <div className="text-2xl font-mono font-bold text-text-primary tabular-nums">
             {formatTime(currentTime)}
           </div>
-          <div className="text-xs text-gray-400">{formatDate(currentTime)}</div>
+          <div className="text-xs text-text-muted">{formatDate(currentTime)}</div>
         </div>
       </div>
 
@@ -63,7 +65,7 @@ export default function Header() {
         {/* API Status */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded-lg">
           <div className={`status-dot ${apiStatus === true ? 'status-success' : apiStatus === false ? 'status-danger' : 'status-warning'}`} />
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-text-muted">
             {apiStatus === true ? 'API Connected' : apiStatus === false ? 'Offline' : 'Checking...'}
           </span>
         </div>
@@ -72,21 +74,34 @@ export default function Header() {
         {modelInfo && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded-lg">
             <Activity className="w-4 h-4 text-primary" />
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-text-muted">
               {modelInfo.version} | MAPE: {modelInfo.mape}%
             </span>
           </div>
         )}
 
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 hover:bg-background rounded-lg transition-colors"
+          title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {isDark ? (
+            <Sun className="w-5 h-5 text-text-muted hover:text-warning" />
+          ) : (
+            <Moon className="w-5 h-5 text-text-muted hover:text-primary" />
+          )}
+        </button>
+
         {/* Notifications */}
         <button className="relative p-2 hover:bg-background rounded-lg transition-colors">
-          <Bell className="w-5 h-5 text-gray-400" />
+          <Bell className="w-5 h-5 text-text-muted" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" />
         </button>
 
         {/* Settings */}
         <button className="p-2 hover:bg-background rounded-lg transition-colors">
-          <Settings className="w-5 h-5 text-gray-400" />
+          <Settings className="w-5 h-5 text-text-muted" />
         </button>
 
         {/* User */}

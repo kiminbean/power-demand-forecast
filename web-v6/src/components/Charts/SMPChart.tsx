@@ -1,5 +1,6 @@
 /**
  * SMP Forecast Chart Component - RE-BMS v6.0
+ * Theme-aware chart with light/dark mode support
  */
 
 import {
@@ -14,6 +15,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import type { SMPForecast } from '../../types';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface SMPChartProps {
   forecast: SMPForecast | null;
@@ -26,13 +28,25 @@ export default function SMPChart({
   height = 300,
   showConfidenceInterval = true,
 }: SMPChartProps) {
+  const { isDark } = useTheme();
+
+  // Theme-aware colors
+  const colors = {
+    grid: isDark ? '#374151' : '#e5e7eb',
+    axis: isDark ? '#9ca3af' : '#6b7280',
+    background: isDark ? '#0e1117' : '#f8fafc',
+    text: isDark ? '#ffffff' : '#0f172a',
+    textMuted: isDark ? '#9ca3af' : '#64748b',
+    textSecondary: isDark ? '#d1d5db' : '#475569',
+  };
+
   if (!forecast) {
     return (
       <div
         className="flex items-center justify-center bg-card rounded-xl"
         style={{ height }}
       >
-        <p className="text-gray-400">Loading SMP data...</p>
+        <p className="text-text-muted">Loading SMP data...</p>
       </div>
     );
   }
@@ -55,21 +69,21 @@ export default function SMPChart({
       const data = payload[0].payload;
       return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-xl">
-          <p className="text-white font-medium mb-2">{label}</p>
+          <p className="text-text-primary font-medium mb-2">{label}</p>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between gap-4">
-              <span className="text-gray-400">예측 SMP:</span>
+              <span className="text-text-muted">예측 SMP:</span>
               <span className="text-smp font-mono">{data.q50.toFixed(1)} 원/kWh</span>
             </div>
             {showConfidenceInterval && (
               <>
                 <div className="flex justify-between gap-4">
-                  <span className="text-gray-400">상한 (90%):</span>
-                  <span className="text-gray-300 font-mono">{data.q90.toFixed(1)} 원/kWh</span>
+                  <span className="text-text-muted">상한 (90%):</span>
+                  <span className="text-text-secondary font-mono">{data.q90.toFixed(1)} 원/kWh</span>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <span className="text-gray-400">하한 (10%):</span>
-                  <span className="text-gray-300 font-mono">{data.q10.toFixed(1)} 원/kWh</span>
+                  <span className="text-text-muted">하한 (10%):</span>
+                  <span className="text-text-secondary font-mono">{data.q10.toFixed(1)} 원/kWh</span>
                 </div>
               </>
             )}
@@ -95,18 +109,18 @@ export default function SMPChart({
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
 
           <XAxis
             dataKey="hour"
-            stroke="#9ca3af"
+            stroke={colors.axis}
             fontSize={12}
             tickLine={false}
             interval={2}
           />
 
           <YAxis
-            stroke="#9ca3af"
+            stroke={colors.axis}
             fontSize={12}
             tickLine={false}
             tickFormatter={(value) => `${value}`}
@@ -118,7 +132,7 @@ export default function SMPChart({
           <Legend
             wrapperStyle={{ paddingTop: 10 }}
             formatter={(value) => (
-              <span className="text-gray-400 text-sm">{value}</span>
+              <span className="text-text-muted text-sm">{value}</span>
             )}
           />
 
@@ -138,7 +152,7 @@ export default function SMPChart({
               type="monotone"
               dataKey="q10"
               stroke="transparent"
-              fill="#0e1117"
+              fill={colors.background}
               name=""
             />
           )}
@@ -152,7 +166,7 @@ export default function SMPChart({
             fill="url(#smpGradient)"
             name="SMP 예측 (중앙값)"
             dot={false}
-            activeDot={{ r: 6, stroke: '#fbbf24', strokeWidth: 2, fill: '#0e1117' }}
+            activeDot={{ r: 6, stroke: '#fbbf24', strokeWidth: 2, fill: colors.background }}
           />
 
           {/* Current hour reference line */}

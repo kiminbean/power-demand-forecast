@@ -34,10 +34,10 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-64 bg-secondary border-r border-border flex flex-col">
+    <aside className="w-64 bg-secondary border-r border-border flex flex-col transition-colors duration-200">
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-2">
+        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2">
           메인
         </div>
         {navItems.slice(0, 5).map((item) => (
@@ -58,7 +58,7 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-2 mt-4">
+        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2 mt-4">
           분석
         </div>
         {navItems.slice(5).map((item) => (
@@ -83,8 +83,8 @@ export default function Sidebar() {
               <HelpCircle className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <div className="text-sm font-medium text-white">도움이 필요하신가요?</div>
-              <div className="text-xs text-gray-400">문서 및 지원</div>
+              <div className="text-sm font-medium text-text-primary">도움이 필요하신가요?</div>
+              <div className="text-xs text-text-muted">문서 및 지원</div>
             </div>
           </div>
           <button className="w-full py-2 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors">
@@ -93,8 +93,8 @@ export default function Sidebar() {
         </div>
 
         <div className="mt-4 text-center">
-          <p className="text-xs text-gray-500">RE-BMS v6.0.0</p>
-          <p className="text-xs text-gray-500">© 2025 Power Demand Forecast</p>
+          <p className="text-xs text-text-muted">RE-BMS v6.0.0</p>
+          <p className="text-xs text-text-muted">© 2025 Power Demand Forecast</p>
         </div>
       </div>
     </aside>
