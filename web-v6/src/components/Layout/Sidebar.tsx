@@ -94,7 +94,7 @@ export default function Sidebar() {
 
         <div className="mt-4 text-center">
           <p className="text-xs text-text-muted">RE-BMS v6.0.0</p>
-          <p className="text-xs text-text-muted">© 2025 Power Demand Forecast</p>
+          <p className="text-xs text-text-muted">© 2025 eXeco</p>
         </div>
       </div>
     </aside>

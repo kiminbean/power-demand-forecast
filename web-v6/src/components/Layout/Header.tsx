@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Bell, Settings, User, Zap, Activity, Sun, Moon } from 'lucide-react';
+import { Bell, Settings, User, Activity, Sun, Moon } from 'lucide-react';
 import { useApiStatus, useModelInfo } from '../../hooks/useApi';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -39,13 +39,15 @@ export default function Header() {
     <header className="h-16 bg-secondary border-b border-border px-6 flex items-center justify-between transition-colors duration-200">
       {/* Logo & Title */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Zap className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-text-primary">RE-BMS</h1>
-            <p className="text-xs text-text-muted">v6.0 Desktop</p>
+        <div className="flex items-center gap-3">
+          <img
+            src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+            alt="eXeco"
+            className="h-8 w-auto"
+          />
+          <div className="border-l border-border pl-3">
+            <h1 className="text-sm font-bold text-brand">RE-BMS</h1>
+            <p className="text-xs text-text-muted">v6.0</p>
           </div>
         </div>
       </div>

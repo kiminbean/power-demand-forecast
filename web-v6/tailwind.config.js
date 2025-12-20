@@ -19,6 +19,7 @@ export default {
           muted: 'var(--color-text-muted)',
         },
         // Static colors (same in both themes)
+        brand: '#04265E',
         primary: '#6366f1',
         accent: '#10b981',
         warning: '#f59e0b',
