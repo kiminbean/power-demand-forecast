@@ -1,0 +1,67 @@
+# RE-BMS v6.0 Docker Compose
+# Private deployment with authentication
+#
+# Usage:
+#   1. Create .env file with credentials (see .env.example)
+#   2. docker-compose -f docker/docker-compose.v6.yml up -d
+#   3. Access: http://localhost:8600 (username/password required)
+
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: rebms-api
+    restart: unless-stopped
+    ports:
+      - "8506:8506"
+    volumes:
+      - ../data/smp:/app/data/smp:ro
+      - ../models:/app/models:ro
+    environment:
+      - PYTHONPATH=/app
+      - ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8506/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - rebms-network
+
+  # React Frontend (Nginx)
+  web:
+    build:
+      context: ../web-v6
+      dockerfile: Dockerfile
+    container_name: rebms-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8600}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - NGINX_AUTH_USER=${AUTH_USER:-admin}
+      - NGINX_AUTH_PASS=${AUTH_PASS:-rebms2025}
+    volumes:
+      - ./htpasswd:/etc/nginx/.htpasswd:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rebms-network
+
+networks:
+  rebms-network:
+    driver: bridge
+
+# Volumes for persistent data
+volumes:
+  smp-data:
+  model-data:

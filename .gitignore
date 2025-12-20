@@ -98,3 +98,6 @@ results/pipeline_report_*.json
 
 # Full requirements (generated)
 requirements-full.txt
+# Docker secrets
+docker/.env
+docker/htpasswd
