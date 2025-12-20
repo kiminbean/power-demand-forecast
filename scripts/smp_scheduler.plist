@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.rebms.smp-scheduler</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ibkim/Ormi_1/power-demand-forecast/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.smp.crawlers.scheduler</string>
+        <string>--foreground</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ibkim/Ormi_1/power-demand-forecast</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/ibkim/Ormi_1/power-demand-forecast</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/smp_scheduler.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/smp_scheduler.err</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

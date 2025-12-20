@@ -51,6 +51,14 @@ except ImportError as e:
     smp_router = None
     bidding_router = None
 
+# v6 Dashboard 라우터
+try:
+    from .v6_routes import router as v6_router
+    V6_ROUTES_AVAILABLE = True
+except ImportError as e:
+    V6_ROUTES_AVAILABLE = False
+    v6_router = None
+
 # 로깅 설정
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),
@@ -115,6 +123,11 @@ app.add_middleware(
 if SMP_ROUTES_AVAILABLE:
     app.include_router(smp_router)
     app.include_router(bidding_router)
+
+# v6 Dashboard 라우터 등록
+if V6_ROUTES_AVAILABLE:
+    app.include_router(v6_router)
+    logger.info("v6 Dashboard routes registered")
 
 
 # ============================================================
