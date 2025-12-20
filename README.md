@@ -97,6 +97,45 @@
 | **24시간 예측** | 신뢰구간 포함 전력 수요 예측 |
 | **XAI 분석** | SHAP/Attention 기반 모델 설명 |
 
+### 🖥️ RE-BMS v6.0 React Desktop Web Application (NEW)
+
+제주도 재생에너지 입찰 관리 시스템의 데스크톱 웹 버전입니다.
+
+| 기능 | 설명 |
+|------|------|
+| **React 18 + TypeScript** | 모던 프론트엔드 스택 |
+| **실시간 EPSIS 연동** | 실제 SMP 데이터 자동 수집 (매시간) |
+| **24시간 SMP 예측** | q10/q50/q90 신뢰구간 포함 |
+| **10-Segment 입찰** | KPX DAM/RTM 시장 입찰 최적화 |
+| **포트폴리오 관리** | 제주도 20개 발전소 모니터링 |
+| **정산 분석** | 수익 및 불균형 정산 현황 |
+| **지도 시각화** | Leaflet 기반 발전소 위치 |
+
+**Tech Stack**: React 18, TypeScript, Vite, Tailwind CSS, Recharts, React Leaflet
+
+```bash
+# v6 대시보드 실행
+cd web-v6 && npm install && npm run dev
+# → http://localhost:8508
+```
+
+### 📱 RE-BMS v5.0 Mobile App
+
+React Native 기반 모바일 앱으로 현장에서 실시간 모니터링이 가능합니다.
+
+| 기능 | 설명 |
+|------|------|
+| **크로스 플랫폼** | iOS / Android / Web 지원 |
+| **실시간 SMP** | EPSIS 데이터 실시간 표시 |
+| **입찰 알림** | DAM/RTM 마감 시간 알림 |
+| **발전소 현황** | GPS 기반 주변 발전소 조회 |
+
+```bash
+# v5 모바일 앱 실행
+cd mobile && npm install && npm start
+# → Expo Go 앱으로 스캔
+```
+
 ---
 
 ## 📸 스크린샷
@@ -369,6 +408,7 @@ power-demand-forecast/
 ├── src/
 │   ├── api/                    # FastAPI 서버
 │   │   ├── main.py             # API 엔드포인트
+│   │   ├── v6_routes.py        # v6 대시보드 API (EPSIS 실제 데이터)
 │   │   ├── docs.py             # API 문서 및 모델 카드
 │   │   └── schemas.py          # Pydantic 스키마
 │   │
@@ -376,6 +416,12 @@ power-demand-forecast/
 │   │   ├── app.py              # API 연동 대시보드
 │   │   ├── app_v1.py           # EPSIS 실시간 대시보드
 │   │   └── app_v4.py           # v4 대시보드 (KPX 실시간 + 경보)
+│   │
+│   ├── smp/                    # SMP 예측 모듈
+│   │   ├── models/             # LSTM-Attention 모델
+│   │   └── crawlers/           # EPSIS 크롤러
+│   │       ├── epsis_crawler.py    # SMP 데이터 수집
+│   │       └── scheduler.py        # 자동 수집 스케줄러
 │   │
 │   ├── models/                 # 딥러닝 모델
 │   │   ├── lstm.py             # LSTM 모델
@@ -400,6 +446,25 @@ power-demand-forecast/
 │   │   └── weather_features.py # THI, Wind Chill, HDD/CDD
 │   │
 │   └── pipeline.py             # 통합 파이프라인 (Task 25)
+│
+├── web-v6/                     # v6 React Desktop Web App
+│   ├── src/
+│   │   ├── components/         # React 컴포넌트
+│   │   ├── pages/              # 페이지 (Dashboard, SMP, Bidding 등)
+│   │   ├── services/           # API 서비스
+│   │   └── App.tsx             # 메인 라우터
+│   ├── vite.config.ts          # Vite 설정 (포트 8508)
+│   └── README.md               # v6 문서
+│
+├── mobile/                     # v5 React Native Mobile App
+│   ├── src/
+│   │   ├── screens/            # 모바일 화면
+│   │   └── components/         # 모바일 컴포넌트
+│   └── README.md               # v5 문서
+│
+├── scripts/                    # 관리 스크립트
+│   ├── manage_scheduler.sh     # 스케줄러 관리
+│   └── smp_scheduler.plist     # macOS launchd 설정
 │
 ├── tools/
 │   └── crawlers/               # 데이터 크롤러
