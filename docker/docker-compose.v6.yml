@@ -6,8 +6,6 @@
 #   2. docker-compose -f docker/docker-compose.v6.yml up -d
 #   3. Access: http://localhost:8600 (username/password required)
 
-version: '3.8'
-
 services:
   # FastAPI Backend
   api:
@@ -19,8 +17,8 @@ services:
     ports:
       - "8506:8506"
     volumes:
-      - ../data/smp:/app/data/smp:ro
-      - ../models:/app/models:ro
+      - ../data/smp:/app/data/smp
+      - ../models/smp:/app/models/smp:ro
     environment:
       - PYTHONPATH=/app
       - ENV=production

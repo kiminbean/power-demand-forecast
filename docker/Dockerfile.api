@@ -20,8 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 COPY api/ ./api/
-COPY models/ ./models/
-COPY data/smp/ ./data/smp/
+
+# Create directories for mounted volumes
+RUN mkdir -p ./models ./data/smp
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
