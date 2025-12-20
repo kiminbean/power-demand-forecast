@@ -3,10 +3,10 @@
  * Interactive map showing power plant locations
  */
 
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
-import { Icon, DivIcon } from 'leaflet';
-import { Sun, Wind, Zap, Activity, MapPin } from 'lucide-react';
+import { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { DivIcon } from 'leaflet';
+import { Sun, Wind, Zap, MapPin } from 'lucide-react';
 import { useResources } from '../hooks/useApi';
 import clsx from 'clsx';
 import 'leaflet/dist/leaflet.css';
@@ -56,7 +56,7 @@ const demoPlants = [
 ];
 
 export default function Map() {
-  const { data: resources } = useResources();
+  useResources(); // Load resources data
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'solar' | 'wind'>('all');
 

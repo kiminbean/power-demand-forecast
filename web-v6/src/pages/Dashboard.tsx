@@ -3,14 +3,12 @@
  * Main Command Center with KPIs and Real-time Data
  */
 
-import { useState, useEffect } from 'react';
 import {
   Zap,
   TrendingUp,
   Sun,
   Wind,
   Battery,
-  AlertTriangle,
   Activity,
   Clock,
   DollarSign,

@@ -10,10 +10,8 @@ import {
   Battery,
   MapPin,
   Activity,
-  TrendingUp,
   Zap,
   MoreVertical,
-  Filter,
   Search,
 } from 'lucide-react';
 import {
@@ -22,7 +20,6 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
-  Legend,
   BarChart,
   Bar,
   XAxis,
@@ -33,7 +30,7 @@ import { useResources } from '../hooks/useApi';
 import clsx from 'clsx';
 
 export default function Portfolio() {
-  const { data: resources, loading } = useResources();
+  const { data: resources } = useResources();
   const [filter, setFilter] = useState<'all' | 'solar' | 'wind'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 

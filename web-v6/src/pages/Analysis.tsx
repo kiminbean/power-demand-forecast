@@ -9,9 +9,7 @@ import {
   TrendingUp,
   BarChart3,
   Info,
-  RefreshCw,
   Download,
-  ChevronRight,
 } from 'lucide-react';
 import {
   BarChart,
@@ -73,7 +71,7 @@ const radarData = [
 
 export default function Analysis() {
   const { data: modelInfo } = useModelInfo();
-  const { data: forecast } = useSMPForecast();
+  useSMPForecast(); // Load forecast data
   const [selectedTab, setSelectedTab] = useState<'xai' | 'performance' | 'comparison'>('xai');
 
   const categoryColors: Record<string, string> = {

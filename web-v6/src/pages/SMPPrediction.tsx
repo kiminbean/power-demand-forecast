@@ -7,7 +7,6 @@ import { useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
-  Clock,
   Activity,
   Info,
   Download,
@@ -33,7 +32,7 @@ import clsx from 'clsx';
 export default function SMPPrediction() {
   const { data: forecast, loading, refetch } = useSMPForecast();
   const { data: modelInfo } = useModelInfo();
-  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [, setSelectedHour] = useState<number | null>(null);
 
   useAutoRefresh(refetch, 300000); // Refresh every 5 minutes
 

@@ -5,9 +5,6 @@
 
 import { useState } from 'react';
 import {
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
   Calendar,
   Download,
   AlertTriangle,
@@ -63,8 +60,8 @@ function generateDemoData() {
 }
 
 export default function Settlement() {
-  const { data: settlements } = useSettlements(30);
-  const { data: summary } = useSettlementSummary();
+  useSettlements(30); // Load settlements data
+  useSettlementSummary(); // Load summary data
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
 
   // Use demo data if no API data
@@ -84,7 +81,7 @@ export default function Settlement() {
   };
 
   // Custom tooltip
-  const ChartTooltip = ({ active, payload, label }: any) => {
+  const ChartTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

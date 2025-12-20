@@ -5,20 +5,12 @@
 
 import { useState } from 'react';
 import {
-  Gavel,
-  Clock,
-  AlertCircle,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
   Send,
   Save,
   Sparkles,
-  BarChart3,
 } from 'lucide-react';
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -29,7 +21,7 @@ import {
   Line,
   Bar,
 } from 'recharts';
-import { useSMPForecast, useMarketStatus, useOptimizedBids } from '../hooks/useApi';
+import { useSMPForecast, useMarketStatus } from '../hooks/useApi';
 import clsx from 'clsx';
 
 interface BidSegment {
@@ -44,7 +36,6 @@ export default function Bidding() {
   const [selectedHour, setSelectedHour] = useState(12);
   const [riskLevel, setRiskLevel] = useState<'conservative' | 'moderate' | 'aggressive'>('moderate');
   const [capacity, setCapacity] = useState(50);
-  const { data: optimizedBids, loading: optimizing, refetch: generateBids } = useOptimizedBids(capacity, riskLevel);
 
   // Generate 10-segment bid structure
   const [segments, setSegments] = useState<BidSegment[]>(() => {
