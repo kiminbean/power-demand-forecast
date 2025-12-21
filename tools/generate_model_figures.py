@@ -363,7 +363,7 @@ def main():
     print("Model Performance Figure Generation")
     print("=" * 60)
 
-    figures_dir = PROJECT_ROOT / 'figures'
+    figures_dir = PROJECT_ROOT / 'results' / 'figures'
     figures_dir.mkdir(exist_ok=True)
 
     device = get_device()
