@@ -100,9 +100,9 @@ const JEJU_BOUNDS = {
   maxLng: 127.02, // 지도 우측
 };
 
-// Map container dimensions
-const MAP_WIDTH = 400;
-const MAP_HEIGHT = 260;
+// Map container dimensions (enlarged)
+const MAP_WIDTH = 480;
+const MAP_HEIGHT = 320;
 
 // Convert lat/lng to pixel position
 const latLngToPixel = (lat: number, lng: number): { x: number; y: number } => {
@@ -233,75 +233,75 @@ export default function ExecoDashboard() {
 
       {/* Main Content */}
       <main className="p-6 flex flex-col gap-6" style={{ height: 'calc(100vh - 80px)' }}>
-        {/* KPI Cards Row */}
+        {/* KPI Cards Row - Font sizes 1.2x */}
         <div className="flex gap-6">
           {/* 현재 수요 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-xl font-medium text-black tracking-[-0.8px]">현재 수요</span>
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">현재 수요</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[32px] font-bold text-black leading-[50px] tracking-[-1.28px]">707.4</span>
-                <span className="text-xl font-bold text-black leading-9 tracking-[-0.8px]">MW</span>
+                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">707.4</span>
+                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">MW</span>
               </div>
               <div className="bg-white rounded-lg px-3.5 py-1">
-                <span className="text-lg text-[#272727] tracking-[-0.72px]">예비율 94.5%</span>
+                <span className="text-xl text-[#272727] tracking-[-0.72px]">예비율 94.5%</span>
               </div>
             </div>
           </div>
 
           {/* 현재 SMP */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-xl font-medium text-black tracking-[-0.8px]">현재 SMP (제주)</span>
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">현재 SMP (제주)</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[32px] font-bold leading-[50px] tracking-[-1.28px]" style={{ color: '#0048ff' }}>114.8</span>
-                <span className="text-xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#0048ff' }}>원</span>
+                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#0048ff' }}>114.8</span>
+                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#0048ff' }}>원</span>
               </div>
               <div className="rounded-lg px-3.5 py-1 flex items-center gap-1" style={{ backgroundColor: 'rgba(0,72,255,0.1)' }}>
-                <span className="text-lg tracking-[-0.72px]" style={{ color: '#0048ff' }}>- 6.0원(-5.0%)</span>
-                <img src={CHECK_ICON} alt="" className="w-6 h-6" />
+                <span className="text-xl tracking-[-0.72px]" style={{ color: '#0048ff' }}>- 6.0원(-5.0%)</span>
+                <img src={CHECK_ICON} alt="" className="w-7 h-7" />
               </div>
             </div>
           </div>
 
           {/* 재생에너지 비율 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-xl font-medium text-black tracking-[-0.8px]">재생에너지 비율</span>
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">재생에너지 비율</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[32px] font-bold leading-[50px] tracking-[-1.28px]" style={{ color: '#ff1d1d' }}>15.6</span>
-                <span className="text-xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#ff1d1d' }}>%</span>
+                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#ff1d1d' }}>15.6</span>
+                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#ff1d1d' }}>%</span>
               </div>
               <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: '#ffeaea' }}>
-                <span className="text-lg tracking-[-0.72px]" style={{ color: '#ff1d1d' }}>태양광+풍력</span>
+                <span className="text-xl tracking-[-0.72px]" style={{ color: '#ff1d1d' }}>태양광+풍력</span>
               </div>
             </div>
           </div>
 
           {/* 계통 주파수 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-xl font-medium text-black tracking-[-0.8px]">계통 주파수</span>
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">계통 주파수</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[32px] font-bold text-black leading-[50px] tracking-[-1.28px]">60.01</span>
-                <span className="text-xl font-bold text-black leading-9 tracking-[-0.8px]">Hz</span>
+                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">60.01</span>
+                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">Hz</span>
               </div>
               <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: 'rgba(0,197,21,0.1)' }}>
-                <span className="text-lg tracking-[-0.72px]" style={{ color: '#00c515' }}>정상</span>
+                <span className="text-xl tracking-[-0.72px]" style={{ color: '#00c515' }}>정상</span>
               </div>
             </div>
           </div>
 
           {/* 기상 현황 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-xl font-medium text-black tracking-[-0.8px]">기상 현황</span>
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">기상 현황</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[32px] font-bold text-black leading-[50px] tracking-[-1.28px]">3</span>
-                <span className="text-xl font-bold text-black leading-9 tracking-[-0.8px]">°C</span>
+                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">3</span>
+                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">°C</span>
               </div>
               <div className="bg-white rounded-lg px-3.5 py-1">
-                <span className="text-lg text-[#272727] tracking-[-0.72px]">풍속 7.2 m/s</span>
+                <span className="text-xl text-[#272727] tracking-[-0.72px]">풍속 7.2 m/s</span>
               </div>
             </div>
           </div>
@@ -313,13 +313,13 @@ export default function ExecoDashboard() {
           <div className="flex-[7] flex flex-col gap-2.5">
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex-1 flex flex-col gap-6">
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl font-bold text-black tracking-[-0.96px]">제주 전력수급 현황</span>
-                <span className="text-base text-black tracking-[-0.64px]">실측vs예측(MW)</span>
+                <span className="text-3xl font-bold text-black tracking-[-0.96px]">제주 전력수급 현황</span>
+                <span className="text-lg text-black tracking-[-0.64px]">실측vs예측(MW)</span>
               </div>
 
               <div className="bg-white rounded-[14px] p-6 flex-1 flex flex-col gap-2.5">
                 {/* Legend */}
-                <div className="flex flex-wrap gap-2.5 justify-end text-[10px] font-medium tracking-[-0.4px]">
+                <div className="flex flex-wrap gap-2.5 justify-end text-xs font-medium tracking-[-0.4px]">
                   <div className="flex items-center gap-1">
                     <div className="w-8 h-[17.5px] bg-gradient-to-b from-blue-300 to-blue-100 rounded"></div>
                     <span>풍력(예측)</span>
@@ -460,7 +460,7 @@ export default function ExecoDashboard() {
             {/* Jeju Map */}
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex flex-col gap-6">
               <div className="flex items-center">
-                <span className="text-2xl font-bold text-black tracking-[-0.96px]">발전량 히트맵 표시</span>
+                <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전량 히트맵 표시</span>
               </div>
 
               {/* Map Container - Centered */}
@@ -486,18 +486,18 @@ export default function ExecoDashboard() {
 
                 {/* Legend - Below map */}
                 <div className="bg-white rounded-lg p-3.5 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex gap-6">
-                  <span className="text-sm font-bold text-black tracking-[-0.56px]">발전소 유형</span>
-                  <div className="flex gap-4 text-sm tracking-[-0.56px]">
+                  <span className="text-base font-bold text-black tracking-[-0.56px]">발전소 유형</span>
+                  <div className="flex gap-4 text-base tracking-[-0.56px]">
                     <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ff4a4a' }}></div>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ff4a4a' }}></div>
                       <span>태양광</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#4a89ff' }}></div>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#4a89ff' }}></div>
                       <span>풍력</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffbd00' }}></div>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ffbd00' }}></div>
                       <span>ESS</span>
                     </div>
                   </div>
@@ -508,27 +508,27 @@ export default function ExecoDashboard() {
             {/* Plant Statistics */}
             <div className="bg-[#f8f8f8] rounded-lg p-6 flex-1 flex flex-col justify-between">
               <div className="flex flex-col gap-3.5">
-                <span className="text-xl font-bold text-black tracking-[-0.8px]">발전소 현황</span>
+                <span className="text-2xl font-bold text-black tracking-[-0.8px]">발전소 현황</span>
                 <div className="bg-white rounded-[14px] px-6 py-3.5 flex flex-col gap-2">
                   <div className="flex items-center gap-3.5">
-                    <span className="text-lg text-black w-[54px] tracking-[-0.72px]">태양광</span>
+                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">태양광</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-lg font-bold tracking-[-0.72px]">6개소 | 5MW</span>
-                      <span className="text-sm tracking-[-0.56px]">(발전량 : 0.0MW)</span>
+                      <span className="text-xl font-bold tracking-[-0.72px]">6개소 | 5MW</span>
+                      <span className="text-base tracking-[-0.56px]">(발전량 : 0.0MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3.5">
-                    <span className="text-lg text-black w-[54px] tracking-[-0.72px]">풍력</span>
+                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">풍력</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-lg font-bold tracking-[-0.72px]">14개소|220MW</span>
-                      <span className="text-sm tracking-[-0.56px]">(발전량 : 79.9MW)</span>
+                      <span className="text-xl font-bold tracking-[-0.72px]">14개소|220MW</span>
+                      <span className="text-base tracking-[-0.56px]">(발전량 : 79.9MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3.5">
-                    <span className="text-lg text-black w-[54px] tracking-[-0.72px]">ESS</span>
+                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">ESS</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-lg font-bold tracking-[-0.72px]">4개소 | 75MW</span>
-                      <span className="text-sm tracking-[-0.56px]">(충방전 : 11.7MW)</span>
+                      <span className="text-xl font-bold tracking-[-0.72px]">4개소 | 75MW</span>
+                      <span className="text-base tracking-[-0.56px]">(충방전 : 11.7MW)</span>
                     </div>
                   </div>
                 </div>
@@ -536,8 +536,8 @@ export default function ExecoDashboard() {
 
               {/* Weather Info */}
               <div className="flex flex-col gap-1">
-                <span className="text-sm text-black w-[54px] tracking-[-0.56px]">기상 정보</span>
-                <div className="flex gap-3.5 text-sm font-medium text-[#232323] tracking-[-0.56px]">
+                <span className="text-base text-black tracking-[-0.56px]">기상 정보</span>
+                <div className="flex gap-3.5 text-base font-medium text-[#232323] tracking-[-0.56px]">
                   <span>일사량 (0w/m²)</span>
                   <span>|</span>
                   <span>풍향 SE</span>
@@ -552,7 +552,7 @@ export default function ExecoDashboard() {
         </div>
 
         {/* Footer */}
-        <div className="text-center text-xs text-[#232323] tracking-[-0.48px] leading-[10px]">
+        <div className="text-center text-sm text-[#232323] tracking-[-0.48px] leading-4">
           <p>제주 전력 지도 v7.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
           <p className="mt-2">데이터 출처: EPSIS, 기상청 AMOS | 모델: LSTM + Quantile Regression</p>
         </div>
