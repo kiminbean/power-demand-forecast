@@ -253,10 +253,10 @@ export default function ExecoDashboard() {
           </div>
         </div>
 
-        {/* Main Content Grid */}
+        {/* Main Content Grid - 7:3 ratio */}
         <div className="flex gap-6 flex-1">
-          {/* Left - Chart Section */}
-          <div className="w-[1300px] flex flex-col gap-2.5">
+          {/* Left - Chart Section (70%) */}
+          <div className="flex-[7] flex flex-col gap-2.5">
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex-1 flex flex-col gap-6">
               <div className="flex items-center gap-2.5">
                 <span className="text-2xl font-bold text-black tracking-[-0.96px]">제주 전력수급 현황</span>
@@ -401,35 +401,17 @@ export default function ExecoDashboard() {
             </div>
           </div>
 
-          {/* Right Panel - Map and Stats */}
-          <div className="flex-1 flex flex-col gap-6">
+          {/* Right Panel - Map and Stats (30%) */}
+          <div className="flex-[3] flex flex-col gap-6">
             {/* Jeju Map */}
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex flex-col gap-6">
-              <div className="flex items-center h-[52px]">
+              <div className="flex items-center">
                 <span className="text-2xl font-bold text-black tracking-[-0.96px]">발전량 히트맵 표시</span>
               </div>
 
-              <div className="flex items-end justify-between relative">
-                {/* Legend */}
-                <div className="bg-white rounded-lg p-3.5 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex flex-col gap-3.5 z-10">
-                  <span className="text-sm font-bold text-black tracking-[-0.56px]">발전소 유형</span>
-                  <div className="flex flex-col gap-2 text-sm tracking-[-0.56px]">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ff4a4a' }}></div>
-                      <span>태양광</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#4a89ff' }}></div>
-                      <span>풍력</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffbd00' }}></div>
-                      <span>ESS</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Jeju Map with markers - EXACT Figma dimensions */}
+              {/* Map Container - Centered */}
+              <div className="flex flex-col items-center gap-4">
+                {/* Jeju Map with markers - Centered */}
                 <div className="relative w-[385px] h-[255px]" style={{ mixBlendMode: 'darken' }}>
                   <img
                     src={JEJU_MAP}
@@ -445,6 +427,25 @@ export default function ExecoDashboard() {
                       isHovered={hoveredPlant?.id === plant.id}
                     />
                   ))}
+                </div>
+
+                {/* Legend - Below map */}
+                <div className="bg-white rounded-lg p-3.5 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex gap-6">
+                  <span className="text-sm font-bold text-black tracking-[-0.56px]">발전소 유형</span>
+                  <div className="flex gap-4 text-sm tracking-[-0.56px]">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ff4a4a' }}></div>
+                      <span>태양광</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#4a89ff' }}></div>
+                      <span>풍력</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffbd00' }}></div>
+                      <span>ESS</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
