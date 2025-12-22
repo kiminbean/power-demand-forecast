@@ -12,6 +12,7 @@ import {
   Sparkles,
   FileCheck,
   Building2,
+  Zap,
 } from 'lucide-react';
 import BidReviewModal from '../components/Modals/BidReviewModal';
 import type { BidStatus } from '../types';
@@ -151,10 +152,22 @@ export default function Bidding() {
     setIsReviewModalOpen(false);
   };
 
-  // Submit to KPX
+  // Submit to KPX (DAM - Day Ahead Market)
   const handleKPXSubmit = () => {
     // Navigate to KPX simulation page with bid data
     navigate('/kpx-simulation', {
+      state: {
+        segments,
+        selectedHour,
+        smpForecast: smpForHour,
+      },
+    });
+  };
+
+  // Submit to RTM (Real-Time Market)
+  const handleRTMSubmit = () => {
+    // Navigate to RTM simulation page with bid data
+    navigate('/rtm-simulation', {
       state: {
         segments,
         selectedHour,
@@ -226,8 +239,22 @@ export default function Bidding() {
             )}
           >
             <Building2 className="w-4 h-4" />
-            <span className="hidden sm:inline">KPX 제출</span>
-            <span className="sm:hidden">KPX</span>
+            <span className="hidden sm:inline">DAM 제출</span>
+            <span className="sm:hidden">DAM</span>
+          </button>
+          <button
+            onClick={handleRTMSubmit}
+            disabled={bidStatus !== 'approved'}
+            className={clsx(
+              'flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors',
+              bidStatus === 'approved'
+                ? 'bg-warning text-white hover:bg-warning/90'
+                : 'bg-background text-text-muted cursor-not-allowed'
+            )}
+          >
+            <Zap className="w-4 h-4" />
+            <span className="hidden sm:inline">RTM 제출</span>
+            <span className="sm:hidden">RTM</span>
           </button>
         </div>
       </div>
@@ -238,7 +265,7 @@ export default function Bidding() {
           <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
           <div>
             <p className="text-sm font-medium text-success">입찰이 승인되었습니다</p>
-            <p className="text-xs text-success/80 mt-0.5">상단의 'KPX 제출' 버튼을 클릭하여 한국전력거래소에 제출하세요.</p>
+            <p className="text-xs text-success/80 mt-0.5">'DAM 제출' 또는 'RTM 제출' 버튼을 클릭하여 시장 시뮬레이션을 실행하세요.</p>
           </div>
         </div>
       )}

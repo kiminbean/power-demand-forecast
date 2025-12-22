@@ -13,6 +13,7 @@ import Settlement from './pages/Settlement';
 import Map from './pages/Map';
 import Analysis from './pages/Analysis';
 import KPXSimulation from './pages/KPXSimulation';
+import RTMSimulation from './pages/RTMSimulation';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="smp" element={<SMPPrediction />} />
         <Route path="bidding" element={<Bidding />} />
         <Route path="kpx-simulation" element={<KPXSimulation />} />
+        <Route path="rtm-simulation" element={<RTMSimulation />} />
         <Route path="portfolio" element={<Portfolio />} />
         <Route path="settlement" element={<Settlement />} />
         <Route path="map" element={<Map />} />
