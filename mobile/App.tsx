@@ -13,6 +13,8 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import BiddingScreen from './src/screens/BiddingScreen';
 import PortfolioScreen from './src/screens/PortfolioScreen';
 import SettlementScreen from './src/screens/SettlementScreen';
+import KPXSimulationScreen from './src/screens/KPXSimulationScreen';
+import RTMSimulationScreen from './src/screens/RTMSimulationScreen';
 
 const colors = {
   background: '#0e1117',
@@ -84,9 +86,76 @@ function PlaceholderScreen({ title }: { title: string }) {
   );
 }
 
-// Web App with simple tab navigation
+// Simulation data type
+interface SimulationData {
+  segments: { id: number; quantity: number; price: number }[];
+  selectedHour: number;
+  smpForecast: { q10: number; q50: number; q90: number };
+}
+
+// Web App with simple tab navigation + simulation support
 function WebApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [simulationScreen, setSimulationScreen] = useState<'none' | 'dam' | 'rtm'>('none');
+  const [simulationData, setSimulationData] = useState<SimulationData | null>(null);
+
+  // Web navigation handlers for simulation screens
+  const webNavigation = {
+    navigate: (screen: string, params?: any) => {
+      if (screen === 'KPXSimulation') {
+        setSimulationData(params);
+        setSimulationScreen('dam');
+      } else if (screen === 'RTMSimulation') {
+        setSimulationData(params);
+        setSimulationScreen('rtm');
+      }
+    },
+    goBack: () => {
+      setSimulationScreen('none');
+      setSimulationData(null);
+    },
+  };
+
+  // Render simulation screens
+  if (simulationScreen === 'dam' && simulationData) {
+    return (
+      <ErrorBoundary>
+        <SafeAreaView style={webStyles.container}>
+          <View style={webStyles.header}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={webNavigation.goBack} style={{ marginRight: 12 }}>
+                <Text style={{ color: colors.primary, fontSize: 16 }}>← 뒤로</Text>
+              </TouchableOpacity>
+              <Text style={webStyles.headerTitle}>DAM 시뮬레이션</Text>
+            </View>
+          </View>
+          <View style={webStyles.content}>
+            <KPXSimulationScreen />
+          </View>
+        </SafeAreaView>
+      </ErrorBoundary>
+    );
+  }
+
+  if (simulationScreen === 'rtm' && simulationData) {
+    return (
+      <ErrorBoundary>
+        <SafeAreaView style={webStyles.container}>
+          <View style={webStyles.header}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={webNavigation.goBack} style={{ marginRight: 12 }}>
+                <Text style={{ color: colors.primary, fontSize: 16 }}>← 뒤로</Text>
+              </TouchableOpacity>
+              <Text style={webStyles.headerTitle}>RTM 시뮬레이션</Text>
+            </View>
+          </View>
+          <View style={webStyles.content}>
+            <RTMSimulationScreen />
+          </View>
+        </SafeAreaView>
+      </ErrorBoundary>
+    );
+  }
 
   const renderScreen = () => {
     try {
@@ -94,7 +163,7 @@ function WebApp() {
         case 'dashboard':
           return <DashboardScreen />;
         case 'bidding':
-          return <BiddingScreen />;
+          return <BiddingScreen webNavigation={webNavigation} />;
         case 'portfolio':
           return <PortfolioScreen />;
         case 'settlement':

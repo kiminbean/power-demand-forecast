@@ -330,8 +330,16 @@ function FilterTabs({
   );
 }
 
-export default function BiddingScreen() {
-  // Navigation only available on native
+// Props for web navigation support
+interface BiddingScreenProps {
+  webNavigation?: {
+    navigate: (screen: string, params?: any) => void;
+    goBack: () => void;
+  };
+}
+
+export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
+  // Navigation only available on native, use webNavigation for web
   const navigation = useNavigation ? useNavigation() : null;
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [bids, setBids] = useState<BidSummary[]>(mockBids);
@@ -421,37 +429,45 @@ export default function BiddingScreen() {
 
   // Navigate to DAM Simulation
   const handleDAMSimulation = useCallback(() => {
+    const params = {
+      segments: [
+        { id: 1, quantity: 5, price: 80 },
+        { id: 2, quantity: 5, price: 85 },
+        { id: 3, quantity: 5, price: 90 },
+        { id: 4, quantity: 5, price: 95 },
+        { id: 5, quantity: 5, price: 100 },
+      ],
+      selectedHour: 12,
+      smpForecast: { q10: 54, q50: 77, q90: 126 },
+    };
+
     if (navigation) {
-      navigation.navigate('KPXSimulation', {
-        segments: [
-          { id: 1, quantity: 5, price: 80 },
-          { id: 2, quantity: 5, price: 85 },
-          { id: 3, quantity: 5, price: 90 },
-          { id: 4, quantity: 5, price: 95 },
-          { id: 5, quantity: 5, price: 100 },
-        ],
-        selectedHour: 12,
-        smpForecast: { q10: 54, q50: 77, q90: 126 },
-      });
+      navigation.navigate('KPXSimulation', params);
+    } else if (webNavigation) {
+      webNavigation.navigate('KPXSimulation', params);
     }
-  }, [navigation]);
+  }, [navigation, webNavigation]);
 
   // Navigate to RTM Simulation
   const handleRTMSimulation = useCallback(() => {
+    const params = {
+      segments: [
+        { id: 1, quantity: 2.5, price: 88 },
+        { id: 2, quantity: 2.5, price: 94 },
+        { id: 3, quantity: 2.5, price: 99 },
+        { id: 4, quantity: 2.5, price: 105 },
+        { id: 5, quantity: 2.5, price: 110 },
+      ],
+      selectedHour: 12,
+      smpForecast: { q10: 54, q50: 77, q90: 126 },
+    };
+
     if (navigation) {
-      navigation.navigate('RTMSimulation', {
-        segments: [
-          { id: 1, quantity: 2.5, price: 88 },
-          { id: 2, quantity: 2.5, price: 94 },
-          { id: 3, quantity: 2.5, price: 99 },
-          { id: 4, quantity: 2.5, price: 105 },
-          { id: 5, quantity: 2.5, price: 110 },
-        ],
-        selectedHour: 12,
-        smpForecast: { q10: 54, q50: 77, q90: 126 },
-      });
+      navigation.navigate('RTMSimulation', params);
+    } else if (webNavigation) {
+      webNavigation.navigate('RTMSimulation', params);
     }
-  }, [navigation]);
+  }, [navigation, webNavigation]);
 
   const renderBidItem = useCallback(({ item }: { item: BidSummary }) => (
     <BidCard
