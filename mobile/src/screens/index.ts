@@ -5,5 +5,7 @@
 export { default as DashboardScreen } from './DashboardScreen';
 export { default as BiddingScreen } from './BiddingScreen';
 export { default as BidDetailScreen } from './BidDetailScreen';
+export { default as KPXSimulationScreen } from './KPXSimulationScreen';
+export { default as RTMSimulationScreen } from './RTMSimulationScreen';
 export { default as PortfolioScreen } from './PortfolioScreen';
 export { default as SettlementScreen } from './SettlementScreen';

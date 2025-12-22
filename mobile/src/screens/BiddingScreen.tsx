@@ -168,6 +168,8 @@ function Icon({ name, size, color }: { name: string; size: number; color: string
     'eye-outline': '👁️',
     'document-outline': '📄',
     'add': '+',
+    'trending-up': '📈',
+    'flash': '⚡',
   };
   return (
     <Text style={{ fontSize: size * 0.8, color }}>{iconMap[name] || '•'}</Text>
@@ -416,6 +418,40 @@ export default function BiddingScreen() {
     );
   }, []);
 
+  // Navigate to DAM Simulation
+  const handleDAMSimulation = useCallback(() => {
+    if (navigation) {
+      navigation.navigate('KPXSimulation', {
+        segments: [
+          { id: 1, quantity: 5, price: 80 },
+          { id: 2, quantity: 5, price: 85 },
+          { id: 3, quantity: 5, price: 90 },
+          { id: 4, quantity: 5, price: 95 },
+          { id: 5, quantity: 5, price: 100 },
+        ],
+        selectedHour: 12,
+        smpForecast: { q10: 54, q50: 77, q90: 126 },
+      });
+    }
+  }, [navigation]);
+
+  // Navigate to RTM Simulation
+  const handleRTMSimulation = useCallback(() => {
+    if (navigation) {
+      navigation.navigate('RTMSimulation', {
+        segments: [
+          { id: 1, quantity: 2.5, price: 88 },
+          { id: 2, quantity: 2.5, price: 94 },
+          { id: 3, quantity: 2.5, price: 99 },
+          { id: 4, quantity: 2.5, price: 105 },
+          { id: 5, quantity: 2.5, price: 110 },
+        ],
+        selectedHour: 12,
+        smpForecast: { q10: 54, q50: 77, q90: 126 },
+      });
+    }
+  }, [navigation]);
+
   const renderBidItem = useCallback(({ item }: { item: BidSummary }) => (
     <BidCard
       bid={item}
@@ -461,6 +497,24 @@ export default function BiddingScreen() {
           </Text>
           <Text style={styles.summaryLabel}>Accepted</Text>
         </View>
+      </View>
+
+      {/* Simulation Buttons */}
+      <View style={styles.simulationButtonsContainer}>
+        <TouchableOpacity
+          style={[styles.simulationButton, { backgroundColor: colors.brand.primary }]}
+          onPress={handleDAMSimulation}
+        >
+          <Icon name="trending-up" size={16} color={colors.text.primary} />
+          <Text style={styles.simulationButtonText}>DAM 시뮬레이션</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.simulationButton, { backgroundColor: colors.status.warning }]}
+          onPress={handleRTMSimulation}
+        >
+          <Icon name="flash" size={16} color={colors.text.inverse} />
+          <Text style={[styles.simulationButtonText, { color: colors.text.inverse }]}>RTM 시뮬레이션</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}
@@ -521,6 +575,31 @@ const styles = StyleSheet.create({
     width: 1,
     height: 30,
     backgroundColor: colors.border.primary,
+  },
+
+  // Simulation Buttons
+  simulationButtonsContainer: {
+    flexDirection: 'row',
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.background.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.primary,
+  },
+  simulationButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  simulationButtonText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
   },
 
   // Filters

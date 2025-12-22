@@ -15,6 +15,8 @@ import { colors } from '../theme/colors';
 import DashboardScreen from '../screens/DashboardScreen';
 import BiddingScreen from '../screens/BiddingScreen';
 import BidDetailScreen from '../screens/BidDetailScreen';
+import KPXSimulationScreen from '../screens/KPXSimulationScreen';
+import RTMSimulationScreen from '../screens/RTMSimulationScreen';
 import PortfolioScreen from '../screens/PortfolioScreen';
 import SettlementScreen from '../screens/SettlementScreen';
 
@@ -30,6 +32,16 @@ export type BiddingStackParamList = {
   BiddingList: undefined;
   BidDetail: { bidId: string };
   CreateBid: undefined;
+  KPXSimulation: {
+    segments?: { id: number; quantity: number; price: number }[];
+    selectedHour?: number;
+    smpForecast?: { q10: number; q50: number; q90: number };
+  };
+  RTMSimulation: {
+    segments?: { id: number; quantity: number; price: number }[];
+    selectedHour?: number;
+    smpForecast?: { q10: number; q50: number; q90: number };
+  };
 };
 
 // Theme
@@ -70,6 +82,16 @@ function BiddingStackNavigator() {
         name="BidDetail"
         component={BidDetailScreen}
         options={{ title: 'Bid Details' }}
+      />
+      <BiddingStack.Screen
+        name="KPXSimulation"
+        component={KPXSimulationScreen}
+        options={{ title: 'DAM Simulation', headerShown: false }}
+      />
+      <BiddingStack.Screen
+        name="RTMSimulation"
+        component={RTMSimulationScreen}
+        options={{ title: 'RTM Simulation', headerShown: false }}
       />
     </BiddingStack.Navigator>
   );
