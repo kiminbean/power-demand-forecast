@@ -5,7 +5,7 @@
  * Matches web-v6.1.0 features
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -241,10 +241,16 @@ export default function RTMSimulationScreen() {
   const [supplyBids, setSupplyBids] = useState<MarketBid[]>([]);
   const [demandBids, setDemandBids] = useState<MarketBid[]>([]);
 
-  // Generate RTM supply bids
-  const generateSupplyBids = useCallback(() => {
+  // Generate RTM supply bids (memoized to prevent re-generation)
+  const initialSupplyBids = useMemo(() => {
     const bids: MarketBid[] = [];
     const solarAvail = SOLAR_AVAILABILITY[selectedHour] || 0;
+
+    // Use seeded random for consistent values
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
     RTM_GENERATORS.forEach((gen, idx) => {
       let effectiveCapacity = gen.capacity;
@@ -254,7 +260,7 @@ export default function RTMSimulationScreen() {
       if (effectiveCapacity <= 0) return;
 
       // RTM prices are more volatile
-      const priceVariation = (Math.random() - 0.5) * 0.3 * volatility;
+      const priceVariation = (seededRandom(idx * 100 + selectedHour) - 0.5) * 0.3 * volatility;
       const price = Math.round(
         (gen.minPrice + (gen.maxPrice - gen.minPrice) * (0.5 + priceVariation)) * volatility
       );
@@ -264,7 +270,7 @@ export default function RTMSimulationScreen() {
         bidder: gen.name,
         type: 'supply',
         resourceType: gen.type,
-        quantity: Math.round(effectiveCapacity * (0.6 + Math.random() * 0.4)),
+        quantity: Math.round(effectiveCapacity * (0.6 + seededRandom(idx * 200 + selectedHour) * 0.4)),
         price: Math.max(0, Math.min(200, price)),
         status: 'pending',
       });
@@ -287,9 +293,15 @@ export default function RTMSimulationScreen() {
     return bids;
   }, [selectedHour, ourSegments, volatility]);
 
-  // Generate RTM demand bids
-  const generateDemandBids = useCallback(() => {
+  // Generate RTM demand bids (memoized to prevent re-generation)
+  const initialDemandBids = useMemo(() => {
     const demandMultiplier = RTM_DEMAND_MULTIPLIER[selectedHour] || 1.0;
+
+    // Use seeded random for consistent values
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
     return RTM_DEMAND_SOURCES.map((d, idx) => {
       const basePrice = d.priceWillingness === 'high' ? smpForecast.q90 * 1.3 :
@@ -300,18 +312,18 @@ export default function RTMSimulationScreen() {
         id: `rtm-dem-${idx}`,
         bidder: d.name,
         type: 'demand' as const,
-        quantity: Math.round(d.baseQuantity * demandMultiplier * (0.8 + Math.random() * 0.4)),
-        price: Math.round(basePrice * volatility * (0.95 + Math.random() * 0.1)),
+        quantity: Math.round(d.baseQuantity * demandMultiplier * (0.8 + seededRandom(idx * 300 + selectedHour) * 0.4)),
+        price: Math.round(basePrice * volatility * (0.95 + seededRandom(idx * 400 + selectedHour) * 0.1)),
         status: 'pending' as const,
       };
     });
   }, [selectedHour, smpForecast, volatility]);
 
-  // Initialize bids
+  // Initialize bids only once on mount
   useEffect(() => {
-    setSupplyBids(generateSupplyBids());
-    setDemandBids(generateDemandBids());
-  }, [generateSupplyBids, generateDemandBids]);
+    setSupplyBids(initialSupplyBids);
+    setDemandBids(initialDemandBids);
+  }, []);
 
   // Run simulation
   const runSimulation = useCallback(() => {
@@ -375,8 +387,8 @@ export default function RTMSimulationScreen() {
 
   // Reset simulation
   const resetSimulation = useCallback(() => {
-    setSupplyBids(generateSupplyBids());
-    setDemandBids(generateDemandBids());
+    setSupplyBids(initialSupplyBids);
+    setDemandBids(initialDemandBids);
     setSimulation({
       phase: 'idle',
       progress: 0,
@@ -389,7 +401,7 @@ export default function RTMSimulationScreen() {
       marketType: 'normal',
       priceVolatility: 0,
     });
-  }, [generateSupplyBids, generateDemandBids]);
+  }, [initialSupplyBids, initialDemandBids]);
 
   const totalSupplyBids = supplyBids.reduce((sum, b) => sum + b.quantity, 0);
   const totalDemandBids = demandBids.reduce((sum, b) => sum + b.quantity, 0);

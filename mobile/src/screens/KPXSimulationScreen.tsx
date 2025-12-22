@@ -234,10 +234,16 @@ export default function KPXSimulationScreen() {
   const [supplyBids, setSupplyBids] = useState<MarketBid[]>([]);
   const [demandBids, setDemandBids] = useState<MarketBid[]>([]);
 
-  // Generate supply bids
-  const generateSupplyBids = useCallback(() => {
+  // Generate supply bids (memoized to prevent re-generation)
+  const initialSupplyBids = useMemo(() => {
     const bids: MarketBid[] = [];
     const solarAvail = SOLAR_AVAILABILITY[selectedHour] || 0;
+
+    // Use seeded random for consistent values
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
     JEJU_GENERATORS.forEach((gen, idx) => {
       let effectiveCapacity = gen.capacity;
@@ -246,7 +252,7 @@ export default function KPXSimulationScreen() {
       }
       if (effectiveCapacity <= 0) return;
 
-      const priceVariation = (Math.random() - 0.5) * 0.2;
+      const priceVariation = (seededRandom(idx * 100 + selectedHour) - 0.5) * 0.2;
       const price = Math.round(gen.minPrice + (gen.maxPrice - gen.minPrice) * (0.5 + priceVariation));
 
       bids.push({
@@ -254,7 +260,7 @@ export default function KPXSimulationScreen() {
         bidder: gen.name,
         type: 'supply',
         resourceType: gen.type,
-        quantity: Math.round(effectiveCapacity * (0.7 + Math.random() * 0.3)),
+        quantity: Math.round(effectiveCapacity * (0.7 + seededRandom(idx * 200 + selectedHour) * 0.3)),
         price: Math.max(0, Math.min(200, price)),
         status: 'pending',
       });
@@ -277,9 +283,15 @@ export default function KPXSimulationScreen() {
     return bids;
   }, [selectedHour, ourSegments]);
 
-  // Generate demand bids
-  const generateDemandBids = useCallback(() => {
+  // Generate demand bids (memoized to prevent re-generation)
+  const initialDemandBids = useMemo(() => {
     const demandMultiplier = DEMAND_MULTIPLIER[selectedHour] || 1.0;
+
+    // Use seeded random for consistent values
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
     return JEJU_DEMAND_SOURCES.map((d, idx) => {
       const basePrice = d.priceWillingness === 'high' ? smpForecast.q90 * 1.2 :
@@ -290,18 +302,18 @@ export default function KPXSimulationScreen() {
         id: `dem-${idx}`,
         bidder: d.name,
         type: 'demand' as const,
-        quantity: Math.round(d.baseQuantity * demandMultiplier * (0.9 + Math.random() * 0.2)),
-        price: Math.round(basePrice * (0.95 + Math.random() * 0.1)),
+        quantity: Math.round(d.baseQuantity * demandMultiplier * (0.9 + seededRandom(idx * 300 + selectedHour) * 0.2)),
+        price: Math.round(basePrice * (0.95 + seededRandom(idx * 400 + selectedHour) * 0.1)),
         status: 'pending' as const,
       };
     });
   }, [selectedHour, smpForecast]);
 
-  // Initialize bids
+  // Initialize bids only once on mount
   useEffect(() => {
-    setSupplyBids(generateSupplyBids());
-    setDemandBids(generateDemandBids());
-  }, [generateSupplyBids, generateDemandBids]);
+    setSupplyBids(initialSupplyBids);
+    setDemandBids(initialDemandBids);
+  }, []);
 
   // Run simulation
   const runSimulation = useCallback(() => {
@@ -364,8 +376,8 @@ export default function KPXSimulationScreen() {
 
   // Reset simulation
   const resetSimulation = useCallback(() => {
-    setSupplyBids(generateSupplyBids());
-    setDemandBids(generateDemandBids());
+    setSupplyBids(initialSupplyBids);
+    setDemandBids(initialDemandBids);
     setSimulation({
       phase: 'idle',
       progress: 0,
@@ -377,7 +389,7 @@ export default function KPXSimulationScreen() {
       ourRevenue: 0,
       marketType: 'normal',
     });
-  }, [generateSupplyBids, generateDemandBids]);
+  }, [initialSupplyBids, initialDemandBids]);
 
   const totalSupplyBids = supplyBids.reduce((sum, b) => sum + b.quantity, 0);
   const totalDemandBids = demandBids.reduce((sum, b) => sum + b.quantity, 0);
