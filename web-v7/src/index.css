@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   Theme CSS Variables
+   Default: Light Mode
+   ============================================ */
+
+:root,
+:root.light {
+  /* Light Theme Colors (Default) */
+  color-scheme: light;
+  --color-background: #f8fafc;
+  --color-secondary: #e2e8f0;
+  --color-card: #ffffff;
+  --color-border: #cbd5e1;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Scrollbar Light */
+  --scrollbar-track: #e2e8f0;
+  --scrollbar-thumb: #94a3b8;
+  --scrollbar-thumb-hover: #64748b;
+}
+
+:root.dark {
+  /* Dark Theme Colors */
+  color-scheme: dark;
+  --color-background: #0e1117;
+  --color-secondary: #1a1f2c;
+  --color-card: #1e2530;
+  --color-border: #374151;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+
+  /* Scrollbar Dark */
+  --scrollbar-track: #1a1f2c;
+  --scrollbar-thumb: #374151;
+  --scrollbar-thumb-hover: #4b5563;
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+
+body {
+  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Card Styles */
+@layer components {
+  .card {
+    @apply bg-card rounded-xl border border-border p-4 transition-colors duration-200;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5;
+  }
+
+  .metric-value {
+    @apply text-3xl font-bold tabular-nums text-text-primary;
+  }
+
+  .metric-label {
+    @apply text-sm text-text-muted;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:text-text-primary hover:bg-secondary transition-all;
+  }
+
+  .nav-link.active {
+    @apply text-primary bg-primary/10 border-l-2 border-primary;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-secondary hover:opacity-80 text-text-primary rounded-lg font-medium transition-all border border-border;
+  }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full animate-pulse;
+  }
+
+  .status-success {
+    @apply bg-success;
+  }
+
+  .status-warning {
+    @apply bg-warning;
+  }
+
+  .status-danger {
+    @apply bg-danger;
+  }
+
+  /* Theme-aware text utilities */
+  .text-theme-primary {
+    color: var(--color-text-primary);
+  }
+
+  .text-theme-secondary {
+    color: var(--color-text-secondary);
+  }
+
+  .text-theme-muted {
+    color: var(--color-text-muted);
+  }
+}
+
+/* Chart tooltip styles - Theme aware */
+.recharts-tooltip-wrapper {
+  z-index: 1000 !important;
+}
+
+.recharts-default-tooltip {
+  background-color: var(--color-card) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* Map styles - Theme aware */
+.leaflet-container {
+  background: var(--color-background) !important;
+  border-radius: 12px;
+}
+
+/* Dark mode: dim map tiles */
+:root.dark .leaflet-tile-pane {
+  filter: brightness(0.7) saturate(0.8);
+}
+
+/* Light mode: normal map tiles */
+:root:not(.dark) .leaflet-tile-pane {
+  filter: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px currentColor; }
+  50% { box-shadow: 0 0 20px currentColor; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
