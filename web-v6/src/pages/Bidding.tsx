@@ -1,15 +1,20 @@
 /**
- * Bidding Page - RE-BMS v6.0
+ * Bidding Page - RE-BMS v6.1
  * 10-Segment Bidding Management for DAM/RTM
+ * With internal review workflow and KPX submission
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
-  Send,
   Save,
   Sparkles,
+  FileCheck,
+  Building2,
 } from 'lucide-react';
+import BidReviewModal from '../components/Modals/BidReviewModal';
+import type { BidStatus } from '../types';
 import {
   XAxis,
   YAxis,
@@ -32,12 +37,19 @@ interface BidSegment {
 }
 
 export default function Bidding() {
+  const navigate = useNavigate();
   const { data: forecast } = useSMPForecast();
   const { data: marketStatus } = useMarketStatus();
   const [selectedHour, setSelectedHour] = useState(12);
   const [riskLevel, setRiskLevel] = useState<'conservative' | 'moderate' | 'aggressive'>('moderate');
   const [capacity, setCapacity] = useState(50);
   const { isDark } = useTheme();
+
+  // Bid submission state
+  const [bidStatus, setBidStatus] = useState<BidStatus>('draft');
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Theme-aware chart colors
   const chartColors = {
@@ -107,14 +119,79 @@ export default function Bidding() {
     }));
 
     setSegments(newSegments);
+    setBidStatus('draft');
   };
+
+  // Save draft
+  const handleSaveDraft = () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+    // Simulate save
+    setTimeout(() => {
+      setIsSaving(false);
+      setSaveMessage('임시 저장 완료');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }, 1000);
+  };
+
+  // Submit for review (internal approval)
+  const handleSubmitForReview = () => {
+    setIsReviewModalOpen(true);
+  };
+
+  // Handle approval from review modal
+  const handleApproved = () => {
+    setBidStatus('approved');
+    setIsReviewModalOpen(false);
+  };
+
+  // Handle rejection from review modal
+  const handleRejected = () => {
+    setBidStatus('draft');
+    setIsReviewModalOpen(false);
+  };
+
+  // Submit to KPX
+  const handleKPXSubmit = () => {
+    // Navigate to KPX simulation page with bid data
+    navigate('/kpx-simulation', {
+      state: {
+        segments,
+        selectedHour,
+        smpForecast: smpForHour,
+      },
+    });
+  };
+
+  // Get status badge
+  const getStatusBadge = () => {
+    switch (bidStatus) {
+      case 'draft':
+        return { label: '작성 중', color: 'bg-gray-500/20 text-gray-400' };
+      case 'pending_review':
+        return { label: '검토 대기', color: 'bg-warning/20 text-warning' };
+      case 'approved':
+        return { label: 'KPX 제출 가능', color: 'bg-success/20 text-success' };
+      case 'submitted_kpx':
+        return { label: 'KPX 제출됨', color: 'bg-primary/20 text-primary' };
+      default:
+        return { label: '작성 중', color: 'bg-gray-500/20 text-gray-400' };
+    }
+  };
+
+  const statusBadge = getStatusBadge();
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">입찰 관리</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-text-primary">입찰 관리</h1>
+            <span className={clsx('px-2.5 py-1 rounded-full text-xs font-medium', statusBadge.color)}>
+              {statusBadge.label}
+            </span>
+          </div>
           <p className="text-text-muted mt-1">10-Segment 입찰가격 설정</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -138,13 +215,33 @@ export default function Bidding() {
             <span className="hidden sm:inline">AI 최적화</span>
             <span className="sm:hidden">최적화</span>
           </button>
-          <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
-            <Send className="w-4 h-4" />
+          <button
+            onClick={handleKPXSubmit}
+            disabled={bidStatus !== 'approved'}
+            className={clsx(
+              'flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors',
+              bidStatus === 'approved'
+                ? 'bg-success text-white hover:bg-success/90'
+                : 'bg-background text-text-muted cursor-not-allowed'
+            )}
+          >
+            <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">KPX 제출</span>
-            <span className="sm:hidden">제출</span>
+            <span className="sm:hidden">KPX</span>
           </button>
         </div>
       </div>
+
+      {/* Status Alert */}
+      {bidStatus === 'approved' && (
+        <div className="flex items-center gap-3 p-4 bg-success/10 border border-success/30 rounded-lg">
+          <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-success">입찰이 승인되었습니다</p>
+            <p className="text-xs text-success/80 mt-0.5">상단의 'KPX 제출' 버튼을 클릭하여 한국전력거래소에 제출하세요.</p>
+          </div>
+        </div>
+      )}
 
       {/* Settings Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -374,21 +471,56 @@ export default function Bidding() {
               <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
               <span className="text-sm text-text-muted whitespace-nowrap">용량 제한 준수</span>
             </div>
+            {saveMessage && (
+              <div className="flex items-center gap-2 text-success">
+                <CheckCircle className="w-4 h-4" />
+                <span className="text-sm">{saveMessage}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <button className="btn-secondary flex items-center gap-2 whitespace-nowrap">
-              <Save className="w-4 h-4" />
-              <span className="hidden sm:inline">임시 저장</span>
-              <span className="sm:hidden">저장</span>
+            <button
+              onClick={handleSaveDraft}
+              disabled={isSaving}
+              className="btn-secondary flex items-center gap-2 whitespace-nowrap"
+            >
+              <Save className={clsx('w-4 h-4', isSaving && 'animate-spin')} />
+              <span className="hidden sm:inline">{isSaving ? '저장 중...' : '임시 저장'}</span>
+              <span className="sm:hidden">{isSaving ? '...' : '저장'}</span>
             </button>
-            <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
-              <Send className="w-4 h-4" />
-              <span className="hidden sm:inline">입찰 제출</span>
-              <span className="sm:hidden">제출</span>
+            <button
+              onClick={handleSubmitForReview}
+              disabled={bidStatus === 'approved'}
+              className={clsx(
+                'flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors',
+                bidStatus === 'approved'
+                  ? 'bg-background text-text-muted cursor-not-allowed'
+                  : 'bg-primary text-white hover:bg-primary/90'
+              )}
+            >
+              <FileCheck className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {bidStatus === 'approved' ? '승인됨' : '입찰 제출'}
+              </span>
+              <span className="sm:hidden">
+                {bidStatus === 'approved' ? '승인' : '제출'}
+              </span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      <BidReviewModal
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        onApprove={handleApproved}
+        onReject={handleRejected}
+        segments={segments}
+        selectedHour={selectedHour}
+        smpForecast={smpForHour}
+        capacity={capacity}
+      />
     </div>
   );
 }

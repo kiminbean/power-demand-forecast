@@ -150,3 +150,47 @@ export interface Alert {
   message: string;
   timestamp: string;
 }
+
+// Bid Submission Status
+export type BidStatus = 'draft' | 'pending_review' | 'approved' | 'submitted_kpx' | 'matched' | 'rejected';
+
+// Bid Submission
+export interface BidSubmission {
+  id: string;
+  tradingDate: string;
+  tradingHour: number;
+  segments: {
+    id: number;
+    quantity: number;
+    price: number;
+  }[];
+  totalQuantity: number;
+  avgPrice: number;
+  status: BidStatus;
+  submittedAt?: string;
+  approvedAt?: string;
+  kpxSubmittedAt?: string;
+  approver?: string;
+  remarks?: string;
+}
+
+// KPX Market Bid (for simulation)
+export interface KPXMarketBid {
+  bidder: string;
+  bidderType: 'generator' | 'consumer';
+  quantity: number;
+  price: number;
+  isOurs?: boolean;
+}
+
+// KPX Matching Result
+export interface KPXMatchingResult {
+  hour: number;
+  clearingPrice: number;
+  totalDemand: number;
+  totalSupply: number;
+  matchedQuantity: number;
+  ourAcceptedQuantity: number;
+  ourRevenue: number;
+  status: 'cleared' | 'partial' | 'rejected';
+}

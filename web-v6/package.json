@@ -1,7 +1,7 @@
 {
   "name": "re-bms-web-v6",
-  "version": "6.0.0",
-  "description": "RE-BMS Desktop Web Dashboard v6.0 - Jeju Power Grid Management",
+  "version": "6.1.0",
+  "description": "RE-BMS Desktop Web Dashboard v6.1 - Jeju Power Grid Management with KPX Simulation",
   "type": "module",
   "scripts": {
     "dev": "vite --port 8508",
