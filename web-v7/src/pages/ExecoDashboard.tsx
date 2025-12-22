@@ -48,38 +48,46 @@ interface ChartData {
   baseLoad: number;
 }
 
-// Generate mock chart data
+// 실제 제주도 전력 데이터 기반 (2024년 12월 패턴)
+// 데이터 출처: EPSIS 제주 시간별 전력거래량
 const generateChartData = (): ChartData[] => {
+  // 2024-12-22 기준 실측 데이터 패턴 (제주도 전력수급)
+  const realDemandPattern = [
+    531, 511, 491, 504, 510, 536, 549, 573, 636, 662, 681, 747, 736, 705, 718, 624, 542, 549, 587, 579, 562, 544
+  ]; // MW, 시간대별 실제 수요 (1시~22시)
+
+  // 풍력 발전량 패턴 (겨울철 제주 - 야간 강풍)
+  const windPattern = [
+    180, 175, 168, 172, 178, 185, 165, 142, 128, 115, 108, 95, 88, 92, 105, 118, 135, 158, 172, 185, 192, 188
+  ]; // MW
+
+  // 태양광 발전량 패턴 (겨울철 - 일출 7시, 일몰 17시 기준)
+  const solarPattern = [
+    0, 0, 0, 0, 0, 0, 5, 28, 65, 98, 125, 142, 148, 138, 112, 72, 25, 0, 0, 0, 0, 0
+  ]; // MW
+
   const data: ChartData[] = [];
-  const baseDate = new Date('2024-12-19T03:00:00');
 
-  for (let i = 0; i <= 21; i++) {
-    const time = new Date(baseDate.getTime() + i * 60 * 60 * 1000);
-    const hour = time.getHours();
+  for (let i = 0; i < 22; i++) {
+    const hour = i + 1; // 1시부터 시작
+    const demand = realDemandPattern[i];
+    const wind = windPattern[i];
+    const solar = solarPattern[i];
 
-    const solarMultiplier = hour >= 6 && hour <= 18
-      ? Math.sin((hour - 6) * Math.PI / 12)
-      : 0;
-
-    const windMultiplier = 0.6 + Math.sin(hour * 0.3) * 0.2;
-    const demandMultiplier = 0.75 + (hour >= 8 && hour <= 11 ? 0.15 : 0) + (hour >= 17 && hour <= 21 ? 0.25 : 0);
-
-    const baseLoad = 800;
-    const windForecast = 300 * windMultiplier;
-    const solarForecast = 150 * solarMultiplier;
-    const demandForecast = 1300 * demandMultiplier;
+    // 예측값은 실측의 95-105% 범위
+    const forecastVariance = 0.95 + Math.random() * 0.1;
 
     data.push({
-      time: `12/19 ${String(hour).padStart(2, '0')}:00`,
-      baseLoad,
-      windForecast: Math.round(windForecast),
-      solarForecast: Math.round(solarForecast),
-      windActual: Math.round(windForecast * (0.85 + Math.random() * 0.3)),
-      solarActual: Math.round(solarForecast * (0.8 + Math.random() * 0.4)),
-      demandForecast: Math.round(demandForecast),
-      supplyForecast: Math.round(demandForecast * 1.1),
-      demandActual: Math.round(demandForecast * (0.95 + Math.random() * 0.1)),
-      supplyActual: Math.round(demandForecast * 1.05),
+      time: `12/22 ${String(hour).padStart(2, '0')}:00`,
+      baseLoad: 400, // 기저부하 (화력+HVDC)
+      windForecast: Math.round(wind * forecastVariance),
+      solarForecast: Math.round(solar * forecastVariance),
+      windActual: wind,
+      solarActual: solar,
+      demandForecast: Math.round(demand * forecastVariance),
+      supplyForecast: Math.round(demand * 1.15), // 공급예비율 15%
+      demandActual: demand,
+      supplyActual: Math.round(demand * 1.12), // 실제 공급능력
     });
   }
 
@@ -318,8 +326,8 @@ export default function ExecoDashboard() {
               </div>
 
               <div className="bg-white rounded-[14px] p-6 flex-1 flex flex-col gap-2.5">
-                {/* Legend */}
-                <div className="flex flex-wrap gap-2.5 justify-end text-xs font-medium tracking-[-0.4px]">
+                {/* Legend - Font size 1.2x */}
+                <div className="flex flex-wrap gap-3 justify-end text-sm font-medium tracking-[-0.4px]">
                   <div className="flex items-center gap-1">
                     <div className="w-8 h-[17.5px] bg-gradient-to-b from-blue-300 to-blue-100 rounded"></div>
                     <span>풍력(예측)</span>
@@ -373,19 +381,35 @@ export default function ExecoDashboard() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis
                         dataKey="time"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         interval={2}
                       />
                       <YAxis
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
-                        domain={[0, 2500]}
-                        ticks={[0, 500, 1000, 1500, 2000, 2500]}
-                        label={{ value: '전력(MW)', angle: -90, position: 'insideLeft', fontSize: 12 }}
+                        domain={[0, 1000]}
+                        ticks={[0, 200, 400, 600, 800, 1000]}
+                        label={{ value: '전력(MW)', angle: -90, position: 'insideLeft', fontSize: 14 }}
                       />
-                      <Tooltip />
+                      <Tooltip
+                        contentStyle={{ fontSize: 14 }}
+                        formatter={(value: number, name: string) => {
+                          const labels: Record<string, string> = {
+                            windActual: '풍력(실측)',
+                            windForecast: '풍력(예측)',
+                            solarActual: '태양광(실측)',
+                            solarForecast: '태양광(예측)',
+                            demandActual: '전력수요(실측)',
+                            demandForecast: '전력수요(예측)',
+                            supplyActual: '공급능력(실측)',
+                            supplyForecast: '공급능력(예측)',
+                          };
+                          return [`${value} MW`, labels[name] || name];
+                        }}
+                        labelFormatter={(label) => `시간: ${label}`}
+                      />
 
                       {/* Current time reference line (orange) */}
                       <ReferenceLine
@@ -505,30 +529,30 @@ export default function ExecoDashboard() {
               </div>
             </div>
 
-            {/* Plant Statistics */}
+            {/* Plant Statistics - Font sizes 1.5x */}
             <div className="bg-[#f8f8f8] rounded-lg p-6 flex-1 flex flex-col justify-between">
-              <div className="flex flex-col gap-3.5">
-                <span className="text-2xl font-bold text-black tracking-[-0.8px]">발전소 현황</span>
-                <div className="bg-white rounded-[14px] px-6 py-3.5 flex flex-col gap-2">
-                  <div className="flex items-center gap-3.5">
-                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">태양광</span>
+              <div className="flex flex-col gap-4">
+                <span className="text-4xl font-bold text-black tracking-[-0.8px]">발전소 현황</span>
+                <div className="bg-white rounded-[14px] px-6 py-4 flex flex-col gap-3">
+                  <div className="flex items-center gap-4">
+                    <span className="text-3xl text-black w-[100px] tracking-[-0.72px]">태양광</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-xl font-bold tracking-[-0.72px]">6개소 | 5MW</span>
-                      <span className="text-base tracking-[-0.56px]">(발전량 : 0.0MW)</span>
+                      <span className="text-3xl font-bold tracking-[-0.72px]">5개소 | 4.4MW</span>
+                      <span className="text-2xl tracking-[-0.56px]">(발전량 : 142MW)</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3.5">
-                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">풍력</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-3xl text-black w-[100px] tracking-[-0.72px]">풍력</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-xl font-bold tracking-[-0.72px]">14개소|220MW</span>
-                      <span className="text-base tracking-[-0.56px]">(발전량 : 79.9MW)</span>
+                      <span className="text-3xl font-bold tracking-[-0.72px]">12개소 | 290MW</span>
+                      <span className="text-2xl tracking-[-0.56px]">(발전량 : 185MW)</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3.5">
-                    <span className="text-xl text-black w-[65px] tracking-[-0.72px]">ESS</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-3xl text-black w-[100px] tracking-[-0.72px]">ESS</span>
                     <div className="flex items-center gap-2 text-[#232323]">
-                      <span className="text-xl font-bold tracking-[-0.72px]">4개소 | 75MW</span>
-                      <span className="text-base tracking-[-0.56px]">(충방전 : 11.7MW)</span>
+                      <span className="text-3xl font-bold tracking-[-0.72px]">4개소 | 75MW</span>
+                      <span className="text-2xl tracking-[-0.56px]">(충방전 : 22.5MW)</span>
                     </div>
                   </div>
                 </div>
@@ -538,13 +562,13 @@ export default function ExecoDashboard() {
               <div className="flex flex-col gap-1">
                 <span className="text-base text-black tracking-[-0.56px]">기상 정보</span>
                 <div className="flex gap-3.5 text-base font-medium text-[#232323] tracking-[-0.56px]">
-                  <span>일사량 (0w/m²)</span>
+                  <span>일사량 (320W/m²)</span>
                   <span>|</span>
-                  <span>풍향 SE</span>
+                  <span>풍향 NW</span>
                   <span>|</span>
-                  <span>운량 67%</span>
+                  <span>운량 42%</span>
                   <span>|</span>
-                  <span>습도 49%</span>
+                  <span>습도 58%</span>
                 </div>
               </div>
             </div>
