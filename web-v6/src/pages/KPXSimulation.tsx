@@ -1092,7 +1092,7 @@ export default function KPXSimulation() {
                       bid.isOurs && 'bg-primary/10',
                       bid.status === 'accepted' && 'bg-success/5',
                       bid.status === 'partial' && 'bg-warning/5',
-                      bid.status === 'rejected' && 'opacity-50'
+                      bid.status === 'rejected' && 'bg-danger/10'
                     )}
                   >
                     <td className="py-2 px-3 font-medium text-text-primary">
@@ -1126,7 +1126,7 @@ export default function KPXSimulation() {
                         <span className="text-warning text-xs font-medium">△ 부분</span>
                       )}
                       {bid.status === 'rejected' && (
-                        <span className="text-danger text-xs">✗ 탈락</span>
+                        <span className="text-danger text-xs font-bold">✗ 탈락</span>
                       )}
                       {bid.status === 'pending' && (
                         <span className="text-text-muted text-xs">-</span>
@@ -1163,7 +1163,7 @@ export default function KPXSimulation() {
                       'border-b border-border/50 transition-colors',
                       bid.status === 'accepted' && 'bg-success/5',
                       bid.status === 'partial' && 'bg-warning/5',
-                      bid.status === 'rejected' && 'opacity-50'
+                      bid.status === 'rejected' && 'bg-danger/10'
                     )}
                   >
                     <td className="py-2 px-3 font-medium text-text-primary">{bid.bidder}</td>
@@ -1187,7 +1187,7 @@ export default function KPXSimulation() {
                         <span className="text-warning text-xs font-medium">△ 부분</span>
                       )}
                       {bid.status === 'rejected' && (
-                        <span className="text-text-muted text-xs">미체결</span>
+                        <span className="text-danger text-xs font-bold">✗ 미체결</span>
                       )}
                       {bid.status === 'pending' && (
                         <span className="text-text-muted text-xs">-</span>
