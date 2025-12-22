@@ -425,14 +425,17 @@ export default function KPXSimulation() {
   }, [bidData]);
 
   // Build curve data for chart
+  // Helper function to round to 1 decimal place (avoid floating point issues)
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+
   // Generate separate curve data for supply and demand (no nulls, continuous lines)
   const supplyCurveData = useMemo(() => {
     const data: { quantity: number; price: number }[] = [];
     let cumSupply = 0;
     [...supplyBids].sort((a, b) => a.price - b.price).forEach(bid => {
-      data.push({ quantity: cumSupply, price: bid.price });
+      data.push({ quantity: round1(cumSupply), price: bid.price });
       cumSupply += bid.quantity;
-      data.push({ quantity: cumSupply, price: bid.price });
+      data.push({ quantity: round1(cumSupply), price: bid.price });
     });
     return data;
   }, [supplyBids]);
@@ -441,16 +444,16 @@ export default function KPXSimulation() {
     const data: { quantity: number; price: number }[] = [];
     let cumDemand = 0;
     [...demandBids].sort((a, b) => b.price - a.price).forEach(bid => {
-      data.push({ quantity: cumDemand, price: bid.price });
+      data.push({ quantity: round1(cumDemand), price: bid.price });
       cumDemand += bid.quantity;
-      data.push({ quantity: cumDemand, price: bid.price });
+      data.push({ quantity: round1(cumDemand), price: bid.price });
     });
     return data;
   }, [demandBids]);
 
   // Merge curve data for chart (with proper alignment)
   const curveData = useMemo(() => {
-    // Get all unique quantities
+    // Get all unique quantities (rounded)
     const allQuantities = new Set<number>();
     supplyCurveData.forEach(d => allQuantities.add(d.quantity));
     demandCurveData.forEach(d => allQuantities.add(d.quantity));
@@ -477,7 +480,7 @@ export default function KPXSimulation() {
         }
       }
 
-      return { quantity: q, supplyPrice, demandPrice };
+      return { quantity: round1(q), supplyPrice, demandPrice };
     });
   }, [supplyCurveData, demandCurveData]);
 
@@ -806,6 +809,7 @@ export default function KPXSimulation() {
                   stroke={chartColors.axis}
                   fontSize={11}
                   tickMargin={5}
+                  tickFormatter={(value) => Math.round(value).toString()}
                   label={{ value: '누적 물량 (MW)', position: 'bottom', offset: 0, fill: chartColors.axis, fontSize: 12 }}
                 />
                 <YAxis
