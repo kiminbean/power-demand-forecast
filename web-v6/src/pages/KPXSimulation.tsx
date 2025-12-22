@@ -40,7 +40,6 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
-  Legend,
 } from 'recharts';
 import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
@@ -426,37 +425,61 @@ export default function KPXSimulation() {
   }, [bidData]);
 
   // Build curve data for chart
-  const curveData = useMemo(() => {
-    const data: { quantity: number; supplyPrice: number | null; demandPrice: number | null }[] = [];
-
-    // Supply curve
+  // Generate separate curve data for supply and demand (no nulls, continuous lines)
+  const supplyCurveData = useMemo(() => {
+    const data: { quantity: number; price: number }[] = [];
     let cumSupply = 0;
     [...supplyBids].sort((a, b) => a.price - b.price).forEach(bid => {
-      data.push({ quantity: cumSupply, supplyPrice: bid.price, demandPrice: null });
+      data.push({ quantity: cumSupply, price: bid.price });
       cumSupply += bid.quantity;
-      data.push({ quantity: cumSupply, supplyPrice: bid.price, demandPrice: null });
+      data.push({ quantity: cumSupply, price: bid.price });
     });
+    return data;
+  }, [supplyBids]);
 
-    // Demand curve
+  const demandCurveData = useMemo(() => {
+    const data: { quantity: number; price: number }[] = [];
     let cumDemand = 0;
     [...demandBids].sort((a, b) => b.price - a.price).forEach(bid => {
-      const existing = data.find(d => Math.abs(d.quantity - cumDemand) < 0.5);
-      if (existing && existing.demandPrice === null) {
-        existing.demandPrice = bid.price;
-      } else {
-        data.push({ quantity: cumDemand, supplyPrice: null, demandPrice: bid.price });
-      }
+      data.push({ quantity: cumDemand, price: bid.price });
       cumDemand += bid.quantity;
-      const existingEnd = data.find(d => Math.abs(d.quantity - cumDemand) < 0.5);
-      if (existingEnd && existingEnd.demandPrice === null) {
-        existingEnd.demandPrice = bid.price;
-      } else {
-        data.push({ quantity: cumDemand, supplyPrice: null, demandPrice: bid.price });
-      }
+      data.push({ quantity: cumDemand, price: bid.price });
     });
+    return data;
+  }, [demandBids]);
 
-    return data.sort((a, b) => a.quantity - b.quantity);
-  }, [supplyBids, demandBids]);
+  // Merge curve data for chart (with proper alignment)
+  const curveData = useMemo(() => {
+    // Get all unique quantities
+    const allQuantities = new Set<number>();
+    supplyCurveData.forEach(d => allQuantities.add(d.quantity));
+    demandCurveData.forEach(d => allQuantities.add(d.quantity));
+
+    const sortedQuantities = Array.from(allQuantities).sort((a, b) => a - b);
+
+    // Build merged data with interpolated values
+    return sortedQuantities.map(q => {
+      // Find supply price at this quantity (step function)
+      let supplyPrice: number | undefined;
+      for (let i = supplyCurveData.length - 1; i >= 0; i--) {
+        if (supplyCurveData[i].quantity <= q) {
+          supplyPrice = supplyCurveData[i].price;
+          break;
+        }
+      }
+
+      // Find demand price at this quantity (step function)
+      let demandPrice: number | undefined;
+      for (let i = demandCurveData.length - 1; i >= 0; i--) {
+        if (demandCurveData[i].quantity <= q) {
+          demandPrice = demandCurveData[i].price;
+          break;
+        }
+      }
+
+      return { quantity: q, supplyPrice, demandPrice };
+    });
+  }, [supplyCurveData, demandCurveData]);
 
   // Run simulation
   const runSimulation = useCallback(() => {
@@ -776,20 +799,21 @@ export default function KPXSimulation() {
           </h3>
           <div className="h-[420px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={curveData} margin={{ top: 20, right: 30, left: 10, bottom: 40 }}>
+              <ComposedChart data={curveData} margin={{ top: 20, right: 30, left: 10, bottom: 35 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                 <XAxis
                   dataKey="quantity"
                   stroke={chartColors.axis}
-                  fontSize={12}
-                  label={{ value: '누적 물량 (MW)', position: 'insideBottom', offset: -10, fill: chartColors.axis }}
+                  fontSize={11}
+                  tickMargin={5}
+                  label={{ value: '누적 물량 (MW)', position: 'bottom', offset: 0, fill: chartColors.axis, fontSize: 12 }}
                 />
                 <YAxis
                   stroke={chartColors.axis}
                   fontSize={12}
-                  width={60}
-                  domain={[0, 180]}
-                  label={{ value: '가격 (원/kWh)', angle: -90, position: 'insideLeft', fill: chartColors.axis }}
+                  width={50}
+                  domain={[0, 200]}
+                  label={{ value: '가격 (원/kWh)', angle: -90, position: 'insideLeft', fill: chartColors.axis, dx: -5 }}
                 />
                 <Tooltip
                   formatter={(value: number, name: string) => [
@@ -803,30 +827,27 @@ export default function KPXSimulation() {
                     borderRadius: '8px',
                   }}
                 />
-                <Legend
-                  formatter={(value) => value === 'supplyPrice' ? '공급 곡선' : '수요 곡선'}
-                />
 
-                {/* Supply curve - green */}
+                {/* Supply curve - green (step pattern for block bids) */}
                 <Line
                   type="stepAfter"
                   dataKey="supplyPrice"
                   stroke="#10b981"
-                  strokeWidth={3}
+                  strokeWidth={2}
                   name="supplyPrice"
                   dot={false}
-                  connectNulls={false}
+                  connectNulls={true}
                 />
 
-                {/* Demand curve - orange */}
+                {/* Demand curve - orange (step pattern for block bids) */}
                 <Line
                   type="stepAfter"
                   dataKey="demandPrice"
                   stroke="#f59e0b"
-                  strokeWidth={3}
+                  strokeWidth={2}
                   name="demandPrice"
                   dot={false}
-                  connectNulls={false}
+                  connectNulls={true}
                 />
 
                 {/* Clearing price reference line */}
