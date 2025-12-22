@@ -181,18 +181,18 @@ const PlantMarker: React.FC<{
     >
       {isHovered && (
         <div
-          className="absolute bg-white rounded-lg shadow-lg p-3 z-50 whitespace-nowrap"
+          className="absolute bg-white rounded-xl shadow-lg p-4 z-50 whitespace-nowrap"
           style={{
-            left: plant.size + 10,
-            top: -10,
-            minWidth: 150,
+            left: plant.size + 12,
+            top: -15,
+            minWidth: 200,
           }}
         >
-          <div className="font-bold text-sm text-gray-900">{plant.name}</div>
-          <div className="text-xs text-gray-600 mt-1">
+          <div className="font-bold text-xl text-gray-900">{plant.name}</div>
+          <div className="text-base text-gray-600 mt-2">
             용량: {plant.capacity} MW
           </div>
-          <div className="text-xs mt-1">
+          <div className="text-base mt-1">
             발전량: <span className="font-bold text-green-600">{plant.generation.toFixed(1)} MW</span>
           </div>
         </div>
