@@ -129,16 +129,24 @@ const powerPlantsData = [
 // Convert to PowerPlant format with calculated pixel positions
 const powerPlants: PowerPlant[] = powerPlantsData.map(plant => {
   const { x, y } = latLngToPixel(plant.lat, plant.lng);
-  // Size based on capacity (min 8, max 20)
-  const size = Math.max(8, Math.min(20, 8 + (plant.capacity / 10)));
-  // Generation is simulated (50-80% of capacity for wind/solar during day, ESS varies)
-  const generationRate = plant.type === 'ess' ? 0.3 : (plant.type === 'solar' ? 0 : 0.65);
+
+  // Generation is simulated (겨울철 오후 기준)
+  // 풍력: 60-70% 가동, 태양광: 정오 기준 최대, ESS: 충방전 30%
+  const generationRate = plant.type === 'ess' ? 0.3 : (plant.type === 'solar' ? 0.85 : 0.65);
+  const generation = Math.round(plant.capacity * generationRate * 10) / 10;
+
+  // Size based on generation (1.5x scale: min 12, max 30)
+  // 발전량 기준으로 크기 차별화
+  const baseSize = 12; // 최소 크기 (기존 8 * 1.5 = 12)
+  const maxSize = 30;  // 최대 크기 (기존 20 * 1.5 = 30)
+  const size = Math.max(baseSize, Math.min(maxSize, baseSize + (generation / 5)));
+
   return {
     id: plant.id,
     name: plant.name,
     type: plant.type,
     capacity: plant.capacity,
-    generation: Math.round(plant.capacity * generationRate * 10) / 10,
+    generation,
     x,
     y,
     size,
