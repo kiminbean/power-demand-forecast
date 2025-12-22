@@ -28,6 +28,8 @@ import {
   Info,
   TrendingUp,
   Activity,
+  Wind,
+  Sun,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -556,6 +558,17 @@ export default function RTMSimulation() {
     (ourTotalBid || 1);
   const volatility = RTM_VOLATILITY_MULTIPLIER[bidData.selectedHour] || 1.0;
 
+  // Resource type icon
+  const ResourceIcon = ({ type }: { type?: string }) => {
+    switch (type) {
+      case 'wind': return <Wind className="w-3 h-3 text-sky-500" />;
+      case 'solar': return <Sun className="w-3 h-3 text-amber-500" />;
+      case 'ess': return <Zap className="w-3 h-3 text-purple-500" />;
+      case 'thermal': return <Factory className="w-3 h-3 text-gray-500" />;
+      default: return null;
+    }
+  };
+
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
@@ -990,6 +1003,142 @@ export default function RTMSimulation() {
                 <p>시뮬레이션 완료 후 결과가 표시됩니다</p>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bid Tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Supply Bids */}
+        <div className="card">
+          <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+            <Factory className="w-5 h-5 text-success" />
+            공급 입찰 (발전사) - Merit Order
+          </h3>
+          <div className="overflow-x-auto max-h-[400px]">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card">
+                <tr className="text-text-muted border-b border-border">
+                  <th className="text-left py-2 px-3">발전사</th>
+                  <th className="text-right py-2 px-3">물량</th>
+                  <th className="text-right py-2 px-3">가격</th>
+                  <th className="text-center py-2 px-3">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supplyBids.map((bid) => (
+                  <tr
+                    key={bid.id}
+                    className={clsx(
+                      'border-b border-border/50 transition-colors',
+                      bid.isOurs && 'bg-primary/10',
+                      bid.status === 'accepted' && 'bg-success/5',
+                      bid.status === 'partial' && 'bg-warning/5',
+                      bid.status === 'rejected' && 'bg-danger/10'
+                    )}
+                  >
+                    <td className="py-2 px-3 font-medium text-text-primary">
+                      <div className="flex items-center gap-2">
+                        <ResourceIcon type={bid.resourceType} />
+                        <span>{bid.bidder}</span>
+                        {bid.isOurs && (
+                          <span className="px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded">
+                            우리
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="text-right py-2 px-3 text-text-muted">
+                      {bid.status === 'partial' ? (
+                        <span className="text-warning">
+                          {bid.acceptedQuantity?.toFixed(1)}/{bid.quantity.toFixed(1)}
+                        </span>
+                      ) : (
+                        `${bid.quantity.toFixed(1)} MW`
+                      )}
+                    </td>
+                    <td className="text-right py-2 px-3 font-mono text-text-primary">
+                      {bid.price.toFixed(1)}원
+                    </td>
+                    <td className="text-center py-2 px-3">
+                      {bid.status === 'accepted' && (
+                        <span className="text-success text-xs font-medium">✓ 낙찰</span>
+                      )}
+                      {bid.status === 'partial' && (
+                        <span className="text-warning text-xs font-medium">△ 부분</span>
+                      )}
+                      {bid.status === 'rejected' && (
+                        <span className="text-danger text-xs font-bold">✗ 탈락</span>
+                      )}
+                      {bid.status === 'pending' && (
+                        <span className="text-text-muted text-xs">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Demand Bids */}
+        <div className="card">
+          <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-warning" />
+            수요 입찰 (수요처) - 가격 내림차순
+          </h3>
+          <div className="overflow-x-auto max-h-[400px]">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card">
+                <tr className="text-text-muted border-b border-border">
+                  <th className="text-left py-2 px-3">수요처</th>
+                  <th className="text-right py-2 px-3">물량</th>
+                  <th className="text-right py-2 px-3">희망가격</th>
+                  <th className="text-center py-2 px-3">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {demandBids.map((bid) => (
+                  <tr
+                    key={bid.id}
+                    className={clsx(
+                      'border-b border-border/50 transition-colors',
+                      bid.status === 'accepted' && 'bg-success/5',
+                      bid.status === 'partial' && 'bg-warning/5',
+                      bid.status === 'rejected' && 'bg-danger/10'
+                    )}
+                  >
+                    <td className="py-2 px-3 font-medium text-text-primary">{bid.bidder}</td>
+                    <td className="text-right py-2 px-3 text-text-muted">
+                      {bid.status === 'partial' ? (
+                        <span className="text-warning">
+                          {bid.acceptedQuantity?.toFixed(1)}/{bid.quantity.toFixed(1)}
+                        </span>
+                      ) : (
+                        `${bid.quantity.toFixed(1)} MW`
+                      )}
+                    </td>
+                    <td className="text-right py-2 px-3 font-mono text-text-primary">
+                      {bid.price.toFixed(1)}원
+                    </td>
+                    <td className="text-center py-2 px-3">
+                      {bid.status === 'accepted' && (
+                        <span className="text-success text-xs font-medium">✓ 체결</span>
+                      )}
+                      {bid.status === 'partial' && (
+                        <span className="text-warning text-xs font-medium">△ 부분</span>
+                      )}
+                      {bid.status === 'rejected' && (
+                        <span className="text-danger text-xs font-bold">✗ 미체결</span>
+                      )}
+                      {bid.status === 'pending' && (
+                        <span className="text-text-muted text-xs">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
