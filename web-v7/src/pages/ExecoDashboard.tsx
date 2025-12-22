@@ -86,26 +86,74 @@ const generateChartData = (): ChartData[] => {
   return data;
 };
 
-// Power plants data - EXACT positions from Figma (node-id 3316:572 ~ 3316:583)
-// Map container: w-[385px] h-[255px]
-const powerPlants: PowerPlant[] = [
-  // Solar (red #ff4a4a)
-  { id: 's1', name: '성산태양광', type: 'solar', capacity: 20, generation: 0, x: 249, y: 41, size: 34 },
-  { id: 's2', name: '서귀포태양광', type: 'solar', capacity: 15, generation: 0, x: 300, y: 185, size: 21 },
+// Jeju island coordinate bounds (from actual data)
+const JEJU_BOUNDS = {
+  minLat: 33.16,  // 가파도 (최남단)
+  maxLat: 33.57,  // 김녕/행원 (최북단)
+  minLng: 126.16, // 탐라해상 (최서단)
+  maxLng: 126.93, // 성산 (최동단)
+};
 
-  // Wind (blue #4a89ff)
-  { id: 'w1', name: '한림풍력', type: 'wind', capacity: 30, generation: 22.5, x: 174, y: 74.5, size: 23 },
-  { id: 'w2', name: '김녕풍력', type: 'wind', capacity: 15, generation: 12.1, x: 216, y: 63, size: 10 },
-  { id: 'w3', name: '행원풍력', type: 'wind', capacity: 10, generation: 7.5, x: 148, y: 105, size: 10 },
-  { id: 'w4', name: '대정풍력', type: 'wind', capacity: 20, generation: 14.8, x: 197, y: 195, size: 10 },
-  { id: 'w5', name: '표선풍력', type: 'wind', capacity: 18, generation: 11.2, x: 424, y: 142, size: 10 },
+// Map dimensions
+const MAP_WIDTH = 385;
+const MAP_HEIGHT = 255;
 
-  // ESS (yellow #ffbd00)
-  { id: 'e1', name: '제주ESS1', type: 'ess', capacity: 25, generation: 5.2, x: 329, y: 38, size: 10 },
-  { id: 'e2', name: '서귀포ESS', type: 'ess', capacity: 20, generation: 3.8, x: 306, y: 43, size: 10 },
-  { id: 'e3', name: '한경ESS', type: 'ess', capacity: 15, generation: 2.1, x: 232, y: 195, size: 10 },
-  { id: 'e4', name: '조천ESS', type: 'ess', capacity: 15, generation: 0.6, x: 369, y: 172, size: 10 },
+// Convert lat/lng to pixel position
+const latLngToPixel = (lat: number, lng: number): { x: number; y: number } => {
+  const x = ((lng - JEJU_BOUNDS.minLng) / (JEJU_BOUNDS.maxLng - JEJU_BOUNDS.minLng)) * MAP_WIDTH;
+  const y = ((JEJU_BOUNDS.maxLat - lat) / (JEJU_BOUNDS.maxLat - JEJU_BOUNDS.minLat)) * MAP_HEIGHT;
+  return { x, y };
+};
+
+// Power plants data from data/jeju_plants/jeju_power_plants.json
+// Using actual latitude/longitude coordinates
+const powerPlantsData = [
+  // Wind farms (주요 풍력단지)
+  { id: 'wind_001', name: '한경풍력', type: 'wind' as const, capacity: 21.0, lat: 33.339417, lng: 126.169222 },
+  { id: 'wind_002', name: '상명풍력', type: 'wind' as const, capacity: 21.0, lat: 33.339250, lng: 126.289556 },
+  { id: 'wind_003', name: '가시리풍력', type: 'wind' as const, capacity: 30.0, lat: 33.3576, lng: 126.7461 },
+  { id: 'wind_004', name: '김녕풍력', type: 'wind' as const, capacity: 30.0, lat: 33.5560, lng: 126.7480 },
+  { id: 'wind_005', name: '행원풍력', type: 'wind' as const, capacity: 8.4, lat: 33.5490, lng: 126.7990 },
+  { id: 'wind_006', name: '삼달풍력', type: 'wind' as const, capacity: 33.0, lat: 33.3790, lng: 126.8630 },
+  { id: 'wind_007', name: '성산1풍력', type: 'wind' as const, capacity: 12.0, lat: 33.4399, lng: 126.9229 },
+  { id: 'wind_008', name: '성산2풍력', type: 'wind' as const, capacity: 8.0, lat: 33.4350, lng: 126.9180 },
+  { id: 'wind_011', name: '탐라해상풍력', type: 'wind' as const, capacity: 30.0, lat: 33.2942, lng: 126.1631 },
+  { id: 'wind_014', name: '제주음풍력', type: 'wind' as const, capacity: 21.0, lat: 33.4800, lng: 126.5500 },
+  { id: 'wind_015', name: '동복-북촌풍력', type: 'wind' as const, capacity: 30.0, lat: 33.5300, lng: 126.7200 },
+  { id: 'wind_016', name: '대정풍력', type: 'wind' as const, capacity: 45.0, lat: 33.2200, lng: 126.2800 },
+
+  // Solar farms (주요 태양광)
+  { id: 'solar_001', name: '구좌태양광', type: 'solar' as const, capacity: 0.75, lat: 33.5200, lng: 126.8500 },
+  { id: 'solar_002', name: '삼도태양광', type: 'solar' as const, capacity: 1.7, lat: 33.5100, lng: 126.5200 },
+  { id: 'solar_003', name: '용담태양광', type: 'solar' as const, capacity: 0.42, lat: 33.5050, lng: 126.5100 },
+  { id: 'solar_005', name: '한경태양광', type: 'solar' as const, capacity: 0.5, lat: 33.3400, lng: 126.1800 },
+  { id: 'solar_006', name: '표선태양광', type: 'solar' as const, capacity: 1.0, lat: 33.3200, lng: 126.8300 },
+
+  // ESS facilities
+  { id: 'ess_001', name: '제주 변동성완화 ESS', type: 'ess' as const, capacity: 30, lat: 33.5100, lng: 126.5400 },
+  { id: 'ess_002', name: '제주 피크저감 ESS', type: 'ess' as const, capacity: 20, lat: 33.4500, lng: 126.5600 },
+  { id: 'ess_003', name: '한경풍력 연계 ESS', type: 'ess' as const, capacity: 10, lat: 33.3400, lng: 126.1700 },
+  { id: 'ess_004', name: '가시리풍력 연계 ESS', type: 'ess' as const, capacity: 15, lat: 33.3576, lng: 126.7500 },
 ];
+
+// Convert to PowerPlant format with calculated pixel positions
+const powerPlants: PowerPlant[] = powerPlantsData.map(plant => {
+  const { x, y } = latLngToPixel(plant.lat, plant.lng);
+  // Size based on capacity (min 8, max 20)
+  const size = Math.max(8, Math.min(20, 8 + (plant.capacity / 10)));
+  // Generation is simulated (50-80% of capacity for wind/solar during day, ESS varies)
+  const generationRate = plant.type === 'ess' ? 0.3 : (plant.type === 'solar' ? 0 : 0.65);
+  return {
+    id: plant.id,
+    name: plant.name,
+    type: plant.type,
+    capacity: plant.capacity,
+    generation: Math.round(plant.capacity * generationRate * 10) / 10,
+    x,
+    y,
+    size,
+  };
+});
 
 // Plant marker component with hover
 const PlantMarker: React.FC<{
