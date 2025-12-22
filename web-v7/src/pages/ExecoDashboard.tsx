@@ -5,7 +5,6 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  AreaChart,
   Area,
   XAxis,
   YAxis,
@@ -14,6 +13,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Line,
+  Legend,
   ReferenceLine,
 } from 'recharts';
 
@@ -35,63 +35,39 @@ interface PowerPlant {
   size: number;
 }
 
+// v6 스타일 간단한 차트 데이터 (공급능력, 전력수요, 태양광, 풍력)
 interface ChartData {
   time: string;
-  windForecast: number;
-  solarForecast: number;
-  windActual: number;
-  solarActual: number;
-  demandForecast: number;
-  supplyForecast: number;
-  demandActual: number;
-  supplyActual: number;
-  baseLoad: number;
+  supply: number;   // 공급능력
+  demand: number;   // 전력수요
+  solar: number;    // 태양광
+  wind: number;     // 풍력
 }
 
 // 실제 제주도 전력 데이터 기반 (2024년 12월 패턴)
-// 데이터 출처: EPSIS 제주 시간별 전력거래량
 const generateChartData = (): ChartData[] => {
-  // 2024-12-22 기준 실측 데이터 패턴 (제주도 전력수급)
-  const realDemandPattern = [
+  // 2024-12-22 기준 실측 데이터 패턴 (EPSIS 제주 시간별 전력거래량)
+  const demandPattern = [
     531, 511, 491, 504, 510, 536, 549, 573, 636, 662, 681, 747, 736, 705, 718, 624, 542, 549, 587, 579, 562, 544
-  ]; // MW, 시간대별 실제 수요 (1시~22시)
+  ];
 
-  // 풍력 발전량 패턴 (겨울철 제주 - 야간 강풍)
+  // 풍력 발전량 패턴 (겨울철 제주)
   const windPattern = [
     180, 175, 168, 172, 178, 185, 165, 142, 128, 115, 108, 95, 88, 92, 105, 118, 135, 158, 172, 185, 192, 188
-  ]; // MW
+  ];
 
-  // 태양광 발전량 패턴 (겨울철 - 일출 7시, 일몰 17시 기준)
+  // 태양광 발전량 패턴 (겨울철)
   const solarPattern = [
     0, 0, 0, 0, 0, 0, 5, 28, 65, 98, 125, 142, 148, 138, 112, 72, 25, 0, 0, 0, 0, 0
-  ]; // MW
+  ];
 
-  const data: ChartData[] = [];
-
-  for (let i = 0; i < 22; i++) {
-    const hour = i + 1; // 1시부터 시작
-    const demand = realDemandPattern[i];
-    const wind = windPattern[i];
-    const solar = solarPattern[i];
-
-    // 예측값은 실측의 95-105% 범위
-    const forecastVariance = 0.95 + Math.random() * 0.1;
-
-    data.push({
-      time: `12/22 ${String(hour).padStart(2, '0')}:00`,
-      baseLoad: 400, // 기저부하 (화력+HVDC)
-      windForecast: Math.round(wind * forecastVariance),
-      solarForecast: Math.round(solar * forecastVariance),
-      windActual: wind,
-      solarActual: solar,
-      demandForecast: Math.round(demand * forecastVariance),
-      supplyForecast: Math.round(demand * 1.15), // 공급예비율 15%
-      demandActual: demand,
-      supplyActual: Math.round(demand * 1.12), // 실제 공급능력
-    });
-  }
-
-  return data;
+  return demandPattern.map((demand, i) => ({
+    time: `${String(i + 1).padStart(2, '0')}:00`,
+    demand,
+    supply: Math.round(demand * 1.15), // 공급예비율 15%
+    solar: solarPattern[i],
+    wind: windPattern[i],
+  }));
 };
 
 // Jeju island coordinate bounds - calibrated to match the map image
@@ -325,156 +301,122 @@ export default function ExecoDashboard() {
                 <span className="text-lg text-black tracking-[-0.64px]">실측vs예측(MW)</span>
               </div>
 
-              <div className="bg-white rounded-[14px] p-6 flex-1 flex flex-col gap-2.5">
-                {/* Legend - Font size 1.2x */}
-                <div className="flex flex-wrap gap-3 justify-end text-sm font-medium tracking-[-0.4px]">
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-[17.5px] bg-gradient-to-b from-blue-300 to-blue-100 rounded"></div>
-                    <span>풍력(예측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-[17.5px] bg-gradient-to-b from-yellow-300 to-yellow-100 rounded"></div>
-                    <span>태양광(예측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-[17.5px] bg-blue-500 rounded"></div>
-                    <span>풍력(실측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-[17.5px] bg-yellow-400 rounded"></div>
-                    <span>태양광(실측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-green-500"></div>
-                    <span>전력수요(예측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 border-t-2 border-dashed border-gray-400"></div>
-                    <span>공급능력(예측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-green-700"></div>
-                    <span>전력수요(실측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-green-400"></div>
-                    <span>공급능력(실측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-cyan-400"></div>
-                    <span>예비전력(예측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-cyan-600"></div>
-                    <span>예비전력(실측)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-8 h-2 bg-gray-200 rounded"></div>
-                    <span>예측 신뢰구간</span>
-                  </div>
-                </div>
+              {/* v6 스타일 간단한 차트 */}
+              <div className="bg-white rounded-[14px] p-6 flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id="supplyGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="demandGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
 
-                {/* Chart */}
-                <div className="flex-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis
-                        dataKey="time"
-                        tick={{ fontSize: 14 }}
-                        tickLine={false}
-                        interval={2}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 14 }}
-                        tickLine={false}
-                        axisLine={false}
-                        domain={[0, 1000]}
-                        ticks={[0, 200, 400, 600, 800, 1000]}
-                        label={{ value: '전력(MW)', angle: -90, position: 'insideLeft', fontSize: 14 }}
-                      />
-                      <Tooltip
-                        contentStyle={{ fontSize: 14 }}
-                        formatter={(value: number, name: string) => {
-                          const labels: Record<string, string> = {
-                            windActual: '풍력(실측)',
-                            windForecast: '풍력(예측)',
-                            solarActual: '태양광(실측)',
-                            solarForecast: '태양광(예측)',
-                            demandActual: '전력수요(실측)',
-                            demandForecast: '전력수요(예측)',
-                            supplyActual: '공급능력(실측)',
-                            supplyForecast: '공급능력(예측)',
-                          };
-                          return [`${value} MW`, labels[name] || name];
-                        }}
-                        labelFormatter={(label) => `시간: ${label}`}
-                      />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
 
-                      {/* Current time reference line (orange) */}
-                      <ReferenceLine
-                        x={chartData[currentTimeIndex]?.time}
-                        stroke="#ff9500"
-                        strokeWidth={2}
-                      />
+                    <XAxis
+                      dataKey="time"
+                      stroke="#6b7280"
+                      fontSize={14}
+                      tickLine={false}
+                      interval={2}
+                    />
 
-                      {/* Base load - green gradient area */}
-                      <Area
-                        type="monotone"
-                        dataKey="supplyActual"
-                        stackId="1"
-                        stroke="#22c55e"
-                        fill="url(#greenGradient)"
-                        fillOpacity={0.8}
-                      />
+                    <YAxis
+                      stroke="#6b7280"
+                      fontSize={14}
+                      tickLine={false}
+                      domain={[0, 900]}
+                      tickFormatter={(value) => `${value}`}
+                    />
 
-                      {/* Wind - blue area */}
-                      <Area
-                        type="monotone"
-                        dataKey="windActual"
-                        stackId="2"
-                        stroke="#3b82f6"
-                        fill="#93c5fd"
-                        fillOpacity={0.7}
-                      />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                      formatter={(value: number, name: string) => {
+                        const labels: Record<string, string> = {
+                          supply: '공급능력',
+                          demand: '전력수요',
+                          solar: '태양광',
+                          wind: '풍력',
+                        };
+                        return [`${value} MW`, labels[name] || name];
+                      }}
+                      labelFormatter={(label) => `${label}`}
+                    />
 
-                      {/* Solar - yellow area */}
-                      <Area
-                        type="monotone"
-                        dataKey="solarActual"
-                        stackId="2"
-                        stroke="#eab308"
-                        fill="#fde047"
-                        fillOpacity={0.7}
-                      />
+                    <Legend
+                      wrapperStyle={{ paddingTop: 10, fontSize: '14px' }}
+                      formatter={(value) => {
+                        const labels: Record<string, string> = {
+                          supply: '공급능력',
+                          demand: '전력수요',
+                          solar: '태양광',
+                          wind: '풍력',
+                        };
+                        return labels[value] || value;
+                      }}
+                    />
 
-                      {/* Demand lines */}
-                      <Line
-                        type="monotone"
-                        dataKey="demandActual"
-                        stroke="#16a34a"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="demandForecast"
-                        stroke="#4ade80"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={false}
-                      />
+                    {/* 현재 시간 표시선 */}
+                    <ReferenceLine
+                      x={chartData[currentTimeIndex]?.time}
+                      stroke="#ef4444"
+                      strokeDasharray="5 5"
+                      label={{ value: '현재', position: 'top', fill: '#ef4444', fontSize: 12 }}
+                    />
 
-                      {/* Gradient definitions */}
-                      <defs>
-                        <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#86efac" stopOpacity={0.9} />
-                          <stop offset="100%" stopColor="#dcfce7" stopOpacity={0.5} />
-                        </linearGradient>
-                      </defs>
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
+                    {/* 공급능력 - 녹색 영역 */}
+                    <Area
+                      type="monotone"
+                      dataKey="supply"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      fill="url(#supplyGradient)"
+                      name="supply"
+                      dot={false}
+                    />
+
+                    {/* 전력수요 - 파란색 영역 */}
+                    <Area
+                      type="monotone"
+                      dataKey="demand"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      fill="url(#demandGradient)"
+                      name="demand"
+                      dot={false}
+                    />
+
+                    {/* 태양광 - 노란색 라인 */}
+                    <Line
+                      type="monotone"
+                      dataKey="solar"
+                      stroke="#fbbf24"
+                      strokeWidth={2}
+                      name="solar"
+                      dot={false}
+                    />
+
+                    {/* 풍력 - 청록색 라인 */}
+                    <Line
+                      type="monotone"
+                      dataKey="wind"
+                      stroke="#06b6d4"
+                      strokeWidth={2}
+                      name="wind"
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
