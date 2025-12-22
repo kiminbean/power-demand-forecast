@@ -1,7 +1,8 @@
 /**
- * RE-BMS Bidding Screen
+ * RE-BMS Bidding Screen v6.1
  * 10-Segment Bidding Matrix with Monotonic Constraint
  * Connected to real SMP prediction API for AI optimization
+ * DAM/RTM Simulation integration - Matches web-v6.1.0 features
  */
 
 import React, { useState, useCallback, useEffect } from 'react';

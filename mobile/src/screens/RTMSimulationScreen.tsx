@@ -1,7 +1,8 @@
 /**
- * RTM (Real-Time Market) Simulation Screen - RE-BMS Mobile v5
+ * RTM (Real-Time Market) Simulation Screen - RE-BMS Mobile v6.1
  * Realistic KPX real-time electricity market bid matching simulation
  * RTM has higher price volatility and smaller volumes compared to DAM
+ * Matches web-v6.1.0 features
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

@@ -1,7 +1,7 @@
 {
   "name": "rebms-mobile",
-  "version": "5.0.0",
-  "description": "RE-BMS Mobile - Renewable Energy Bidding Management System",
+  "version": "6.1.0",
+  "description": "RE-BMS Mobile v6.1 - Renewable Energy Bidding Management System with KPX Simulation",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",

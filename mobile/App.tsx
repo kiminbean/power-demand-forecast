@@ -1,7 +1,7 @@
 /**
- * RE-BMS Mobile App
- * Renewable Energy Bidding Management System
- * v5.0.0
+ * RE-BMS Mobile App v6.1.0
+ * Renewable Energy Bidding Management System with KPX DAM/RTM Simulation
+ * Matches web-v6.1.0 features
  */
 
 import React, { useState } from 'react';
@@ -115,7 +115,7 @@ function WebApp() {
     <ErrorBoundary>
       <SafeAreaView style={webStyles.container}>
         <View style={webStyles.header}>
-          <Text style={webStyles.headerTitle}>RE-BMS Command Center</Text>
+          <Text style={webStyles.headerTitle}>RE-BMS v6.1 Command Center</Text>
         </View>
         <View style={webStyles.content}>
           {renderScreen()}

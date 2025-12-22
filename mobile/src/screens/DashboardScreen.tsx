@@ -1,7 +1,8 @@
 /**
- * RE-BMS Dashboard Screen
+ * RE-BMS Dashboard Screen v6.1
  * Command Center with SMP Forecast and Key Metrics
  * Connected to real SMP prediction API
+ * Matches web-v6.1.0 features
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

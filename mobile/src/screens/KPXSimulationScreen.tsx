@@ -1,6 +1,7 @@
 /**
- * KPX DAM (Day-Ahead Market) Simulation Screen - RE-BMS Mobile v5
+ * KPX DAM (Day-Ahead Market) Simulation Screen - RE-BMS Mobile v6.1
  * Realistic KPX electricity market bid matching simulation
+ * Matches web-v6.1.0 features
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
