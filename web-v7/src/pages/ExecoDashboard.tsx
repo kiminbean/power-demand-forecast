@@ -86,17 +86,23 @@ const generateChartData = (): ChartData[] => {
   return data;
 };
 
-// Jeju island coordinate bounds (from actual data)
+// Jeju island coordinate bounds - calibrated to match the map image
+// Reference points:
+// - 제주시 (북쪽 중앙): lat 33.50, lng 126.53
+// - 서귀포시 (남쪽 중앙): lat 33.25, lng 126.56
+// - 성산 (동쪽 끝): lat 33.46, lng 126.94
+// - 한경 (서쪽 끝): lat 33.34, lng 126.17
 const JEJU_BOUNDS = {
-  minLat: 33.16,  // 가파도 (최남단)
-  maxLat: 33.57,  // 김녕/행원 (최북단)
-  minLng: 126.16, // 탐라해상 (최서단)
-  maxLng: 126.93, // 성산 (최동단)
+  // 지도 이미지의 실제 표시 범위에 맞춤
+  minLat: 33.12,  // 지도 하단
+  maxLat: 33.60,  // 지도 상단
+  minLng: 126.08, // 지도 좌측
+  maxLng: 127.02, // 지도 우측
 };
 
-// Map dimensions
-const MAP_WIDTH = 385;
-const MAP_HEIGHT = 255;
+// Map container dimensions
+const MAP_WIDTH = 400;
+const MAP_HEIGHT = 260;
 
 // Convert lat/lng to pixel position
 const latLngToPixel = (lat: number, lng: number): { x: number; y: number } => {
@@ -459,12 +465,13 @@ export default function ExecoDashboard() {
 
               {/* Map Container - Centered */}
               <div className="flex flex-col items-center gap-4">
-                {/* Jeju Map with markers - Centered */}
-                <div className="relative w-[385px] h-[255px]" style={{ mixBlendMode: 'darken' }}>
+                {/* Jeju Map with markers - Centered, exact fit */}
+                <div className="relative" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }}>
                   <img
                     src={JEJU_MAP}
                     alt="Jeju Island Map"
-                    className="absolute h-[106.51%] left-[-3.12%] max-w-none top-0 w-[109.09%]"
+                    className="w-full h-full object-cover"
+                    style={{ mixBlendMode: 'multiply' }}
                   />
                   {/* Power Plant Markers */}
                   {powerPlants.map((plant) => (
