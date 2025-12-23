@@ -46,6 +46,8 @@ class WeatherData:
     wind_speed: Optional[float] = None  # 풍속 (m/s)
     precipitation: Optional[float] = None  # 강수량 (mm)
     pressure: Optional[float] = None  # 기압 (hPa)
+    weather_condition: Optional[str] = None  # 날씨 상태 (맑음, 흐림, 비 등)
+    cloud_cover: Optional[int] = None  # 운량 (0-10)
     fetched_at: str = field(
         default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
@@ -63,6 +65,8 @@ class WeatherData:
             "wind_speed": self.wind_speed,
             "precipitation": self.precipitation,
             "pressure": self.pressure,
+            "weather_condition": self.weather_condition,
+            "cloud_cover": self.cloud_cover,
             "fetched_at": self.fetched_at,
             "source": self.source,
         }
@@ -111,6 +115,61 @@ class KMAWeatherCrawler:
             clean = re.sub(r"[^\d.\-]", "", value.strip())
             return float(clean) if clean else None
         except (ValueError, TypeError):
+            return None
+
+    def _parse_int(self, value: str) -> Optional[int]:
+        """문자열을 int로 변환 (결측치 처리)"""
+        if not value or value.strip() in ["", "-", "－", "−"]:
+            return None
+        try:
+            clean = re.sub(r"[^\d]", "", value.strip())
+            return int(clean) if clean else None
+        except (ValueError, TypeError):
+            return None
+
+    def _parse_weather_icon(self, cell) -> Optional[str]:
+        """
+        날씨 아이콘에서 날씨 상태 추출
+
+        기상청 아이콘 파일명 패턴:
+        - DB01.png ~ DB05.png: 맑음 (구름 정도에 따라)
+        - DB06.png ~ DB09.png: 구름많음/흐림
+        - DB10.png ~ DB14.png: 비
+        - DB20.png ~ DB24.png: 눈
+        - 등등
+        """
+        try:
+            # img 태그에서 src 또는 alt 추출
+            img = cell.find("img")
+            if img:
+                src = img.get("src", "")
+                alt = img.get("alt", "")
+
+                # alt 텍스트가 있으면 우선 사용
+                if alt:
+                    return alt
+
+                # 파일명에서 날씨 추론
+                if "DB01" in src or "DB02" in src:
+                    return "맑음"
+                elif "DB03" in src or "DB04" in src or "DB05" in src:
+                    return "구름조금"
+                elif "DB06" in src or "DB07" in src:
+                    return "구름많음"
+                elif "DB08" in src or "DB09" in src:
+                    return "흐림"
+                elif "DB10" in src or "DB11" in src or "DB12" in src or "DB13" in src or "DB14" in src:
+                    return "비"
+                elif "DB20" in src or "DB21" in src or "DB22" in src or "DB23" in src or "DB24" in src:
+                    return "눈"
+
+            # 텍스트로 된 경우
+            text = cell.get_text(strip=True)
+            if text and text != "-":
+                return text
+
+            return None
+        except Exception:
             return None
 
     def fetch_weather(
@@ -214,6 +273,12 @@ class KMAWeatherCrawler:
             wind_speed = self._parse_float(cells[12].get_text(strip=True)) if len(cells) > 12 else None
             pressure = self._parse_float(cells[13].get_text(strip=True)) if len(cells) > 13 else None
 
+            # 날씨 아이콘에서 날씨 상태 추출 (column 1)
+            weather_condition = self._parse_weather_icon(cells[1])
+
+            # 운량 추출 (column 3)
+            cloud_cover = self._parse_int(cells[3].get_text(strip=True))
+
             if temperature is None:
                 logger.warning(f"{station}: 기온 데이터 없음")
                 return None
@@ -230,11 +295,13 @@ class KMAWeatherCrawler:
                 wind_speed=wind_speed,
                 precipitation=precipitation,
                 pressure=pressure,
+                weather_condition=weather_condition,
+                cloud_cover=cloud_cover,
             )
 
             logger.info(
                 f"기상 데이터 수집 완료: {station} {temperature}°C, "
-                f"습도 {humidity}%, 풍속 {wind_speed}m/s"
+                f"습도 {humidity}%, 풍속 {wind_speed}m/s, 날씨 {weather_condition}"
             )
             return data
 

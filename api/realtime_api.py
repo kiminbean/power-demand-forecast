@@ -100,10 +100,16 @@ class WeatherData:
     precipitation_type: int  # 강수형태 (0=없음, 1=비, 2=비/눈, 3=눈)
     base_datetime: datetime
     data_source: str = "KMA Real-time API"
+    _weather_condition: Optional[str] = None  # 크롤러에서 가져온 실제 날씨 상태
 
     @property
     def condition(self) -> str:
         """Get weather condition string"""
+        # 크롤러에서 가져온 실제 날씨 상태가 있으면 사용
+        if self._weather_condition:
+            return self._weather_condition
+
+        # 없으면 강수/습도 기반 추정
         if self.precipitation_type == 1:
             return "비"
         elif self.precipitation_type == 2:
@@ -253,11 +259,12 @@ class RealtimeAPIClient:
                         precipitation_type=0,  # Not available from crawler
                         base_datetime=base_dt,
                         data_source="KMA Weather Crawler (실시간)",
+                        _weather_condition=kma_data.weather_condition,  # 실제 날씨 상태
                     )
 
                     # Update cache
                     self._weather_cache = (result, datetime.now())
-                    logger.info(f"Weather via crawler: {result.temperature}°C, {result.humidity}% humidity")
+                    logger.info(f"Weather via crawler: {result.temperature}°C, {result.humidity}% humidity, {result.condition}")
                     return result
         except Exception as e:
             logger.warning(f"Weather crawler failed: {e}")
