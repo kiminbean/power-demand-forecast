@@ -334,8 +334,8 @@ async def get_dashboard_kpis():
 
         if rt_smp and rt_smp.smp_jeju > 0:
             current_smp = rt_smp.smp_jeju
-            data_sources.append("KPX SMP API (실시간)")
-            logger.info(f"Real-time SMP (Jeju): {current_smp} 원/kWh")
+            data_sources.append(rt_smp.data_source)
+            logger.info(f"Real-time SMP (Jeju): {current_smp} 원/kWh via {rt_smp.data_source}")
         else:
             # Fallback: 과거 EPSIS 파일 데이터
             smp_df = load_smp_data()
@@ -350,18 +350,22 @@ async def get_dashboard_kpis():
                     prev_smp = yesterday.iloc[0]['smp_jeju']
                     smp_change = ((current_smp - prev_smp) / prev_smp) * 100
 
-        # ===== 실시간 전력수급 (KPX API) =====
+        # ===== 실시간 전력수급 (KPX Crawler - 제주 직접 데이터) =====
         current_demand = 650.0  # 기본값
         supply_reserve_rate = 25.0  # 공급예비율 기본값
-        rt_power = await realtime_client.get_power_supply_realtime()
+        rt_power = await realtime_client.get_power_supply_realtime(prefer_jeju=True)
 
         if rt_power:
-            # 전국 수요 → 제주 비율 적용 (제주는 전국의 약 1.5~2%)
-            jeju_ratio = 0.018  # 제주 비율 약 1.8%
-            current_demand = rt_power.current_demand_mw * jeju_ratio
+            # 제주 크롤러 사용시 직접 데이터, API 사용시 비율 적용
+            if "Jeju Crawler" in rt_power.data_source:
+                current_demand = rt_power.current_demand_mw  # 제주 직접 데이터
+            else:
+                # 전국 데이터의 경우 비율 적용
+                jeju_ratio = 0.018
+                current_demand = rt_power.current_demand_mw * jeju_ratio
             supply_reserve_rate = rt_power.supply_reserve_rate
-            data_sources.append("KPX 전력수급 API (실시간)")
-            logger.info(f"Real-time demand: {rt_power.current_demand_mw} MW (national), {current_demand:.1f} MW (Jeju est.)")
+            data_sources.append(rt_power.data_source)
+            logger.info(f"Real-time demand: {current_demand:.1f} MW (Jeju), Reserve: {supply_reserve_rate:.1f}%")
         else:
             # Fallback: 과거 EPSIS 파일 데이터
             demand_df = load_power_demand_data()

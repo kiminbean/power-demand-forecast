@@ -1,15 +1,19 @@
 """
-Real-time API Client for External Data Sources
+Real-time Data Client for External Sources
 
-APIs:
-1. KPX 계통한계가격(SMP) API - 제주/육지 SMP 실시간 조회
-2. KPX 현재전력수급현황 API - 전국 실시간 수급 현황
-3. 기상청 초단기실황 API - 실시간 기상 관측 데이터
+Primary: Web Crawlers (no API key required)
+1. JejuRealtimeCrawler - 제주 실시간 전력수급 (KPX 웹페이지 크롤링)
+2. SMPCrawler - 실시간 SMP 조회 (KPX 웹페이지 크롤링)
+
+Fallback: Public Data APIs (API key required)
+3. KPX 계통한계가격(SMP) API
+4. KPX 현재전력수급현황 API
+5. 기상청 초단기실황 API
 
 Sources:
-- https://www.data.go.kr/data/15076302/openapi.do (SMP)
-- https://www.data.go.kr/data/15056640/openapi.do (전력수급)
-- https://www.data.go.kr/data/15084084/openapi.do (기상청)
+- https://www.kpx.or.kr/powerinfoJeju.es (Jeju realtime - crawl)
+- https://new.kpx.or.kr/bidSmpLfdDataRt.es (SMP - crawl)
+- https://www.data.go.kr APIs (fallback)
 """
 
 import os
@@ -26,6 +30,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Import crawlers (primary data source)
+try:
+    from tools.crawlers.jeju_realtime_crawler import JejuRealtimeCrawler
+    from src.smp.crawlers.smp_crawler import SMPCrawler
+    CRAWLERS_AVAILABLE = True
+    logger.info("Crawlers loaded successfully - using web scraping for real-time data")
+except ImportError as e:
+    CRAWLERS_AVAILABLE = False
+    logger.warning(f"Crawlers not available, using API fallback: {e}")
 
 # API Configuration
 DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY", "")
@@ -100,17 +114,26 @@ class WeatherData:
 
 
 class RealtimeAPIClient:
-    """Client for fetching real-time data from external APIs"""
+    """Client for fetching real-time data from external sources
+
+    Primary: Web crawlers (JejuRealtimeCrawler, SMPCrawler)
+    Fallback: Public Data APIs (requires API key approval)
+    """
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or DATA_GO_KR_API_KEY
-        if not self.api_key:
-            logger.warning("No API key found. Real-time API calls will fail.")
+        self.use_crawlers = CRAWLERS_AVAILABLE
+
+        if self.use_crawlers:
+            logger.info("Using web crawlers for real-time data (no API key required)")
+        elif not self.api_key:
+            logger.warning("No API key and crawlers not available. Real-time data will fail.")
 
         # Cache storage with timestamps
         self._smp_cache: Dict[str, tuple[Any, datetime]] = {}
         self._power_cache: Optional[tuple[PowerSupplyData, datetime]] = None
         self._weather_cache: Optional[tuple[WeatherData, datetime]] = None
+        self._jeju_power_cache: Optional[tuple[Any, datetime]] = None  # Jeju specific
 
     def _is_cache_valid(self, cache_time: Optional[datetime], ttl_seconds: int) -> bool:
         """Check if cache is still valid"""
@@ -126,9 +149,77 @@ class RealtimeAPIClient:
             logger.error(f"XML parse error: {e}")
             return None
 
+    def _get_smp_via_crawler(self) -> Optional[SMPData]:
+        """Get SMP data using web crawler (synchronous)"""
+        if not self.use_crawlers:
+            return None
+
+        try:
+            with SMPCrawler() as crawler:
+                smp_data = crawler.get_current_smp()
+                if smp_data:
+                    result = SMPData(
+                        trade_day=smp_data.date.replace("-", ""),
+                        trade_hour=smp_data.hour,
+                        smp_land=smp_data.smp_mainland,
+                        smp_jeju=smp_data.smp_jeju,
+                        timestamp=datetime.now(),
+                        data_source="KPX Web Crawler (실시간)",
+                    )
+                    logger.info(f"SMP via crawler: Jeju={result.smp_jeju:.2f}, Mainland={result.smp_land:.2f}")
+                    return result
+        except Exception as e:
+            logger.warning(f"SMP crawler failed: {e}")
+        return None
+
+    def _get_jeju_power_via_crawler(self) -> Optional[PowerSupplyData]:
+        """Get Jeju power supply data using web crawler (synchronous)"""
+        if not self.use_crawlers:
+            return None
+
+        # Check cache
+        if self._jeju_power_cache:
+            data, cache_time = self._jeju_power_cache
+            if self._is_cache_valid(cache_time, POWER_SUPPLY_CACHE_TTL):
+                logger.debug("Using cached Jeju power data from crawler")
+                return data
+
+        try:
+            with JejuRealtimeCrawler() as crawler:
+                jeju_data = crawler.fetch_realtime()
+                if jeju_data:
+                    # Parse timestamp
+                    try:
+                        base_dt = datetime.strptime(jeju_data.timestamp, "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        base_dt = datetime.now()
+
+                    result = PowerSupplyData(
+                        base_datetime=base_dt,
+                        supply_capacity_mw=jeju_data.supply_capacity,
+                        current_demand_mw=jeju_data.current_demand,
+                        forecast_demand_mw=jeju_data.current_demand * 1.05,  # 예상
+                        supply_reserve_mw=jeju_data.supply_reserve,
+                        supply_reserve_rate=jeju_data.reserve_rate,
+                        oper_reserve_mw=jeju_data.operation_reserve,
+                        oper_reserve_rate=(jeju_data.operation_reserve / jeju_data.current_demand * 100) if jeju_data.current_demand > 0 else 0,
+                        data_source="KPX Jeju Crawler (실시간)",
+                    )
+
+                    # Update cache
+                    self._jeju_power_cache = (result, datetime.now())
+                    logger.info(f"Jeju power via crawler: {result.current_demand_mw:.0f} MW demand, {result.supply_reserve_rate:.1f}% reserve")
+                    return result
+        except Exception as e:
+            logger.warning(f"Jeju power crawler failed: {e}")
+        return None
+
     async def get_smp_realtime(self, area_code: str = "9") -> Optional[SMPData]:
         """
-        Get real-time SMP data from KPX API
+        Get real-time SMP data
+
+        Primary: Web crawler (no API key required)
+        Fallback: KPX API (requires approval)
 
         Args:
             area_code: "1" for 육지(mainland), "9" for 제주(Jeju)
@@ -145,6 +236,14 @@ class RealtimeAPIClient:
                 logger.debug(f"Using cached SMP data for area {area_code}")
                 return data
 
+        # Try crawler first (primary source)
+        if self.use_crawlers:
+            smp_data = self._get_smp_via_crawler()
+            if smp_data:
+                self._smp_cache[cache_key] = (smp_data, datetime.now())
+                return smp_data
+
+        # Fallback to API
         try:
             params = {
                 "ServiceKey": self.api_key,
@@ -204,22 +303,33 @@ class RealtimeAPIClient:
             logger.error(f"Error fetching SMP: {e}")
             return None
 
-    async def get_power_supply_realtime(self) -> Optional[PowerSupplyData]:
+    async def get_power_supply_realtime(self, prefer_jeju: bool = True) -> Optional[PowerSupplyData]:
         """
-        Get real-time power supply status from KPX API
+        Get real-time power supply status
 
-        Note: This is nationwide data, not Jeju-specific
+        Primary: Jeju crawler (제주 실시간 데이터, no API key required)
+        Fallback: KPX nationwide API (requires approval)
+
+        Args:
+            prefer_jeju: If True, use Jeju-specific crawler (default)
 
         Returns:
             PowerSupplyData object or None if failed
         """
-        # Check cache
+        # Try Jeju crawler first (primary for Jeju dashboard)
+        if prefer_jeju and self.use_crawlers:
+            jeju_data = self._get_jeju_power_via_crawler()
+            if jeju_data:
+                return jeju_data
+
+        # Check cache for nationwide data
         if self._power_cache:
             data, cache_time = self._power_cache
             if self._is_cache_valid(cache_time, POWER_SUPPLY_CACHE_TTL):
                 logger.debug("Using cached power supply data")
                 return data
 
+        # Fallback to nationwide API
         try:
             params = {
                 "ServiceKey": self.api_key,
