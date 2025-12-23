@@ -606,18 +606,27 @@ async def get_power_supply():
     """
     24시간 전력수급 현황 (실측 + 예측)
 
-    - 현재 시간 이전: 실측 데이터 (EPSIS 기반)
-    - 현재 시간 이후: 예측 데이터 (모델 기반)
+    - 현재 시간: 실시간 크롤러 데이터 (KPX Jeju Crawler)
+    - 현재 시간 이전: EPSIS 패턴 기반 (스케일 조정)
+    - 현재 시간 이후: 예측 데이터 (패턴 기반)
     """
     now = datetime.now()
     current_hour = now.hour
 
-    # 실제 EPSIS 데이터 로드
+    # ===== 1. 실시간 수요 데이터 (현재 시간) =====
+    rt_power = await realtime_client.get_power_supply_realtime()
+    realtime_demand = None
+    realtime_supply = None
+
+    if rt_power:
+        realtime_demand = rt_power.current_demand_mw
+        realtime_supply = rt_power.supply_capacity_mw
+        logger.info(f"Real-time demand for chart: {realtime_demand:.0f} MW")
+
+    # ===== 2. EPSIS 패턴 데이터 로드 =====
     demand_df = load_power_demand_data()
     supply_df = load_supply_capacity_data()
 
-    # 최신 데이터 기준 날짜 (데이터는 2025-04-30까지)
-    # 실시간 연동이 아니므로, 최신 데이터의 평균 패턴 사용
     data_source = "Simulated Pattern"
 
     if not demand_df.empty and not supply_df.empty:
@@ -630,11 +639,19 @@ async def get_power_supply():
         supply_pattern = [recent_supply[f'h{i}'].mean() for i in range(1, 25)]
 
         # 0시 데이터 = 24시 데이터 (인덱스 조정: h1=1시, 0시는 전날 24시)
-        # 차트는 0시~23시 표시하므로, h24를 0시로, h1을 1시로 배치
-        demand_pattern = [demand_pattern[23]] + demand_pattern[:23]  # h24->0시, h1->1시, ..., h23->23시
+        demand_pattern = [demand_pattern[23]] + demand_pattern[:23]
         supply_pattern = [supply_pattern[23]] + supply_pattern[:23]
 
-        data_source = f"EPSIS Real Data (30-day avg, last: {demand_df['date'].max().strftime('%Y-%m-%d')})"
+        # ===== 3. 실시간 데이터로 패턴 스케일 조정 =====
+        # 현재 시간의 실시간 수요와 패턴 수요 비율로 전체 패턴 스케일 조정
+        if realtime_demand and demand_pattern[current_hour] > 0:
+            scale_factor = realtime_demand / demand_pattern[current_hour]
+            demand_pattern = [d * scale_factor for d in demand_pattern]
+            supply_pattern = [s * scale_factor for s in supply_pattern]
+            data_source = f"EPSIS Pattern (scaled to real-time: {realtime_demand:.0f} MW)"
+            logger.info(f"Demand pattern scaled by {scale_factor:.2f}x to match real-time")
+        else:
+            data_source = f"EPSIS Real Data (30-day avg, last: {demand_df['date'].max().strftime('%Y-%m-%d')})"
     else:
         # 폴백: 기존 패턴 사용
         demand_pattern = [
@@ -643,6 +660,12 @@ async def get_power_supply():
             590, 570, 550, 530
         ]
         supply_pattern = [d * 1.15 for d in demand_pattern]
+
+        # 실시간 데이터로 스케일 조정
+        if realtime_demand and demand_pattern[current_hour] > 0:
+            scale_factor = realtime_demand / demand_pattern[current_hour]
+            demand_pattern = [d * scale_factor for d in demand_pattern]
+            supply_pattern = [s * scale_factor for s in supply_pattern]
 
     # ===== 재생에너지 발전량 추정 (실제 데이터 기반) =====
     # 현재 기상 데이터 가져오기
