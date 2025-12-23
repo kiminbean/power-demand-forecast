@@ -650,13 +650,20 @@ async def get_power_supply():
         supply_pattern = [supply_pattern[23]] + supply_pattern[:23]
 
         # ===== 3. 실시간 데이터로 패턴 스케일 조정 =====
-        # 현재 시간의 실시간 수요와 패턴 수요 비율로 전체 패턴 스케일 조정
+        # 수요: 현재 시간의 실시간 수요와 패턴 수요 비율로 스케일 조정
         if realtime_demand and demand_pattern[current_hour] > 0:
-            scale_factor = realtime_demand / demand_pattern[current_hour]
-            demand_pattern = [d * scale_factor for d in demand_pattern]
-            supply_pattern = [s * scale_factor for s in supply_pattern]
-            data_source = f"EPSIS Pattern (scaled to real-time: {realtime_demand:.0f} MW)"
-            logger.info(f"Demand pattern scaled by {scale_factor:.2f}x to match real-time")
+            demand_scale = realtime_demand / demand_pattern[current_hour]
+            demand_pattern = [d * demand_scale for d in demand_pattern]
+            logger.info(f"Demand pattern scaled by {demand_scale:.2f}x to match real-time")
+
+        # 공급: 실시간 공급용량으로 별도 스케일 조정
+        if realtime_supply and supply_pattern[current_hour] > 0:
+            supply_scale = realtime_supply / supply_pattern[current_hour]
+            supply_pattern = [s * supply_scale for s in supply_pattern]
+            logger.info(f"Supply pattern scaled by {supply_scale:.2f}x to match real-time")
+
+        if realtime_demand and realtime_supply:
+            data_source = f"EPSIS Pattern (scaled to real-time: demand {realtime_demand:.0f} MW, supply {realtime_supply:.0f} MW)"
         else:
             data_source = f"EPSIS Real Data (30-day avg, last: {demand_df['date'].max().strftime('%Y-%m-%d')})"
     else:
@@ -670,9 +677,12 @@ async def get_power_supply():
 
         # 실시간 데이터로 스케일 조정
         if realtime_demand and demand_pattern[current_hour] > 0:
-            scale_factor = realtime_demand / demand_pattern[current_hour]
-            demand_pattern = [d * scale_factor for d in demand_pattern]
-            supply_pattern = [s * scale_factor for s in supply_pattern]
+            demand_scale = realtime_demand / demand_pattern[current_hour]
+            demand_pattern = [d * demand_scale for d in demand_pattern]
+
+        if realtime_supply and supply_pattern[current_hour] > 0:
+            supply_scale = realtime_supply / supply_pattern[current_hour]
+            supply_pattern = [s * supply_scale for s in supply_pattern]
 
     # ===== 재생에너지 발전량 ML 예측 (기상 예보 기반) =====
     # 현재 기상 데이터 가져오기
