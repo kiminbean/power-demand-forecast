@@ -136,6 +136,7 @@ export const mockData = {
       total_capacity_mw: 224.9,
       current_output_mw: 168.5,
       utilization_pct: 74.9,
+      supply_reserve_rate: 128.5,  // 공급 예비율 (%)
       daily_revenue_million: 245.8,
       revenue_change_pct: 3.2,
       current_smp: 102.5,

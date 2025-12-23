@@ -41,6 +41,7 @@ export interface DashboardKPIs {
   total_capacity_mw: number;
   current_output_mw: number;
   utilization_pct: number;
+  supply_reserve_rate: number;   // 공급 예비율 (%)
   daily_revenue_million: number;
   revenue_change_pct: number;
   current_smp: number;

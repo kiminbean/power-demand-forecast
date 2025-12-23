@@ -72,7 +72,8 @@ class DashboardKPIsResponse(BaseModel):
     """대시보드 KPI 응답"""
     total_capacity_mw: float
     current_output_mw: float
-    utilization_pct: float
+    utilization_pct: float  # 재생에너지 이용률 (%)
+    supply_reserve_rate: float  # 공급 예비율 (%)
     daily_revenue_million: float
     revenue_change_pct: float
     current_smp: float
@@ -455,6 +456,7 @@ async def get_dashboard_kpis():
             total_capacity_mw=round(total_capacity, 1),
             current_output_mw=round(current_output, 1),
             utilization_pct=round(utilization, 1),
+            supply_reserve_rate=round(supply_reserve_rate, 1),
             daily_revenue_million=round(daily_revenue, 1),
             revenue_change_pct=round(3.2 + rng.uniform(-1, 1), 1),
             current_smp=round(current_smp, 1),

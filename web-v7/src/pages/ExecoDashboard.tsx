@@ -238,7 +238,8 @@ export default function ExecoDashboard() {
   // KPI 데이터 (API 또는 기본값) - 실제 EPSIS/KMA 데이터 기반
   const currentDemand = kpis?.current_demand_mw ?? 685.0;  // 현재 전력 수요 (MW)
   const totalCapacity = kpis?.total_capacity_mw ?? 369.4;
-  const utilizationPct = kpis?.utilization_pct ?? 94.5;
+  const utilizationPct = kpis?.utilization_pct ?? 94.5;  // 재생에너지 이용률 (%)
+  const supplyReserveRate = kpis?.supply_reserve_rate ?? 25.0;  // 공급 예비율 (%)
   const currentSMP = kpis?.current_smp ?? 114.8;
   const smpChangePct = kpis?.smp_change_pct ?? -5.0;
   const gridFrequency = kpis?.grid_frequency ?? 60.01;  // 계통 주파수 (Hz)
@@ -300,7 +301,7 @@ export default function ExecoDashboard() {
                 <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">MW</span>
               </div>
               <div className="bg-white rounded-lg px-3.5 py-1">
-                <span className="text-xl text-[#272727] tracking-[-0.72px]">예비율 {utilizationPct.toFixed(1)}%</span>
+                <span className="text-xl text-[#272727] tracking-[-0.72px]">예비율 {supplyReserveRate.toFixed(1)}%</span>
               </div>
             </div>
           </div>
