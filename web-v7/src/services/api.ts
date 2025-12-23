@@ -7,11 +7,13 @@ import type {
   SMPForecast,
   MarketStatus,
   DashboardKPIs,
+  WeatherData,
   Resource,
   OptimizedBids,
   SettlementRecord,
   SettlementStats,
   ModelInfo,
+  PowerSupplyResponse,
 } from '../types';
 
 const API_BASE_URL = '/api/v1';
@@ -87,6 +89,11 @@ class ApiService {
   async getModelInfo(): Promise<ModelInfo> {
     return this.fetch('/model/info');
   }
+
+  // Power Supply (실측 + 예측 데이터)
+  async getPowerSupply(): Promise<PowerSupplyResponse> {
+    return this.fetch('/power-supply');
+  }
 }
 
 // Singleton instance
@@ -133,7 +140,17 @@ export const mockData = {
       revenue_change_pct: 3.2,
       current_smp: 102.5,
       smp_change_pct: -2.1,
+      current_demand_mw: 685.0,
+      renewable_ratio_pct: 24.6,
+      grid_frequency: 60.01,
+      weather: {
+        temperature: 5.5,
+        wind_speed: 3.2,
+        humidity: 58.0,
+        condition: '맑음',
+      },
       resource_count: 20,
+      data_source: 'Mock Data',
     };
   },
 
@@ -173,6 +190,27 @@ export const mockData = {
       device: 'MPS',
       mape: 4.23,
       coverage: 94.5,
+    };
+  },
+
+  getPowerSupply(): PowerSupplyResponse {
+    const currentHour = new Date().getHours();
+    const demandPattern = [520, 495, 480, 475, 485, 510, 550, 590, 650, 700, 730, 760, 750, 720, 710, 680, 640, 620, 610, 600, 590, 570, 550, 530];
+    const windPattern = [185, 180, 175, 172, 178, 188, 170, 148, 132, 118, 105, 92, 85, 90, 108, 125, 145, 168, 182, 195, 200, 195, 190, 188];
+    const solarPattern = [0, 0, 0, 0, 0, 0, 2, 25, 65, 105, 140, 165, 175, 168, 145, 95, 35, 5, 0, 0, 0, 0, 0, 0];
+
+    return {
+      current_hour: currentHour,
+      data: Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        time: `${String(hour).padStart(2, '0')}:00`,
+        supply: Math.round(demandPattern[hour] * 1.15),
+        demand: demandPattern[hour],
+        solar: solarPattern[hour],
+        wind: windPattern[hour],
+        is_forecast: hour > currentHour,
+      })),
+      data_source: 'Mock Data',
     };
   },
 };

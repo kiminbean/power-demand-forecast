@@ -13,6 +13,7 @@ import type {
   SettlementRecord,
   SettlementStats,
   OptimizedBids,
+  PowerSupplyResponse,
 } from '../types';
 
 interface UseApiState<T> {
@@ -92,6 +93,14 @@ export function useModelInfo(): UseApiState<ModelInfo> {
   return useApiData(
     () => apiService.getModelInfo(),
     () => mockData.getModelInfo()
+  );
+}
+
+// Power Supply Hook (실측 + 예측)
+export function usePowerSupply(): UseApiState<PowerSupplyResponse> {
+  return useApiData(
+    () => apiService.getPowerSupply(),
+    () => mockData.getPowerSupply()
   );
 }
 

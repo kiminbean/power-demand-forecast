@@ -28,6 +28,14 @@ export interface MarketStatus {
   };
 }
 
+// Weather Data
+export interface WeatherData {
+  temperature: number;  // 기온 (°C)
+  wind_speed: number;   // 풍속 (m/s)
+  humidity: number;     // 습도 (%)
+  condition: string;    // 날씨 상태 (맑음, 흐림, 비 등)
+}
+
 // Dashboard KPIs
 export interface DashboardKPIs {
   total_capacity_mw: number;
@@ -37,7 +45,12 @@ export interface DashboardKPIs {
   revenue_change_pct: number;
   current_smp: number;
   smp_change_pct: number;
+  current_demand_mw: number;     // 현재 수요 (MW)
+  renewable_ratio_pct: number;   // 재생에너지 비율 (%)
+  grid_frequency: number;        // 계통 주파수 (Hz)
+  weather: WeatherData;          // 기상 현황
   resource_count: number;
+  data_source?: string;
 }
 
 // Resource (Power Plant)
@@ -140,6 +153,23 @@ export interface PowerChartData {
   solar: number;
   wind: number;
   forecast?: boolean;
+}
+
+// Power Supply API Response (실측 + 예측)
+export interface PowerSupplyHourlyData {
+  hour: number;
+  time: string;
+  supply: number;
+  demand: number;
+  solar: number;
+  wind: number;
+  is_forecast: boolean;
+}
+
+export interface PowerSupplyResponse {
+  current_hour: number;
+  data: PowerSupplyHourlyData[];
+  data_source: string;
 }
 
 // Alert
