@@ -27,8 +27,11 @@ from pydantic import BaseModel, Field
 # Real-time API client
 from api.realtime_api import realtime_client, SMPData, PowerSupplyData, WeatherData as RTWeatherData
 
-# Renewable energy estimator
+# Renewable energy estimator (pattern-based fallback)
 from api.renewable_estimator import get_estimator, RenewableGeneration
+
+# Renewable energy ML predictor (weather-based)
+from api.renewable_ml_predictor import get_ml_predictor, RenewablePrediction
 
 logger = logging.getLogger(__name__)
 
@@ -411,18 +414,20 @@ async def get_dashboard_kpis():
                     weather_condition = "맑음"
                 data_sources.append("KMA Weather (파일)")
 
-        # ===== 재생에너지 출력 및 비율 (실제 데이터 기반 추정) =====
+        # ===== 재생에너지 출력 및 비율 (ML 예측 기반) =====
         ess_capacity = sum(p['capacity'] for p in JEJU_PLANTS if p['type'] == 'ess')
 
-        # 재생에너지 추정기 사용 (실제 발전 데이터 패턴 + 풍력 Power Curve)
-        renewable_estimator = get_estimator()
-        renewable_gen = renewable_estimator.estimate_current(
-            wind_speed=wind_speed,
-            humidity=humidity
+        # ML 예측기 사용 (기상 데이터 기반 GradientBoosting 모델)
+        ml_predictor = get_ml_predictor()
+        ml_pred = ml_predictor.predict_hour(
+            hour=hour,
+            temperature=temperature,
+            humidity=humidity,
+            wind_speed=wind_speed
         )
 
-        solar_output = renewable_gen.solar_mw
-        wind_output = renewable_gen.wind_mw
+        solar_output = ml_pred.solar_mw
+        wind_output = ml_pred.wind_mw
         ess_output = ess_capacity * 0.3
 
         current_output = solar_output + wind_output + ess_output
@@ -432,8 +437,8 @@ async def get_dashboard_kpis():
         renewable_output = solar_output + wind_output
         renewable_ratio = (renewable_output / current_demand) * 100 if current_demand > 0 else 0
 
-        # 데이터 소스에 재생에너지 추정 방법 추가
-        data_sources.append(f"Renewable: {renewable_gen.data_source}")
+        # 데이터 소스에 ML 예측 방법 추가
+        data_sources.append(f"Renewable ML: {ml_pred.method} (신뢰도 {ml_pred.confidence*100:.0f}%)")
 
         # ===== 계통 주파수 =====
         # 한국전력 표준: 60Hz ± 0.2Hz (시뮬레이션)
@@ -667,37 +672,28 @@ async def get_power_supply():
             demand_pattern = [d * scale_factor for d in demand_pattern]
             supply_pattern = [s * scale_factor for s in supply_pattern]
 
-    # ===== 재생에너지 발전량 추정 (실제 데이터 기반) =====
+    # ===== 재생에너지 발전량 ML 예측 (기상 예보 기반) =====
     # 현재 기상 데이터 가져오기
     try:
         rt_weather = await realtime_client.get_weather_realtime()
+        current_temp = rt_weather.temperature if rt_weather else 15.0
         current_wind_speed = rt_weather.wind_speed if rt_weather else 5.0
         current_humidity = rt_weather.humidity if rt_weather else 60.0
     except Exception:
+        current_temp = 15.0
         current_wind_speed = 5.0
         current_humidity = 60.0
 
-    # 재생에너지 추정기 초기화
-    renewable_estimator = get_estimator()
-
-    # 24시간 재생에너지 발전량 추정
-    # 풍속은 현재 값을 기준으로 시간대별 변동 적용
-    wind_speed_forecast = []
-    humidity_forecast = []
-    for hour in range(24):
-        # 풍속: 새벽/저녁에 높고 낮에 낮음 (일반적 패턴)
-        wind_variation = 1.0 + 0.3 * np.cos((hour - 3) * np.pi / 12)
-        wind_speed_forecast.append(current_wind_speed * wind_variation)
-        humidity_forecast.append(current_humidity)
-
-    hourly_renewable = renewable_estimator.estimate_hourly(
-        wind_speed_forecast=wind_speed_forecast,
-        humidity_forecast=humidity_forecast,
-        base_date=now.replace(minute=0, second=0, microsecond=0)
+    # ML 예측기로 24시간 재생에너지 발전량 예측
+    ml_predictor = get_ml_predictor()
+    ml_predictions = ml_predictor.predict_24h(
+        current_temp=current_temp,
+        current_humidity=current_humidity,
+        current_wind=current_wind_speed
     )
 
     # 데이터 소스 업데이트
-    data_source += " + Renewable: Historical pattern + Power curve"
+    data_source += " + Renewable ML: GradientBoosting (R²=0.95) + Power Curve"
 
     # 날짜 기반 시드 설정 (같은 날에는 동일한 예측값 유지)
     date_seed = int(now.strftime("%Y%m%d"))
@@ -723,10 +719,10 @@ async def get_power_supply():
         demand = round(demand_pattern[hour] * demand_var, 1)
         supply = round(supply_pattern[hour] * supply_var, 1)
 
-        # 재생에너지: 추정기 결과 사용
-        renewable_gen = hourly_renewable[hour]
-        solar = round(renewable_gen.solar_mw, 1)
-        wind = round(renewable_gen.wind_mw, 1)
+        # 재생에너지: ML 예측 결과 사용
+        ml_pred = ml_predictions[hour]
+        solar = round(ml_pred.solar_mw, 1)
+        wind = round(ml_pred.wind_mw, 1)
 
         data.append(PowerSupplyHourlyData(
             hour=hour,
