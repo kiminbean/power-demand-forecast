@@ -4,15 +4,17 @@ Real-time Data Client for External Sources
 Primary: Web Crawlers (no API key required)
 1. JejuRealtimeCrawler - 제주 실시간 전력수급 (KPX 웹페이지 크롤링)
 2. SMPCrawler - 실시간 SMP 조회 (KPX 웹페이지 크롤링)
+3. KMAWeatherCrawler - 실시간 기상 데이터 (기상청 날씨누리 크롤링)
 
 Fallback: Public Data APIs (API key required)
-3. KPX 계통한계가격(SMP) API
-4. KPX 현재전력수급현황 API
-5. 기상청 초단기실황 API
+4. KPX 계통한계가격(SMP) API
+5. KPX 현재전력수급현황 API
+6. 기상청 초단기실황 API
 
 Sources:
 - https://www.kpx.or.kr/powerinfoJeju.es (Jeju realtime - crawl)
 - https://new.kpx.or.kr/bidSmpLfdDataRt.es (SMP - crawl)
+- https://www.weather.go.kr/w/obs-climate/land/city-obs.do (Weather - crawl)
 - https://www.data.go.kr APIs (fallback)
 """
 
@@ -35,10 +37,13 @@ logger = logging.getLogger(__name__)
 try:
     from tools.crawlers.jeju_realtime_crawler import JejuRealtimeCrawler
     from src.smp.crawlers.smp_crawler import SMPCrawler
+    from tools.crawlers.kma_weather_crawler import KMAWeatherCrawler
     CRAWLERS_AVAILABLE = True
+    WEATHER_CRAWLER_AVAILABLE = True
     logger.info("Crawlers loaded successfully - using web scraping for real-time data")
 except ImportError as e:
     CRAWLERS_AVAILABLE = False
+    WEATHER_CRAWLER_AVAILABLE = False
     logger.warning(f"Crawlers not available, using API fallback: {e}")
 
 # API Configuration
@@ -214,6 +219,75 @@ class RealtimeAPIClient:
             logger.warning(f"Jeju power crawler failed: {e}")
         return None
 
+    def _get_weather_via_crawler(self) -> Optional[WeatherData]:
+        """Get weather data using KMA web crawler (synchronous)"""
+        if not WEATHER_CRAWLER_AVAILABLE:
+            return None
+
+        # Check cache
+        if self._weather_cache:
+            data, cache_time = self._weather_cache
+            if self._is_cache_valid(cache_time, WEATHER_CACHE_TTL):
+                logger.debug("Using cached weather data from crawler")
+                return data
+
+        try:
+            with KMAWeatherCrawler() as crawler:
+                kma_data = crawler.fetch_jeju_weather()
+                if kma_data:
+                    # Parse timestamp
+                    try:
+                        base_dt = datetime.strptime(kma_data.timestamp, "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        base_dt = datetime.now()
+
+                    # Convert wind direction from Korean to degrees
+                    wind_deg = self._convert_wind_direction(kma_data.wind_direction)
+
+                    result = WeatherData(
+                        temperature=kma_data.temperature,
+                        humidity=kma_data.humidity or 60.0,
+                        wind_speed=kma_data.wind_speed or 3.0,
+                        wind_direction=wind_deg,
+                        precipitation=kma_data.precipitation or 0.0,
+                        precipitation_type=0,  # Not available from crawler
+                        base_datetime=base_dt,
+                        data_source="KMA Weather Crawler (실시간)",
+                    )
+
+                    # Update cache
+                    self._weather_cache = (result, datetime.now())
+                    logger.info(f"Weather via crawler: {result.temperature}°C, {result.humidity}% humidity")
+                    return result
+        except Exception as e:
+            logger.warning(f"Weather crawler failed: {e}")
+        return None
+
+    def _convert_wind_direction(self, direction: Optional[str]) -> float:
+        """Convert Korean wind direction to degrees"""
+        if not direction:
+            return 0.0
+
+        direction_map = {
+            "북": 0.0, "N": 0.0,
+            "북북동": 22.5, "NNE": 22.5,
+            "북동": 45.0, "NE": 45.0,
+            "동북동": 67.5, "ENE": 67.5,
+            "동": 90.0, "E": 90.0,
+            "동남동": 112.5, "ESE": 112.5,
+            "남동": 135.0, "SE": 135.0,
+            "남남동": 157.5, "SSE": 157.5,
+            "남": 180.0, "S": 180.0,
+            "남남서": 202.5, "SSW": 202.5,
+            "남서": 225.0, "SW": 225.0,
+            "서남서": 247.5, "WSW": 247.5,
+            "서": 270.0, "W": 270.0,
+            "서북서": 292.5, "WNW": 292.5,
+            "북서": 315.0, "NW": 315.0,
+            "북북서": 337.5, "NNW": 337.5,
+        }
+        return direction_map.get(direction, 0.0)
+
     async def get_smp_realtime(self, area_code: str = "9") -> Optional[SMPData]:
         """
         Get real-time SMP data
@@ -388,7 +462,10 @@ class RealtimeAPIClient:
 
     async def get_weather_realtime(self, nx: int = JEJU_NX, ny: int = JEJU_NY) -> Optional[WeatherData]:
         """
-        Get real-time weather data from KMA API (초단기실황)
+        Get real-time weather data
+
+        Primary: KMA Weather Crawler (no API key required)
+        Fallback: KMA API (requires approval)
 
         Args:
             nx: Grid X coordinate (default: Jeju)
@@ -397,13 +474,21 @@ class RealtimeAPIClient:
         Returns:
             WeatherData object or None if failed
         """
-        # Check cache
+        # Check cache first
         if self._weather_cache:
             data, cache_time = self._weather_cache
             if self._is_cache_valid(cache_time, WEATHER_CACHE_TTL):
                 logger.debug("Using cached weather data")
                 return data
 
+        # Try crawler first (primary source - no API key needed)
+        if WEATHER_CRAWLER_AVAILABLE:
+            weather_data = self._get_weather_via_crawler()
+            if weather_data:
+                return weather_data
+            logger.debug("Weather crawler failed, trying API fallback")
+
+        # Fallback to API
         try:
             # 초단기실황 API requires base_time to be the most recent hour
             now = datetime.now()

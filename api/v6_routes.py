@@ -387,8 +387,10 @@ async def get_dashboard_kpis():
             wind_speed = rt_weather.wind_speed
             humidity = rt_weather.humidity
             weather_condition = rt_weather.condition
-            data_sources.append("기상청 API (실시간)")
-            logger.info(f"Real-time weather: {temperature}°C, {humidity}%, {weather_condition}")
+            # Use actual data source from weather object
+            weather_source = rt_weather.data_source if hasattr(rt_weather, 'data_source') else "기상청 (실시간)"
+            data_sources.append(weather_source)
+            logger.info(f"Real-time weather: {temperature}°C, {humidity}%, {weather_condition} via {weather_source}")
         else:
             # Fallback: 과거 KMA 파일 데이터
             weather_df = load_weather_data()
