@@ -120,6 +120,88 @@ export interface ModelInfo {
   message?: string;
 }
 
+export interface CurrentSMP {
+  current_smp: number;
+  hour: number;
+  region: string;
+  comparison: {
+    daily_avg: number;
+    weekly_avg: number;
+    daily_change_pct: number;
+    weekly_change_pct: number;
+  };
+}
+
+export interface BiddingStrategy {
+  risk_level: string;
+  recommended_hours: number[];
+  total_generation_kwh: number;
+  total_revenue: number;
+  average_smp: number;
+  revenue_per_kwh: number;
+  hourly_details: Array<{
+    hour: number;
+    smp: number;
+    generation_kwh: number;
+    revenue: number;
+    recommendation: string;
+  }>;
+}
+
+export interface SimulationResult {
+  expected_revenue: number;
+  best_case: number;
+  worst_case: number;
+  risk_adjusted: number;
+  scenarios: Array<{
+    scenario: string;
+    revenue: number;
+    generation_kwh: number;
+  }>;
+}
+
+export interface PowerSupplyData {
+  current_hour: number;
+  data: Array<{
+    hour: number;
+    time: string;
+    supply: number;
+    demand: number;
+    solar: number;
+    wind: number;
+    is_forecast: boolean;
+  }>;
+  data_source: string;
+}
+
+export interface DAMSimulationRequest {
+  segments: Array<{
+    segment_id: number;
+    quantity_mw: number;
+    price_krw_mwh: number;
+  }>;
+  hour: number;
+}
+
+export interface DAMSimulationResult {
+  hour: number;
+  submitted_segments: number;
+  total_quantity_mw: number;
+  total_cleared_mw: number;
+  clearing_rate: number;
+  expected_revenue_million: number;
+  results: Array<{
+    segment_id: number;
+    quantity_mw: number;
+    price_krw_mwh: number;
+    cleared_mw: number;
+    clearing_price: number;
+    status: string;
+    revenue_million: number;
+  }>;
+  market_clearing_price: number;
+}
+
 // API Client using fetch (web compatible)
 class ApiService {
   private baseUrl: string;
@@ -197,6 +279,58 @@ class ApiService {
   // Model Info
   async getModelInfo(): Promise<ModelInfo> {
     return this.fetch('/api/v1/model/info');
+  }
+
+  // Current SMP (real-time)
+  async getCurrentSMP(region: string = 'jeju'): Promise<CurrentSMP> {
+    return this.fetch(`/api/v1/smp/current?region=${region}`);
+  }
+
+  // Power Supply Data (24-hour)
+  async getPowerSupply(): Promise<PowerSupplyData> {
+    return this.fetch('/api/v1/power-supply');
+  }
+
+  // Bidding Strategy (AI optimization)
+  async getBiddingStrategy(
+    capacityKw: number = 50000,
+    energyType: string = 'solar',
+    riskLevel: string = 'moderate'
+  ): Promise<BiddingStrategy> {
+    return this.fetch('/api/v1/bidding/strategy', {
+      method: 'POST',
+      body: JSON.stringify({
+        capacity_kw: capacityKw,
+        energy_type: energyType,
+        risk_level: riskLevel,
+        location: 'Jeju',
+        prediction_hours: 24,
+      }),
+    });
+  }
+
+  // Revenue Simulation
+  async simulateRevenue(
+    capacityKw: number = 50000,
+    energyType: string = 'solar',
+    hours: number = 24
+  ): Promise<SimulationResult> {
+    return this.fetch('/api/v1/bidding/simulate', {
+      method: 'POST',
+      body: JSON.stringify({
+        capacity_kw: capacityKw,
+        energy_type: energyType,
+        hours: hours,
+      }),
+    });
+  }
+
+  // DAM Simulation (KPX submission simulation)
+  async simulateDAM(request: DAMSimulationRequest): Promise<DAMSimulationResult> {
+    return this.fetch('/api/v1/bidding/dam-simulate', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   }
 }
 

@@ -1,7 +1,7 @@
 {
-  "name": "rebms-mobile",
-  "version": "6.1.0",
-  "description": "RE-BMS Mobile v6.1 - Renewable Energy Bidding Management System with KPX Simulation",
+  "name": "execo-mobile-alan",
+  "version": "5.1.0",
+  "description": "eXeco Mobile v5.1 - Alan AI Chatbot Edition for RE-BMS",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",

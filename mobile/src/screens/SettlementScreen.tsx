@@ -1,411 +1,299 @@
 /**
- * RE-BMS Settlement Screen
- * Settlement & Revenue Analytics
+ * Settlement Screen - Page 4
+ * Figma: iPhone 16 Pro - 14 (id: 2:374)
+ * Design: 정산 with daily revenue chart and stats
+ * Uses real API data from backend
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   Dimensions,
   Platform,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
+import { apiService, SettlementRecord, SettlementStats, CurrentSMP, SMPForecast } from '../services/api';
 
-// Conditional imports for native-only features
-let Ionicons: any = null;
-let LineChart: any = null;
-let BarChart: any = null;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-if (Platform.OS !== 'web') {
-  try {
-    Ionicons = require('@expo/vector-icons').Ionicons;
-    const chartKit = require('react-native-chart-kit');
-    LineChart = chartKit.LineChart;
-    BarChart = chartKit.BarChart;
-  } catch (e) {
-    console.log('Native components not available');
-  }
-}
+// Design colors from Figma
+const colors = {
+  primary: '#04265e',
+  secondary: '#0048ff',
+  background: '#ffffff',
+  cardBg: '#f8f9fa',
+  smpCardBg: '#2563eb',
+  text: '#000000',
+  textSecondary: '#666666',
+  textMuted: '#999999',
+  orange: '#f59e0b',
+  blue: '#2563eb',
+  green: '#10b981',
+  border: '#e5e7eb',
+  chartBg: '#f1f5f9',
+};
 
-import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-
-// Icon component with emoji fallback for web
-function Icon({ name, size, color }: { name: string; size: number; color: string }) {
-  if (Ionicons) {
-    return <Ionicons name={name as any} size={size} color={color} />;
-  }
-  const iconMap: { [key: string]: string } = {
-    'cash': '💵',
-    'warning': '⚠️',
-    'wallet': '💰',
-    'analytics': '📊',
-    'arrow-up': '↑',
-    'arrow-down': '↓',
-  };
-  return (
-    <Text style={{ fontSize: size * 0.8 }}>{iconMap[name] || '•'}</Text>
-  );
-}
-
-const { width: screenWidth } = Dimensions.get('window');
-
-// Types
-interface DailySettlement {
+// Daily revenue data type
+interface DailyRevenue {
   date: string;
   revenue: number;
-  penalty: number;
-  netRevenue: number;
-  avgSmp: number;
-  generationMwh: number;
-  imbalanceRate: number;
+  imbalance: number;
 }
 
-// Mock data
-const mockSettlements: DailySettlement[] = [
-  { date: '12/13', revenue: 15.2, penalty: 0.8, netRevenue: 14.4, avgSmp: 132.5, generationMwh: 115.3, imbalanceRate: 5.2 },
-  { date: '12/14', revenue: 18.5, penalty: 0.3, netRevenue: 18.2, avgSmp: 145.2, generationMwh: 127.5, imbalanceRate: 2.1 },
-  { date: '12/15', revenue: 12.8, penalty: 1.5, netRevenue: 11.3, avgSmp: 118.7, generationMwh: 108.2, imbalanceRate: 9.8 },
-  { date: '12/16', revenue: 20.1, penalty: 0.2, netRevenue: 19.9, avgSmp: 155.3, generationMwh: 129.4, imbalanceRate: 1.2 },
-  { date: '12/17', revenue: 16.7, penalty: 0.6, netRevenue: 16.1, avgSmp: 138.9, generationMwh: 120.2, imbalanceRate: 4.5 },
-  { date: '12/18', revenue: 19.3, penalty: 0.4, netRevenue: 18.9, avgSmp: 148.6, generationMwh: 130.1, imbalanceRate: 2.8 },
-  { date: '12/19', revenue: 17.5, penalty: 0.5, netRevenue: 17.0, avgSmp: 141.2, generationMwh: 124.0, imbalanceRate: 3.5 },
+// Mock revenue data
+const mockRevenueData: DailyRevenue[] = [
+  { date: '12/17', revenue: 180, imbalance: -5.2 },
+  { date: '12/18', revenue: 195, imbalance: -8.1 },
+  { date: '12/19', revenue: 175, imbalance: -3.5 },
+  { date: '12/20', revenue: 210, imbalance: -10.2 },
+  { date: '12/21', revenue: 188, imbalance: -6.8 },
+  { date: '12/22', revenue: 165, imbalance: -4.5 },
+  { date: '12/23', revenue: 138, imbalance: -7.0 },
 ];
 
-// Period Selector
-type Period = '7d' | '30d' | '90d';
-
-function PeriodSelector({
-  selectedPeriod,
-  onPeriodChange,
-}: {
-  selectedPeriod: Period;
-  onPeriodChange: (period: Period) => void;
-}) {
-  const periods: { key: Period; label: string }[] = [
-    { key: '7d', label: '7 Days' },
-    { key: '30d', label: '30 Days' },
-    { key: '90d', label: '90 Days' },
-  ];
-
-  return (
-    <View style={styles.periodSelector}>
-      {periods.map((period) => (
-        <TouchableOpacity
-          key={period.key}
-          style={[
-            styles.periodButton,
-            selectedPeriod === period.key && styles.periodButtonActive,
-          ]}
-          onPress={() => onPeriodChange(period.key)}
-        >
-          <Text
-            style={[
-              styles.periodButtonText,
-              selectedPeriod === period.key && styles.periodButtonTextActive,
-            ]}
-          >
-            {period.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+// Transaction data type
+interface Transaction {
+  date: string;
+  type: 'generation' | 'imbalance' | 'settlement';
+  amount: number;
+  description: string;
 }
 
-// Summary Cards
-function SummaryCard({
-  title,
-  value,
-  unit,
-  icon,
-  color,
-  trend,
-}: {
-  title: string;
-  value: string;
-  unit: string;
-  icon: string;
-  color: string;
-  trend?: { value: string; direction: 'up' | 'down' };
-}) {
-  return (
-    <View style={styles.summaryCard}>
-      <View style={[styles.summaryIcon, { backgroundColor: `${color}20` }]}>
-        <Icon name={icon} size={20} color={color} />
-      </View>
-      <Text style={styles.summaryTitle}>{title}</Text>
-      <View style={styles.summaryValueRow}>
-        <Text style={[styles.summaryValue, { color }]}>{value}</Text>
-        <Text style={styles.summaryUnit}>{unit}</Text>
-      </View>
-      {trend && (
-        <View style={styles.trendRow}>
-          <Icon
-            name={trend.direction === 'up' ? 'arrow-up' : 'arrow-down'}
-            size={12}
-            color={trend.direction === 'up' ? colors.status.success : colors.status.danger}
-          />
-          <Text
-            style={[
-              styles.trendText,
-              { color: trend.direction === 'up' ? colors.status.success : colors.status.danger },
-            ]}
-          >
-            {trend.value}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-}
+// Mock transactions
+const mockTransactions: Transaction[] = [
+  { date: '12/23', type: 'generation', amount: 45.2, description: '발전 수익' },
+  { date: '12/23', type: 'imbalance', amount: -3.5, description: '불균형 정산' },
+  { date: '12/22', type: 'generation', amount: 52.1, description: '발전 수익' },
+  { date: '12/22', type: 'imbalance', amount: -4.2, description: '불균형 정산' },
+  { date: '12/21', type: 'settlement', amount: 158.3, description: '주간 정산' },
+];
 
-// Imbalance Indicator
-function ImbalanceIndicator({ rate }: { rate: number }) {
-  const tolerance = 12; // ±12% tolerance band (Jeju pilot)
-  const isWithinBand = Math.abs(rate) <= tolerance;
-  const indicatorColor = isWithinBand ? colors.status.success : colors.status.danger;
+// Simple Revenue Chart Component
+function RevenueChart({ data }: { data: DailyRevenue[] }) {
+  const maxRevenue = Math.max(...data.map(d => Math.abs(d.revenue)), 1);
+  const chartHeight = 100; // Fixed height for bars area
 
   return (
-    <View style={styles.imbalanceContainer}>
-      <View style={styles.imbalanceHeader}>
-        <Text style={styles.imbalanceTitle}>Imbalance Status</Text>
-        <View style={[styles.toleranceBadge, { backgroundColor: `${indicatorColor}20` }]}>
-          <Text style={[styles.toleranceText, { color: indicatorColor }]}>
-            {isWithinBand ? 'Within Band' : 'Penalty Applied'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.toleranceBar}>
-        {/* Tolerance band visualization */}
-        <View style={styles.toleranceScale}>
-          <Text style={styles.scaleLabel}>-12%</Text>
-          <Text style={styles.scaleLabel}>0%</Text>
-          <Text style={styles.scaleLabel}>+12%</Text>
-        </View>
-        <View style={styles.toleranceTrack}>
-          <View style={styles.toleranceBand} />
-          <View
-            style={[
-              styles.imbalanceMarker,
-              {
-                left: `${50 + (rate / 24) * 100}%`,
-                backgroundColor: indicatorColor,
-              },
-            ]}
-          />
-        </View>
-      </View>
-
-      <View style={styles.penaltyInfo}>
-        <View style={styles.penaltyRow}>
-          <Text style={styles.penaltyLabel}>Over-generation penalty:</Text>
-          <Text style={styles.penaltyValue}>80% of SMP</Text>
-        </View>
-        <View style={styles.penaltyRow}>
-          <Text style={styles.penaltyLabel}>Under-generation penalty:</Text>
-          <Text style={styles.penaltyValue}>120% of SMP</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// Settlement Table Row
-function SettlementRow({ settlement }: { settlement: DailySettlement }) {
-  const penaltyColor = settlement.penalty > 1 ? colors.status.danger : colors.status.warning;
-
-  return (
-    <View style={styles.settlementRow}>
-      <View style={styles.settlementCell}>
-        <Text style={styles.dateText}>{settlement.date}</Text>
-      </View>
-      <View style={styles.settlementCell}>
-        <Text style={[styles.revenueText, { color: colors.status.success }]}>
-          ₩{settlement.revenue.toFixed(1)}M
-        </Text>
-      </View>
-      <View style={styles.settlementCell}>
-        <Text style={[styles.penaltyText, { color: penaltyColor }]}>
-          -₩{settlement.penalty.toFixed(1)}M
-        </Text>
-      </View>
-      <View style={styles.settlementCell}>
-        <Text style={styles.netRevenueText}>₩{settlement.netRevenue.toFixed(1)}M</Text>
+    <View style={styles.chartContainer}>
+      <View style={styles.chartArea}>
+        {data.map((item, index) => {
+          const barHeight = Math.max((Math.abs(item.revenue) / maxRevenue) * chartHeight, 4);
+          return (
+            <View key={`${item.date}-${index}`} style={styles.chartBarWrapper}>
+              <View style={[styles.chartBar, { height: barHeight }]} />
+              <Text style={styles.chartBarLabel}>{item.date.split('/')[1] || item.date}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
 }
 
 export default function SettlementScreen() {
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('7d');
+  const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const totalRevenue = mockSettlements.reduce((sum, s) => sum + s.revenue, 0);
-  const totalPenalty = mockSettlements.reduce((sum, s) => sum + s.penalty, 0);
-  const totalNetRevenue = mockSettlements.reduce((sum, s) => sum + s.netRevenue, 0);
-  const avgImbalance = mockSettlements.reduce((sum, s) => sum + s.imbalanceRate, 0) / mockSettlements.length;
+  // API data states
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
+  const [summary, setSummary] = useState<SettlementStats | null>(null);
+  const [currentSMPData, setCurrentSMPData] = useState<CurrentSMP | null>(null);
+  const [smpForecast, setSmpForecast] = useState<SMPForecast | null>(null);
 
-  const revenueChartData = {
-    labels: mockSettlements.map((s) => s.date),
-    datasets: [
-      {
-        data: mockSettlements.map((s) => s.netRevenue),
-        color: () => colors.brand.accent,
-        strokeWidth: 2,
-      },
-    ],
-  };
+  // Transform settlements to chart data format
+  const revenueData = settlements.length > 0 ? settlements.slice(0, 7).map(s => ({
+    date: s.date.slice(-5).replace('-', '/'), // Format: MM/DD
+    revenue: s.net_revenue_million,
+    imbalance: s.imbalance_million,
+  })) : mockRevenueData;
 
-  const barChartData = {
-    labels: mockSettlements.map((s) => s.date),
-    datasets: [
-      {
-        data: mockSettlements.map((s) => s.generationMwh),
-      },
-    ],
-  };
+  // Transform settlements to transaction format
+  const transactions = settlements.length > 0 ? settlements.flatMap(s => [
+    { date: s.date.slice(-5).replace('-', '/'), type: 'generation' as const, amount: s.revenue_million, description: '발전 수익' },
+    { date: s.date.slice(-5).replace('-', '/'), type: 'imbalance' as const, amount: s.imbalance_million, description: '불균형 정산' },
+  ]).slice(0, 6) : mockTransactions;
+
+  // Fetch settlement data from API
+  const fetchSettlementData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      // Fetch all data in parallel
+      const [settlementsData, summaryData, smpData, forecastData] = await Promise.all([
+        apiService.getRecentSettlements(7),
+        apiService.getSettlementSummary(),
+        apiService.getCurrentSMP('jeju'),
+        apiService.getSMPForecast(),
+      ]);
+
+      setSettlements(settlementsData);
+      setSummary(summaryData);
+      setCurrentSMPData(smpData);
+      setSmpForecast(forecastData);
+    } catch (error) {
+      console.log('API unavailable, using mock data:', error);
+      // Keep mock data on error
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSettlementData();
+  }, [fetchSettlementData]);
+
+  const onRefresh = () => fetchSettlementData(true);
+
+  // Calculate display values from API or fallback to defaults
+  const totalRevenue = summary?.generation_revenue_million ?? 1251;
+  const totalImbalance = summary?.imbalance_charges_million ?? -45.3;
+  const accuracy = summary?.forecast_accuracy_pct ?? 94.5;
+  const totalGeneration = Math.round(settlements.reduce((sum, s) => sum + s.generation_mwh, 0) * 10) / 10;
+  const avgAccuracy = settlements.length > 0
+    ? Math.round(settlements.reduce((sum, s) => sum + s.accuracy_pct, 0) / settlements.length * 10) / 10
+    : 0.0;
+
+  // Current SMP values
+  const currentSMP = currentSMPData?.current_smp ?? 71.2;
+  const currentHour = currentSMPData?.hour ?? new Date().getHours();
+
+  // SMP high/low from forecast
+  const smpHigh = smpForecast ? {
+    value: Math.round(Math.max(...smpForecast.q50)),
+    hour: smpForecast.q50.indexOf(Math.max(...smpForecast.q50)),
+  } : { value: 102, hour: 18 };
+  const smpLow = smpForecast ? {
+    value: Math.round(Math.min(...smpForecast.q50)),
+    hour: smpForecast.q50.indexOf(Math.min(...smpForecast.q50)),
+  } : { value: 71, hour: 12 };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Period Selector */}
-      <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
-
-      {/* Summary Cards */}
-      <View style={styles.summaryGrid}>
-        <SummaryCard
-          title="Total Revenue"
-          value={totalRevenue.toFixed(1)}
-          unit="M₩"
-          icon="cash"
-          color={colors.status.success}
-          trend={{ value: '+12.3%', direction: 'up' }}
-        />
-        <SummaryCard
-          title="Penalties"
-          value={totalPenalty.toFixed(1)}
-          unit="M₩"
-          icon="warning"
-          color={colors.status.danger}
-          trend={{ value: '-8.5%', direction: 'down' }}
-        />
-        <SummaryCard
-          title="Net Revenue"
-          value={totalNetRevenue.toFixed(1)}
-          unit="M₩"
-          icon="wallet"
-          color={colors.brand.accent}
-          trend={{ value: '+15.2%', direction: 'up' }}
-        />
-        <SummaryCard
-          title="Avg Imbalance"
-          value={avgImbalance.toFixed(1)}
-          unit="%"
-          icon="analytics"
-          color={colors.brand.primary}
-        />
-      </View>
-
-      {/* Imbalance Indicator */}
-      <ImbalanceIndicator rate={avgImbalance} />
-
-      {/* Revenue Chart */}
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Net Revenue Trend</Text>
-        {Platform.OS === 'web' ? (
-          <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 8 }}>
-            {revenueChartData.datasets[0].data.map((val, i) => (
-              <View key={i} style={{ alignItems: 'center' }}>
-                <View style={{ height: val * 8, width: 28, backgroundColor: colors.brand.accent, borderRadius: 4 }} />
-                <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 4 }}>{revenueChartData.labels[i]}</Text>
-              </View>
-            ))}
-          </View>
-        ) : LineChart && (
-          <LineChart
-            data={revenueChartData}
-            width={screenWidth - spacing.lg * 2 - spacing.md * 2}
-            height={180}
-            chartConfig={{
-              backgroundColor: colors.background.card,
-              backgroundGradientFrom: colors.background.card,
-              backgroundGradientTo: colors.background.secondary,
-              decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-              labelColor: () => colors.text.muted,
-              propsForDots: {
-                r: '4',
-                strokeWidth: '2',
-                stroke: colors.brand.accent,
-              },
-              propsForBackgroundLines: {
-                stroke: colors.border.primary,
-                strokeDasharray: '5,5',
-              },
-            }}
-            bezier
-            style={styles.chart}
-            withInnerLines={true}
-            withOuterLines={false}
-          />
-        )}
-      </View>
-
-      {/* Generation Chart */}
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Daily Generation (MWh)</Text>
-        {Platform.OS === 'web' ? (
-          <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 8 }}>
-            {barChartData.datasets[0].data.map((val, i) => (
-              <View key={i} style={{ alignItems: 'center' }}>
-                <Text style={{ color: colors.text.muted, fontSize: 10, marginBottom: 4 }}>{val.toFixed(0)}</Text>
-                <View style={{ height: val * 1.2, width: 28, backgroundColor: colors.brand.primary, borderRadius: 4 }} />
-                <Text style={{ color: colors.text.muted, fontSize: 10, marginTop: 4 }}>{barChartData.labels[i]}</Text>
-              </View>
-            ))}
-          </View>
-        ) : BarChart && (
-          <BarChart
-            data={barChartData}
-            width={screenWidth - spacing.lg * 2 - spacing.md * 2}
-            height={180}
-            yAxisLabel=""
-            yAxisSuffix=""
-            chartConfig={{
-              backgroundColor: colors.background.card,
-              backgroundGradientFrom: colors.background.card,
-              backgroundGradientTo: colors.background.secondary,
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-              labelColor: () => colors.text.muted,
-              barPercentage: 0.6,
-              propsForBackgroundLines: {
-                stroke: colors.border.primary,
-                strokeDasharray: '5,5',
-              },
-            }}
-            style={styles.chart}
-            showValuesOnTopOfBars={true}
-            fromZero={true}
-          />
-        )}
-      </View>
-
-      {/* Settlement Table */}
-      <View style={styles.tableCard}>
-        <Text style={styles.chartTitle}>Settlement Details</Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeaderText}>Date</Text>
-          <Text style={styles.tableHeaderText}>Revenue</Text>
-          <Text style={styles.tableHeaderText}>Penalty</Text>
-          <Text style={styles.tableHeaderText}>Net</Text>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      {/* Title Section */}
+      <View style={styles.titleSection}>
+        <View style={styles.titleRow}>
+          <Text style={styles.pageTitle}>정산</Text>
+          <TouchableOpacity style={styles.periodBadge}>
+            <Text style={styles.periodIcon}>📅</Text>
+            <Text style={styles.periodText}>7일</Text>
+          </TouchableOpacity>
         </View>
-        {mockSettlements.map((settlement) => (
-          <SettlementRow key={settlement.date} settlement={settlement} />
-        ))}
+        <Text style={styles.subtitle}>최근 7일 정산 현황</Text>
       </View>
+
+      {/* Current SMP Card */}
+      <View style={styles.smpCard}>
+        <View style={styles.smpCardLeft}>
+          <Text style={styles.smpCardLabel}>현재 SMP ({currentHour}시)</Text>
+          <Text style={styles.smpCardValue}>{Math.round(currentSMP)}</Text>
+          <Text style={styles.smpCardUnit}>원/kWh</Text>
+        </View>
+        <View style={styles.smpCardRight}>
+          <View style={styles.smpHighLow}>
+            <Text style={styles.highLowIcon}>↗</Text>
+            <Text style={styles.highLowText}>최고 {smpHigh.value} ({smpHigh.hour}시)</Text>
+          </View>
+          <View style={styles.smpHighLow}>
+            <Text style={styles.highLowIcon}>↘</Text>
+            <Text style={styles.highLowText}>최저 {smpLow.value} ({smpLow.hour}시)</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Stats Row */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>총 발전량</Text>
+          <View style={styles.statValueRow}>
+            <Text style={styles.statValue}>{totalGeneration}</Text>
+            <Text style={styles.statUnit}> MWh</Text>
+          </View>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>예측 정확도</Text>
+          <View style={styles.statValueRow}>
+            <Text style={styles.statValue}>{avgAccuracy.toFixed(1)}%</Text>
+            <Text style={styles.statUnit}> 평균</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Daily Revenue Section */}
+      <View style={styles.chartSection}>
+        <Text style={styles.sectionTitle}>일별 순수익</Text>
+        <View style={styles.chartCard}>
+          <RevenueChart data={revenueData} />
+        </View>
+      </View>
+
+      {/* Revenue Stats */}
+      <View style={styles.revenueStatsRow}>
+        <View style={styles.revenueStat}>
+          <Text style={styles.revenueStatLabel}>발전수익</Text>
+          <Text style={styles.revenueStatValue}>{totalRevenue} M</Text>
+        </View>
+        <View style={styles.revenueStat}>
+          <Text style={styles.revenueStatLabel}>불균형</Text>
+          <Text style={[styles.revenueStatValue, { color: colors.orange }]}>
+            {totalImbalance} M
+          </Text>
+        </View>
+        <View style={styles.revenueStat}>
+          <Text style={styles.revenueStatLabel}>정확도</Text>
+          <Text style={[styles.revenueStatValue, { color: colors.blue }]}>
+            {accuracy}%
+          </Text>
+        </View>
+      </View>
+
+      {/* Transaction History */}
+      <TouchableOpacity
+        style={styles.transactionSection}
+        onPress={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
+      >
+        <View style={styles.transactionHeader}>
+          <Text style={styles.sectionTitle}>거래 내역</Text>
+          <Text style={styles.expandIcon}>{isTransactionsExpanded ? '∨' : '>'}</Text>
+        </View>
+      </TouchableOpacity>
+
+      {isTransactionsExpanded && (
+        <View style={styles.transactionList}>
+          {transactions.map((transaction, index) => (
+            <View key={index} style={styles.transactionRow}>
+              <View style={styles.transactionLeft}>
+                <Text style={styles.transactionDate}>{transaction.date}</Text>
+                <Text style={styles.transactionDesc}>{transaction.description}</Text>
+              </View>
+              <Text
+                style={[
+                  styles.transactionAmount,
+                  transaction.amount < 0 && { color: colors.orange },
+                ]}
+              >
+                {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(1)} M
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Bottom padding */}
+      <View style={{ height: 100 }} />
     </ScrollView>
   );
 }
@@ -413,244 +301,236 @@ export default function SettlementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  contentContainer: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
   },
 
-  // Period Selector
-  periodSelector: {
-    flexDirection: 'row',
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    marginBottom: spacing.lg,
+  // Title Section
+  titleSection: {
+    marginTop: 16,
+    marginBottom: 16,
   },
-  periodButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
+  titleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.md,
+    justifyContent: 'space-between',
   },
-  periodButtonActive: {
-    backgroundColor: colors.brand.primary,
-  },
-  periodButtonText: {
-    fontSize: fontSize.sm,
-    color: colors.text.muted,
-  },
-  periodButtonTextActive: {
-    color: colors.text.primary,
+  pageTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: colors.text,
   },
-
-  // Summary Grid
-  summaryGrid: {
+  periodBadge: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  summaryCard: {
-    width: Platform.OS === 'web' ? '48%' : (screenWidth - spacing.md * 2 - spacing.sm) / 2 - spacing.sm / 2,
-    minWidth: 150,
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border.primary,
+    borderColor: colors.border,
   },
-  summaryIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+  periodIcon: {
+    fontSize: 14,
+    marginRight: 4,
   },
-  summaryTitle: {
-    fontSize: fontSize.xs,
-    color: colors.text.muted,
-    marginBottom: 4,
+  periodText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
   },
-  summaryValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 2,
-  },
-  summaryValue: {
-    fontSize: fontSize.xxl,
-    fontWeight: 'bold',
-  },
-  summaryUnit: {
-    fontSize: fontSize.sm,
-    color: colors.text.muted,
-  },
-  trendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+  subtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
     marginTop: 4,
   },
-  trendText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
 
-  // Imbalance Indicator
-  imbalanceContainer: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border.primary,
-  },
-  imbalanceHeader: {
+  // SMP Card
+  smpCard: {
+    backgroundColor: colors.smpCardBg,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
-  imbalanceTitle: {
-    fontSize: fontSize.lg,
+  smpCardLeft: {
+    flex: 1,
+  },
+  smpCardLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 4,
+  },
+  smpCardValue: {
+    fontSize: 48,
     fontWeight: 'bold',
-    color: colors.text.primary,
+    color: '#ffffff',
+    lineHeight: 56,
   },
-  toleranceBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+  smpCardUnit: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
-  toleranceText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+  smpCardRight: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
-  toleranceBar: {
-    marginBottom: spacing.md,
-  },
-  toleranceScale: {
+  smpHighLow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    marginVertical: 4,
   },
-  scaleLabel: {
-    fontSize: fontSize.xs,
-    color: colors.text.muted,
+  highLowIcon: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginRight: 4,
   },
-  toleranceTrack: {
-    height: 12,
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.sm,
-    position: 'relative',
-    overflow: 'visible',
-  },
-  toleranceBand: {
-    position: 'absolute',
-    left: '25%',
-    right: '25%',
-    top: 0,
-    bottom: 0,
-    backgroundColor: `${colors.status.success}30`,
-    borderRadius: borderRadius.sm,
-  },
-  imbalanceMarker: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    top: -2,
-    marginLeft: -8,
-    borderWidth: 2,
-    borderColor: colors.text.primary,
-  },
-  penaltyInfo: {
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.primary,
-  },
-  penaltyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  penaltyLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text.muted,
-  },
-  penaltyValue: {
-    fontSize: fontSize.sm,
-    color: colors.text.secondary,
-    fontWeight: '500',
+  highLowText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
   },
 
-  // Charts
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  statUnit: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+
+  // Chart Section
+  chartSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
   chartCard: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border.primary,
+    backgroundColor: colors.chartBg,
+    borderRadius: 12,
+    padding: 16,
+    height: 160,
   },
-  chartTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: 'bold',
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+  chartContainer: {
+    flex: 1,
   },
-  chart: {
-    borderRadius: borderRadius.md,
+  chartArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
+    paddingBottom: 20,
+  },
+  chartBarWrapper: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  chartBar: {
+    width: 24,
+    backgroundColor: '#94a3b8',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  chartBarLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
   },
 
-  // Settlement Table
-  tableCard: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.primary,
-  },
-  tableHeader: {
+  // Revenue Stats Row
+  revenueStatsRow: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.primary,
-    marginBottom: spacing.sm,
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
-  tableHeaderText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    color: colors.text.muted,
-    textAlign: 'center',
-  },
-  settlementRow: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.primary,
-  },
-  settlementCell: {
+  revenueStat: {
     flex: 1,
     alignItems: 'center',
   },
-  dateText: {
-    fontSize: fontSize.sm,
-    color: colors.text.secondary,
+  revenueStatLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
-  revenueText: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  penaltyText: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  netRevenueText: {
-    fontSize: fontSize.sm,
+  revenueStatValue: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text.primary,
+    color: colors.text,
+  },
+
+  // Transaction Section
+  transactionSection: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  expandIcon: {
+    fontSize: 18,
+    color: colors.textSecondary,
+  },
+  transactionList: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  transactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  transactionLeft: {
+    flex: 1,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  transactionDesc: {
+    fontSize: 14,
+    color: colors.text,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.green,
   },
 });

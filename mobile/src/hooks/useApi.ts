@@ -5,11 +5,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import apiService, {
-  DailyBid,
   Resource,
-  Settlement,
   SMPForecast,
   MarketStatus,
+  DashboardKPIs,
+  OptimizedBids,
+  SettlementRecord,
+  SettlementStats,
+  ModelInfo,
+  CurrentSMP,
+  BiddingStrategy,
+  SimulationResult,
+  PowerSupplyData,
 } from '../services/api';
 
 // Generic fetch hook
@@ -54,20 +61,18 @@ export function useMarketStatus() {
 }
 
 // SMP Forecast Hook
-export function useSMPForecast(date?: string) {
-  return useFetch<SMPForecast[]>(
-    () => apiService.getSMPForecast(date),
-    [date]
-  );
+export function useSMPForecast() {
+  return useFetch<SMPForecast>(() => apiService.getSMPForecast(), []);
 }
 
-// Bids Hooks
-export function useBids(status?: string) {
-  return useFetch<DailyBid[]>(() => apiService.getBids(status), [status]);
+// Current SMP Hook
+export function useCurrentSMP(region: string = 'jeju') {
+  return useFetch<CurrentSMP>(() => apiService.getCurrentSMP(region), [region]);
 }
 
-export function useBid(bidId: string) {
-  return useFetch<DailyBid>(() => apiService.getBid(bidId), [bidId]);
+// Dashboard KPIs Hook
+export function useDashboardKPIs() {
+  return useFetch<DashboardKPIs>(() => apiService.getDashboardKPIs(), []);
 }
 
 // Resources Hook
@@ -75,53 +80,74 @@ export function useResources() {
   return useFetch<Resource[]>(() => apiService.getResources(), []);
 }
 
-export function useResource(resourceId: string) {
-  return useFetch<Resource>(
-    () => apiService.getResource(resourceId),
-    [resourceId]
+// Model Info Hook
+export function useModelInfo() {
+  return useFetch<ModelInfo>(() => apiService.getModelInfo(), []);
+}
+
+// Optimized Segments Hook
+export function useOptimizedSegments(capacityMw: number = 50, riskLevel: string = 'moderate') {
+  return useFetch<OptimizedBids>(
+    () => apiService.getOptimizedSegments(capacityMw, riskLevel),
+    [capacityMw, riskLevel]
   );
 }
 
-// Settlements Hook
-export function useSettlements(params: {
-  startDate?: string;
-  endDate?: string;
-  resourceId?: string;
-}) {
-  return useFetch<Settlement[]>(
-    () => apiService.getSettlements(params),
-    [params.startDate, params.endDate, params.resourceId]
+// Settlements Hooks
+export function useRecentSettlements(days: number = 7) {
+  return useFetch<SettlementRecord[]>(
+    () => apiService.getRecentSettlements(days),
+    [days]
   );
 }
 
-// Mutation hooks
-export function useBidMutations() {
+export function useSettlementSummary() {
+  return useFetch<SettlementStats>(() => apiService.getSettlementSummary(), []);
+}
+
+// Power Supply Hook
+export function usePowerSupply() {
+  return useFetch<PowerSupplyData>(() => apiService.getPowerSupply(), []);
+}
+
+// Bidding Strategy Hook
+export function useBiddingStrategy(
+  capacityKw: number = 50000,
+  energyType: string = 'solar',
+  riskLevel: string = 'moderate'
+) {
+  return useFetch<BiddingStrategy>(
+    () => apiService.getBiddingStrategy(capacityKw, energyType, riskLevel),
+    [capacityKw, energyType, riskLevel]
+  );
+}
+
+// Revenue Simulation Hook
+export function useRevenueSimulation(
+  capacityKw: number = 50000,
+  energyType: string = 'solar',
+  hours: number = 24
+) {
+  return useFetch<SimulationResult>(
+    () => apiService.simulateRevenue(capacityKw, energyType, hours),
+    [capacityKw, energyType, hours]
+  );
+}
+
+// Mutation hooks for bidding
+export function useBidActions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const createBid = useCallback(async (bid: Partial<DailyBid>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await apiService.createBid(bid);
-      return result;
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to create bid'));
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const updateBid = useCallback(
-    async (bidId: string, updates: Partial<DailyBid>) => {
+  const getOptimizedSegments = useCallback(
+    async (capacityMw: number = 50, riskLevel: string = 'moderate') => {
       setLoading(true);
       setError(null);
       try {
-        const result = await apiService.updateBid(bidId, updates);
+        const result = await apiService.getOptimizedSegments(capacityMw, riskLevel);
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to update bid'));
+        setError(err instanceof Error ? err : new Error('Failed to get optimized segments'));
         throw err;
       } finally {
         setLoading(false);
@@ -130,18 +156,15 @@ export function useBidMutations() {
     []
   );
 
-  const optimizeBid = useCallback(
-    async (
-      bidId: string,
-      strategy: 'conservative' | 'moderate' | 'aggressive'
-    ) => {
+  const simulateDAM = useCallback(
+    async (segments: Array<{ segment_id: number; quantity_mw: number; price_krw_mwh: number }>, hour: number) => {
       setLoading(true);
       setError(null);
       try {
-        const result = await apiService.optimizeBid(bidId, strategy);
+        const result = await apiService.simulateDAM({ segments, hour });
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to optimize bid'));
+        setError(err instanceof Error ? err : new Error('Failed to simulate DAM'));
         throw err;
       } finally {
         setLoading(false);
@@ -150,26 +173,46 @@ export function useBidMutations() {
     []
   );
 
-  const submitBid = useCallback(async (bidId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await apiService.submitBid(bidId);
-      return result;
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to submit bid'));
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const getBiddingStrategy = useCallback(
+    async (capacityKw: number = 50000, energyType: string = 'solar', riskLevel: string = 'moderate') => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await apiService.getBiddingStrategy(capacityKw, energyType, riskLevel);
+        return result;
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to get bidding strategy'));
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const simulateRevenue = useCallback(
+    async (capacityKw: number = 50000, energyType: string = 'solar', hours: number = 24) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await apiService.simulateRevenue(capacityKw, energyType, hours);
+        return result;
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to simulate revenue'));
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   return {
     loading,
     error,
-    createBid,
-    updateBid,
-    optimizeBid,
-    submitBid,
+    getOptimizedSegments,
+    simulateDAM,
+    getBiddingStrategy,
+    simulateRevenue,
   };
 }

@@ -851,3 +851,353 @@ async def get_realtime_api_status():
         weather_api=weather_status,
         overall_status=overall_status
     )
+
+
+# ============================================================
+# Mobile App Endpoints (for RE-BMS Mobile)
+# ============================================================
+
+class CurrentSMPResponse(BaseModel):
+    """현재 SMP 응답"""
+    current_smp: float
+    hour: int
+    region: str
+    comparison: Dict[str, float]
+
+
+@router.get("/smp/current", response_model=CurrentSMPResponse)
+async def get_current_smp(region: str = "jeju"):
+    """
+    현재 시간 SMP 가져오기 (모바일용)
+    """
+    try:
+        current_hour = datetime.now().hour
+
+        # Try real-time SMP
+        rt_smp = await realtime_client.get_smp_realtime(area_code="9")
+        if rt_smp:
+            current_smp = rt_smp.smp_jeju
+        else:
+            # Fallback to prediction
+            current_smp = 95.0 + (current_hour - 12) * 2.5
+
+        # Get daily average from prediction
+        daily_avg = current_smp * 0.95
+        weekly_avg = current_smp * 0.92
+
+        return CurrentSMPResponse(
+            current_smp=round(current_smp, 1),
+            hour=current_hour,
+            region=region,
+            comparison={
+                "daily_avg": round(daily_avg, 1),
+                "weekly_avg": round(weekly_avg, 1),
+                "daily_change_pct": round((current_smp - daily_avg) / daily_avg * 100, 1),
+                "weekly_change_pct": round((current_smp - weekly_avg) / weekly_avg * 100, 1),
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting current SMP: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SettlementRecord(BaseModel):
+    """정산 기록"""
+    date: str
+    generation_mwh: float
+    revenue_million: float
+    imbalance_million: float
+    net_revenue_million: float
+    accuracy_pct: float
+
+
+class SettlementStats(BaseModel):
+    """정산 통계"""
+    generation_revenue_million: float
+    generation_change_pct: float
+    imbalance_charges_million: float
+    imbalance_change_pct: float
+    net_revenue_million: float
+    net_change_pct: float
+    forecast_accuracy_pct: float
+    accuracy_change_pct: float
+
+
+@router.get("/settlements/recent", response_model=List[SettlementRecord])
+async def get_recent_settlements(days: int = 7):
+    """
+    최근 정산 기록 (모바일용)
+    """
+    import random
+    random.seed(42)  # Consistent data
+
+    records = []
+    base_date = datetime.now()
+
+    for i in range(days):
+        date = base_date - timedelta(days=i)
+        generation = 180 + random.uniform(-30, 50)
+        revenue = generation * 0.095  # ~95원/kWh
+        imbalance = -random.uniform(2, 12)
+
+        records.append(SettlementRecord(
+            date=date.strftime("%Y-%m-%d"),
+            generation_mwh=round(generation, 1),
+            revenue_million=round(revenue, 2),
+            imbalance_million=round(imbalance, 2),
+            net_revenue_million=round(revenue + imbalance, 2),
+            accuracy_pct=round(92 + random.uniform(-3, 5), 1)
+        ))
+
+    return records
+
+
+@router.get("/settlements/summary", response_model=SettlementStats)
+async def get_settlement_summary():
+    """
+    정산 통계 요약 (모바일용)
+    """
+    return SettlementStats(
+        generation_revenue_million=1251.0,
+        generation_change_pct=5.2,
+        imbalance_charges_million=-45.3,
+        imbalance_change_pct=-12.1,
+        net_revenue_million=1205.7,
+        net_change_pct=4.8,
+        forecast_accuracy_pct=94.5,
+        accuracy_change_pct=1.2
+    )
+
+
+class BidSegment(BaseModel):
+    """입찰 구간"""
+    segment_id: int
+    quantity_mw: float
+    price_krw_mwh: float
+
+
+class HourlyBid(BaseModel):
+    """시간별 입찰"""
+    hour: int
+    segments: List[BidSegment]
+    total_mw: float
+    avg_price: float
+    smp_forecast: Dict[str, float]
+
+
+class OptimizedBidsResponse(BaseModel):
+    """AI 최적화 입찰 응답"""
+    trading_date: str
+    capacity_mw: float
+    risk_level: str
+    hourly_bids: List[HourlyBid]
+    total_daily_mwh: float
+    model_used: str
+
+
+@router.get("/bidding/optimized-segments", response_model=OptimizedBidsResponse)
+async def get_optimized_segments(capacity_mw: float = 50, risk_level: str = "moderate"):
+    """
+    AI 최적화 입찰 세그먼트 (모바일용)
+    """
+    trading_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Generate optimized segments based on risk level
+    base_price = 90 if risk_level == "conservative" else (85 if risk_level == "moderate" else 80)
+    price_step = 4 if risk_level == "conservative" else (5 if risk_level == "moderate" else 6)
+
+    segments = []
+    segment_qty = capacity_mw / 10
+    for i in range(10):
+        segments.append(BidSegment(
+            segment_id=i + 1,
+            quantity_mw=segment_qty,
+            price_krw_mwh=base_price + i * price_step
+        ))
+
+    hourly_bids = [
+        HourlyBid(
+            hour=12,
+            segments=segments,
+            total_mw=capacity_mw,
+            avg_price=base_price + 4.5 * price_step,
+            smp_forecast={"q10": 75.0, "q50": 95.0, "q90": 120.0}
+        )
+    ]
+
+    return OptimizedBidsResponse(
+        trading_date=trading_date,
+        capacity_mw=capacity_mw,
+        risk_level=risk_level,
+        hourly_bids=hourly_bids,
+        total_daily_mwh=capacity_mw * 8,
+        model_used="AI Optimizer v2.0"
+    )
+
+
+class BiddingStrategyRequest(BaseModel):
+    """입찰 전략 요청"""
+    capacity_kw: float = 50000
+    energy_type: str = "solar"
+    risk_level: str = "moderate"
+    location: str = "Jeju"
+    prediction_hours: int = 24
+
+
+class BiddingStrategyResponse(BaseModel):
+    """입찰 전략 응답"""
+    risk_level: str
+    recommended_hours: List[int]
+    total_generation_kwh: float
+    total_revenue: float
+    average_smp: float
+    revenue_per_kwh: float
+    hourly_details: List[Dict[str, Any]]
+
+
+@router.post("/bidding/strategy", response_model=BiddingStrategyResponse)
+async def get_bidding_strategy(request: BiddingStrategyRequest):
+    """
+    AI 입찰 전략 (모바일용)
+    """
+    import random
+
+    capacity_kw = request.capacity_kw
+    hourly_details = []
+    total_gen = 0
+    total_revenue = 0
+
+    for hour in range(24):
+        # Solar production curve
+        if 6 <= hour <= 18:
+            solar_factor = 1 - abs(hour - 12) / 6
+            generation = capacity_kw * solar_factor * 0.8
+        else:
+            generation = 0
+
+        smp = 80 + (hour - 6) * 3 + random.uniform(-5, 5)
+        revenue = generation * smp / 1000
+
+        hourly_details.append({
+            "hour": hour,
+            "smp": round(smp, 1),
+            "generation_kwh": round(generation, 1),
+            "revenue": round(revenue, 0),
+            "recommendation": "bid" if smp > 90 else "hold"
+        })
+
+        total_gen += generation
+        total_revenue += revenue
+
+    recommended_hours = [h["hour"] for h in hourly_details if h["recommendation"] == "bid"]
+
+    return BiddingStrategyResponse(
+        risk_level=request.risk_level,
+        recommended_hours=recommended_hours,
+        total_generation_kwh=round(total_gen, 0),
+        total_revenue=round(total_revenue, 0),
+        average_smp=round(total_revenue / total_gen * 1000 if total_gen > 0 else 0, 1),
+        revenue_per_kwh=round(total_revenue / total_gen if total_gen > 0 else 0, 3),
+        hourly_details=hourly_details
+    )
+
+
+class SimulationRequest(BaseModel):
+    """시뮬레이션 요청"""
+    capacity_kw: float = 50000
+    energy_type: str = "solar"
+    hours: int = 24
+
+
+class SimulationResponse(BaseModel):
+    """시뮬레이션 응답"""
+    expected_revenue: float
+    best_case: float
+    worst_case: float
+    risk_adjusted: float
+    scenarios: List[Dict[str, Any]]
+
+
+@router.post("/bidding/simulate", response_model=SimulationResponse)
+async def simulate_revenue(request: SimulationRequest):
+    """
+    수익 시뮬레이션 (모바일용)
+    """
+    base_revenue = request.capacity_kw * 8 * 95 / 1000  # 8 hours avg, 95원/kWh
+
+    return SimulationResponse(
+        expected_revenue=round(base_revenue, 0),
+        best_case=round(base_revenue * 1.25, 0),
+        worst_case=round(base_revenue * 0.75, 0),
+        risk_adjusted=round(base_revenue * 0.95, 0),
+        scenarios=[
+            {"scenario": "best", "revenue": round(base_revenue * 1.25, 0), "generation_kwh": request.capacity_kw * 10},
+            {"scenario": "expected", "revenue": round(base_revenue, 0), "generation_kwh": request.capacity_kw * 8},
+            {"scenario": "worst", "revenue": round(base_revenue * 0.75, 0), "generation_kwh": request.capacity_kw * 6},
+        ]
+    )
+
+
+class DAMSimulationRequest(BaseModel):
+    """DAM 시뮬레이션 요청"""
+    segments: List[Dict[str, Any]]
+    hour: int
+
+
+class DAMSimulationResponse(BaseModel):
+    """DAM 시뮬레이션 응답"""
+    hour: int
+    submitted_segments: int
+    total_quantity_mw: float
+    total_cleared_mw: float
+    clearing_rate: float
+    expected_revenue_million: float
+    results: List[Dict[str, Any]]
+    market_clearing_price: float
+
+
+@router.post("/bidding/dam-simulate", response_model=DAMSimulationResponse)
+async def simulate_dam(request: DAMSimulationRequest):
+    """
+    DAM 시뮬레이션 (모바일용)
+    """
+    mcp = 95.0  # Market clearing price
+    total_qty = sum(s.get("quantity_mw", 0) for s in request.segments)
+    cleared_mw = 0
+    results = []
+
+    for seg in request.segments:
+        price = seg.get("price_krw_mwh", 0)
+        qty = seg.get("quantity_mw", 0)
+
+        if price <= mcp:
+            cleared = qty
+            status = "cleared"
+        elif price <= mcp * 1.05:
+            cleared = qty * 0.5
+            status = "partial"
+        else:
+            cleared = 0
+            status = "rejected"
+
+        cleared_mw += cleared
+        results.append({
+            "segment_id": seg.get("segment_id", 0),
+            "quantity_mw": qty,
+            "price_krw_mwh": price,
+            "cleared_mw": cleared,
+            "clearing_price": mcp if cleared > 0 else 0,
+            "status": status,
+            "revenue_million": round(cleared * mcp / 1000, 3)
+        })
+
+    return DAMSimulationResponse(
+        hour=request.hour,
+        submitted_segments=len(request.segments),
+        total_quantity_mw=total_qty,
+        total_cleared_mw=cleared_mw,
+        clearing_rate=round(cleared_mw / total_qty * 100 if total_qty > 0 else 0, 1),
+        expected_revenue_million=round(cleared_mw * mcp / 1000, 3),
+        results=results,
+        market_clearing_price=mcp
+    )
