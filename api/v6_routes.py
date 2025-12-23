@@ -3,7 +3,12 @@ RE-BMS v6.0 API Routes
 ======================
 
 v6 React Dashboard 전용 API 엔드포인트
-실제 EPSIS 데이터 및 모델 예측 결과 제공
+실시간 공공데이터 API 연동 + 모델 예측 결과 제공
+
+APIs:
+- KPX 계통한계가격(SMP) API - 실시간 제주 SMP
+- KPX 현재전력수급현황 API - 실시간 전력수급
+- 기상청 초단기실황 API - 실시간 제주 기상
 
 Author: Claude Code
 Date: 2025-12
@@ -18,6 +23,9 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+
+# Real-time API client
+from api.realtime_api import realtime_client, SMPData, PowerSupplyData, WeatherData as RTWeatherData
 
 logger = logging.getLogger(__name__)
 
@@ -296,15 +304,16 @@ async def get_smp_forecast():
 @router.get("/dashboard/kpis", response_model=DashboardKPIsResponse)
 async def get_dashboard_kpis():
     """
-    대시보드 KPI
+    대시보드 KPI - 실시간 공공데이터 API 연동
 
-    실제 EPSIS/KMA 데이터 기반
+    Data Sources:
+    - SMP: KPX 계통한계가격 API (실시간)
+    - 전력수급: KPX 현재전력수급현황 API (실시간)
+    - 기상: 기상청 초단기실황 API (실시간)
+
+    Fallback: 과거 EPSIS/KMA 파일 데이터
     """
     try:
-        smp_df = load_smp_data()
-        demand_df = load_power_demand_data()
-        weather_df = load_weather_data()
-
         now = datetime.now()
         hour = now.hour
 
@@ -315,21 +324,93 @@ async def get_dashboard_kpis():
         # 총 설비 용량
         total_capacity = sum(p['capacity'] for p in JEJU_PLANTS)
 
-        # ===== 현재 수요 (EPSIS 데이터) =====
+        # 데이터 소스 추적
+        data_sources = []
+
+        # ===== 실시간 SMP (KPX API) =====
+        current_smp = 120.0  # 기본값
+        smp_change = 0.0
+        rt_smp = await realtime_client.get_smp_realtime(area_code="9")  # 제주
+
+        if rt_smp and rt_smp.smp_jeju > 0:
+            current_smp = rt_smp.smp_jeju
+            data_sources.append("KPX SMP API (실시간)")
+            logger.info(f"Real-time SMP (Jeju): {current_smp} 원/kWh")
+        else:
+            # Fallback: 과거 EPSIS 파일 데이터
+            smp_df = load_smp_data()
+            if not smp_df.empty:
+                latest = smp_df.tail(1)
+                current_smp = float(latest['smp_jeju'].values[0])
+                data_sources.append("EPSIS SMP (파일)")
+
+                # 전일 동시간 대비 변화율
+                yesterday = smp_df[smp_df['hour'] == hour].tail(2)
+                if len(yesterday) >= 2:
+                    prev_smp = yesterday.iloc[0]['smp_jeju']
+                    smp_change = ((current_smp - prev_smp) / prev_smp) * 100
+
+        # ===== 실시간 전력수급 (KPX API) =====
         current_demand = 650.0  # 기본값
-        if not demand_df.empty:
-            # 최근 30일 평균 패턴에서 현재 시간 값 사용
-            recent_demand = demand_df.tail(30)
-            hour_col = f'h{hour if hour > 0 else 24}'  # 0시 = 24시 컬럼
-            current_demand = recent_demand[hour_col].mean()
+        supply_reserve_rate = 25.0  # 공급예비율 기본값
+        rt_power = await realtime_client.get_power_supply_realtime()
+
+        if rt_power:
+            # 전국 수요 → 제주 비율 적용 (제주는 전국의 약 1.5~2%)
+            jeju_ratio = 0.018  # 제주 비율 약 1.8%
+            current_demand = rt_power.current_demand_mw * jeju_ratio
+            supply_reserve_rate = rt_power.supply_reserve_rate
+            data_sources.append("KPX 전력수급 API (실시간)")
+            logger.info(f"Real-time demand: {rt_power.current_demand_mw} MW (national), {current_demand:.1f} MW (Jeju est.)")
+        else:
+            # Fallback: 과거 EPSIS 파일 데이터
+            demand_df = load_power_demand_data()
+            if not demand_df.empty:
+                recent_demand = demand_df.tail(30)
+                hour_col = f'h{hour if hour > 0 else 24}'
+                current_demand = recent_demand[hour_col].mean()
+                data_sources.append("EPSIS Demand (파일)")
+
+        # ===== 실시간 기상 (기상청 API) =====
+        temperature = 5.0  # 기본값 (겨울)
+        wind_speed = 3.0
+        humidity = 60.0
+        weather_condition = "맑음"
+        rt_weather = await realtime_client.get_weather_realtime()
+
+        if rt_weather:
+            temperature = rt_weather.temperature
+            wind_speed = rt_weather.wind_speed
+            humidity = rt_weather.humidity
+            weather_condition = rt_weather.condition
+            data_sources.append("기상청 API (실시간)")
+            logger.info(f"Real-time weather: {temperature}°C, {humidity}%, {weather_condition}")
+        else:
+            # Fallback: 과거 KMA 파일 데이터
+            weather_df = load_weather_data()
+            if not weather_df.empty:
+                recent_weather = weather_df.tail(24)
+                temperature = recent_weather['temp'].mean()
+                wind_speed = recent_weather['wind_speed'].mean()
+                humidity = recent_weather['humidity'].mean()
+
+                if humidity > 80:
+                    weather_condition = "흐림"
+                elif humidity > 70:
+                    weather_condition = "구름많음"
+                else:
+                    weather_condition = "맑음"
+                data_sources.append("KMA Weather (파일)")
 
         # ===== 재생에너지 출력 및 비율 =====
         solar_capacity = sum(p['capacity'] for p in JEJU_PLANTS if p['type'] == 'solar')
         wind_capacity = sum(p['capacity'] for p in JEJU_PLANTS if p['type'] == 'wind')
         ess_capacity = sum(p['capacity'] for p in JEJU_PLANTS if p['type'] == 'ess')
 
+        # 실시간 기상 기반 출력 계산
         solar_factor = max(0, np.sin((hour - 6) * np.pi / 12)) if 6 <= hour <= 18 else 0
-        wind_factor = 0.7 + 0.2 * rng.random()
+        # 풍속 기반 풍력 출력 (풍속 3m/s ~ 25m/s 범위)
+        wind_factor = min(1.0, max(0.1, (wind_speed - 3) / 10)) if wind_speed > 3 else 0.1
 
         solar_output = solar_capacity * solar_factor * (0.8 + 0.15 * rng.random())
         wind_output = wind_capacity * wind_factor
@@ -342,42 +423,8 @@ async def get_dashboard_kpis():
         renewable_output = solar_output + wind_output
         renewable_ratio = (renewable_output / current_demand) * 100 if current_demand > 0 else 0
 
-        # ===== 현재 SMP (실제 데이터) =====
-        current_smp = 120.0
-        smp_change = 0.0
-        if not smp_df.empty:
-            latest = smp_df.tail(1)
-            current_smp = float(latest['smp_jeju'].values[0])
-
-            # 전일 동시간 대비 변화율
-            yesterday = smp_df[smp_df['hour'] == hour].tail(2)
-            if len(yesterday) >= 2:
-                prev_smp = yesterday.iloc[0]['smp_jeju']
-                smp_change = ((current_smp - prev_smp) / prev_smp) * 100
-
-        # ===== 기상 현황 (KMA 데이터) =====
-        temperature = 5.0  # 기본값 (겨울)
-        wind_speed = 3.0
-        humidity = 60.0
-        weather_condition = "맑음"
-
-        if not weather_df.empty:
-            # 최신 날씨 데이터 (12월 평균 또는 최근)
-            recent_weather = weather_df.tail(24)  # 최근 24시간
-            temperature = recent_weather['temp'].mean()
-            wind_speed = recent_weather['wind_speed'].mean()
-            humidity = recent_weather['humidity'].mean()
-
-            # 날씨 상태 결정
-            if humidity > 80:
-                weather_condition = "흐림"
-            elif humidity > 70:
-                weather_condition = "구름많음"
-            else:
-                weather_condition = "맑음"
-
         # ===== 계통 주파수 =====
-        # 한국전력 표준: 60Hz ± 0.2Hz
+        # 한국전력 표준: 60Hz ± 0.2Hz (시뮬레이션)
         grid_frequency = 60.00 + rng.uniform(-0.03, 0.03)
 
         # ===== 일일 수익 계산 =====
@@ -385,13 +432,6 @@ async def get_dashboard_kpis():
         daily_revenue = (daily_mwh * current_smp) / 1000000
 
         # 데이터 소스 표시
-        data_sources = []
-        if not smp_df.empty:
-            data_sources.append("EPSIS SMP")
-        if not demand_df.empty:
-            data_sources.append("EPSIS Demand")
-        if not weather_df.empty:
-            data_sources.append("KMA Weather")
         data_source = " + ".join(data_sources) if data_sources else "Simulated"
 
         return DashboardKPIsResponse(
@@ -649,4 +689,104 @@ async def get_power_supply():
         current_hour=current_hour,
         data=data,
         data_source=data_source
+    )
+
+
+# ============================================================
+# Real-time API Status Endpoint
+# ============================================================
+
+class RealtimeAPIStatusResponse(BaseModel):
+    """실시간 API 상태 응답"""
+    timestamp: str
+    smp_api: Dict[str, Any]
+    power_supply_api: Dict[str, Any]
+    weather_api: Dict[str, Any]
+    overall_status: str
+
+
+@router.get("/realtime-status", response_model=RealtimeAPIStatusResponse)
+async def get_realtime_api_status():
+    """
+    실시간 API 연결 상태 확인
+
+    각 외부 API의 연결 상태와 최근 데이터를 반환
+    """
+    timestamp = datetime.now().isoformat()
+
+    # SMP API 상태
+    smp_status = {"status": "unknown", "data": None, "error": None}
+    try:
+        smp_data = await realtime_client.get_smp_realtime(area_code="9")
+        if smp_data:
+            smp_status = {
+                "status": "connected",
+                "data": {
+                    "smp_jeju": smp_data.smp_jeju,
+                    "trade_hour": smp_data.trade_hour,
+                    "trade_day": smp_data.trade_day,
+                },
+                "error": None
+            }
+        else:
+            smp_status = {"status": "no_data", "data": None, "error": "API returned no data"}
+    except Exception as e:
+        smp_status = {"status": "error", "data": None, "error": str(e)}
+
+    # Power Supply API 상태
+    power_status = {"status": "unknown", "data": None, "error": None}
+    try:
+        power_data = await realtime_client.get_power_supply_realtime()
+        if power_data:
+            power_status = {
+                "status": "connected",
+                "data": {
+                    "current_demand_mw": power_data.current_demand_mw,
+                    "supply_capacity_mw": power_data.supply_capacity_mw,
+                    "supply_reserve_rate": power_data.supply_reserve_rate,
+                    "base_datetime": power_data.base_datetime.isoformat(),
+                },
+                "error": None
+            }
+        else:
+            power_status = {"status": "no_data", "data": None, "error": "API returned no data"}
+    except Exception as e:
+        power_status = {"status": "error", "data": None, "error": str(e)}
+
+    # Weather API 상태
+    weather_status = {"status": "unknown", "data": None, "error": None}
+    try:
+        weather_data = await realtime_client.get_weather_realtime()
+        if weather_data:
+            weather_status = {
+                "status": "connected",
+                "data": {
+                    "temperature": weather_data.temperature,
+                    "humidity": weather_data.humidity,
+                    "wind_speed": weather_data.wind_speed,
+                    "condition": weather_data.condition,
+                    "base_datetime": weather_data.base_datetime.isoformat(),
+                },
+                "error": None
+            }
+        else:
+            weather_status = {"status": "no_data", "data": None, "error": "API returned no data"}
+    except Exception as e:
+        weather_status = {"status": "error", "data": None, "error": str(e)}
+
+    # 전체 상태 결정
+    statuses = [smp_status["status"], power_status["status"], weather_status["status"]]
+    if all(s == "connected" for s in statuses):
+        overall_status = "all_connected"
+    elif any(s == "connected" for s in statuses):
+        overall_status = "partial"
+    else:
+        overall_status = "disconnected"
+
+    return RealtimeAPIStatusResponse(
+        timestamp=timestamp,
+        smp_api=smp_status,
+        power_supply_api=power_status,
+        weather_api=weather_status,
+        overall_status=overall_status
     )
