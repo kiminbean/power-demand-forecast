@@ -1,179 +1,176 @@
 # Project Status Backup
-> Last Updated: 2025-12-20 14:10 KST
+> Last Updated: 2025-12-26 07:25 (Current Session - v3.5/v3.6 Generation Data Experiments)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
 - **Repository**: https://github.com/kiminbean/power-demand-forecast (PRIVATE)
-- **Version**: v6.0.0 (React Desktop Web Application)
-- **Release**: https://github.com/kiminbean/power-demand-forecast/releases/tag/v6.0.0
+- **Current Version**: v8.0.0 (Weather Map Edition) ✅ Complete
+- **Previous Version**: v7.0.0 (React Desktop Web Application)
 - **License**: Proprietary (All Rights Reserved)
 
 ---
 
-## Latest Changes (2025-12-20)
+## Current Session (2025-12-26)
 
-### 🚀 RE-BMS v6.0.0 Release
+### Task: SMP Model R² 0.9+ Improvement with Generation Data
 
-#### Docker Deployment with Private Access
-| 항목 | 상태 |
-|------|------|
-| Basic Authentication | ✅ 설정 완료 |
-| rebms-api 컨테이너 | ✅ 테스트 완료 |
-| rebms-web 컨테이너 | ✅ 테스트 완료 |
-| 7개 페이지 검증 | ✅ 모두 정상 |
+#### Request
+- Use crawlers to search and download generation data from 공공데이터포털
+- Improve R² beyond 0.760 (v3.2 baseline)
+- Incorporate power generation data to improve SMP prediction
 
-#### Docker 구성
-| 서비스 | 컨테이너 | 포트 | 설명 |
-|--------|----------|------|------|
-| `api` | rebms-api | 8506 | FastAPI 백엔드 |
-| `web` | rebms-web | 8600 | React + Nginx + Basic Auth |
+#### Progress
+| Task | Status |
+|------|--------|
+| Check existing crawler code | ✅ Complete |
+| Search public data portal | ✅ Complete |
+| Identify available datasets | ✅ Complete |
+| Train v3.3 (Jeju LNG/Oil generation) | ✅ Complete (R² 0.158) - FAILED |
+| Train v3.4 (KPX nationwide generation) | ✅ Complete (R² -0.105) - FAILED |
+| Train v3.5 (Jeju power trading/demand) | ✅ Complete (R² 0.506) - UNDERPERFORMED |
+| Train v3.6 (Solar generation) | ✅ Complete (R² 0.250) - FAILED |
 
-#### Docker 테스트 스크린샷
+#### Model Comparison
+
+| Model | MAPE | R² | Features | Data Period | Notes |
+|-------|------|-----|----------|-------------|-------|
+| v3.2 (Optuna) | 7.42% | **0.760** | 22 | 5 years SMP only | **BASELINE** |
+| v3.3 (LNG/Oil) | 17.34% | 0.158 | 37 | ~11 months overlap | Data period too short |
+| v3.4 (KPX gen) | 17.58% | -0.105 | 53 | ~1 year overlap | Data period too short |
+| v3.5 (Power demand) | 11.09% | 0.506 | 60 | ~4 years overlap | Demand ≠ Generation |
+| v3.6 (Solar gen) | 23.82% | 0.250 | 73 | ~3.5 years overlap | Solar-SMP corr=-0.106 |
+
+#### Key Findings
+
+1. **Data Period Matters**: Models with short overlap periods (v3.3, v3.4) performed poorly
+2. **Demand ≠ Generation**: Power trading volume (수요) is NOT the same as generation (발전량)
+   - SMP is determined by marginal generator costs, not directly by demand
+3. **Zero SMP Problem**: 141 records have smp_jeju = 0 (during high solar generation)
+   - Fixed MAPE calculation to exclude SMP < 10 won/kWh
+4. **Solar Generation is Key**: High solar → Low SMP (can be 0)
+   - v3.6 uses solar generation data which should be more relevant
+
+#### Available Data Files in data/raw/
+
 ```
-docs/screenshots/docker_dashboard.png   - 메인 대시보드
-docs/screenshots/docker_smp.png         - SMP 예측
-docs/screenshots/docker_bidding.png     - 입찰 관리
-docs/screenshots/docker_portfolio.png   - 포트폴리오
-docs/screenshots/docker_settlement.png  - 정산
-docs/screenshots/docker_map.png         - 제주 지도
-docs/screenshots/docker_analysis.png    - 분석
-```
+# Power Demand (NOT generation)
+jeju_hourly_power_2013_2024.csv        - 전력거래량 (2013-2024, 105K records)
 
-### 🔒 보안 설정 변경
+# Generation Data
+제주 시간대별 발전량(LNG)_240331.csv    - LNG generation (2023.05-2024.03)
+제주 시간대별 발전량(유류)_240331.csv   - Oil generation (2023.05-2024.03)
+한국전력거래소_시간별 발전량_20211231.csv - Nationwide hourly (2017-2021)
 
-#### License 변경
-| 항목 | 이전 | 이후 |
-|------|------|------|
-| 라이선스 | MIT (개방형) | Proprietary (독점) |
-| 복사/수정/배포 | ✅ 허용 | ❌ 금지 |
-| 상업적 사용 | ✅ 허용 | ❌ 금지 |
-
-#### Repository Visibility
-| 항목 | 이전 | 이후 |
-|------|------|------|
-| 공개 설정 | Public | **Private** |
-| 접근 권한 | 누구나 | 소유자/협업자만 |
-
-### 📝 문서 업데이트
-
-#### README.md 변경사항
-- Docker 배포 섹션 대폭 확장 (94줄 추가)
-- v6 Docker 스크린샷 갤러리 추가
-- 라이선스 배지 변경 (MIT → Proprietary)
-- 버전 업데이트 (v4.0.7 → v6.0.0)
-
-### Recent Commits (2025-12-20)
-```
-1954e23 chore: Change license to Proprietary (All Rights Reserved)
-b184b6b docs: Add RE-BMS v6.0 Docker deployment guide to README
-9582c03 docs: Add Docker deployment test screenshots
-bddb954 fix: Docker volume mount configuration for v6 deployment
+# Solar Generation + Weather (RECOMMENDED for v3.6)
+한국동서발전_제주_기상관측_태양광발전.csv - Solar gen with weather (2018-2024, 56K records)
+  - Columns: 일시, 기온, 습도, 일사량, 태양광 발전량(MWh) 등
+  - Overlap with SMP: ~3.5 years (2020-12 ~ 2024-05)
 ```
 
----
+#### Files Created This Session
 
-## RE-BMS v6.0 Features
-
-### 7 Dashboard Pages
-| 페이지 | 경로 | 기능 |
-|--------|------|------|
-| 대시보드 | `/` | 실시간 전력수급 현황 |
-| SMP 예측 | `/smp` | 24시간 SMP 예측 (q10/q50/q90) |
-| 입찰 관리 | `/bidding` | 10-Segment KPX 입찰 매트릭스 |
-| 포트폴리오 | `/portfolio` | 제주 20개 발전소 관리 |
-| 정산 | `/settlement` | 수익/불균형 정산 분석 |
-| 제주 지도 | `/map` | Leaflet 발전소 위치 |
-| 분석 | `/analysis` | XAI 피처 중요도 |
-
-### Tech Stack
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS
-- **Charts**: Recharts, React Leaflet
-- **Backend**: FastAPI, Python 3.11, PyTorch
-- **Infrastructure**: Docker, Nginx, Basic Auth
-
-### 접속 정보
 ```
-Development: http://localhost:8508
-Docker: http://localhost:8600 (인증 필요)
-Username: admin
-Password: (htpasswd 설정)
+src/crawlers/public_data_crawler.py    - Search data.go.kr
+src/crawlers/download_public_data.py   - Download from data.go.kr
+src/smp/models/train_smp_v3_3_generation.py  - LNG/Oil generation model
+src/smp/models/train_smp_v3_4_kpx_generation.py - KPX nationwide model
+src/smp/models/train_smp_v3_5_jeju_power.py  - Power demand model
+src/smp/models/train_smp_v3_6_solar.py       - Solar generation model (READY)
+models/smp_v3_5_jeju_power/metrics.json      - v3.5 results
 ```
 
----
+#### Code Fixes Applied
 
-## Docker 명령어
+1. **MAPE Zero Division Fix** (in v3.5, v3.6):
+```python
+# Filter out near-zero actuals for MAPE
+mask = actuals > 10  # Only consider SMP > 10 won/kWh for MAPE
+mape = mean_absolute_percentage_error(actuals[mask], preds[mask]) * 100
+```
 
+2. **SMP 24:00 Timestamp Fix**:
+```python
+df['timestamp'] = df['timestamp'].str.replace(' 24:00', ' 00:00')
+mask = df['hour'] == 24
+df.loc[mask, 'datetime'] = df.loc[mask, 'datetime'] + pd.Timedelta(days=1)
+```
+
+#### Next Steps (Pending)
+
+1. **Run v3.6** (Solar generation model):
 ```bash
-# 시작
-docker-compose -f docker/docker-compose.v6.yml up -d
-
-# 중지
-docker-compose -f docker/docker-compose.v6.yml down
-
-# 재빌드
-docker-compose -f docker/docker-compose.v6.yml up -d --build
-
-# 로그
-docker-compose -f docker/docker-compose.v6.yml logs -f
-
-# 전체 정리
-docker system prune -af --volumes
+source .venv/bin/activate && python src/smp/models/train_smp_v3_6_solar.py
 ```
+
+2. **If v3.6 still underperforms**:
+   - Try combining solar + power demand features
+   - Use Optuna tuning on v3.6 model
+   - Download additional generation data from 공공데이터포털
+
+3. **For R² 0.9+**:
+   - Need actual Jeju generation data (not just demand)
+   - Consider real-time fuel prices (LNG, oil)
+   - Apply for data.go.kr API subscription
+
+---
+
+## Previous Session (2025-12-26 06:00)
+
+### Task: SMP Model v3.2 Optuna Tuning ✅ Complete
+
+#### v3.2 Optuna Results (CURRENT BEST)
+| Metric | v3.1 Baseline | v3.2 Optuna | Improvement |
+|--------|---------------|-------------|-------------|
+| MAPE | 7.83% | **7.42%** | -0.41%p |
+| R² | 0.736 | **0.760** | +0.024 |
+
+**Best Hyperparameters:**
+```json
+{
+  "input_hours": 96,
+  "hidden_size": 64,
+  "num_layers": 1,
+  "dropout": 0.198,
+  "n_heads": 4,
+  "learning_rate": 0.000165,
+  "batch_size": 32,
+  "noise_std": 0.0099
+}
+```
+
+**Model saved at:** `models/smp_v3_optuna/`
+
+---
+
+## Previous Sessions
+
+### 2025-12-23: Create web-v8 Dashboard ✅ Complete
+### 2025-12-22: System Architecture Documentation ✅ Complete
+### 2025-12-20: RE-BMS v6.0.0 Release ✅ Complete
 
 ---
 
 ## Key Files
 
-### Docker Configuration
+### SMP Models
 ```
-docker/docker-compose.v6.yml    - v6 Docker Compose
-docker/Dockerfile.api           - FastAPI 이미지
-docker/.env                     - 환경변수
-docker/htpasswd                 - Basic Auth 인증 파일
-docker/setup-auth.sh            - 인증 설정 스크립트
-web-v6/Dockerfile               - React 프론트엔드 이미지
-web-v6/nginx.conf               - Nginx 설정 (Basic Auth)
+models/smp_v3_optuna/           - v3.2 Optuna (BEST: R² 0.760)
+models/smp_v3_5_jeju_power/     - v3.5 Power demand (R² 0.506)
+src/smp/models/train_smp_v3_6_solar.py  - v3.6 Solar (READY)
 ```
 
-### v6 Web Application
+### Crawlers
 ```
-web-v6/src/pages/Dashboard.tsx      - 대시보드
-web-v6/src/pages/SMPPrediction.tsx  - SMP 예측
-web-v6/src/pages/Bidding.tsx        - 입찰 관리
-web-v6/src/pages/Portfolio.tsx      - 포트폴리오
-web-v6/src/pages/Settlement.tsx     - 정산
-web-v6/src/pages/Map.tsx            - 제주 지도
-web-v6/src/pages/Analysis.tsx       - 분석
+src/crawlers/public_data_crawler.py    - data.go.kr search
+src/crawlers/download_public_data.py   - data.go.kr download
+src/crawlers/epsis_crawler.py          - EPSIS SMP data
 ```
 
-### License
+### web-v7 (Current Production)
 ```
-LICENSE                         - Proprietary (All Rights Reserved)
+web-v7/src/pages/ExecoDashboard.tsx  - Main dashboard
+web-v7/src/hooks/useApi.ts          - API hooks
 ```
-
----
-
-## Version History
-
-| Version | Date | Highlights |
-|---------|------|------------|
-| **v6.0.0** | **2025-12-20** | **React Desktop Web + Docker Private Deploy** |
-| v5.0.0 | 2025-12-19 | React Native Mobile App |
-| v4.0.7 | 2025-12-19 | Enhanced chart (예비전력, 태양광, 풍력) |
-| v4.0.6 | 2025-12-19 | Reserve rate bug fix |
-| v4.0.5 | 2025-12-19 | GE Inertia layout |
-| v4.0.4 | 2025-12-19 | Slack webhook |
-| v4.0.3 | 2025-12-19 | Email notification |
-
----
-
-## Session Recovery
-
-For next session:
-1. Read `.claude/backups/PROJECT_STATUS.md`
-2. Run `git log --oneline -10`
-3. Repository is **PRIVATE** - requires authentication
-4. License is **Proprietary** - all rights reserved
 
 ---
 
@@ -183,8 +180,15 @@ For next session:
 - Apple Silicon MPS (M1 MacBook Pro 32GB)
 - Docker Desktop
 
-## Security Notes
-- Repository: **PRIVATE**
-- License: **Proprietary (All Rights Reserved)**
-- Docker: **Basic Authentication required**
-- No public access without explicit permission
+---
+
+## Session Recovery
+
+For next session:
+1. Read `.claude/backups/PROJECT_STATUS.md`
+2. Run `git log --oneline -10`
+3. To continue v3.6 solar model:
+```bash
+source .venv/bin/activate && python src/smp/models/train_smp_v3_6_solar.py
+```
+4. v3.2 Optuna (R² 0.760) remains the best model until v3.6 is tested
