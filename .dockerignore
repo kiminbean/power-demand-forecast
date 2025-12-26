@@ -100,8 +100,9 @@ feature_list.json
 # v14 download folder
 v14_download/
 
-# Tools not needed in container
-tools/
+# Tools - only exclude unnecessary subdirectories
+tools/deprecated/
+tools/__pycache__/
 
 # Keep models but exclude training checkpoints
 models/checkpoints/

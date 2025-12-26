@@ -33,18 +33,32 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Import crawlers (primary data source)
+# Import crawlers (primary data source) - import each separately to handle partial availability
+CRAWLERS_AVAILABLE = False
+WEATHER_CRAWLER_AVAILABLE = False
+JejuRealtimeCrawler = None
+SMPCrawler = None
+KMAWeatherCrawler = None
+
 try:
     from tools.crawlers.jeju_realtime_crawler import JejuRealtimeCrawler
-    from src.smp.crawlers.smp_crawler import SMPCrawler
-    from tools.crawlers.kma_weather_crawler import KMAWeatherCrawler
     CRAWLERS_AVAILABLE = True
-    WEATHER_CRAWLER_AVAILABLE = True
-    logger.info("Crawlers loaded successfully - using web scraping for real-time data")
+    logger.info("JejuRealtimeCrawler loaded successfully")
 except ImportError as e:
-    CRAWLERS_AVAILABLE = False
-    WEATHER_CRAWLER_AVAILABLE = False
-    logger.warning(f"Crawlers not available, using API fallback: {e}")
+    logger.warning(f"JejuRealtimeCrawler not available: {e}")
+
+try:
+    from src.smp.crawlers.smp_crawler import SMPCrawler
+    logger.info("SMPCrawler loaded successfully")
+except ImportError as e:
+    logger.warning(f"SMPCrawler not available: {e}")
+
+try:
+    from tools.crawlers.kma_weather_crawler import KMAWeatherCrawler
+    WEATHER_CRAWLER_AVAILABLE = True
+    logger.info("KMAWeatherCrawler loaded successfully")
+except ImportError as e:
+    logger.warning(f"KMAWeatherCrawler not available: {e}")
 
 # API Configuration
 DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY", "")
@@ -53,6 +67,8 @@ DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY", "")
 KPX_SMP_API = "https://openapi.kpx.or.kr/openapi/smp1hToday/getSmp1hToday"
 KPX_POWER_SUPPLY_API = "https://openapi.kpx.or.kr/openapi/sukub5mMaxDatetime/getSukub5mMaxDatetime"
 KMA_WEATHER_API = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
+# 제주시범사업 SMP API (실시간 제주 SMP + 수요예측)
+JEJU_SMP_API = "https://apis.data.go.kr/B552115/JejuSmpLfd2/getJejuSmpLfd2"
 
 # Jeju Grid Coordinates for KMA API (제주시 기준)
 JEJU_NX = 52
@@ -162,7 +178,7 @@ class RealtimeAPIClient:
 
     def _get_smp_via_crawler(self) -> Optional[SMPData]:
         """Get SMP data using web crawler (synchronous)"""
-        if not self.use_crawlers:
+        if not self.use_crawlers or SMPCrawler is None:
             return None
 
         try:
@@ -185,7 +201,7 @@ class RealtimeAPIClient:
 
     def _get_jeju_power_via_crawler(self) -> Optional[PowerSupplyData]:
         """Get Jeju power supply data using web crawler (synchronous)"""
-        if not self.use_crawlers:
+        if not self.use_crawlers or JejuRealtimeCrawler is None:
             return None
 
         # Check cache
@@ -227,7 +243,7 @@ class RealtimeAPIClient:
 
     def _get_weather_via_crawler(self) -> Optional[WeatherData]:
         """Get weather data using KMA web crawler (synchronous)"""
-        if not WEATHER_CRAWLER_AVAILABLE:
+        if not WEATHER_CRAWLER_AVAILABLE or KMAWeatherCrawler is None:
             return None
 
         # Check cache
@@ -270,6 +286,79 @@ class RealtimeAPIClient:
             logger.warning(f"Weather crawler failed: {e}")
         return None
 
+    async def _get_jeju_smp_via_api(self) -> Optional[SMPData]:
+        """Get Jeju SMP data from 제주시범사업 API (primary API source)"""
+        if not self.api_key:
+            logger.warning("No API key for Jeju SMP API")
+            return None
+
+        try:
+            params = {
+                "serviceKey": self.api_key,
+                "pageNo": 1,
+                "numOfRows": 100,  # Get latest data
+                "dataType": "JSON",
+            }
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(JEJU_SMP_API, params=params)
+                response.raise_for_status()
+
+            data = response.json()
+
+            # Check result code
+            result_code = data.get("response", {}).get("header", {}).get("resultCode")
+            if result_code != "00":
+                result_msg = data.get("response", {}).get("header", {}).get("resultMsg", "Unknown error")
+                logger.error(f"Jeju SMP API error: {result_code} - {result_msg}")
+                return None
+
+            # Get items
+            items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if not items:
+                logger.warning("No Jeju SMP data items found")
+                return None
+
+            # Get latest item (first item is usually most recent)
+            # Items are sorted by date/hour/gugan
+            latest = items[0]
+
+            # Find the latest hour's average SMP (average across 4 gugan)
+            trade_date = latest.get("date", "")
+            trade_hour = latest.get("hour", 0)
+
+            # Calculate average SMP for the hour (across all gugan)
+            hour_items = [item for item in items if item.get("date") == trade_date and item.get("hour") == trade_hour]
+            if hour_items:
+                avg_jsmp = sum(item.get("jsmp", 0) for item in hour_items) / len(hour_items)
+                avg_jsmp_rt = sum(item.get("jsmpRt", 0) for item in hour_items) / len(hour_items)
+                avg_demand = sum(item.get("jlfd", 0) for item in hour_items) / len(hour_items)
+                avg_demand_rt = sum(item.get("jlfdRt", 0) for item in hour_items) / len(hour_items)
+            else:
+                avg_jsmp = latest.get("jsmp", 0)
+                avg_jsmp_rt = latest.get("jsmpRt", 0)
+                avg_demand = latest.get("jlfd", 0)
+                avg_demand_rt = latest.get("jlfdRt", 0)
+
+            smp_data = SMPData(
+                trade_day=trade_date,
+                trade_hour=trade_hour,
+                smp_land=avg_jsmp,  # 하루전 SMP (육지와 동일하게 저장)
+                smp_jeju=avg_jsmp_rt if avg_jsmp_rt > 0 else avg_jsmp,  # 실시간 SMP 우선
+                timestamp=datetime.now(),
+                data_source=f"KPX 제주시범사업 API (수요: {avg_demand_rt:.0f}MW)",
+            )
+
+            logger.info(f"Jeju SMP via API: {smp_data.smp_jeju:.2f}원/kWh (Hour {trade_hour}), Demand: {avg_demand_rt:.0f}MW")
+            return smp_data
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error fetching Jeju SMP: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching Jeju SMP: {e}")
+            return None
+
     def _convert_wind_direction(self, direction: Optional[str]) -> float:
         """Convert Korean wind direction to degrees"""
         if not direction:
@@ -299,8 +388,10 @@ class RealtimeAPIClient:
         """
         Get real-time SMP data
 
-        Primary: Web crawler (no API key required)
-        Fallback: KPX API (requires approval)
+        Priority order:
+        1. 제주시범사업 API (Jeju SMP + demand forecast)
+        2. Web crawler (no API key required)
+        3. KPX API (requires approval)
 
         Args:
             area_code: "1" for 육지(mainland), "9" for 제주(Jeju)
@@ -317,14 +408,21 @@ class RealtimeAPIClient:
                 logger.debug(f"Using cached SMP data for area {area_code}")
                 return data
 
-        # Try crawler first (primary source)
+        # Try 제주시범사업 API first (primary source for Jeju)
+        if area_code == "9" and self.api_key:
+            smp_data = await self._get_jeju_smp_via_api()
+            if smp_data:
+                self._smp_cache[cache_key] = (smp_data, datetime.now())
+                return smp_data
+
+        # Try crawler second
         if self.use_crawlers:
             smp_data = self._get_smp_via_crawler()
             if smp_data:
                 self._smp_cache[cache_key] = (smp_data, datetime.now())
                 return smp_data
 
-        # Fallback to API
+        # Fallback to old KPX API
         try:
             params = {
                 "ServiceKey": self.api_key,
@@ -471,8 +569,9 @@ class RealtimeAPIClient:
         """
         Get real-time weather data
 
-        Primary: KMA Weather Crawler (no API key required)
-        Fallback: KMA API (requires approval)
+        Priority order:
+        1. KMA API (official, stable)
+        2. Web crawler (backup)
 
         Args:
             nx: Grid X coordinate (default: Jeju)
@@ -488,14 +587,26 @@ class RealtimeAPIClient:
                 logger.debug("Using cached weather data")
                 return data
 
-        # Try crawler first (primary source - no API key needed)
-        if WEATHER_CRAWLER_AVAILABLE:
+        # Try API first (primary source - official and stable)
+        api_result = await self._get_weather_via_api(nx, ny)
+        if api_result:
+            return api_result
+
+        # Fallback to crawler
+        if WEATHER_CRAWLER_AVAILABLE or KMAWeatherCrawler is not None:
+            logger.debug("Weather API failed, trying crawler fallback")
             weather_data = self._get_weather_via_crawler()
             if weather_data:
                 return weather_data
-            logger.debug("Weather crawler failed, trying API fallback")
 
-        # Fallback to API
+        return None
+
+    async def _get_weather_via_api(self, nx: int = JEJU_NX, ny: int = JEJU_NY) -> Optional[WeatherData]:
+        """Get weather data from KMA API (primary source)"""
+        if not self.api_key:
+            logger.warning("No API key for KMA Weather API")
+            return None
+
         try:
             # 초단기실황 API requires base_time to be the most recent hour
             now = datetime.now()
@@ -576,11 +687,12 @@ class RealtimeAPIClient:
                 precipitation=precipitation,
                 precipitation_type=precipitation_type,
                 base_datetime=base_time,
+                data_source="KMA Real-time API (기상청 단기예보)",
             )
 
             # Update cache
             self._weather_cache = (weather_data, datetime.now())
-            logger.info(f"Fetched real-time weather: {temperature}°C, {humidity}% humidity")
+            logger.info(f"Weather via API: {temperature}°C, {humidity}% humidity, {weather_data.condition}")
 
             return weather_data
 
