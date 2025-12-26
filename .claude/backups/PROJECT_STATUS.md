@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2025-12-26 07:25 (Current Session - v3.5/v3.6 Generation Data Experiments)
+> Last Updated: 2025-12-26 16:30 (v3.14-v3.20 External Data Experiments Complete)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -12,141 +12,106 @@
 
 ## Current Session (2025-12-26)
 
-### Task: SMP Model R² 0.9+ Improvement with Generation Data
+### Task: SMP Model Performance Improvement - External Data Experiments
 
-#### Request
-- Use crawlers to search and download generation data from 공공데이터포털
-- Improve R² beyond 0.760 (v3.2 baseline)
-- Incorporate power generation data to improve SMP prediction
+#### Goal: Reach R² 0.9+ (Current best: v3.12 CatBoost CV R² 0.834)
 
-#### Progress
-| Task | Status |
-|------|--------|
-| Check existing crawler code | ✅ Complete |
-| Search public data portal | ✅ Complete |
-| Identify available datasets | ✅ Complete |
-| Train v3.3 (Jeju LNG/Oil generation) | ✅ Complete (R² 0.158) - FAILED |
-| Train v3.4 (KPX nationwide generation) | ✅ Complete (R² -0.105) - FAILED |
-| Train v3.5 (Jeju power trading/demand) | ✅ Complete (R² 0.506) - UNDERPERFORMED |
-| Train v3.6 (Solar generation) | ✅ Complete (R² 0.250) - FAILED |
+#### Experiments Completed
 
-#### Model Comparison
-
-| Model | MAPE | R² | Features | Data Period | Notes |
-|-------|------|-----|----------|-------------|-------|
-| v3.2 (Optuna) | 7.42% | **0.760** | 22 | 5 years SMP only | **BASELINE** |
-| v3.3 (LNG/Oil) | 17.34% | 0.158 | 37 | ~11 months overlap | Data period too short |
-| v3.4 (KPX gen) | 17.58% | -0.105 | 53 | ~1 year overlap | Data period too short |
-| v3.5 (Power demand) | 11.09% | 0.506 | 60 | ~4 years overlap | Demand ≠ Generation |
-| v3.6 (Solar gen) | 23.82% | 0.250 | 73 | ~3.5 years overlap | Solar-SMP corr=-0.106 |
+| Model | Strategy | Test R² | Test MAPE | Result |
+|-------|----------|---------|-----------|--------|
+| v3.12 CatBoost CV | 5-fold CV baseline | 0.834 | 5.25% | **BEST** ✅ |
+| v3.14 +Fuel | Fuel price features | 0.534 | 12.56% | ❌ FAILED |
+| v3.15 +Supply | Supply margin features | 0.107 | 12.09% | ❌ FAILED |
+| v3.16 +Weather | Weather features | 0.788 | 5.73% | ❌ FAILED |
+| v3.18 Transform | Box-Cox target transform | 0.793 | 5.69% | ❌ FAILED |
+| v3.19 +EMA | EMA + recent data | 0.827 | 5.28% | ❌ FAILED |
+| v3.20 Recent | 2022+ data only | 0.779 | 7.75% | ❌ FAILED |
 
 #### Key Findings
 
-1. **Data Period Matters**: Models with short overlap periods (v3.3, v3.4) performed poorly
-2. **Demand ≠ Generation**: Power trading volume (수요) is NOT the same as generation (발전량)
-   - SMP is determined by marginal generator costs, not directly by demand
-3. **Zero SMP Problem**: 141 records have smp_jeju = 0 (during high solar generation)
-   - Fixed MAPE calculation to exclude SMP < 10 won/kWh
-4. **Solar Generation is Key**: High solar → Low SMP (can be 0)
-   - v3.6 uses solar generation data which should be more relevant
+1. **External data doesn't help**:
+   - Fuel prices: 0% feature importance, data mismatch (2022+ only)
+   - Weather: <0.5% importance for all weather features
+   - Supply margin: Not in top 20 features, only 33% data overlap
 
-#### Available Data Files in data/raw/
+2. **smp_lag1 dominates everything**:
+   - 40-80% feature importance in ALL models
+   - Recent SMP history is the only reliable predictor
 
-```
-# Power Demand (NOT generation)
-jeju_hourly_power_2013_2024.csv        - 전력거래량 (2013-2024, 105K records)
+3. **Concept drift is severe**:
+   - Fold 1 (2020-2021 COVID era) consistently has R² ~ -2.5
+   - This drags down CV performance to ~0.1 for most models
+   - v3.12's R² 0.834 benefits from Folds 3-5 having similar train/test periods
 
-# Generation Data
-제주 시간대별 발전량(LNG)_240331.csv    - LNG generation (2023.05-2024.03)
-제주 시간대별 발전량(유류)_240331.csv   - Oil generation (2023.05-2024.03)
-한국전력거래소_시간별 발전량_20211231.csv - Nationwide hourly (2017-2021)
+4. **Target transformation doesn't help**:
+   - Box-Cox, log, sqrt all tested - none improved performance
+   - The distribution is not the issue
 
-# Solar Generation + Weather (RECOMMENDED for v3.6)
-한국동서발전_제주_기상관측_태양광발전.csv - Solar gen with weather (2018-2024, 56K records)
-  - Columns: 일시, 기온, 습도, 일사량, 태양광 발전량(MWh) 등
-  - Overlap with SMP: ~3.5 years (2020-12 ~ 2024-05)
-```
+5. **More recent data = worse performance**:
+   - Using only 2022+ data: R² 0.779
+   - Using only 2023+ data: R² 0.760
+   - Less training data hurts more than concept drift
+
+6. **The R² 0.9+ goal may be unreachable**:
+   - SMP is inherently noisy and unpredictable
+   - External factors not captured in available data
+   - v3.12's 0.834 is likely near the ceiling for this feature set
 
 #### Files Created This Session
 
 ```
-src/crawlers/public_data_crawler.py    - Search data.go.kr
-src/crawlers/download_public_data.py   - Download from data.go.kr
-src/smp/models/train_smp_v3_3_generation.py  - LNG/Oil generation model
-src/smp/models/train_smp_v3_4_kpx_generation.py - KPX nationwide model
-src/smp/models/train_smp_v3_5_jeju_power.py  - Power demand model
-src/smp/models/train_smp_v3_6_solar.py       - Solar generation model (READY)
-models/smp_v3_5_jeju_power/metrics.json      - v3.5 results
+src/smp/models/train_smp_v3_14_fuel.py       - Fuel price features (FAILED)
+src/smp/models/train_smp_v3_15_supply.py     - Supply margin features (FAILED)
+src/smp/models/train_smp_v3_16_weather.py    - Weather features (FAILED)
+src/smp/models/train_smp_v3_18_transform.py  - Target transformation (FAILED)
+src/smp/models/train_smp_v3_19_recent.py     - EMA + recent data (FAILED)
+src/smp/models/train_smp_v3_20_recent_only.py - Recent data only (FAILED)
+
+models/smp_v3_14_fuel/
+models/smp_v3_15_supply/
+models/smp_v3_16_weather/
+models/smp_v3_18_transform/
+models/smp_v3_19_recent/
+models/smp_v3_20_recent/
 ```
 
-#### Code Fixes Applied
+#### Recommendations for Future Work
 
-1. **MAPE Zero Division Fix** (in v3.5, v3.6):
-```python
-# Filter out near-zero actuals for MAPE
-mask = actuals > 10  # Only consider SMP > 10 won/kWh for MAPE
-mape = mean_absolute_percentage_error(actuals[mask], preds[mask]) * 100
-```
+1. **Accept v3.12 as production model**:
+   - R² 0.834, MAPE 5.25% is a solid result
+   - Significant external data doesn't improve it
 
-2. **SMP 24:00 Timestamp Fix**:
-```python
-df['timestamp'] = df['timestamp'].str.replace(' 24:00', ' 00:00')
-mask = df['hour'] == 24
-df.loc[mask, 'datetime'] = df.loc[mask, 'datetime'] + pd.Timedelta(days=1)
-```
+2. **Focus on other improvements**:
+   - Confidence intervals / uncertainty quantification
+   - Hourly prediction for different time horizons
+   - Model monitoring and drift detection
 
-#### Next Steps (Pending)
-
-1. **Run v3.6** (Solar generation model):
-```bash
-source .venv/bin/activate && python src/smp/models/train_smp_v3_6_solar.py
-```
-
-2. **If v3.6 still underperforms**:
-   - Try combining solar + power demand features
-   - Use Optuna tuning on v3.6 model
-   - Download additional generation data from 공공데이터포털
-
-3. **For R² 0.9+**:
-   - Need actual Jeju generation data (not just demand)
-   - Consider real-time fuel prices (LNG, oil)
-   - Apply for data.go.kr API subscription
+3. **Alternative approaches (if R² 0.9+ still needed)**:
+   - Real-time market data (if available)
+   - Transmission constraints and grid topology
+   - Bidding behavior patterns from market participants
 
 ---
 
-## Previous Session (2025-12-26 06:00)
+## Model Comparison (Full History)
 
-### Task: SMP Model v3.2 Optuna Tuning ✅ Complete
-
-#### v3.2 Optuna Results (CURRENT BEST)
-| Metric | v3.1 Baseline | v3.2 Optuna | Improvement |
-|--------|---------------|-------------|-------------|
-| MAPE | 7.83% | **7.42%** | -0.41%p |
-| R² | 0.736 | **0.760** | +0.024 |
-
-**Best Hyperparameters:**
-```json
-{
-  "input_hours": 96,
-  "hidden_size": 64,
-  "num_layers": 1,
-  "dropout": 0.198,
-  "n_heads": 4,
-  "learning_rate": 0.000165,
-  "batch_size": 32,
-  "noise_std": 0.0099
-}
-```
-
-**Model saved at:** `models/smp_v3_optuna/`
-
----
-
-## Previous Sessions
-
-### 2025-12-23: Create web-v8 Dashboard ✅ Complete
-### 2025-12-22: System Architecture Documentation ✅ Complete
-### 2025-12-20: RE-BMS v6.0.0 Release ✅ Complete
+| Model | MAPE | R² | Features | Strategy |
+|-------|------|-----|----------|----------|
+| v3.2 (Optuna) | 7.42% | 0.760 | 22 | BiLSTM+Attention |
+| v3.3-v3.6 | - | < 0.6 | - | Generation data (failed) |
+| v3.7 | 9.21% | 0.402 | 26 | Long-term MA (failed) |
+| v3.8 LightGBM | 5.46% | 0.815 | 36 | LightGBM default |
+| v3.9 Optuna LGB | 5.49% | 0.821 | 60 | Optuna-tuned LightGBM |
+| v3.10 CatBoost | 5.38% | 0.826 | 60 | Optuna-tuned CatBoost |
+| v3.11 XGBoost | 5.39% | 0.822 | 60 | Optuna-tuned XGBoost |
+| **v3.12 CatBoost CV** | **5.25%** | **0.834** | 60 | **5-fold CV best** ✅ |
+| v3.14 +Fuel | 12.56% | 0.534 | 70 | Fuel prices (FAILED) |
+| v3.15 +Supply | 12.09% | 0.107 | 77 | Supply margin (FAILED) |
+| v3.16 +Weather | 5.73% | 0.788 | 75 | Weather (FAILED) |
+| v3.18 Transform | 5.69% | 0.793 | 60 | Box-Cox (FAILED) |
+| v3.19 +EMA | 5.28% | 0.827 | 67 | EMA features (FAILED) |
+| v3.20 Recent | 7.75% | 0.779 | 60 | 2022+ data (FAILED) |
 
 ---
 
@@ -154,9 +119,11 @@ source .venv/bin/activate && python src/smp/models/train_smp_v3_6_solar.py
 
 ### SMP Models
 ```
-models/smp_v3_optuna/           - v3.2 Optuna (BEST: R² 0.760)
-models/smp_v3_5_jeju_power/     - v3.5 Power demand (R² 0.506)
-src/smp/models/train_smp_v3_6_solar.py  - v3.6 Solar (READY)
+models/smp_v3_12_stacking/      - v3.12 CatBoost CV (BEST: R² 0.834, MAPE 5.25%)
+models/smp_v3_10_catboost/      - v3.10 CatBoost (R² 0.826, MAPE 5.38%)
+models/smp_v3_9_optuna_lgb/     - v3.9 Optuna LGB (R² 0.821)
+models/smp_v3_8_ensemble/       - v3.8 LightGBM (R² 0.815)
+src/smp/models/train_smp_v3_12_stacking.py  - v3.12 source code
 ```
 
 ### Crawlers
@@ -187,8 +154,7 @@ web-v7/src/hooks/useApi.ts          - API hooks
 For next session:
 1. Read `.claude/backups/PROJECT_STATUS.md`
 2. Run `git log --oneline -10`
-3. To continue v3.6 solar model:
-```bash
-source .venv/bin/activate && python src/smp/models/train_smp_v3_6_solar.py
-```
-4. v3.2 Optuna (R² 0.760) remains the best model until v3.6 is tested
+3. **CURRENT BEST**: v3.12 CatBoost CV (R² 0.834, MAPE 5.25%)
+4. **CONCLUSION**: External data (fuel, weather, supply) doesn't improve SMP prediction
+5. Key insight: smp_lag1 has 40-80% feature importance; external data is noise
+6. R² 0.9+ is likely unreachable with available data
