@@ -226,3 +226,91 @@ class ErrorResponse(BaseModel):
                 "detail": "최소 168개의 데이터 포인트가 필요합니다"
             }
         }
+
+
+# ============================================================
+# Daily Prediction Schemas (BiLSTM v18)
+# ============================================================
+
+class DailyTimeSeriesData(BaseModel):
+    """일간 시계열 데이터 포인트"""
+    date: datetime = Field(..., description="날짜")
+    power_mwh: float = Field(..., description="일간 전력 수요 (MWh)")
+    avg_temp: Optional[float] = Field(None, description="평균 기온 (°C)")
+    min_temp: Optional[float] = Field(None, description="최저 기온 (°C)")
+    max_temp: Optional[float] = Field(None, description="최고 기온 (°C)")
+    humidity: Optional[float] = Field(None, description="습도 (%)")
+    sunlight: Optional[float] = Field(None, description="일조량 (h)")
+    dew_point: Optional[float] = Field(None, description="이슬점 (°C)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2024-01-15",
+                "power_mwh": 20500.5,
+                "avg_temp": 5.2,
+                "min_temp": -1.0,
+                "max_temp": 10.5,
+                "humidity": 65.0,
+                "sunlight": 6.5
+            }
+        }
+
+
+class DailyPredictionRequest(BaseModel):
+    """일간 예측 요청"""
+    data: List[DailyTimeSeriesData] = Field(
+        ...,
+        min_length=7,
+        description="일간 시계열 데이터 (최소 7일)"
+    )
+
+    @field_validator('data')
+    @classmethod
+    def validate_data_length(cls, v):
+        if len(v) < 7:
+            raise ValueError(f"최소 7일의 데이터가 필요합니다. (현재: {len(v)}일)")
+        return v
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "data": [
+                    {"date": "2024-01-08", "power_mwh": 19800.0, "avg_temp": 3.5},
+                    {"date": "2024-01-09", "power_mwh": 20100.0, "avg_temp": 4.2},
+                    {"date": "2024-01-10", "power_mwh": 20300.0, "avg_temp": 5.0},
+                    {"date": "2024-01-11", "power_mwh": 19500.0, "avg_temp": 2.8},
+                    {"date": "2024-01-12", "power_mwh": 18200.0, "avg_temp": 1.5},
+                    {"date": "2024-01-13", "power_mwh": 17800.0, "avg_temp": 0.8},
+                    {"date": "2024-01-14", "power_mwh": 20200.0, "avg_temp": 3.2}
+                ]
+            }
+        }
+
+
+class DailyPredictionResponse(BaseModel):
+    """일간 예측 응답"""
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "prediction": 20850.5,
+                "prediction_date": "2024-01-15",
+                "model_used": "BiLSTM (v18)",
+                "model_info": {
+                    "input_days": 7,
+                    "features_used": 31,
+                    "device": "mps"
+                },
+                "processing_time_ms": 15.32
+            }
+        }
+    )
+
+    success: bool = Field(..., description="요청 성공 여부")
+    prediction: float = Field(..., description="예측 일간 전력 수요 (MWh)")
+    prediction_date: datetime = Field(..., description="예측 대상 날짜")
+    model_used: str = Field(..., description="사용된 모델")
+    model_info: Dict = Field(..., description="모델 메타데이터")
+    processing_time_ms: float = Field(..., description="처리 시간 (밀리초)")

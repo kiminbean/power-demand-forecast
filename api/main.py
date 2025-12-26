@@ -38,8 +38,11 @@ from .schemas import (
     ModelInfoResponse,
     ErrorResponse,
     ModelType,
+    DailyPredictionRequest,
+    DailyPredictionResponse,
 )
 from .service import get_prediction_service, initialize_service, PredictionService
+from .daily_predictor import get_daily_predictor, initialize_daily_predictor, DailyPredictor
 
 # SMP/Bidding 라우터 (v2.0)
 try:
@@ -81,11 +84,21 @@ async def lifespan(app: FastAPI):
 
     try:
         service = initialize_service()
-        logger.info(f"Models loaded successfully")
+        logger.info(f"Hourly models loaded successfully")
         logger.info(f"Device: {service.get_device()}")
     except Exception as e:
-        logger.error(f"Failed to initialize service: {e}")
+        logger.error(f"Failed to initialize hourly service: {e}")
         # 서비스 초기화 실패해도 앱은 시작 (healthcheck에서 상태 확인 가능)
+
+    # Daily BiLSTM model initialization
+    try:
+        daily_predictor = initialize_daily_predictor()
+        if daily_predictor.is_ready():
+            logger.info(f"Daily BiLSTM model loaded successfully")
+        else:
+            logger.warning("Daily BiLSTM model not available")
+    except Exception as e:
+        logger.error(f"Failed to initialize daily predictor: {e}")
 
     logger.info(f"API server ready at http://{settings.HOST}:{settings.PORT}")
     logger.info("=" * 60)
@@ -207,7 +220,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 # ============================================================
 
 def get_service() -> PredictionService:
-    """예측 서비스 의존성"""
+    """예측 서비스 의존성 (시간별)"""
     service = get_prediction_service()
     if not service.is_ready():
         raise HTTPException(
@@ -215,6 +228,17 @@ def get_service() -> PredictionService:
             detail="Service not initialized. Please try again later."
         )
     return service
+
+
+def get_daily_service() -> DailyPredictor:
+    """일간 예측 서비스 의존성"""
+    predictor = get_daily_predictor()
+    if not predictor.is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Daily prediction model not available. Please check model file."
+        )
+    return predictor
 
 
 # ============================================================
@@ -377,6 +401,90 @@ async def predict_batch(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Batch prediction error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Routes - Daily Prediction (BiLSTM v18)
+# ============================================================
+
+@app.post(
+    "/predict/daily",
+    response_model=DailyPredictionResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "잘못된 요청"},
+        503: {"model": ErrorResponse, "description": "서비스 불가"}
+    },
+    summary="일간 예측",
+    description="BiLSTM 모델을 사용한 일간 전력 수요 예측 (7일 시퀀스 기반)"
+)
+async def predict_daily(
+    request: DailyPredictionRequest,
+    predictor: DailyPredictor = Depends(get_daily_service)
+):
+    """
+    일간 전력 수요 예측 엔드포인트
+
+    BiLSTM v18 모델을 사용하여 다음 날의 전력 수요를 예측합니다.
+    - MAPE: 6.17%
+    - R²: 0.726
+
+    - **data**: 일간 시계열 데이터 (최소 7일)
+    """
+    import time
+    import pandas as pd
+    from datetime import timedelta
+
+    start_time = time.perf_counter()
+
+    try:
+        # Convert request data to DataFrame
+        records = []
+        for item in request.data:
+            record = {
+                'power_mwh': item.power_mwh,
+            }
+            if item.avg_temp is not None:
+                record['avg_temp'] = item.avg_temp
+            if item.min_temp is not None:
+                record['min_temp'] = item.min_temp
+            if item.max_temp is not None:
+                record['max_temp'] = item.max_temp
+            if item.humidity is not None:
+                record['humidity'] = item.humidity
+            if item.sunlight is not None:
+                record['sunlight'] = item.sunlight
+            if item.dew_point is not None:
+                record['dew_point'] = item.dew_point
+            records.append(record)
+
+        # Create DataFrame with date index
+        dates = [item.date for item in request.data]
+        df = pd.DataFrame(records, index=pd.DatetimeIndex(dates))
+        df.sort_index(inplace=True)
+
+        # Run prediction
+        prediction, metadata = predictor.predict(df)
+
+        # Calculate prediction date (next day after last data point)
+        last_date = df.index[-1]
+        prediction_date = last_date + timedelta(days=1)
+
+        processing_time = (time.perf_counter() - start_time) * 1000
+
+        return DailyPredictionResponse(
+            success=True,
+            prediction=round(prediction, 2),
+            prediction_date=prediction_date,
+            model_used=metadata.get('model', 'BiLSTM (v18)'),
+            model_info=metadata,
+            processing_time_ms=round(processing_time, 2)
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Daily prediction error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
