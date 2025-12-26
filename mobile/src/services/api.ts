@@ -7,9 +7,10 @@
 import { Platform } from 'react-native';
 
 // API Base URL - different for web vs native
+// Uses FastAPI server on port 8000 with /api/v1 prefix
 const API_BASE_URL = Platform.OS === 'web'
-  ? 'http://localhost:8506'
-  : 'http://localhost:8506';  // Change to your server IP for device testing
+  ? 'http://localhost:8000'
+  : 'http://localhost:8000';  // Change to your server IP for device testing
 
 // Types
 export interface SMPForecast {
@@ -118,6 +119,53 @@ export interface ModelInfo {
   mape?: number | string;
   coverage?: number | string;
   message?: string;
+}
+
+// RTM (Real-Time Market) Prediction Types
+export interface RTMPrediction {
+  status: string;
+  prediction: {
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+  };
+  model: {
+    name: string;
+    mape: number;
+    r2: number;
+  };
+  data_source: string;
+}
+
+export interface RTMMultiPrediction {
+  status: string;
+  predictions: Array<{
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+    is_recursive: boolean;
+  }>;
+  model: {
+    name: string;
+    mape: number;
+    note: string;
+  };
+  data_source: string;
+}
+
+export interface RTMModelInfo {
+  status: string;
+  model: {
+    name: string;
+    version: string;
+    type: string;
+    device: string;
+    mape: number;
+    r2: number;
+    prediction_type: string;
+  };
 }
 
 export interface CurrentSMP {
@@ -331,6 +379,21 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  }
+
+  // RTM Prediction - Single Hour (CatBoost v3.10)
+  async getRTMPrediction(): Promise<RTMPrediction> {
+    return this.fetch('/smp/rtm/predict');
+  }
+
+  // RTM Prediction - Multi Hour (CatBoost v3.10, recursive)
+  async getRTMMultiPrediction(hours: number = 6): Promise<RTMMultiPrediction> {
+    return this.fetch(`/smp/rtm/predict/${hours}`);
+  }
+
+  // RTM Model Info
+  async getRTMModelInfo(): Promise<RTMModelInfo> {
+    return this.fetch('/smp/rtm/model/info');
   }
 }
 

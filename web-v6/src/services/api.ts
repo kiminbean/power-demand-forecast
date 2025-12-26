@@ -12,6 +12,9 @@ import type {
   SettlementRecord,
   SettlementStats,
   ModelInfo,
+  RTMPrediction,
+  RTMMultiPrediction,
+  RTMModelInfo,
 } from '../types';
 
 const API_BASE_URL = '/api/v1';
@@ -87,6 +90,34 @@ class ApiService {
   async getModelInfo(): Promise<ModelInfo> {
     return this.fetch('/model/info');
   }
+
+  // RTM Prediction - Single Hour (CatBoost v3.10, MAPE 5.25%)
+  async getRTMPrediction(): Promise<RTMPrediction> {
+    // RTM uses direct /smp prefix, not /api/v1
+    const response = await fetch('/smp/rtm/predict', {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
+
+  // RTM Prediction - Multi Hour (CatBoost v3.10, recursive)
+  async getRTMMultiPrediction(hours: number = 6): Promise<RTMMultiPrediction> {
+    const response = await fetch(`/smp/rtm/predict/${hours}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
+
+  // RTM Model Info
+  async getRTMModelInfo(): Promise<RTMModelInfo> {
+    const response = await fetch('/smp/rtm/model/info', {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
 }
 
 // Singleton instance
@@ -118,7 +149,7 @@ export const mockData = {
       q10,
       q50,
       q90,
-      model_used: 'LSTM-Attention v3.1',
+      model_used: 'BiLSTM+Attention v3.2 Optuna',
       confidence: 0.87,
       created_at: new Date().toISOString(),
     };
@@ -168,11 +199,27 @@ export const mockData = {
   getModelInfo(): ModelInfo {
     return {
       status: 'active',
-      version: 'v3.1',
-      type: 'LSTM-Attention',
+      version: 'v3.2',
+      type: 'BiLSTM+Attention (Optuna)',
       device: 'MPS',
-      mape: 4.23,
+      mape: 7.17,
       coverage: 94.5,
+    };
+  },
+
+  // RTM Model Mock Data (CatBoost v3.10)
+  getRTMModelInfo(): RTMModelInfo {
+    return {
+      status: 'active',
+      model: {
+        name: 'CatBoost v3.10',
+        version: '3.10',
+        type: 'CatBoost Gradient Boosting',
+        device: 'CPU',
+        mape: 5.25,
+        r2: 0.8264,
+        prediction_type: 'single-step (RTM)',
+      },
     };
   },
 };

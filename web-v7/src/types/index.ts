@@ -101,26 +101,58 @@ export interface OptimizedBids {
   model_used: string;
 }
 
-// Settlement Record
+// Settlement Record (KPX Jeju Pilot - Gemini Verified)
 export interface SettlementRecord {
   date: string;
-  generation_mwh: number;
-  revenue_million: number;
-  imbalance_million: number;
-  net_revenue_million: number;
-  accuracy_pct: number;
+  cleared_mwh: number;           // DA market cleared amount
+  generation_mwh: number;        // Actual generation
+  imbalance_mwh: number;         // |cleared - actual|
+  revenue_million: number;       // DA market revenue
+  imbalance_million: number;     // Imbalance penalty
+  capacity_payment_million: number; // Capacity Payment (CP)
+  net_revenue_million: number;   // Total net revenue
+  accuracy_pct: number;          // Forecast accuracy
+  avg_da_smp: number;            // Average DA-SMP
+  avg_rt_smp: number;            // Average RT-SMP
+  avg_deviation: number;         // Average deviation %
+  // 3-tier penalty statistics
+  hours_tier1: number;           // ±8% - No penalty
+  hours_tier2: number;           // ±8~15% - Mild penalty
+  hours_tier3: number;           // >±15% - Severe penalty
+  hours_zero_risk: number;       // RT-SMP 0원 risk hours
+  // Legacy fields (for backward compatibility)
+  avg_smp?: number;
+  hours_no_penalty?: number;
+  hours_over_generation?: number;
+  hours_under_generation?: number;
 }
 
-// Settlement Stats
+// Settlement Stats (KPX Jeju Pilot - Gemini Verified)
 export interface SettlementStats {
   generation_revenue_million: number;
   generation_change_pct: number;
   imbalance_charges_million: number;
   imbalance_change_pct: number;
+  capacity_payment_million: number;  // Capacity Payment (CP)
   net_revenue_million: number;
   net_change_pct: number;
   forecast_accuracy_pct: number;
   accuracy_change_pct: number;
+  // DA/RT market info
+  total_cleared_mwh: number;
+  total_actual_mwh: number;
+  avg_da_smp: number;
+  avg_rt_smp: number;
+  avg_deviation_pct: number;
+  // 3-tier penalty statistics
+  total_hours_tier1: number;     // ±8% - No penalty
+  total_hours_tier2: number;     // ±8~15% - Mild penalty
+  total_hours_tier3: number;     // >±15% - Severe penalty
+  total_hours_zero_risk: number; // RT-SMP 0원 risk hours
+  // Legacy fields
+  total_hours_no_penalty?: number;
+  total_hours_over_gen?: number;
+  total_hours_under_gen?: number;
 }
 
 // Model Info
@@ -224,4 +256,66 @@ export interface KPXMatchingResult {
   ourAcceptedQuantity: number;
   ourRevenue: number;
   status: 'cleared' | 'partial' | 'rejected';
+}
+
+// API Connection Status (for each API endpoint)
+export interface APIConnectionStatus {
+  status: 'connected' | 'error' | 'unknown';
+  last_update: string | null;
+  error_message?: string;
+}
+
+// Realtime Status Response (from /api/v1/realtime-status)
+export interface RealtimeStatus {
+  smp_api: APIConnectionStatus;
+  power_supply_api: APIConnectionStatus;
+  weather_api: APIConnectionStatus;
+  overall_status: 'all_connected' | 'partial' | 'all_error';
+}
+
+// RTM (Real-Time Market) Prediction Types
+export interface RTMPrediction {
+  status: string;
+  prediction: {
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+  };
+  model: {
+    name: string;
+    mape: number;
+    r2: number;
+  };
+  data_source: string;
+}
+
+export interface RTMMultiPrediction {
+  status: string;
+  predictions: Array<{
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+    is_recursive: boolean;
+  }>;
+  model: {
+    name: string;
+    mape: number;
+    note: string;
+  };
+  data_source: string;
+}
+
+export interface RTMModelInfo {
+  status: string;
+  model: {
+    name: string;
+    version: string;
+    type: string;
+    device: string;
+    mape: number;
+    r2: number;
+    prediction_type: string;
+  };
 }

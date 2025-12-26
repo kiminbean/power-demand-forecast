@@ -1,0 +1,16 @@
+{
+  "best_mape": 7.104536016571104,
+  "best_params": {
+    "input_hours": 96,
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.19833711905140256,
+    "n_heads": 4,
+    "learning_rate": 0.00016538758106243796,
+    "weight_decay": 0.00047583910882228835,
+    "batch_size": 32,
+    "noise_std": 0.009853853487112232
+  },
+  "n_trials": 30,
+  "timestamp": "2025-12-26T05:46:50.154324"
+}

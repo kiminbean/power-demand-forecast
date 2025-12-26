@@ -62,6 +62,8 @@ export interface BidSegment {
   segment_id: number;
   quantity_mw: number;
   price_krw_mwh: number;
+  clearing_probability?: number;  // AI optimization result
+  expected_revenue?: number;      // AI optimization result
 }
 
 // Hourly Bid
@@ -85,6 +87,7 @@ export interface OptimizedBids {
   hourly_bids: HourlyBid[];
   total_daily_mwh: number;
   model_used: string;
+  optimization_method?: string;  // 'quantile-based', 'rule-based', etc.
 }
 
 // Settlement Record
@@ -193,4 +196,51 @@ export interface KPXMatchingResult {
   ourAcceptedQuantity: number;
   ourRevenue: number;
   status: 'cleared' | 'partial' | 'rejected';
+}
+
+// RTM (Real-Time Market) Prediction Types
+export interface RTMPrediction {
+  status: string;
+  prediction: {
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+  };
+  model: {
+    name: string;
+    mape: number;
+    r2: number;
+  };
+  data_source: string;
+}
+
+export interface RTMMultiPrediction {
+  status: string;
+  predictions: Array<{
+    time: string;
+    smp: number;
+    confidence_low: number;
+    confidence_high: number;
+    is_recursive: boolean;
+  }>;
+  model: {
+    name: string;
+    mape: number;
+    note: string;
+  };
+  data_source: string;
+}
+
+export interface RTMModelInfo {
+  status: string;
+  model: {
+    name: string;
+    version: string;
+    type: string;
+    device: string;
+    mape: number;
+    r2: number;
+    prediction_type: string;
+  };
 }
