@@ -4,7 +4,7 @@
  * With internal review workflow and KPX submission
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
@@ -13,6 +13,8 @@ import {
   FileCheck,
   Building2,
   Zap,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import BidReviewModal from '../components/Modals/BidReviewModal';
 import type { BidStatus } from '../types';
@@ -29,12 +31,15 @@ import {
 } from 'recharts';
 import { useSMPForecast, useMarketStatus } from '../hooks/useApi';
 import { useTheme } from '../contexts/ThemeContext';
+import { apiService } from '../services/api';
 import clsx from 'clsx';
 
 interface BidSegment {
   id: number;
   quantity: number;
   price: number;
+  clearingProbability?: number;  // AI optimization result
+  expectedRevenue?: number;      // AI optimization result
 }
 
 export default function Bidding() {
@@ -51,6 +56,15 @@ export default function Bidding() {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  // AI Optimization state
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [optimizationInfo, setOptimizationInfo] = useState<{
+    modelUsed: string;
+    method: string;
+    totalExpectedRevenue: number;
+  } | null>(null);
 
   // Theme-aware chart colors
   const chartColors = {
@@ -107,21 +121,67 @@ export default function Bidding() {
     });
   };
 
-  // AI optimization
-  const handleOptimize = () => {
-    // Apply optimization based on SMP forecast
-    const basePrice = smpForHour.q10 * 0.9;
-    const priceSpread = (smpForHour.q90 - smpForHour.q10) / 9;
+  // AI optimization using backend API (BiLSTM+Attention v3.1)
+  const handleOptimize = useCallback(async () => {
+    setIsOptimizing(true);
+    setOptimizationError(null);
+    setOptimizationInfo(null);
 
-    const newSegments = segments.map((seg, idx) => ({
-      ...seg,
-      price: Math.round(basePrice + idx * priceSpread),
-      quantity: capacity / 10,
-    }));
+    try {
+      // Call the real AI optimization API
+      const result = await apiService.getOptimizedSegments(capacity, riskLevel);
 
-    setSegments(newSegments);
-    setBidStatus('draft');
-  };
+      // Find the hourly bid for the selected hour
+      const hourlyBid = result.hourly_bids.find(bid => bid.hour === selectedHour);
+
+      if (hourlyBid && hourlyBid.segments) {
+        // Convert API response to local segment format
+        const newSegments: BidSegment[] = hourlyBid.segments.map((seg, idx) => ({
+          id: seg.segment_id || idx + 1,
+          quantity: seg.quantity_mw,
+          price: Math.round(seg.price_krw_mwh),
+          // Include AI optimization fields if available
+          clearingProbability: (seg as any).clearing_probability,
+          expectedRevenue: (seg as any).expected_revenue,
+        }));
+
+        setSegments(newSegments);
+
+        // Calculate total expected revenue for this hour
+        const totalExpectedRevenue = newSegments.reduce(
+          (sum, seg) => sum + (seg.expectedRevenue || 0),
+          0
+        );
+
+        setOptimizationInfo({
+          modelUsed: result.model_used || 'AI Optimizer',
+          method: (result as any).optimization_method || 'quantile-based',
+          totalExpectedRevenue,
+        });
+
+        setBidStatus('draft');
+      } else {
+        throw new Error(`No optimization data for hour ${selectedHour}`);
+      }
+    } catch (error) {
+      console.error('AI optimization failed:', error);
+      setOptimizationError(
+        error instanceof Error ? error.message : 'AI optimization failed'
+      );
+
+      // Fallback to simple client-side optimization
+      const basePrice = smpForHour.q10 * 0.9;
+      const priceSpread = (smpForHour.q90 - smpForHour.q10) / 9;
+      const newSegments = segments.map((seg, idx) => ({
+        ...seg,
+        price: Math.round(basePrice + idx * priceSpread),
+        quantity: capacity / 10,
+      }));
+      setSegments(newSegments);
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [capacity, riskLevel, selectedHour, smpForHour, segments]);
 
   // Save draft
   const handleSaveDraft = () => {
@@ -223,10 +283,21 @@ export default function Bidding() {
               </span>
             )}
           </div>
-          <button onClick={handleOptimize} className="btn-secondary flex items-center gap-2 whitespace-nowrap">
-            <Sparkles className="w-4 h-4" />
-            <span className="hidden sm:inline">AI 최적화</span>
-            <span className="sm:hidden">최적화</span>
+          <button
+            onClick={handleOptimize}
+            disabled={isOptimizing}
+            className={clsx(
+              'btn-secondary flex items-center gap-2 whitespace-nowrap',
+              isOptimizing && 'opacity-70 cursor-wait'
+            )}
+          >
+            {isOptimizing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{isOptimizing ? 'AI 분석 중...' : 'AI 최적화'}</span>
+            <span className="sm:hidden">{isOptimizing ? '...' : '최적화'}</span>
           </button>
           <button
             onClick={handleKPXSubmit}
@@ -266,6 +337,33 @@ export default function Bidding() {
           <div>
             <p className="text-sm font-medium text-success">입찰이 승인되었습니다</p>
             <p className="text-xs text-success/80 mt-0.5">'DAM 제출' 또는 'RTM 제출' 버튼을 클릭하여 시장 시뮬레이션을 실행하세요.</p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Optimization Info */}
+      {optimizationInfo && (
+        <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/30 rounded-lg">
+          <Sparkles className="w-5 h-5 text-primary flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-primary">AI 최적화 완료</p>
+            <p className="text-xs text-primary/80 mt-0.5">
+              모델: {optimizationInfo.modelUsed} | 방식: {optimizationInfo.method}
+              {optimizationInfo.totalExpectedRevenue > 0 && (
+                <> | 예상 수익: {(optimizationInfo.totalExpectedRevenue / 1000000).toFixed(2)}백만원</>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Optimization Error */}
+      {optimizationError && (
+        <div className="flex items-center gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-warning">AI 최적화 실패 (대체 알고리즘 사용)</p>
+            <p className="text-xs text-warning/80 mt-0.5">{optimizationError}</p>
           </div>
         </div>
       )}
@@ -350,17 +448,18 @@ export default function Bidding() {
         <div className="card">
           <h3 className="text-lg font-semibold text-text-primary mb-4">10-Segment 입찰 매트릭스</h3>
           <div className="space-y-2">
-            <div className="grid grid-cols-4 gap-2 text-xs text-text-muted font-medium px-2">
+            <div className="grid grid-cols-5 gap-2 text-xs text-text-muted font-medium px-2">
               <span>구간</span>
               <span className="text-right">물량 (MW)</span>
               <span className="text-right">가격 (원/kWh)</span>
+              <span className="text-right">낙찰확률</span>
               <span className="text-right">예상수익</span>
             </div>
             {segments.map((seg, idx) => (
               <div
                 key={seg.id}
                 className={clsx(
-                  'grid grid-cols-4 gap-2 items-center p-2 rounded-lg transition-colors',
+                  'grid grid-cols-5 gap-2 items-center p-2 rounded-lg transition-colors',
                   seg.price <= smpForHour.q50 ? 'bg-success/10 border border-success/20' : 'bg-background'
                 )}
               >
@@ -384,8 +483,20 @@ export default function Bidding() {
                   onChange={(e) => updateSegmentPrice(seg.id, Number(e.target.value))}
                   className="w-full bg-card border border-border rounded px-2 py-1 text-text-primary text-right text-sm"
                 />
+                <span className={clsx(
+                  'text-right text-sm font-mono',
+                  seg.clearingProbability !== undefined
+                    ? seg.clearingProbability >= 0.7 ? 'text-success' : seg.clearingProbability >= 0.4 ? 'text-warning' : 'text-danger'
+                    : 'text-text-muted'
+                )}>
+                  {seg.clearingProbability !== undefined
+                    ? `${(seg.clearingProbability * 100).toFixed(0)}%`
+                    : '-'}
+                </span>
                 <span className="text-right text-sm text-text-muted font-mono">
-                  {((seg.quantity * seg.price) / 1000).toFixed(1)}K
+                  {seg.expectedRevenue !== undefined
+                    ? `${(seg.expectedRevenue / 1000).toFixed(0)}K`
+                    : `${((seg.quantity * seg.price) / 1000).toFixed(1)}K`}
                 </span>
               </div>
             ))}

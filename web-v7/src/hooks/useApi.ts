@@ -14,6 +14,7 @@ import type {
   SettlementStats,
   OptimizedBids,
   PowerSupplyResponse,
+  RealtimeStatus,
 } from '../types';
 
 interface UseApiState<T> {
@@ -172,4 +173,41 @@ export function useAutoRefresh(callback: () => void, intervalMs: number = 60000)
     const interval = setInterval(callback, intervalMs);
     return () => clearInterval(interval);
   }, [callback, intervalMs]);
+}
+
+// Realtime Status Hook (API connection status)
+export function useRealtimeStatus(): UseApiState<RealtimeStatus> {
+  const [data, setData] = useState<RealtimeStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiService.getRealtimeStatus();
+      setData(result);
+    } catch (err) {
+      console.error('Realtime status fetch failed:', err);
+      setError('Unable to fetch API status');
+      // Fallback mock status
+      setData({
+        smp_api: { status: 'unknown', last_update: null },
+        power_supply_api: { status: 'unknown', last_update: null },
+        weather_api: { status: 'unknown', last_update: null },
+        overall_status: 'all_error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch();
+    // Check status every 30 seconds
+    const interval = setInterval(fetch, 30000);
+    return () => clearInterval(interval);
+  }, [fetch]);
+
+  return { data, loading, error, refetch: fetch };
 }

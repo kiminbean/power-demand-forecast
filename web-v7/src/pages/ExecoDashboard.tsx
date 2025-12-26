@@ -17,8 +17,8 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts';
-import { useDashboardKPIs, useSMPForecast, useResources, usePowerSupply, useAutoRefresh } from '../hooks/useApi';
-import type { Resource, PowerSupplyHourlyData } from '../types';
+import { useDashboardKPIs, useSMPForecast, useResources, usePowerSupply, useAutoRefresh, useRealtimeStatus } from '../hooks/useApi';
+import type { Resource, PowerSupplyHourlyData, RealtimeStatus } from '../types';
 
 // Local assets
 const JEJU_MAP = '/jeju-map.png';
@@ -192,6 +192,7 @@ export default function ExecoDashboard() {
   const { data: smpForecast, refetch: refetchSMP } = useSMPForecast();
   const { data: resources, refetch: refetchResources } = useResources();
   const { data: powerSupply, refetch: refetchPowerSupply } = usePowerSupply();
+  const { data: realtimeStatus } = useRealtimeStatus();
 
   // 60초마다 자동 새로고침
   useAutoRefresh(() => {
@@ -270,6 +271,25 @@ export default function ExecoDashboard() {
   // 데이터 소스 표시 (API 연결 상태)
   const dataSource = kpisError ? '데모 데이터' : 'EPSIS 실시간';
 
+  // API 연결 상태 아이콘 색상
+  const getStatusColor = (status: string | undefined) => {
+    switch (status) {
+      case 'connected': return '#00c515';  // 녹색
+      case 'error': return '#ff1d1d';       // 빨간색
+      default: return '#fbbf24';            // 노란색 (unknown)
+    }
+  };
+
+  // 전체 API 상태 라벨
+  const getOverallStatusLabel = (status: string | undefined) => {
+    switch (status) {
+      case 'all_connected': return '전체 연결';
+      case 'partial': return '일부 연결';
+      case 'all_error': return '연결 오류';
+      default: return '확인 중';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header - #04265e */}
@@ -280,7 +300,41 @@ export default function ExecoDashboard() {
         <div className="h-[40px]">
           <img src={LOGO} alt="RE-BMS" className="h-full object-contain" />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {/* API 연결 상태 표시 */}
+          <div className="flex items-center gap-3 bg-white/10 rounded-lg px-3 py-1.5">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: getStatusColor(realtimeStatus?.smp_api?.status) }}
+                title={`SMP API: ${realtimeStatus?.smp_api?.status || 'unknown'}`}
+              />
+              <span className="text-xs text-white/80">SMP</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: getStatusColor(realtimeStatus?.power_supply_api?.status) }}
+                title={`전력수급 API: ${realtimeStatus?.power_supply_api?.status || 'unknown'}`}
+              />
+              <span className="text-xs text-white/80">전력</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: getStatusColor(realtimeStatus?.weather_api?.status) }}
+                title={`기상청 API: ${realtimeStatus?.weather_api?.status || 'unknown'}`}
+              />
+              <span className="text-xs text-white/80">기상</span>
+            </div>
+            <div className="h-4 w-px bg-white/30" />
+            <span
+              className="text-xs font-medium"
+              style={{ color: getStatusColor(realtimeStatus?.overall_status === 'all_connected' ? 'connected' : realtimeStatus?.overall_status === 'partial' ? 'unknown' : 'error') }}
+            >
+              {getOverallStatusLabel(realtimeStatus?.overall_status)}
+            </span>
+          </div>
           <span className="text-xs text-white/70">{dataSource}</span>
           <button className="w-6 h-6">
             <img src={MENU_ICON} alt="Menu" className="w-full h-full" />
