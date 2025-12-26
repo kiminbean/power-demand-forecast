@@ -1,0 +1,103 @@
+# RE-BMS v7.0 Docker Compose
+# Full stack deployment with API + Web Dashboard + Mobile
+#
+# Usage:
+#   1. Create .env file with credentials (optional)
+#   2. docker-compose -f docker/docker-compose.v7.yml up -d --build
+#   3. API: http://localhost:8506
+#   4. Web Dashboard: http://localhost:8700 (ExecO KPI Dashboard)
+#   5. Web v6: http://localhost:8600 (Bidding UI)
+#   6. Mobile: http://localhost:8601
+
+services:
+  # FastAPI Backend (SMP Prediction + RTM + DAM APIs)
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: rebms-api
+    restart: unless-stopped
+    ports:
+      - "8506:8506"
+    volumes:
+      - ../data/smp:/app/data/smp:ro
+      - ../models/smp:/app/models/smp:ro
+      - ../models/smp_v3_optuna:/app/models/smp_v3_optuna:ro
+      - ../models/smp_v3_10_catboost:/app/models/smp_v3_10_catboost:ro
+    env_file:
+      - ../.env
+    environment:
+      - PYTHONPATH=/app
+      - ENV=production
+      - TZ=Asia/Seoul
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8506/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - rebms-network
+
+  # React Web Dashboard v7 - ExecO KPI Dashboard
+  web-v7:
+    build:
+      context: ../web-v7
+      dockerfile: Dockerfile
+    container_name: rebms-web-v7
+    restart: unless-stopped
+    ports:
+      - "${WEB_V7_PORT:-8700}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rebms-network
+
+  # React Web v6 - Bidding UI
+  web-v6:
+    build:
+      context: ../web-v6
+      dockerfile: Dockerfile
+    container_name: rebms-web-v6
+    restart: unless-stopped
+    ports:
+      - "${WEB_V6_PORT:-8600}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rebms-network
+
+  # React Native Web Mobile
+  mobile:
+    build:
+      context: ../mobile
+      dockerfile: Dockerfile
+    container_name: rebms-mobile
+    restart: unless-stopped
+    ports:
+      - "${MOBILE_PORT:-8601}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rebms-network
+
+networks:
+  rebms-network:
+    driver: bridge
