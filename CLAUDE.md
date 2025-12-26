@@ -45,9 +45,9 @@
 /.claude/       - Claude backups
 ```
 
-**Model Performance**:
-- MAPE: 6.32%
-- R²: 0.852
+**Model Performance (v3.2 Optuna - Best SMP Model)**:
+- MAPE: 7.42%
+- R²: 0.760
 
 ---
 
@@ -166,3 +166,297 @@ find ~/.claude -name "*.json" -exec grep -l '[가-힣]' {} \; 2>/dev/null
    - `chore`: Maintenance tasks
 
 4. **Do NOT auto-push**: Only commit locally, let user decide when to push
+
+---
+
+## SMP Model Improvement Roadmap (R² 0.9+ Target)
+
+**Last Updated**: 2025-12-26 (v3.2 Optuna completed)
+
+### Current Status
+
+| Model Version | MAPE | R² | Status |
+|---------------|------|-----|--------|
+| v3.1 (baseline) | 7.83% | 0.736 | Baseline |
+| **v3.2 (Optuna)** | **7.42%** | **0.760** | ✅ **Best (Current)** |
+| v5.0 (Transformer) | 8.25% | 0.537 | Rejected (unsuitable for data size) |
+| v6.0 (BiLSTM+Weather) | 7.83% | 0.707 | Comparable |
+| v7.0 (BiLSTM+Full) | 9.62% | 0.57 | Unstable (synthetic data issue) |
+| **Target** | <5% | **0.9+** | Requires power generation data |
+
+### API Keys Status
+
+| API Source | Key Status | Usage |
+|------------|------------|-------|
+| data.go.kr | ✅ Available | Jeju SMP, Weather |
+| 제주시범사업 API | ✅ Connected | Real-time Jeju SMP + 수요예측 |
+| KMA (기상청) | ✅ Connected | 단기예보 API |
+| EIA | ❌ Not set | US energy prices |
+| KRX | ❌ Not set | K-ETS carbon prices |
+
+### R² 0.9+ Roadmap
+
+#### Phase 1: Real Data Acquisition ⏳
+1. **Power Generation Data** (data.go.kr API)
+   - 한국전력거래소_제주 시간별 전력 수급 현황
+   - 신재생에너지 발전량 (태양광, 풍력)
+   - HVDC 송전량 (제주-육지 연결)
+
+2. **Fuel Price Data** (Yahoo Finance)
+   - ✅ WTI, Brent crude oil
+   - ✅ Natural gas futures
+   - ✅ Heating oil
+
+3. **Carbon Price Data**
+   - K-ETS (한국탄소배출권거래소)
+   - EU-ETS (참조용)
+
+#### Phase 2: Data Preprocessing ⏳
+- Remove synthetic/sample data
+- Proper time alignment (hourly)
+- Handle missing values with domain knowledge
+- Validate data quality (no constant features)
+
+#### Phase 3: Feature Engineering ⏳
+- Net Load calculation (demand - renewable generation)
+- Fuel price time-lag effects (7-day, 30-day MA)
+- HVDC transmission patterns
+- Marginal unit identification signals
+
+#### Phase 4: Model Architecture ⏳
+- BiLSTM + Multi-Head Attention (proven best)
+- Quantile regression for uncertainty
+- Walk-forward validation (5 splits)
+
+#### Phase 5: Hyperparameter Tuning ⏳
+- Optuna-based optimization
+- Learning rate, hidden size, attention heads
+- Dropout and regularization
+
+### Data Sources
+
+```
+data/
+├── smp/                    # SMP historical data
+│   └── smp_5years_epsis.csv
+├── processed/              # Preprocessed datasets
+│   ├── jeju_weather_hourly_merged.csv
+│   └── smp_enhanced_dataset.csv
+└── external/               # Crawler outputs
+    ├── epsis/              # Power generation
+    ├── fuel/               # Fuel prices
+    └── carbon/             # Carbon prices
+```
+
+### Crawlers
+
+```
+src/crawlers/
+├── __init__.py
+├── epsis_crawler.py        # EPSIS power generation
+├── fuel_crawler.py         # Yahoo Finance fuel prices
+├── carbon_crawler.py       # K-ETS carbon prices
+└── data_collector.py       # Master orchestrator
+```
+
+### Key Insights from Gemini Discussion
+
+1. **Net Load (순부하)** is critical for Jeju SMP prediction
+   - Net Load = Demand - Renewable Generation
+   - High renewable penetration causes SMP volatility
+
+2. **HVDC Interconnection** affects Jeju SMP
+   - Jeju connected to mainland via HVDC
+   - Import/export dynamics impact local prices
+
+3. **Fuel Price Time Lag**
+   - LNG contracts have 3-6 month lag
+   - Moving averages capture delayed effect
+
+4. **Marginal Unit Identification**
+   - SMP set by highest-cost generator in operation
+   - Usually LNG or oil-fired plants during peak
+
+---
+
+## Model Training Results (2025-12-26)
+
+### Latest Experiments
+
+| Model | Features | MAPE | R² | Notes |
+|-------|----------|------|-----|-------|
+| v3.1 (baseline) | 21 | 7.83% | 0.736 | Simple BiLSTM+Attention |
+| **v3.2 (Optuna)** | 22 | **7.42%** | **0.760** | **Optuna-optimized (best)** |
+| v5.0 (Transformer) | 21 | 8.25% | 0.537 | Rejected (unsuitable) |
+| v6.0 (BiLSTM+Weather) | 45 | 7.83% | 0.707 | Added weather features |
+| v7.0 (Enhanced) | 45 | 9.62% | 0.57 | Added fuel prices (synthetic data issue) |
+| v8.0 (Full Feature) | 109 | 11.84% | -1.48 | Too many features, overfitting |
+| v8.1 (SMP+Weather) | 64 | 14.31% | -0.11 | Data loss from feature engineering |
+
+### v3.2 Optuna Hyperparameters (Best Configuration)
+
+```json
+{
+  "input_hours": 96,
+  "hidden_size": 64,
+  "num_layers": 1,
+  "dropout": 0.198,
+  "n_heads": 4,
+  "learning_rate": 0.000165,
+  "weight_decay": 0.000476,
+  "batch_size": 32,
+  "noise_std": 0.0099
+}
+```
+
+**Optuna Tuning Results:**
+- 30 trials completed (3h 38m)
+- Best trial MAPE: 7.10% (validation)
+- Full training MAPE: 7.42%, R²: 0.760
+- Improvement: 0.41%p MAPE reduction from v3.1
+
+### Key Findings
+
+1. **Simpler is Better**: v3.1/v3.2 with ~22 features outperforms complex models
+2. **Optimal Sequence Length**: 96 hours (4 days) lookback found by Optuna
+3. **Model Size**: Hidden size 64 with 1 layer is optimal (not 2)
+4. **Noise Injection**: Small noise (0.01) helps regularization
+5. **Critical Missing Data**: Power generation data (unavailable via API) is essential
+
+### Bottleneck Analysis
+
+**Why R² 0.9+ is Difficult:**
+1. SMP is determined by marginal generator (requires generation data)
+2. Renewable output (solar, wind) causes SMP volatility
+3. HVDC interconnection affects Jeju-mainland price spread
+4. data.go.kr API requires specific subscription for power data
+
+**Best Achievable with Current Data:**
+- R² ~0.76 achieved with v3.2 Optuna-optimized model
+- MAPE ~7.4% is the current best (validated)
+- Further improvement requires power generation data
+
+### Recommended Next Steps
+
+1. **Acquire Power Generation Data** (for R² 0.9+)
+   - Apply for data.go.kr API subscription
+   - Download from EPSIS manually if needed
+   - Focus on: Solar, Wind, Thermal generation
+
+2. **Deploy v3.2 Model** ✅
+   - Model saved at `models/smp_v3_optuna/`
+   - Hyperparameters documented above
+   - Ready for production use
+
+3. **Future Improvements**
+   - Ensemble with different architectures
+   - Add seasonal/holiday features
+   - Real-time adaptation
+
+---
+
+## Docker Deployment (2025-12-26)
+
+### Container Architecture
+
+```
+docker-compose.v7.yml
+├── api (FastAPI)          → Port 8000
+├── web-v6 (Bidding)       → Port 8600
+├── web-v7 (ExecO)         → Port 8700
+└── mobile (React Native)  → Port 3001
+```
+
+### Quick Start
+
+```bash
+# Start all services
+docker compose -f docker/docker-compose.v7.yml up -d --build
+
+# Check status
+docker compose -f docker/docker-compose.v7.yml ps
+
+# View logs
+docker compose -f docker/docker-compose.v7.yml logs -f api
+
+# Stop services
+docker compose -f docker/docker-compose.v7.yml down
+```
+
+### Important Docker Notes
+
+1. **tools directory**: Must be included in build context
+   - `.dockerignore` only excludes `tools/deprecated/` and `tools/__pycache__/`
+   - `Dockerfile.api` includes `COPY tools/ ./tools/`
+
+2. **Rebuild with no-cache** if crawlers fail:
+   ```bash
+   docker compose -f docker/docker-compose.v7.yml build --no-cache api
+   ```
+
+---
+
+## Real-time API Integration (2025-12-26)
+
+### Data Source Priorities
+
+| Data Type | Priority 1 (Primary) | Priority 2 (Backup) |
+|-----------|---------------------|---------------------|
+| **SMP** | 제주시범사업 API | Web Crawler |
+| **Power Supply** | Web Crawler | - |
+| **Weather** | KMA API (기상청) | Web Crawler |
+
+### API Endpoints
+
+#### 1. 제주시범사업 SMP API
+```
+URL: https://apis.data.go.kr/B552115/JejuSmpLfd2/getJejuSmpLfd2
+Method: GET
+Parameters:
+  - serviceKey: API key (required)
+  - pageNo: 1
+  - numOfRows: 100
+  - dataType: JSON
+Response: Real-time Jeju SMP (원/kWh) + 수요예측량 (MW)
+```
+
+#### 2. KMA Weather API (기상청 단기예보)
+```
+URL: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst
+Method: GET
+Parameters:
+  - serviceKey: API key (required)
+  - base_date: YYYYMMDD
+  - base_time: HHMM
+  - nx: 52 (Jeju)
+  - ny: 38 (Jeju)
+Response: Temperature, Humidity, Wind Speed, etc.
+```
+
+### Crawler Fallbacks
+
+| Crawler | Location | Purpose |
+|---------|----------|---------|
+| JejuRealtimeCrawler | tools/jeju_realtime_crawler.py | Power supply data |
+| KMAWeatherCrawler | tools/kma_weather_crawler.py | Weather backup |
+
+### Current Status (All Connected)
+
+```
+✅ SMP: 84.3원/kWh (제주시범사업 API)
+✅ Power Supply: 865MW, 73.4% reserve (Crawler)
+✅ Weather: 2°C (KMA API)
+```
+
+### API Key Configuration
+
+Set in environment or `.env` file:
+```bash
+DATA_GO_KR_API_KEY=7d42f7c08ba4abd4354d07567d3f6cb0d7478d66cb861e890e6c77a0e3c4d362
+```
+
+### Troubleshooting
+
+1. **SMP API Error 830 (KOSPO)**: KOSPO portal discontinued, use 제주시범사업 API instead
+2. **Crawler import error**: Rebuild Docker with `--no-cache`
+3. **Weather API timeout**: Fallback to crawler automatically

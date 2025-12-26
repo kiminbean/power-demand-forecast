@@ -1,10 +1,10 @@
 # Project Status Backup
-> Last Updated: 2025-12-26 16:30 (v3.14-v3.20 External Data Experiments Complete)
+> Last Updated: 2025-12-26 23:00 (Real-time API Integration Complete)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
 - **Repository**: https://github.com/kiminbean/power-demand-forecast (PRIVATE)
-- **Current Version**: v8.0.0 (Weather Map Edition) ✅ Complete
+- **Current Version**: v8.0.0 (Real-time API Edition) ✅ Complete
 - **Previous Version**: v7.0.0 (React Desktop Web Application)
 - **License**: Proprietary (All Rights Reserved)
 
@@ -12,9 +12,50 @@
 
 ## Current Session (2025-12-26)
 
-### Task: SMP Model Performance Improvement - External Data Experiments
+### Task: Real-time API Integration ✅ COMPLETE
 
-#### Goal: Reach R² 0.9+ (Current best: v3.12 CatBoost CV R² 0.834)
+#### Completed Work
+
+1. **제주시범사업 SMP API Integration**
+   - Endpoint: `https://apis.data.go.kr/B552115/JejuSmpLfd2/getJejuSmpLfd2`
+   - Returns: Real-time Jeju SMP (원/kWh) + 수요예측량 (MW)
+   - Status: ✅ Connected (84.3원/kWh working)
+
+2. **KMA Weather API Integration**
+   - Endpoint: `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst`
+   - Returns: Temperature, Humidity, Wind Speed
+   - Status: ✅ Connected (2°C working)
+
+3. **Docker Deployment Fixed**
+   - Fixed `.dockerignore` (tools directory now included)
+   - Fixed `Dockerfile.api` (added `COPY tools/ ./tools/`)
+   - Fixed crawler imports (individual try/except)
+   - Status: ✅ All containers running
+
+4. **Data Source Priority Configuration**
+   | Data Type | Priority 1 | Priority 2 |
+   |-----------|------------|------------|
+   | SMP | 제주시범사업 API | Crawler |
+   | Power Supply | Crawler | - |
+   | Weather | KMA API | Crawler |
+
+5. **Git Commit & Push**
+   - Commit: "feat: Add Jeju SMP API and improve data source priorities"
+   - Status: ✅ Pushed to GitHub
+
+#### Current Dashboard Status
+```
+✅ SMP: 84.3원/kWh (제주시범사업 API)
+✅ Power Supply: 865MW, 73.4% reserve (Crawler)
+✅ Weather: 2°C (KMA API)
+✅ Frequency: 59.99Hz (Simulated)
+```
+
+---
+
+## Previous Session: SMP Model Experiments
+
+### Goal: Reach R² 0.9+ (Best achieved: v3.12 CatBoost CV R² 0.834)
 
 #### Experiments Completed
 
@@ -154,7 +195,11 @@ web-v7/src/hooks/useApi.ts          - API hooks
 For next session:
 1. Read `.claude/backups/PROJECT_STATUS.md`
 2. Run `git log --oneline -10`
-3. **CURRENT BEST**: v3.12 CatBoost CV (R² 0.834, MAPE 5.25%)
-4. **CONCLUSION**: External data (fuel, weather, supply) doesn't improve SMP prediction
-5. Key insight: smp_lag1 has 40-80% feature importance; external data is noise
-6. R² 0.9+ is likely unreachable with available data
+3. **DOCKER**: `docker compose -f docker/docker-compose.v7.yml up -d --build`
+4. **DASHBOARDS**:
+   - ExecO Dashboard: http://localhost:8700
+   - Bidding Dashboard: http://localhost:8600
+   - Mobile App: http://localhost:3001
+5. **API KEY**: `DATA_GO_KR_API_KEY=7d42f7c08...` (set in .env or Docker environment)
+6. **BEST MODEL**: v3.12 CatBoost CV (R² 0.834, MAPE 5.25%)
+7. **ALL APIS CONNECTED**: SMP (제주시범사업), Weather (KMA), Power (Crawler)
