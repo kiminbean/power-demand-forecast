@@ -15,19 +15,8 @@ import {
   Platform,
 } from 'react-native';
 
-let useNavigation: any = null;
-let useRoute: any = null;
-let Ionicons: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    useNavigation = require('@react-navigation/native').useNavigation;
-    useRoute = require('@react-navigation/native').useRoute;
-    Ionicons = require('@expo/vector-icons').Ionicons;
-  } catch (e) {
-    console.log('Native navigation/icons not available');
-  }
-}
+// Navigation and icons are handled by parent component
+// Using emoji icons for cross-platform compatibility
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 
@@ -109,11 +98,8 @@ const phaseLabels: Record<SimulationState['phase'], string> = {
   complete: '매칭 완료',
 };
 
-// Icon component
+// Icon component - using emoji for cross-platform compatibility
 function Icon({ name, size, color }: { name: string; size: number; color: string }) {
-  if (Ionicons) {
-    return <Ionicons name={name as any} size={size} color={color} />;
-  }
   const iconMap: { [key: string]: string } = {
     'arrow-back': '←',
     'play': '▶',
@@ -198,20 +184,15 @@ function updateBidStatuses(
   });
 }
 
-export default function KPXSimulationScreen() {
-  const navigation = useNavigation ? useNavigation() : null;
-  const route = useRoute ? useRoute() : null;
+interface KPXSimulationScreenProps {
+  onBack?: () => void;
+}
 
-  // Get params from navigation
-  const params = route?.params as {
-    segments?: { id: number; quantity: number; price: number }[];
-    selectedHour?: number;
-    smpForecast?: { q10: number; q50: number; q90: number };
-  } | undefined;
-
-  const selectedHour = params?.selectedHour ?? 12;
-  const smpForecast = params?.smpForecast ?? { q10: 54, q50: 77, q90: 126 };
-  const ourSegments = params?.segments ?? [
+export default function KPXSimulationScreen({ onBack }: KPXSimulationScreenProps = {}) {
+  // Using default values - navigation params are passed via App.tsx
+  const selectedHour = 12;
+  const smpForecast = { q10: 54, q50: 77, q90: 126 };
+  const ourSegments = [
     { id: 1, quantity: 5, price: 80 },
     { id: 2, quantity: 5, price: 85 },
     { id: 3, quantity: 5, price: 90 },
@@ -401,7 +382,7 @@ export default function KPXSimulationScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation?.goBack()}
+          onPress={() => onBack?.()}
         >
           <Icon name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>

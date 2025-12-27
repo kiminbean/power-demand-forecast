@@ -1,0 +1,77 @@
+{
+  "best_start_date": "2022-01-01",
+  "test_r2": 0.778837890880058,
+  "test_mape": 7.75272889681446,
+  "test_mae": 7.342073104466609,
+  "val_r2": 0.8044244904393125,
+  "val_mape": 4.4584256027023415,
+  "n_train": 27572,
+  "n_test": 3447,
+  "n_features": 60,
+  "best_params": {
+    "depth": 10,
+    "learning_rate": 0.027453592417620964,
+    "l2_leaf_reg": 2.1610936178744493e-07,
+    "bagging_temperature": 0.8270107996967769,
+    "random_strength": 0.21497234887421635,
+    "border_count": 220,
+    "min_data_in_leaf": 65
+  },
+  "all_results": {
+    "2022-01-01": {
+      "n_train": 27572,
+      "n_test": 3447,
+      "val_r2": 0.8044244904393125,
+      "val_mape": 4.4584256027023415,
+      "test_r2": 0.778837890880058,
+      "test_mape": 7.75272889681446,
+      "test_mae": 7.342073104466609,
+      "best_params": {
+        "depth": 10,
+        "learning_rate": 0.027453592417620964,
+        "l2_leaf_reg": 2.1610936178744493e-07,
+        "bagging_temperature": 0.8270107996967769,
+        "random_strength": 0.21497234887421635,
+        "border_count": 220,
+        "min_data_in_leaf": 65
+      }
+    },
+    "2022-06-01": {
+      "n_train": 24672,
+      "n_test": 3085,
+      "val_r2": 0.8038843866152492,
+      "val_mape": 4.354387740346705,
+      "test_r2": 0.7736092110015391,
+      "test_mape": 7.976237444894396,
+      "test_mae": 7.513853488148506,
+      "best_params": {
+        "depth": 9,
+        "learning_rate": 0.027561816907723392,
+        "l2_leaf_reg": 0.00020975918501052527,
+        "bagging_temperature": 0.4346085201498035,
+        "random_strength": 0.3373429585239194,
+        "border_count": 171,
+        "min_data_in_leaf": 92
+      }
+    },
+    "2023-01-01": {
+      "n_train": 20564,
+      "n_test": 2571,
+      "val_r2": 0.7832049352371097,
+      "val_mape": 4.543471394550198,
+      "test_r2": 0.7603584890005055,
+      "test_mape": 8.23745207931065,
+      "test_mae": 7.689800677499157,
+      "best_params": {
+        "depth": 8,
+        "learning_rate": 0.017472079297306507,
+        "l2_leaf_reg": 2.123270026276208e-08,
+        "bagging_temperature": 0.5433588526628397,
+        "random_strength": 0.6256994476462744,
+        "border_count": 207,
+        "min_data_in_leaf": 70
+      }
+    }
+  },
+  "timestamp": "2025-12-26T16:28:17.524427"
+}

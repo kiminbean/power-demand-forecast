@@ -17,18 +17,35 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-// Conditionally import Ionicons and charts for native only
-let Ionicons: any = null;
+// Conditionally import charts for native only
 let LineChart: any = null;
-
 if (Platform.OS !== 'web') {
   try {
-    Ionicons = require('@expo/vector-icons').Ionicons;
     LineChart = require('react-native-chart-kit').LineChart;
   } catch (e) {
-    console.log('Native components not available');
+    console.log('LineChart not available');
   }
 }
+
+// Icon map for cross-platform compatibility
+const iconMap: { [key: string]: string } = {
+  'flash': '⚡',
+  'trending-up': '📈',
+  'leaf': '🌿',
+  'pulse': '📊',
+  'thermometer': '🌡️',
+  'cloud': '☁️',
+  'sunny': '☀️',
+  'rainy': '🌧️',
+  'analytics': '📊',
+  'document-text': '📄',
+  'settings': '⚙️',
+  'notifications': '🔔',
+  'calendar': '📅',
+  'bar-chart': '📊',
+  'pie-chart': '🥧',
+  'cash': '💵',
+};
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { apiService, SMPForecast, DashboardKPIs, MarketStatus, ModelInfo } from '../services/api';
@@ -72,11 +89,7 @@ function MetricCard({ title, value, unit, trend, trendValue, icon, color }: Metr
   return (
     <View style={styles.metricCard}>
       <View style={styles.metricHeader}>
-        {Ionicons ? (
-          <Ionicons name={icon as any} size={20} color={color} />
-        ) : (
-          <View style={[styles.iconPlaceholder, { backgroundColor: color }]} />
-        )}
+        <Text style={{ fontSize: 18 }}>{iconMap[icon] || '•'}</Text>
         <Text style={styles.metricTitle}>{title}</Text>
       </View>
       <View style={styles.metricBody}>
@@ -408,13 +421,7 @@ function QuickActionButton({ icon, label, color }: QuickActionButtonProps) {
   return (
     <View style={styles.actionButton}>
       <View style={[styles.actionIconContainer, { backgroundColor: `${color}20` }]}>
-        {Ionicons ? (
-          <Ionicons name={icon as any} size={24} color={color} />
-        ) : (
-          <Text style={{ color, fontSize: 18, fontWeight: 'bold' }}>
-            {label.charAt(0)}
-          </Text>
-        )}
+        <Text style={{ fontSize: 20 }}>{iconMap[icon] || '•'}</Text>
       </View>
       <Text style={styles.actionLabel}>{label}</Text>
     </View>

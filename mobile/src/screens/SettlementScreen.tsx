@@ -95,10 +95,14 @@ function RevenueChart({ data }: { data: DailyRevenue[] }) {
   );
 }
 
+// Period type
+type Period = 'week' | 'month' | 'quarter';
+
 export default function SettlementScreen() {
   const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [period, setPeriod] = useState<Period>('week');
 
   // API data states
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
@@ -187,12 +191,25 @@ export default function SettlementScreen() {
       <View style={styles.titleSection}>
         <View style={styles.titleRow}>
           <Text style={styles.pageTitle}>정산</Text>
-          <TouchableOpacity style={styles.periodBadge}>
-            <Text style={styles.periodIcon}>📅</Text>
-            <Text style={styles.periodText}>7일</Text>
-          </TouchableOpacity>
         </View>
-        <Text style={styles.subtitle}>최근 7일 정산 현황</Text>
+        <Text style={styles.subtitle}>KPX 제주 시범사업 이중 정산</Text>
+      </View>
+
+      {/* Period Selector */}
+      <View style={styles.periodSelector}>
+        {(['week', 'month', 'quarter'] as const).map((p) => (
+          <TouchableOpacity
+            key={p}
+            style={[styles.periodBtn, period === p && styles.periodBtnActive]}
+            onPress={() => setPeriod(p)}
+          >
+            <Text style={[styles.periodBtnText, period === p && styles.periodBtnTextActive]}>
+              {p === 'week' && '1주'}
+              {p === 'month' && '1개월'}
+              {p === 'quarter' && '분기'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Current SMP Card */}
@@ -226,9 +243,29 @@ export default function SettlementScreen() {
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>예측 정확도</Text>
           <View style={styles.statValueRow}>
-            <Text style={styles.statValue}>{avgAccuracy.toFixed(1)}%</Text>
+            <Text style={[styles.statValue, { color: avgAccuracy >= 95 ? colors.green : colors.orange }]}>
+              {avgAccuracy.toFixed(1)}%
+            </Text>
             <Text style={styles.statUnit}> 평균</Text>
           </View>
+        </View>
+      </View>
+
+      {/* DA/RT SMP Info */}
+      <View style={styles.smpInfoRow}>
+        <View style={styles.smpInfoCard}>
+          <Text style={styles.smpInfoLabel}>평균 DA-SMP</Text>
+          <Text style={[styles.smpInfoValue, { color: '#3b82f6' }]}>
+            {(summary as any)?.avg_da_smp?.toFixed(1) ?? '85.2'}
+            <Text style={styles.smpInfoUnit}> 원/kWh</Text>
+          </Text>
+        </View>
+        <View style={styles.smpInfoCard}>
+          <Text style={styles.smpInfoLabel}>평균 RT-SMP</Text>
+          <Text style={[styles.smpInfoValue, { color: '#8b5cf6' }]}>
+            {(summary as any)?.avg_rt_smp?.toFixed(1) ?? '82.5'}
+            <Text style={styles.smpInfoUnit}> 원/kWh</Text>
+          </Text>
         </View>
       </View>
 
@@ -345,6 +382,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  // Period Selector
+  periodSelector: {
+    flexDirection: 'row',
+    backgroundColor: colors.cardBg,
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+  },
+  periodBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  periodBtnActive: {
+    backgroundColor: colors.blue,
+  },
+  periodBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  periodBtnTextActive: {
+    color: '#ffffff',
+  },
+
   // SMP Card
   smpCard: {
     backgroundColor: colors.smpCardBg,
@@ -420,6 +483,33 @@ const styles = StyleSheet.create({
   statUnit: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+
+  // DA/RT SMP Info
+  smpInfoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  smpInfoCard: {
+    flex: 1,
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 14,
+  },
+  smpInfoLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  smpInfoValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  smpInfoUnit: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: 'normal',
   },
 
   // Chart Section

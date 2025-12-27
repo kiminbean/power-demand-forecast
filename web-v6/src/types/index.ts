@@ -244,3 +244,66 @@ export interface RTMModelInfo {
     prediction_type: string;
   };
 }
+
+// Power Plant Types (v6.2.0)
+export type PlantType = 'solar' | 'wind' | 'ess';
+export type ContractType = 'net_metering' | 'ppa';
+export type RoofDirection = 'south' | 'east' | 'west' | 'flat';
+export type PlantStatus = 'active' | 'maintenance' | 'paused';
+export type WeatherCondition = 'clear' | 'partly_cloudy' | 'cloudy' | 'rainy';
+
+export interface PowerPlantLocation {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface PowerPlant {
+  id: string;
+  name: string;
+  type: PlantType;
+  capacity: number;
+  installDate: string;
+  contractType: ContractType;
+  location: PowerPlantLocation;
+  roofDirection?: RoofDirection;
+  status?: PlantStatus;  // Operating status (default: active)
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PowerPlantCreate {
+  name: string;
+  type: PlantType;
+  capacity: number;
+  installDate: string;
+  contractType: ContractType;
+  location: PowerPlantLocation;
+  roofDirection?: RoofDirection;
+  status?: PlantStatus;  // Operating status (default: active)
+}
+
+// Power Plant UI Labels
+export const PLANT_TYPE_LABELS: Record<PlantType, { label: string; icon: string }> = {
+  solar: { label: '태양광', icon: '☀️' },
+  wind: { label: '풍력', icon: '💨' },
+  ess: { label: 'ESS', icon: '🔋' },
+};
+
+export const CONTRACT_TYPE_LABELS: Record<ContractType, { label: string; description: string }> = {
+  net_metering: { label: '상계거래', description: '전기요금 차감' },
+  ppa: { label: 'PPA', description: '현금 수익' },
+};
+
+export const ROOF_DIRECTION_LABELS: Record<RoofDirection, string> = {
+  south: '남향',
+  east: '동향',
+  west: '서향',
+  flat: '평지',
+};
+
+export const PLANT_STATUS_LABELS: Record<PlantStatus, { label: string; color: string; icon: string }> = {
+  active: { label: '운영중', color: 'green', icon: '✓' },
+  maintenance: { label: '점검중', color: 'yellow', icon: '🔧' },
+  paused: { label: '중지', color: 'gray', icon: '⏸' },
+};

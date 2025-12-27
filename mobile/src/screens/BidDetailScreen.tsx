@@ -14,15 +14,20 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { BiddingStackParamList } from '../navigation/AppNavigator';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-type BidDetailRouteProp = RouteProp<BiddingStackParamList, 'BidDetail'>;
+// Icon map for cross-platform compatibility
+const iconMap: { [key: string]: string } = {
+  'warning': '⚠️',
+  'sunny': '☀️',
+  'cloudy': '💨',
+  'information-circle': 'ℹ️',
+  'sparkles': '✨',
+  'send': '📤',
+};
 
 interface BidSegment {
   segmentId: number;
@@ -114,7 +119,7 @@ function SegmentEditor({
       </View>
 
       {hasMonotonicError && (
-        <Ionicons name="warning" size={16} color={colors.status.danger} />
+        <Text style={{ fontSize: 14 }}>{iconMap['warning']}</Text>
       )}
     </View>
   );
@@ -207,10 +212,12 @@ function StepChart({ segments }: { segments: BidSegment[] }) {
   );
 }
 
-export default function BidDetailScreen() {
-  const route = useRoute<BidDetailRouteProp>();
-  const navigation = useNavigation();
-  const { bidId } = route.params;
+interface BidDetailScreenProps {
+  bidId?: string;
+  onBack?: () => void;
+}
+
+export default function BidDetailScreen({ bidId = 'bid-001', onBack }: BidDetailScreenProps) {
 
   const [bid, setBid] = useState(mockBidDetail);
   const [selectedHour, setSelectedHour] = useState(1);
@@ -280,12 +287,12 @@ export default function BidDetailScreen() {
           style: 'destructive',
           onPress: () => {
             console.log('Submitting bid:', bidId);
-            navigation.goBack();
+            onBack?.();
           },
         },
       ]
     );
-  }, [bidId, navigation]);
+  }, [bidId, onBack]);
 
   const totalQuantity = segments.reduce((sum, s) => sum + s.quantityMw, 0);
   const avgPrice = segments.filter(s => s.quantityMw > 0).length > 0
@@ -299,11 +306,9 @@ export default function BidDetailScreen() {
         <View style={styles.headerCard}>
           <View style={styles.headerRow}>
             <View style={styles.resourceBadge}>
-              <Ionicons
-                name={bid.resourceType === 'solar' ? 'sunny' : 'cloudy'}
-                size={20}
-                color={bid.resourceType === 'solar' ? colors.chart.solar : colors.chart.wind}
-              />
+              <Text style={{ fontSize: 18 }}>
+                {iconMap[bid.resourceType === 'solar' ? 'sunny' : 'cloudy']}
+              </Text>
               <Text style={styles.resourceName}>{bid.resourceName}</Text>
             </View>
             <View style={styles.marketBadge}>
@@ -366,7 +371,7 @@ export default function BidDetailScreen() {
           ))}
 
           <View style={styles.monotonicNote}>
-            <Ionicons name="information-circle" size={14} color={colors.text.muted} />
+            <Text style={{ fontSize: 12 }}>{iconMap['information-circle']}</Text>
             <Text style={styles.monotonicNoteText}>
               Prices must be monotonically increasing (Seg 1 ≤ Seg 2 ≤ ... ≤ Seg 10)
             </Text>
@@ -378,11 +383,11 @@ export default function BidDetailScreen() {
       {bid.status === 'draft' && (
         <View style={styles.bottomActions}>
           <TouchableOpacity style={styles.optimizeBtn} onPress={handleOptimize}>
-            <Ionicons name="sparkles" size={20} color={colors.brand.accent} />
+            <Text style={{ fontSize: 18 }}>{iconMap['sparkles']}</Text>
             <Text style={styles.optimizeBtnText}>AI Optimize</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-            <Ionicons name="send" size={20} color={colors.text.primary} />
+            <Text style={{ fontSize: 18 }}>{iconMap['send']}</Text>
             <Text style={styles.submitBtnText}>Submit to KPX</Text>
           </TouchableOpacity>
         </View>

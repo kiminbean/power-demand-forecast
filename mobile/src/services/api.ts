@@ -128,6 +128,35 @@ export interface SettlementStats {
   accuracy_change_pct: number;
 }
 
+// Dual Settlement for DAM/RTM (Phase 7)
+export interface DualSettlement {
+  trading_date: string;
+  dam_cleared_mwh: number;
+  dam_smp: number;
+  dam_revenue: number;
+  actual_generation_mwh: number;
+  rtm_volume_mwh: number;  // actual - dam_cleared
+  rtm_price: number;
+  rtm_revenue: number;
+  total_revenue: number;
+  imbalance_type: 'surplus' | 'deficit' | 'balanced';
+}
+
+// RTM Bid Slot (Phase 6)
+export interface RTMBidSlot {
+  time: string;
+  adjustment_mw: number;
+  estimated_price: number;
+  status: 'pending' | 'submitted' | 'cleared' | 'rejected';
+}
+
+// RTM Bid Submission (Phase 6)
+export interface RTMBidSubmission {
+  slots: RTMBidSlot[];
+  total_adjustment_mw: number;
+  submitted_at: string;
+}
+
 export interface ModelInfo {
   status: string;
   version: string;
@@ -501,6 +530,28 @@ class ApiService {
       // Silently fail - plant deletion from local storage already succeeded
       return { success: true };
     }
+  }
+
+  // ============================================
+  // Dual Settlement (Phase 7 - DAM/RTM)
+  // ============================================
+
+  // Get dual settlement for a specific date
+  async getDualSettlement(date: string): Promise<DualSettlement> {
+    return this.fetch(`/api/v1/settlements/dual?date=${date}`);
+  }
+
+  // Submit RTM bids (15-minute slots)
+  async submitRTMBids(submission: RTMBidSubmission): Promise<{ success: boolean; message: string }> {
+    return this.fetch('/api/v1/bidding/rtm-submit', {
+      method: 'POST',
+      body: JSON.stringify(submission),
+    });
+  }
+
+  // Get RTM bid status for current slots
+  async getRTMBidStatus(): Promise<RTMBidSlot[]> {
+    return this.fetch('/api/v1/bidding/rtm-status');
   }
 }
 

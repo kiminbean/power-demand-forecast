@@ -1,0 +1,69 @@
+{
+  "best_approach": "All data",
+  "test_r2": 0.8270385354141507,
+  "test_mape": 5.27601404592515,
+  "test_mae": 5.741172984363699,
+  "val_r2": 0.8858013819889776,
+  "n_samples": 43536,
+  "best_params": {
+    "depth": 9,
+    "learning_rate": 0.04827406077059341,
+    "l2_leaf_reg": 3.3987544979174626,
+    "bagging_temperature": 0.5009946485839046,
+    "random_strength": 0.002758186083851875,
+    "border_count": 107,
+    "min_data_in_leaf": 41
+  },
+  "all_results": {
+    "All data": {
+      "test_r2": 0.8270385354141507,
+      "test_mape": 5.27601404592515,
+      "test_mae": 5.741172984363699,
+      "val_r2": 0.8858013819889776,
+      "n_samples": 43536,
+      "best_params": {
+        "depth": 9,
+        "learning_rate": 0.04827406077059341,
+        "l2_leaf_reg": 3.3987544979174626,
+        "bagging_temperature": 0.5009946485839046,
+        "random_strength": 0.002758186083851875,
+        "border_count": 107,
+        "min_data_in_leaf": 41
+      }
+    },
+    "From 2022-01-01": {
+      "test_r2": 0.7940548738431735,
+      "test_mape": 6.963259873803667,
+      "test_mae": 6.897872257002187,
+      "val_r2": 0.8544043983664031,
+      "n_samples": 34465,
+      "best_params": {
+        "depth": 10,
+        "learning_rate": 0.022042774390528288,
+        "l2_leaf_reg": 0.0022136130478306033,
+        "bagging_temperature": 0.963065245693747,
+        "random_strength": 7.486313760132436e-06,
+        "border_count": 244,
+        "min_data_in_leaf": 4
+      }
+    },
+    "From 2023-01-01": {
+      "test_r2": 0.7808089731320245,
+      "test_mape": 7.572140704894202,
+      "test_mae": 7.272205063321466,
+      "val_r2": 0.8223823940563634,
+      "n_samples": 25705,
+      "best_params": {
+        "depth": 7,
+        "learning_rate": 0.035944044478888215,
+        "l2_leaf_reg": 6.118097883883868,
+        "bagging_temperature": 0.12375658349232213,
+        "random_strength": 7.77670681164099e-06,
+        "border_count": 60,
+        "min_data_in_leaf": 36
+      }
+    }
+  },
+  "n_features": 68,
+  "timestamp": "2025-12-26T15:39:57.768261"
+}

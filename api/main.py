@@ -62,6 +62,14 @@ except ImportError as e:
     V6_ROUTES_AVAILABLE = False
     v6_router = None
 
+# Power Plant 라우터 (v6.2.0)
+try:
+    from .power_plant_routes import router as power_plant_router
+    POWER_PLANT_ROUTES_AVAILABLE = True
+except ImportError as e:
+    POWER_PLANT_ROUTES_AVAILABLE = False
+    power_plant_router = None
+
 # 로깅 설정
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),
@@ -141,6 +149,11 @@ if SMP_ROUTES_AVAILABLE:
 if V6_ROUTES_AVAILABLE:
     app.include_router(v6_router)
     logger.info("v6 Dashboard routes registered")
+
+# Power Plant 라우터 등록 (v6.2.0)
+if POWER_PLANT_ROUTES_AVAILABLE:
+    app.include_router(power_plant_router)
+    logger.info("Power Plant routes registered")
 
 
 # ============================================================

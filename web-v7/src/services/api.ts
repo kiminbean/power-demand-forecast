@@ -18,6 +18,8 @@ import type {
   RTMPrediction,
   RTMMultiPrediction,
   RTMModelInfo,
+  PowerPlant,
+  PowerPlantCreate,
 } from '../types';
 
 const API_BASE_URL = '/api/v1';
@@ -130,6 +132,43 @@ class ApiService {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     return response.json();
+  }
+
+  // ============================================
+  // Power Plant Management (v6.2.0)
+  // ============================================
+
+  // Get all power plants
+  async getPowerPlants(): Promise<PowerPlant[]> {
+    return this.fetch('/power-plants');
+  }
+
+  // Get a single power plant
+  async getPowerPlant(id: string): Promise<PowerPlant> {
+    return this.fetch(`/power-plants/${id}`);
+  }
+
+  // Create a new power plant
+  async createPowerPlant(plant: PowerPlantCreate): Promise<PowerPlant> {
+    return this.fetch('/power-plants', {
+      method: 'POST',
+      body: JSON.stringify(plant),
+    });
+  }
+
+  // Update an existing power plant
+  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate>): Promise<PowerPlant> {
+    return this.fetch(`/power-plants/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(plant),
+    });
+  }
+
+  // Delete a power plant
+  async deletePowerPlant(id: string): Promise<{ success: boolean }> {
+    return this.fetch(`/power-plants/${id}`, {
+      method: 'DELETE',
+    });
   }
 }
 

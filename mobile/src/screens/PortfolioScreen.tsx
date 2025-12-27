@@ -17,27 +17,21 @@ import {
   RefreshControl,
 } from 'react-native';
 
-// Conditional imports for native-only features
-let Ionicons: any = null;
+// PieChart conditional import
 let PieChart: any = null;
-
 if (Platform.OS !== 'web') {
   try {
-    Ionicons = require('@expo/vector-icons').Ionicons;
     PieChart = require('react-native-chart-kit').PieChart;
   } catch (e) {
-    console.log('Native components not available');
+    console.log('PieChart not available');
   }
 }
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import apiService, { Resource } from '../services/api';
 
-// Icon component with emoji fallback for web
+// Icon component using emoji for cross-platform compatibility
 function Icon({ name, size, color }: { name: string; size: number; color: string }) {
-  if (Ionicons) {
-    return <Ionicons name={name as any} size={size} color={color} />;
-  }
   const iconMap: { [key: string]: string } = {
     'sunny': '☀️',
     'cloudy': '💨',
@@ -49,7 +43,7 @@ function Icon({ name, size, color }: { name: string; size: number; color: string
     'wallet-outline': '💰',
   };
   return (
-    <Text style={{ fontSize: size * 0.8 }}>{iconMap[name] || '•'}</Text>
+    <Text style={{ fontSize: size * 0.8, color }}>{iconMap[name] || '•'}</Text>
   );
 }
 

@@ -1,7 +1,7 @@
 {
-  "name": "execo-mobile-alan",
-  "version": "5.1.0",
-  "description": "eXeco Mobile v5.1 - Alan AI Chatbot Edition for RE-BMS",
+  "name": "execo-mobile",
+  "version": "6.2.0",
+  "description": "eXeco Mobile v6.2.0 - Power Plant Registration Edition",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",

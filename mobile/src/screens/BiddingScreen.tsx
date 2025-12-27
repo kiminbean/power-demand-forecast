@@ -21,7 +21,7 @@ import {
   RefreshControl,
   Modal,
 } from 'react-native';
-import { apiService, SMPForecast, MarketStatus, OptimizedBids, PowerPlant } from '../services/api';
+import { apiService, SMPForecast, MarketStatus, OptimizedBids, PowerPlant, DualSettlement } from '../services/api';
 import PowerPlantRegistrationScreen from './PowerPlantRegistrationScreen';
 import {
   calculateEfficiency,
@@ -160,6 +160,17 @@ interface BiddingScreenProps {
 type BidStatus = 'draft' | 'validating' | 'submitted' | 'accepted' | 'closed' | 'cleared' | 'rejected';
 type RiskLevel = 'conservative' | 'moderate' | 'aggressive';
 
+// Market type for DAM/RTM tab selection (Phase 6)
+type MarketType = 'dam' | 'rtm';
+
+// RTM Slot for 15-minute interval bidding (Phase 6)
+interface RTMSlot {
+  time: string;
+  adjustmentMw: number;
+  estimatedPrice: number;
+  status: 'pending' | 'submitted';
+}
+
 // Bid Status Configuration (Phase 5)
 const BID_STATUS_CONFIG: Record<BidStatus, { label: string; color: string; icon: string }> = {
   draft: { label: '작성 중', color: '#9ca3af', icon: '📝' },
@@ -206,6 +217,14 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
   const [showRegistration, setShowRegistration] = useState(false);
   const [currentWeather, setCurrentWeather] = useState<WeatherCondition>('clear');
   const [vppBiddingEnabled, setVppBiddingEnabled] = useState(true); // VPP auto-bidding toggle
+
+  // Market Tab states (Phase 6 - DAM/RTM)
+  const [selectedMarket, setSelectedMarket] = useState<MarketType>('dam');
+  const [rtmSlots, setRtmSlots] = useState<RTMSlot[]>([]);
+  const [rtmTimeRemaining, setRtmTimeRemaining] = useState('');
+
+  // Dual Settlement state (Phase 7)
+  const [dualSettlement, setDualSettlement] = useState<DualSettlement | null>(null);
 
   // Calculate totals
   const totalMW = segments.reduce((sum, s) => sum + s.quantity, 0);
@@ -415,6 +434,26 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         selectedHour: 12,
         smpForecast: { q10: smpLow, q50: smpMid, q90: smpHigh },
       });
+    } else {
+      // Mobile: Show simulation results as alert
+      const totalQuantity = segments.reduce((sum, s) => sum + s.quantity, 0);
+      const avgPriceVal = segments.reduce((sum, s) => sum + s.price * s.quantity, 0) / totalQuantity;
+      const estimatedClearing = segments.filter(s => s.price <= smpMid).reduce((sum, s) => sum + s.quantity, 0);
+      const clearingRate = (estimatedClearing / totalQuantity * 100).toFixed(1);
+      const estimatedRevenue = (estimatedClearing * smpMid * 1000 / 1000000).toFixed(2);
+
+      const message = `DAM 시뮬레이션 결과\n\n` +
+        `총 입찰량: ${totalQuantity} MW\n` +
+        `평균 입찰가: ${avgPriceVal.toFixed(0)}원/kWh\n` +
+        `예상 SMP: ${smpMid}원/kWh\n` +
+        `예상 낙찰량: ${estimatedClearing} MW (${clearingRate}%)\n` +
+        `예상 수익: ${estimatedRevenue}백만원`;
+
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('DAM 시뮬레이션', message);
+      }
     }
   };
 
@@ -426,6 +465,30 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         selectedHour: new Date().getHours(),
         smpForecast: { q10: smpLow, q50: smpMid, q90: smpHigh },
       });
+    } else {
+      // Mobile: Show RTM simulation as alert
+      const currentHour = new Date().getHours();
+      const isPeak = (currentHour >= 9 && currentHour <= 11) || (currentHour >= 18 && currentHour <= 21);
+      const rtmpEstimate = Math.round(smpMid * (isPeak ? 1.15 : 1.0));
+      const volatility = isPeak ? '높음 (±15%)' : '보통 (±8%)';
+
+      // Calculate RTM adjustment impact
+      const totalAdjustment = rtmSlots.reduce((sum, s) => sum + s.adjustmentMw, 0);
+      const estimatedRtmRevenue = (totalAdjustment * rtmpEstimate * 1000 / 10000).toFixed(1);
+
+      const message = `RTM 시뮬레이션 결과\n\n` +
+        `현재 시간: ${currentHour}:00\n` +
+        `예상 RTMP: ${rtmpEstimate}원/kWh\n` +
+        `변동성: ${volatility}\n` +
+        `피크 시간대: ${isPeak ? '예' : '아니오'}\n\n` +
+        `RTM 조정량: ${totalAdjustment > 0 ? '+' : ''}${totalAdjustment} MW\n` +
+        `예상 추가 수익: ${estimatedRtmRevenue}만원`;
+
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('RTM 시뮬레이션', message);
+      }
     }
   };
 
@@ -556,6 +619,185 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
     loadPowerPlants();
   }, [loadPowerPlants]);
 
+  // ============================================
+  // RTM Functions (Phase 6 - DAM/RTM Dual Bidding)
+  // ============================================
+
+  // Generate RTM slots for the next 4 hours (16 x 15-min intervals)
+  const generateRTMSlots = useCallback(() => {
+    const slots: RTMSlot[] = [];
+    const now = new Date();
+    // Round up to next 15-minute interval
+    const minutes = Math.ceil(now.getMinutes() / 15) * 15;
+    const startTime = new Date(now);
+    startTime.setMinutes(minutes, 0, 0);
+
+    // Add T+75 minutes offset (KPX RTM bidding deadline)
+    startTime.setMinutes(startTime.getMinutes() + 75);
+
+    // Max available capacity for RTM adjustments (10% of active capacity)
+    const maxAdjustmentMw = activePlantCapacityKw / 1000 * 0.1;
+
+    for (let i = 0; i < 16; i++) {
+      const slotTime = new Date(startTime);
+      slotTime.setMinutes(slotTime.getMinutes() + i * 15);
+      const timeStr = `${String(slotTime.getHours()).padStart(2, '0')}:${String(slotTime.getMinutes()).padStart(2, '0')}`;
+
+      // Estimate RTMP based on SMP with time-based volatility
+      const hour = slotTime.getHours();
+      const isPeak = hour >= 9 && hour <= 11 || hour >= 18 && hour <= 21;
+      const volatility = isPeak ? 1.15 : 1.0;
+      const estimatedPrice = Math.round(smpMid * volatility * (0.95 + Math.random() * 0.1));
+
+      // AI-recommended adjustment based on price and peak hours
+      // Positive = sell more (price high), Negative = buy/reduce (price low)
+      let aiRecommendedAdjustment = 0;
+      if (isPeak && estimatedPrice > smpMid) {
+        // Peak + high price → sell more
+        aiRecommendedAdjustment = Math.round((Math.random() * maxAdjustmentMw * 0.8 + maxAdjustmentMw * 0.2) * 10) / 10;
+      } else if (!isPeak && estimatedPrice < smpMid * 0.9) {
+        // Off-peak + low price → reduce/buy
+        aiRecommendedAdjustment = -Math.round((Math.random() * maxAdjustmentMw * 0.5) * 10) / 10;
+      } else {
+        // Normal → small random adjustment or zero
+        aiRecommendedAdjustment = Math.random() > 0.5
+          ? Math.round((Math.random() * maxAdjustmentMw * 0.3) * 10) / 10
+          : 0;
+      }
+
+      slots.push({
+        time: timeStr,
+        adjustmentMw: aiRecommendedAdjustment,
+        estimatedPrice,
+        status: 'pending',
+      });
+    }
+    setRtmSlots(slots);
+  }, [smpMid, activePlantCapacityKw]);
+
+  // Get market deadline
+  const getMarketDeadline = useCallback((market: MarketType) => {
+    const now = new Date();
+    if (market === 'dam') {
+      // D-1 10:00 deadline (tomorrow's trading -> today 10:00 deadline)
+      const deadline = new Date(now);
+      if (now.getHours() >= 10) {
+        deadline.setDate(deadline.getDate() + 1);
+      }
+      deadline.setHours(10, 0, 0, 0);
+      return deadline;
+    } else {
+      // T-75 minutes before next 15-min slot
+      const minutes = Math.ceil(now.getMinutes() / 15) * 15;
+      const nextSlot = new Date(now);
+      nextSlot.setMinutes(minutes + 75, 0, 0);
+      return nextSlot;
+    }
+  }, []);
+
+  // Update RTM slot adjustment
+  const updateRtmSlot = useCallback((time: string, adjustmentMw: number) => {
+    setRtmSlots(prev => prev.map(slot =>
+      slot.time === time ? { ...slot, adjustmentMw } : slot
+    ));
+  }, []);
+
+  // Initialize RTM slots and deadline timer
+  useEffect(() => {
+    if (selectedMarket === 'rtm') {
+      generateRTMSlots();
+    }
+
+    // Update countdown timer every second
+    const timer = setInterval(() => {
+      const deadline = getMarketDeadline(selectedMarket);
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) {
+        setRtmTimeRemaining('마감');
+      } else {
+        const hours = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        if (selectedMarket === 'dam') {
+          setRtmTimeRemaining(`${hours}h ${mins}m`);
+        } else {
+          const secs = Math.floor((diff % 60000) / 1000);
+          setRtmTimeRemaining(`${mins}m ${secs}s`);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [selectedMarket, generateRTMSlots, getMarketDeadline]);
+
+  // Handle RTM submission
+  const handleRTMSubmit = async () => {
+    const totalAdjustment = rtmSlots.reduce((sum, s) => sum + s.adjustmentMw, 0);
+    const message = `RTM 입찰 제출 완료\n\n총 조정량: ${totalAdjustment > 0 ? '+' : ''}${totalAdjustment} MW\n슬롯 수: ${rtmSlots.filter(s => s.adjustmentMw !== 0).length}개`;
+
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('RTM 제출 완료', message);
+    }
+
+    // Mark slots as submitted
+    setRtmSlots(prev => prev.map(slot => ({ ...slot, status: 'submitted' as const })));
+  };
+
+  // ============================================
+  // Dual Settlement Functions (Phase 7)
+  // ============================================
+
+  // Generate mock dual settlement for demo (real API may not be available)
+  const generateMockDualSettlement = useCallback((): DualSettlement => {
+    const today = new Date().toISOString().split('T')[0];
+    const damClearedMwh = totalMW * 12; // 12 hours avg
+    const damSmp = smpMid;
+    const damRevenue = damClearedMwh * damSmp * 1000;
+
+    // Actual generation varies ±10%
+    const variance = (Math.random() * 0.2 - 0.1);
+    const actualGenerationMwh = damClearedMwh * (1 + variance);
+    const rtmVolumeMwh = actualGenerationMwh - damClearedMwh;
+
+    // RTM price is typically 5-20% different from DAM SMP
+    const rtmPriceVariance = Math.random() * 0.15 + 0.05;
+    const rtmPrice = Math.round(smpMid * (1 + (rtmVolumeMwh >= 0 ? -rtmPriceVariance : rtmPriceVariance)));
+    const rtmRevenue = rtmVolumeMwh * rtmPrice * 1000;
+
+    return {
+      trading_date: today,
+      dam_cleared_mwh: Math.round(damClearedMwh * 10) / 10,
+      dam_smp: damSmp,
+      dam_revenue: damRevenue,
+      actual_generation_mwh: Math.round(actualGenerationMwh * 10) / 10,
+      rtm_volume_mwh: Math.round(rtmVolumeMwh * 10) / 10,
+      rtm_price: rtmPrice,
+      rtm_revenue: rtmRevenue,
+      total_revenue: damRevenue + rtmRevenue,
+      imbalance_type: rtmVolumeMwh > 0.1 ? 'surplus' : rtmVolumeMwh < -0.1 ? 'deficit' : 'balanced',
+    };
+  }, [totalMW, smpMid]);
+
+  // Load dual settlement data
+  const loadDualSettlement = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const settlement = await apiService.getDualSettlement(today);
+      setDualSettlement(settlement);
+    } catch {
+      // Fallback to mock data if API unavailable
+      setDualSettlement(generateMockDualSettlement());
+    }
+  }, [generateMockDualSettlement]);
+
+  // Load dual settlement when market changes or on mount
+  useEffect(() => {
+    if (bidStatus === 'cleared' || bidStatus === 'accepted') {
+      loadDualSettlement();
+    }
+  }, [bidStatus, loadDualSettlement]);
+
   return (
     <ScrollView
       style={styles.container}
@@ -568,16 +810,56 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
       <View style={styles.titleSection}>
         <View style={styles.titleRow}>
           <Text style={styles.pageTitle}>입찰관리</Text>
-          <View style={[styles.damBadge, marketStatus === 'open' && styles.damBadgeOpen]}>
-            <View style={[styles.damDot, marketStatus === 'open' && styles.damDotOpen]} />
-            <Text style={[styles.damBadgeText, marketStatus === 'open' && styles.damBadgeTextOpen]}>
-              {marketStatus === 'open'
-                ? `DAM ${Math.floor(hoursRemaining)}h ${Math.round((hoursRemaining % 1) * 60)}m`
-                : 'DAM 마감'}
+          <View style={[
+            styles.damBadge,
+            selectedMarket === 'dam' && marketStatus === 'open' && styles.damBadgeOpen,
+            selectedMarket === 'rtm' && styles.rtmBadge,
+          ]}>
+            <View style={[
+              styles.damDot,
+              selectedMarket === 'dam' && marketStatus === 'open' && styles.damDotOpen,
+              selectedMarket === 'rtm' && styles.rtmDot,
+            ]} />
+            <Text style={[
+              styles.damBadgeText,
+              selectedMarket === 'dam' && marketStatus === 'open' && styles.damBadgeTextOpen,
+              selectedMarket === 'rtm' && styles.rtmBadgeText,
+            ]}>
+              {selectedMarket === 'dam'
+                ? (marketStatus === 'open' ? `DAM ${rtmTimeRemaining || `${Math.floor(hoursRemaining)}h`}` : 'DAM 마감')
+                : `RTM ${rtmTimeRemaining}`}
             </Text>
           </View>
         </View>
-        <Text style={styles.subtitle}>10-segment 입찰가격 설정</Text>
+        <Text style={styles.subtitle}>
+          {selectedMarket === 'dam' ? '10-segment 입찰가격 설정' : '15분 단위 증감 입찰'}
+        </Text>
+
+        {/* DAM/RTM Market Tabs (Phase 6) */}
+        <View style={styles.marketTabs}>
+          <TouchableOpacity
+            style={[styles.marketTab, selectedMarket === 'dam' && styles.marketTabActive]}
+            onPress={() => setSelectedMarket('dam')}
+          >
+            <Text style={[styles.marketTabTitle, selectedMarket === 'dam' && styles.marketTabTitleActive]}>
+              DAM
+            </Text>
+            <Text style={[styles.marketTabSubtext, selectedMarket === 'dam' && styles.marketTabSubtextActive]}>
+              D-1 10:00 마감
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.marketTab, selectedMarket === 'rtm' && styles.marketTabActive]}
+            onPress={() => setSelectedMarket('rtm')}
+          >
+            <Text style={[styles.marketTabTitle, selectedMarket === 'rtm' && styles.marketTabTitleActive]}>
+              RTM
+            </Text>
+            <Text style={[styles.marketTabSubtext, selectedMarket === 'rtm' && styles.marketTabSubtextActive]}>
+              15분 단위
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Power Plant Section (v6.2.0) */}
@@ -607,7 +889,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
             <View style={styles.vppToggleLeft}>
               <Text style={styles.vppToggleLabel}>VPP 자동 입찰</Text>
               <Text style={styles.vppToggleCapacity}>
-                {(activePlantCapacityKw / 1000).toFixed(2)} MW 참여
+                {activePlantCapacityKw >= 1000
+                  ? `${(activePlantCapacityKw / 1000).toFixed(2)} MW 참여`
+                  : `${activePlantCapacityKw.toFixed(0)} kW 참여`}
               </Text>
             </View>
             <TouchableOpacity
@@ -818,6 +1102,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
             </View>
           </View>
 
+      {/* ====== DAM Content (Phase 6) ====== */}
+      {selectedMarket === 'dam' ? (
+        <>
       {/* SMP Stats Row */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -1083,12 +1370,317 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         </TouchableOpacity>
       </View>
 
+      {/* Dual Settlement Card (Phase 7) - also in DAM section */}
+      {(bidStatus === 'cleared' || bidStatus === 'accepted') && dualSettlement && (
+        <View style={styles.dualSettlementCard}>
+          <View style={styles.dualSettlementHeader}>
+            <Text style={styles.dualSettlementTitle}>📊 이중 정산 결과</Text>
+            <Text style={styles.dualSettlementDate}>{dualSettlement.trading_date}</Text>
+          </View>
+
+          {/* DAM Settlement */}
+          <View style={styles.settlementRow}>
+            <View style={styles.settlementLabel}>
+              <Text style={styles.settlementLabelText}>DAM 정산</Text>
+              <Text style={styles.settlementDetailText}>
+                {dualSettlement.dam_cleared_mwh} MWh × {dualSettlement.dam_smp}원
+              </Text>
+            </View>
+            <Text style={styles.settlementValue}>
+              {(dualSettlement.dam_revenue / 1000000).toFixed(2)}백만원
+            </Text>
+          </View>
+
+          {/* RTM Settlement */}
+          <View style={styles.settlementRow}>
+            <View style={styles.settlementLabel}>
+              <Text style={styles.settlementLabelText}>
+                RTM 정산
+                <Text style={[
+                  styles.imbalanceBadge,
+                  dualSettlement.imbalance_type === 'surplus'
+                    ? { color: colors.green }
+                    : dualSettlement.imbalance_type === 'deficit'
+                    ? { color: colors.red }
+                    : { color: colors.textMuted }
+                ]}>
+                  {dualSettlement.imbalance_type === 'surplus' ? ' (잉여)' :
+                   dualSettlement.imbalance_type === 'deficit' ? ' (부족)' : ' (균형)'}
+                </Text>
+              </Text>
+              <Text style={styles.settlementDetailText}>
+                {dualSettlement.rtm_volume_mwh > 0 ? '+' : ''}{dualSettlement.rtm_volume_mwh} MWh × {dualSettlement.rtm_price}원
+              </Text>
+            </View>
+            <Text style={[
+              styles.settlementValue,
+              { color: dualSettlement.rtm_revenue >= 0 ? colors.green : colors.red }
+            ]}>
+              {dualSettlement.rtm_revenue >= 0 ? '+' : ''}{(dualSettlement.rtm_revenue / 1000000).toFixed(2)}백만원
+            </Text>
+          </View>
+
+          {/* Total */}
+          <View style={styles.settlementTotal}>
+            <Text style={styles.settlementTotalLabel}>총 정산금</Text>
+            <Text style={styles.settlementTotalValue}>
+              {(dualSettlement.total_revenue / 1000000).toFixed(2)}백만원
+            </Text>
+          </View>
+
+          {/* Summary */}
+          <View style={styles.settlementSummary}>
+            <Text style={styles.settlementSummaryText}>
+              실제 발전: {dualSettlement.actual_generation_mwh} MWh
+              {dualSettlement.imbalance_type !== 'balanced' && (
+                <Text style={{ color: dualSettlement.rtm_revenue >= 0 ? colors.green : colors.orange }}>
+                  {' '}→ {dualSettlement.imbalance_type === 'surplus' ? '잉여분 판매' : '부족분 구매'}
+                </Text>
+              )}
+            </Text>
+          </View>
+        </View>
+      )}
+        </>
+      ) : (
+        <>
+          {/* ====== RTM Content (Phase 6) ====== */}
+
+          {/* SMP Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>현재 SMP</Text>
+              <Text style={styles.statValue}>{smpMid}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>변동성</Text>
+              <Text style={[styles.statValue, { color: colors.orange }]}>±15%</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>예상 RTMP</Text>
+              <Text style={[styles.statValue, { color: colors.green }]}>
+                {Math.round(smpMid * 1.05)}
+              </Text>
+            </View>
+          </View>
+
+          {/* RTM Bidding Form (Phase 6) */}
+          <View style={styles.rtmBidSection}>
+            <View style={styles.rtmBidHeader}>
+              <Text style={styles.sectionTitle}>RTM 입찰 (다음 4시간)</Text>
+              <View style={styles.rtmSlotCount}>
+                <Text style={styles.rtmSlotCountText}>
+                  {rtmSlots.filter(s => s.adjustmentMw !== 0).length}/{rtmSlots.length} 슬롯
+                </Text>
+              </View>
+            </View>
+
+            {/* RTM Slot List Header */}
+            <View style={styles.rtmSlotHeader}>
+              <Text style={[styles.rtmSlotHeaderText, { width: 60 }]}>시간</Text>
+              <Text style={[styles.rtmSlotHeaderText, { flex: 1, textAlign: 'center' }]}>증감 (MW)</Text>
+              <Text style={[styles.rtmSlotHeaderText, { width: 80, textAlign: 'right' }]}>예상 RTMP</Text>
+            </View>
+
+            {/* RTM Slot List */}
+            <View style={styles.rtmSlotList}>
+              {rtmSlots.map((slot) => (
+                <View key={slot.time} style={styles.rtmSlotRow}>
+                  <View style={styles.rtmSlotTimeCell}>
+                    <Text style={styles.rtmSlotTime}>{slot.time}</Text>
+                  </View>
+                  <View style={styles.rtmSlotInputCell}>
+                    <TouchableOpacity
+                      style={styles.rtmAdjustBtn}
+                      onPress={() => updateRtmSlot(slot.time, slot.adjustmentMw - 1)}
+                    >
+                      <Text style={styles.rtmAdjustBtnText}>−</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[
+                        styles.rtmSlotInput,
+                        slot.adjustmentMw > 0 && styles.rtmSlotInputPositive,
+                        slot.adjustmentMw < 0 && styles.rtmSlotInputNegative,
+                      ]}
+                      value={slot.adjustmentMw > 0 ? `+${slot.adjustmentMw}` : String(slot.adjustmentMw)}
+                      onChangeText={(val) => updateRtmSlot(slot.time, parseFloat(val.replace('+', '')) || 0)}
+                      keyboardType="numeric"
+                      selectTextOnFocus
+                    />
+                    <TouchableOpacity
+                      style={styles.rtmAdjustBtn}
+                      onPress={() => updateRtmSlot(slot.time, slot.adjustmentMw + 1)}
+                    >
+                      <Text style={styles.rtmAdjustBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.rtmSlotPriceCell}>
+                    <Text style={styles.rtmSlotPrice}>{slot.estimatedPrice}원</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* RTM Summary */}
+            <View style={styles.rtmSummary}>
+              <View style={styles.rtmSummaryItem}>
+                <Text style={styles.rtmSummaryLabel}>순 증감</Text>
+                <Text style={[
+                  styles.rtmSummaryValue,
+                  { color: rtmSlots.reduce((sum, s) => sum + s.adjustmentMw, 0) >= 0 ? colors.green : colors.red }
+                ]}>
+                  {rtmSlots.reduce((sum, s) => sum + s.adjustmentMw, 0) > 0 ? '+' : ''}
+                  {rtmSlots.reduce((sum, s) => sum + s.adjustmentMw, 0)} MW
+                </Text>
+              </View>
+              <View style={styles.rtmSummaryItem}>
+                <Text style={styles.rtmSummaryLabel}>예상 추가 수익</Text>
+                <Text style={[styles.rtmSummaryValue, { color: colors.orange }]}>
+                  {(() => {
+                    const totalRevenue = rtmSlots.reduce((sum, s) =>
+                      sum + s.adjustmentMw * s.estimatedPrice * 1000, 0);
+                    return totalRevenue >= 0 ? '+' : '';
+                  })()}
+                  {(rtmSlots.reduce((sum, s) =>
+                    sum + s.adjustmentMw * s.estimatedPrice * 1000, 0) / 10000).toFixed(1)}만원
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* RTM Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.optimizeBtn]}
+              onPress={generateRTMSlots}
+            >
+              <Text style={styles.optimizeBtnText}>AI 추천</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                styles.submitBtn,
+                rtmSlots.filter(s => s.adjustmentMw !== 0).length === 0 && { opacity: 0.5 }
+              ]}
+              onPress={handleRTMSubmit}
+              disabled={rtmSlots.filter(s => s.adjustmentMw !== 0).length === 0}
+            >
+              <Text style={styles.submitBtnText}>RTM 제출</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* RTM Simulation Button */}
+          <View style={styles.simulationButtons}>
+            <TouchableOpacity
+              style={[styles.simulationBtn, styles.rtmSimulationBtn, { flex: 1 }]}
+              onPress={handleRTMSimulation}
+            >
+              <Text style={styles.simulationBtnText}>RTM 시뮬레이션</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Dual Settlement Card (Phase 7) */}
+          {(bidStatus === 'cleared' || bidStatus === 'accepted') && dualSettlement && (
+            <View style={styles.dualSettlementCard}>
+              <View style={styles.dualSettlementHeader}>
+                <Text style={styles.dualSettlementTitle}>📊 이중 정산 결과</Text>
+                <Text style={styles.dualSettlementDate}>{dualSettlement.trading_date}</Text>
+              </View>
+
+              {/* DAM Settlement */}
+              <View style={styles.settlementRow}>
+                <View style={styles.settlementLabel}>
+                  <Text style={styles.settlementLabelText}>DAM 정산</Text>
+                  <Text style={styles.settlementDetailText}>
+                    {dualSettlement.dam_cleared_mwh} MWh × {dualSettlement.dam_smp}원
+                  </Text>
+                </View>
+                <Text style={styles.settlementValue}>
+                  {(dualSettlement.dam_revenue / 1000000).toFixed(2)}백만원
+                </Text>
+              </View>
+
+              {/* RTM Settlement */}
+              <View style={styles.settlementRow}>
+                <View style={styles.settlementLabel}>
+                  <Text style={styles.settlementLabelText}>
+                    RTM 정산
+                    <Text style={[
+                      styles.imbalanceBadge,
+                      dualSettlement.imbalance_type === 'surplus'
+                        ? { color: colors.green }
+                        : dualSettlement.imbalance_type === 'deficit'
+                        ? { color: colors.red }
+                        : { color: colors.textMuted }
+                    ]}>
+                      {dualSettlement.imbalance_type === 'surplus' ? ' (잉여)' :
+                       dualSettlement.imbalance_type === 'deficit' ? ' (부족)' : ' (균형)'}
+                    </Text>
+                  </Text>
+                  <Text style={styles.settlementDetailText}>
+                    {dualSettlement.rtm_volume_mwh > 0 ? '+' : ''}{dualSettlement.rtm_volume_mwh} MWh × {dualSettlement.rtm_price}원
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.settlementValue,
+                  { color: dualSettlement.rtm_revenue >= 0 ? colors.green : colors.red }
+                ]}>
+                  {dualSettlement.rtm_revenue >= 0 ? '+' : ''}{(dualSettlement.rtm_revenue / 1000000).toFixed(2)}백만원
+                </Text>
+              </View>
+
+              {/* Total */}
+              <View style={styles.settlementTotal}>
+                <Text style={styles.settlementTotalLabel}>총 정산금</Text>
+                <Text style={styles.settlementTotalValue}>
+                  {(dualSettlement.total_revenue / 1000000).toFixed(2)}백만원
+                </Text>
+              </View>
+
+              {/* Summary */}
+              <View style={styles.settlementSummary}>
+                <Text style={styles.settlementSummaryText}>
+                  실제 발전: {dualSettlement.actual_generation_mwh} MWh
+                  {dualSettlement.imbalance_type !== 'balanced' && (
+                    <Text style={{ color: dualSettlement.rtm_revenue >= 0 ? colors.green : colors.orange }}>
+                      {' '}→ {dualSettlement.imbalance_type === 'surplus' ? '잉여분 판매' : '부족분 구매'}
+                    </Text>
+                  )}
+                </Text>
+              </View>
+            </View>
+          )}
+        </>
+      )}
+
           {/* Bottom padding */}
           <View style={{ height: 100 }} />
         </>
       ) : (
         <>
           {/* ===== Simplified UI for Small Capacity (< 1MW) ===== */}
+
+          {/* DAM/RTM Tabs for small capacity users too */}
+          {powerPlants.length > 0 && (
+            <View style={styles.marketTabs}>
+              <TouchableOpacity
+                style={[styles.marketTab, selectedMarket === 'dam' && styles.marketTabActive]}
+                onPress={() => setSelectedMarket('dam')}
+              >
+                <Text style={[styles.marketTabTitle, selectedMarket === 'dam' && styles.marketTabTitleActive]}>
+                  DAM
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.marketTab, selectedMarket === 'rtm' && styles.marketTabActive]}
+                onPress={() => setSelectedMarket('rtm')}
+              >
+                <Text style={[styles.marketTabTitle, selectedMarket === 'rtm' && styles.marketTabTitleActive]}>
+                  RTM
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* VPP Auto-Bidding Summary - Conditional on VPP toggle (Phase 1) */}
           {vppBiddingEnabled ? (
@@ -2414,5 +3006,271 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // Phase 6: DAM/RTM Market Tabs
+  marketTabs: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  marketTab: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  marketTabActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  marketTabTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  marketTabTitleActive: {
+    color: '#ffffff',
+  },
+  marketTabSubtext: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  marketTabSubtextActive: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+
+  // Phase 6: RTM Badge Styles
+  rtmBadge: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  rtmDot: {
+    backgroundColor: colors.green,
+  },
+  rtmBadgeText: {
+    color: colors.green,
+  },
+
+  // Phase 6: RTM Bidding Section
+  rtmBidSection: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  rtmBidHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rtmSlotCount: {
+    backgroundColor: colors.green + '20',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  rtmSlotCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.green,
+  },
+  rtmSlotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rtmSlotHeaderText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  rtmSlotList: {
+    // No maxHeight - show all 16 slots, let parent ScrollView handle scrolling
+  },
+  rtmSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rtmSlotTimeCell: {
+    width: 60,
+  },
+  rtmSlotTime: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  rtmSlotInputCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  rtmAdjustBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rtmAdjustBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  rtmSlotInput: {
+    width: 60,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    textAlign: 'center',
+  },
+  rtmSlotInputPositive: {
+    borderColor: colors.green,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    color: colors.green,
+  },
+  rtmSlotInputNegative: {
+    borderColor: colors.red,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    color: colors.red,
+  },
+  rtmSlotPriceCell: {
+    width: 80,
+    alignItems: 'flex-end',
+  },
+  rtmSlotPrice: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  rtmSummary: {
+    flexDirection: 'row',
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 16,
+  },
+  rtmSummaryItem: {
+    flex: 1,
+  },
+  rtmSummaryLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  rtmSummaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+
+  // ============================================
+  // Dual Settlement Styles (Phase 7)
+  // ============================================
+  dualSettlementCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dualSettlementHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dualSettlementTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dualSettlementDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  settlementRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settlementLabel: {
+    flex: 1,
+  },
+  settlementLabelText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  settlementDetailText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  settlementValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'right',
+  },
+  imbalanceBadge: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  settlementTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: colors.primary,
+  },
+  settlementTotalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  settlementTotalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  settlementSummary: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  settlementSummaryText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });

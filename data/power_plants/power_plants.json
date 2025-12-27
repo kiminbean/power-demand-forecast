@@ -1,0 +1,18 @@
+[
+  {
+    "id": "692a5583-e182-43d3-a051-4e1d574ca5b2",
+    "name": "우리집 태양광 1호",
+    "type": "solar",
+    "capacity": 3.0,
+    "installDate": "2025-01-01",
+    "contractType": "ppa",
+    "location": {
+      "address": "",
+      "lat": null,
+      "lng": null
+    },
+    "roofDirection": "south",
+    "createdAt": "2025-12-27T16:02:23.100705",
+    "updatedAt": "2025-12-27T16:05:32.983812"
+  }
+]

@@ -16,19 +16,8 @@ import {
   Platform,
 } from 'react-native';
 
-let useNavigation: any = null;
-let useRoute: any = null;
-let Ionicons: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    useNavigation = require('@react-navigation/native').useNavigation;
-    useRoute = require('@react-navigation/native').useRoute;
-    Ionicons = require('@expo/vector-icons').Ionicons;
-  } catch (e) {
-    console.log('Native navigation/icons not available');
-  }
-}
+// Navigation and icons are handled by parent component
+// Using emoji icons for cross-platform compatibility
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 
@@ -114,11 +103,8 @@ const phaseLabels: Record<SimulationState['phase'], string> = {
   complete: '매칭 완료',
 };
 
-// Icon component
+// Icon component - using emoji for cross-platform compatibility
 function Icon({ name, size, color }: { name: string; size: number; color: string }) {
-  if (Ionicons) {
-    return <Ionicons name={name as any} size={size} color={color} />;
-  }
   const iconMap: { [key: string]: string } = {
     'arrow-back': '←',
     'play': '▶',
@@ -202,20 +188,15 @@ function updateBidStatuses(
   });
 }
 
-export default function RTMSimulationScreen() {
-  const navigation = useNavigation ? useNavigation() : null;
-  const route = useRoute ? useRoute() : null;
+interface RTMSimulationScreenProps {
+  onBack?: () => void;
+}
 
-  // Get params from navigation
-  const params = route?.params as {
-    segments?: { id: number; quantity: number; price: number }[];
-    selectedHour?: number;
-    smpForecast?: { q10: number; q50: number; q90: number };
-  } | undefined;
-
-  const selectedHour = params?.selectedHour ?? 12;
-  const smpForecast = params?.smpForecast ?? { q10: 54, q50: 77, q90: 126 };
-  const ourSegments = params?.segments ?? [
+export default function RTMSimulationScreen({ onBack }: RTMSimulationScreenProps = {}) {
+  // Using default values - navigation params are passed via App.tsx
+  const selectedHour = new Date().getHours();
+  const smpForecast = { q10: 54, q50: 77, q90: 126 };
+  const ourSegments = [
     { id: 1, quantity: 2.5, price: 88 },
     { id: 2, quantity: 2.5, price: 94 },
     { id: 3, quantity: 2.5, price: 99 },
@@ -417,7 +398,7 @@ export default function RTMSimulationScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation?.goBack()}
+          onPress={() => onBack?.()}
         >
           <Icon name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>

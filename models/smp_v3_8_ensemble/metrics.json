@@ -1,0 +1,21 @@
+{
+  "lgb_mape": 5.45736752800964,
+  "lgb_r2": 0.8151071577377976,
+  "ensemble_mape": 5.616910481903538,
+  "ensemble_r2": 0.8097261525796092,
+  "ensemble_mae": 6.107126883229723,
+  "features": 36,
+  "records": 43608,
+  "lstm_config": {
+    "seq_len": 48,
+    "hidden_size": 32,
+    "num_layers": 1,
+    "dropout": 0.1,
+    "lr": 0.001,
+    "batch_size": 64,
+    "epochs": 100,
+    "patience": 15
+  },
+  "timestamp": "2025-12-26T11:15:52.825186",
+  "strategy": "LightGBM for trend + LSTM for residuals"
+}

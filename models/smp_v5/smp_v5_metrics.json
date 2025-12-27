@@ -1,0 +1,98 @@
+{
+  "version": "5.0.0",
+  "mae": 9.892031478881837,
+  "rmse": 13.510047149658202,
+  "mape": 8.248548603057861,
+  "r2": 0.536527442932129,
+  "coverage_80": 69.58269131997946,
+  "interval_width": 23.960579299926756,
+  "all_splits": [
+    {
+      "mae": 10.231493949890137,
+      "rmse": 13.996962547302246,
+      "mape": 7.208950996398926,
+      "r2": 0.3087767958641052,
+      "coverage_80": 62.69902413970211,
+      "interval_width": 19.714115142822266
+    },
+    {
+      "mae": 9.035467147827148,
+      "rmse": 13.170413970947266,
+      "mape": 6.830894947052002,
+      "r2": 0.5323013067245483,
+      "coverage_80": 73.09322033898306,
+      "interval_width": 23.07340431213379
+    },
+    {
+      "mae": 9.612412452697754,
+      "rmse": 12.952096939086914,
+      "mape": 9.036174774169922,
+      "r2": 0.6380705833435059,
+      "coverage_80": 74.884437596302,
+      "interval_width": 26.8508243560791
+    },
+    {
+      "mae": 10.59968090057373,
+      "rmse": 13.43769645690918,
+      "mape": 9.825277328491211,
+      "r2": 0.4937551021575928,
+      "coverage_80": 65.09373394966616,
+      "interval_width": 24.993255615234375
+    },
+    {
+      "mae": 9.98110294342041,
+      "rmse": 13.99306583404541,
+      "mape": 8.341444969177246,
+      "r2": 0.7097334265708923,
+      "coverage_80": 72.14304057524397,
+      "interval_width": 25.171297073364258
+    }
+  ],
+  "features": 36,
+  "feature_names": [
+    "smp_mainland",
+    "smp_jeju",
+    "smp_max",
+    "smp_min",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos",
+    "is_weekend",
+    "month_sin",
+    "month_cos",
+    "is_summer",
+    "is_winter",
+    "peak_morning",
+    "peak_evening",
+    "off_peak",
+    "smp_ma6",
+    "smp_ma24",
+    "smp_ma168",
+    "smp_std24",
+    "smp_diff",
+    "smp_range",
+    "smp_pct_change",
+    "smp_momentum",
+    "smp_lag_24h",
+    "smp_lag_48h",
+    "smp_lag_168h",
+    "smp_lag_336h",
+    "temperature",
+    "hdd",
+    "cdd",
+    "temp_lag_24h",
+    "wind_speed",
+    "humidity",
+    "solar_radiation",
+    "pressure"
+  ],
+  "architecture": "Transformer",
+  "improvements": [
+    "Transformer encoder (replaces LSTM)",
+    "Weather features integration",
+    "Cosine annealing scheduler",
+    "AdamW optimizer with weight decay"
+  ],
+  "timestamp": "2025-12-25T21:34:49.340845"
+}

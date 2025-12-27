@@ -4,12 +4,20 @@
  */
 
 import React from 'react';
+import { Text } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../theme/colors';
+
+// Icon map for cross-platform compatibility (emoji icons)
+const tabIconMap: { [key: string]: string } = {
+  'grid': '🏠',
+  'trending-up': '📈',
+  'layers': '📚',
+  'wallet': '💰',
+};
 
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
@@ -97,10 +105,13 @@ function BiddingStackNavigator() {
   );
 }
 
-// Tab Icon Component
+// Tab Icon Component - using emoji for cross-platform compatibility
 function TabIcon({ name, focused, color }: { name: string; focused: boolean; color: string }) {
-  const iconName = focused ? name : `${name}-outline`;
-  return <Ionicons name={iconName as any} size={24} color={color} />;
+  return (
+    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>
+      {tabIconMap[name] || '•'}
+    </Text>
+  );
 }
 
 // Main App Navigator

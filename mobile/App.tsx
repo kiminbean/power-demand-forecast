@@ -1,16 +1,15 @@
 /**
- * RE-BMS Mobile App v6.0.0 - Alan AI Edition
- * EastSoft Alan AI Chatbot Integration
- * Design: Figma alan_mobile (100% matching)
+ * RE-BMS Mobile App v6.1.0 - Cross-Platform Edition
+ * 100% Feature Parity with Web-v6.1.0
+ * Supports iOS, Android, and Web
  *
- * Screens:
- * - Page 1: SMP Forecast (Tab: SMP예측)
- * - Page 2: Alan Chat (Floating button access)
- * - Page 3: Bidding Management (Tab: 입찰관리)
- * - Page 4: Settlement (Tab: 정산)
+ * Tabs (3-tab navigation):
+ * - SMP Forecast (24h Prediction)
+ * - Bidding (DAM/RTM Management)
+ * - Settlement (Revenue Analysis)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   View,
@@ -19,81 +18,24 @@ import {
   Platform,
   TouchableOpacity,
   SafeAreaView,
-  Image,
-  Dimensions,
 } from 'react-native';
 
-// Custom SVG-like icons for web (matching Figma exactly)
-const TabIcon = ({ name, size, color }: { name: string; size: number; color: string }) => {
-  // Bar chart icon for SMP 예측
-  if (name === 'bar-chart' || name === 'bar-chart-outline') {
-    return (
-      <View style={{ width: size, height: size, justifyContent: 'flex-end', alignItems: 'center', flexDirection: 'row', gap: 2 }}>
-        <View style={{ width: 5, height: size * 0.5, backgroundColor: color, borderRadius: 1 }} />
-        <View style={{ width: 5, height: size * 0.75, backgroundColor: color, borderRadius: 1 }} />
-        <View style={{ width: 5, height: size * 0.6, backgroundColor: color, borderRadius: 1 }} />
-      </View>
-    );
-  }
-  // Gavel/Auction icon for 입찰관리
-  if (name === 'hammer' || name === 'hammer-outline') {
-    return (
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: size * 0.7, height: size * 0.25, backgroundColor: color, borderRadius: 2, transform: [{ rotate: '-45deg' }], marginBottom: -4 }} />
-        <View style={{ width: size * 0.15, height: size * 0.5, backgroundColor: color, borderRadius: 2, marginTop: -2 }} />
-      </View>
-    );
-  }
-  // Box icon for 정산
-  if (name === 'cube' || name === 'cube-outline') {
-    return (
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{
-          width: size * 0.75,
-          height: size * 0.6,
-          borderWidth: 2,
-          borderColor: color,
-          borderRadius: 2,
-          marginTop: size * 0.15,
-        }}>
-          <View style={{ position: 'absolute', top: -size * 0.15, left: -2, right: -2, height: size * 0.2, borderWidth: 2, borderColor: color, borderRadius: 2, backgroundColor: 'transparent' }} />
-        </View>
-      </View>
-    );
-  }
-  // Fallback
-  return <Text style={{ fontSize: size * 0.8, color }}>●</Text>;
-};
+// Use emoji icons for cross-platform compatibility
+// Ionicons has compatibility issues with Expo 50 on iOS
+const USE_EMOJI_ICONS = true;
 
-// Conditionally import Ionicons for better web compatibility
-let Ionicons: any = TabIcon;
-
-try {
-  const VectorIcons = require('@expo/vector-icons');
-  if (VectorIcons && VectorIcons.Ionicons) {
-    Ionicons = VectorIcons.Ionicons;
-  }
-} catch (e) {
-  console.log('Ionicons not available, using custom icons');
-}
-
-// Screens
-import AlanChatScreen from './src/screens/alan/AlanChatScreen';
+// Screens (3-tab: SMP, Bidding, Settlement)
 import SMPForecastScreen from './src/screens/SMPForecastScreen';
 import BiddingScreen from './src/screens/BiddingScreen';
 import SettlementScreen from './src/screens/SettlementScreen';
 import KPXSimulationScreen from './src/screens/KPXSimulationScreen';
 import RTMSimulationScreen from './src/screens/RTMSimulationScreen';
+import AlanChatScreen from './src/screens/alan/AlanChatScreen';
 
-// Alan API
-import { alanApi } from './src/services/alan/alanApi';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Design colors from Figma
+// Design colors (matching web-v6.1.0)
 const colors = {
-  primary: '#04265e',      // Header blue (eXeco brand)
-  secondary: '#0048ff',    // Accent blue
+  primary: '#04265e',
+  secondary: '#0048ff',
   background: '#ffffff',
   cardBg: '#f8f8f8',
   text: '#000000',
@@ -104,30 +46,47 @@ const colors = {
   tabInactive: '#999999',
 };
 
-// Tab configuration (from Figma design)
+// Tab Icon using emojis for cross-platform compatibility
+const TabIcon = ({ name, focused }: { name: string; focused: boolean }) => {
+  const iconMap: { [key: string]: string } = {
+    'bar-chart': '📊',
+    'hammer': '⚖️',
+    'wallet': '💰',
+  };
+
+  return (
+    <Text style={{
+      fontSize: 22,
+      opacity: focused ? 1 : 0.6
+    }}>
+      {iconMap[name] || '•'}
+    </Text>
+  );
+};
+
+// Tab configuration (3 tabs only - matching web-v6.1.0)
 type TabKey = 'smp' | 'bidding' | 'settlement';
 
 interface TabConfig {
   key: TabKey;
   label: string;
   icon: string;
-  iconActive: string;
 }
 
 const tabs: TabConfig[] = [
-  { key: 'smp', label: 'SMP 예측', icon: 'bar-chart-outline', iconActive: 'bar-chart' },
-  { key: 'bidding', label: '입찰관리', icon: 'hammer-outline', iconActive: 'hammer' },
-  { key: 'settlement', label: '정산', icon: 'cube-outline', iconActive: 'cube' },
+  { key: 'smp', label: 'SMP예측', icon: 'bar-chart' },
+  { key: 'bidding', label: '입찰관리', icon: 'hammer' },
+  { key: 'settlement', label: '정산', icon: 'wallet' },
 ];
 
-// Header Component (Figma style - white background)
+// Header Component
 function Header({ title, showBack, onBack }: { title?: string; showBack?: boolean; onBack?: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         {showBack ? (
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
+            <Text style={{ fontSize: 20 }}>←</Text>
           </TouchableOpacity>
         ) : (
           <Text style={styles.logoText}>eXeco</Text>
@@ -135,21 +94,17 @@ function Header({ title, showBack, onBack }: { title?: string; showBack?: boolea
         {title && <Text style={styles.headerTitle}>{title}</Text>}
       </View>
       <View style={styles.headerRight}>
-        {/* Live indicator */}
         <View style={styles.liveIndicator}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>Live</Text>
         </View>
-        {/* Moon/Dark mode icon */}
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Text style={styles.headerIcon}>☽</Text>
-        </TouchableOpacity>
+        <Text style={styles.versionText}>v6.1</Text>
       </View>
     </View>
   );
 }
 
-// Bottom Tab Bar (Figma design)
+// Bottom Tab Bar
 function BottomTabBar({
   activeTab,
   onTabChange,
@@ -166,12 +121,9 @@ function BottomTabBar({
             key={tab.key}
             style={styles.tabItem}
             onPress={() => onTabChange(tab.key)}
+            activeOpacity={0.7}
           >
-            <Ionicons
-              name={isActive ? tab.iconActive as any : tab.icon as any}
-              size={24}
-              color={isActive ? colors.tabActive : colors.tabInactive}
-            />
+            <TabIcon name={tab.icon} focused={isActive} />
             <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
               {tab.label}
             </Text>
@@ -180,13 +132,6 @@ function BottomTabBar({
       })}
     </View>
   );
-}
-
-// Simulation data type
-interface SimulationData {
-  segments: { id: number; quantity: number; price: number }[];
-  selectedHour: number;
-  smpForecast: { q10: number; q50: number; q90: number };
 }
 
 // Error Boundary
@@ -207,9 +152,14 @@ class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <View style={styles.errorContainer}>
-          <Ionicons name="warning" size={48} color={colors.secondary} />
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{this.state.error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => this.setState({ hasError: false, error: '' })}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -217,56 +167,33 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Main Web App with Alan Integration
-function WebApp() {
+// Main App
+export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('smp');
   const [simulationScreen, setSimulationScreen] = useState<'none' | 'dam' | 'rtm'>('none');
-  const [simulationData, setSimulationData] = useState<SimulationData | null>(null);
-  const [alanConfigured, setAlanConfigured] = useState(false);
   const [showAlanChat, setShowAlanChat] = useState(false);
 
-  // Initialize Alan API (placeholder - will be configured with actual credentials)
-  useEffect(() => {
-    // Check if Alan is configured
-    // In production, load credentials from secure storage
-    const initAlan = async () => {
-      try {
-        // Placeholder: will be replaced with actual API key
-        // alanApi.initialize({
-        //   clientId: 'YOUR_CLIENT_ID',
-        //   apiKey: 'YOUR_API_KEY',
-        // });
-        setAlanConfigured(false); // Set to true when configured
-      } catch (error) {
-        console.log('Alan not configured, using mock responses');
-      }
-    };
-    initAlan();
-  }, []);
-
-  // Navigation handler
-  const handleNavigate = (screen: string, params?: any) => {
+  // Navigation handler for simulation screens
+  const handleNavigate = (screen: string) => {
     if (screen === 'KPXSimulation' || screen === 'DAM') {
-      setSimulationData(params);
       setSimulationScreen('dam');
     } else if (screen === 'RTMSimulation' || screen === 'RTM') {
-      setSimulationData(params);
       setSimulationScreen('rtm');
-    } else if (screen === 'SMP' || screen === 'smp') {
+    } else if (screen.toLowerCase() === 'smp') {
       setActiveTab('smp');
-    } else if (screen === 'Bidding' || screen === 'bidding') {
+    } else if (screen.toLowerCase() === 'bidding') {
       setActiveTab('bidding');
-    } else if (screen === 'Settlement' || screen === 'settlement') {
+    } else if (screen.toLowerCase() === 'settlement') {
       setActiveTab('settlement');
     }
+    setShowAlanChat(false);
   };
 
   const handleBack = () => {
     setSimulationScreen('none');
-    setSimulationData(null);
   };
 
-  // Web navigation handlers for simulation screens
+  // Web navigation object for screens that need it
   const webNavigation = {
     navigate: handleNavigate,
     goBack: handleBack,
@@ -277,6 +204,7 @@ function WebApp() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
+          <StatusBar style="dark" />
           <Header title="DAM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <KPXSimulationScreen />
@@ -290,6 +218,7 @@ function WebApp() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
+          <StatusBar style="dark" />
           <Header title="RTM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <RTMSimulationScreen />
@@ -301,32 +230,27 @@ function WebApp() {
 
   // Render main screen based on active tab
   const renderScreen = () => {
+    if (showAlanChat) {
+      return (
+        <AlanChatScreen
+          onNavigate={(screen) => {
+            setShowAlanChat(false);
+            handleNavigate(screen);
+          }}
+        />
+      );
+    }
+
     switch (activeTab) {
       case 'smp':
-        // SMP Forecast screen (Page 1 from Figma)
         return <SMPForecastScreen />;
       case 'bidding':
-        // Bidding Management screen (Page 3 from Figma)
         return <BiddingScreen webNavigation={webNavigation} />;
       case 'settlement':
-        // Settlement screen (Page 4 from Figma)
         return <SettlementScreen />;
       default:
         return <SMPForecastScreen />;
     }
-  };
-
-  // Render main content (including Alan Chat as overlay within same layout)
-  const renderContent = () => {
-    if (showAlanChat) {
-      return (
-        <AlanChatScreen onNavigate={(screen) => {
-          setShowAlanChat(false);
-          handleNavigate(screen);
-        }} />
-      );
-    }
-    return renderScreen();
   };
 
   return (
@@ -334,19 +258,23 @@ function WebApp() {
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
         <Header />
-        <View style={styles.content}>{renderContent()}</View>
-        <BottomTabBar activeTab={activeTab} onTabChange={(tab) => {
-          setShowAlanChat(false);
-          setActiveTab(tab);
-        }} />
+        <View style={styles.content}>{renderScreen()}</View>
+        <BottomTabBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setShowAlanChat(false);
+            setActiveTab(tab);
+          }}
+        />
 
-        {/* Floating Alan Button */}
+        {/* Floating Alan AI Button */}
         {!showAlanChat && (
           <TouchableOpacity
             style={styles.floatingAlanBtn}
             onPress={() => setShowAlanChat(true)}
+            activeOpacity={0.8}
           >
-            <View style={styles.alanAvatarSmall}>
+            <View style={styles.alanAvatar}>
               <Text style={styles.alanEmoji}>🤖</Text>
             </View>
           </TouchableOpacity>
@@ -356,40 +284,16 @@ function WebApp() {
   );
 }
 
-// Native App (full React Navigation)
-function NativeApp() {
-  const GestureHandlerRootView = require('react-native-gesture-handler').GestureHandlerRootView;
-  const AppNavigator = require('./src/navigation/AppNavigator').default;
-
-  return (
-    <GestureHandlerRootView style={styles.nativeContainer}>
-      <StatusBar style="light" />
-      <AppNavigator />
-    </GestureHandlerRootView>
-  );
-}
-
-// Main App Export
-export default function App() {
-  if (Platform.OS === 'web') {
-    return <WebApp />;
-  }
-  return <NativeApp />;
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  nativeContainer: {
-    flex: 1,
-  },
   content: {
     flex: 1,
   },
 
-  // Header (Figma style - white background)
+  // Header
   header: {
     backgroundColor: colors.background,
     paddingHorizontal: 16,
@@ -425,9 +329,6 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 8,
   },
-  headerIconBtn: {
-    padding: 4,
-  },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,8 +349,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4caf50',
   },
-  headerIcon: {
-    fontSize: 20,
+  versionText: {
+    fontSize: 12,
     color: colors.textMuted,
   },
 
@@ -469,7 +370,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.tabInactive,
     marginTop: 4,
     fontWeight: '500',
@@ -491,36 +392,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
-    marginTop: 16,
+    marginBottom: 8,
   },
   errorText: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 8,
     textAlign: 'center',
+    marginBottom: 20,
   },
-
-  // Alan Chat Header
-  alanChatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  retryButton: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderRadius: 8,
   },
-  alanBackBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alanChatTitle: {
-    fontSize: 17,
+  retryText: {
+    color: '#fff',
     fontWeight: '600',
-    color: colors.text,
   },
 
   // Floating Alan Button
@@ -535,7 +423,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  alanAvatarSmall: {
+  alanAvatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
