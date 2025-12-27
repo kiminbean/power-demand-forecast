@@ -20,6 +20,7 @@ import type {
   RTMModelInfo,
   PowerPlant,
   PowerPlantCreate,
+  CurrentSMP,
 } from '../types';
 
 const API_BASE_URL = '/api/v1';
@@ -132,6 +133,11 @@ class ApiService {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     return response.json();
+  }
+
+  // Current SMP (Real-time)
+  async getCurrentSMP(region: string = 'jeju'): Promise<CurrentSMP> {
+    return this.fetch(`/smp/current?region=${region}`);
   }
 
   // ============================================
@@ -282,6 +288,23 @@ export const mockData = {
         mape: 5.25,
         r2: 0.8264,
         prediction_type: 'single-step (RTM)',
+      },
+    };
+  },
+
+  // Current SMP Mock Data
+  getCurrentSMP(): CurrentSMP {
+    const currentHour = new Date().getHours();
+    const baseSMP = 95 + Math.sin((currentHour - 6) * Math.PI / 12) * 25;
+    return {
+      current_smp: Math.round(baseSMP * 10) / 10,
+      hour: currentHour,
+      region: 'jeju',
+      comparison: {
+        daily_avg: Math.round(baseSMP * 0.95 * 10) / 10,
+        weekly_avg: Math.round(baseSMP * 0.92 * 10) / 10,
+        daily_change_pct: 5.2,
+        weekly_change_pct: 8.3,
       },
     };
   },

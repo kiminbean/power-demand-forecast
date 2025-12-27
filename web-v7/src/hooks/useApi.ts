@@ -15,6 +15,7 @@ import type {
   OptimizedBids,
   PowerSupplyResponse,
   RealtimeStatus,
+  CurrentSMP,
 } from '../types';
 
 interface UseApiState<T> {
@@ -62,6 +63,14 @@ export function useSMPForecast(): UseApiState<SMPForecast> {
   return useApiData(
     () => apiService.getSMPForecast(),
     () => mockData.getSMPForecast()
+  );
+}
+
+// Current SMP Hook (Real-time)
+export function useCurrentSMP(): UseApiState<CurrentSMP> {
+  return useApiData(
+    () => apiService.getCurrentSMP(),
+    () => mockData.getCurrentSMP()
   );
 }
 

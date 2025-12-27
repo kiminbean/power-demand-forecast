@@ -1,18 +1,18 @@
 [
   {
-    "id": "692a5583-e182-43d3-a051-4e1d574ca5b2",
-    "name": "우리집 태양광 1호",
+    "id": "9286c0cc-25a5-4da5-9309-6758c18467be",
+    "name": "우리집 태양광 1호기",
     "type": "solar",
     "capacity": 3.0,
     "installDate": "2025-01-01",
     "contractType": "ppa",
     "location": {
-      "address": "",
+      "address": "제주특별자치도 제주시 한라대학로 38 (제주한라대학교)",
       "lat": null,
       "lng": null
     },
     "roofDirection": "south",
-    "createdAt": "2025-12-27T16:02:23.100705",
-    "updatedAt": "2025-12-27T16:05:32.983812"
+    "createdAt": "2025-12-27T21:13:37.752345",
+    "updatedAt": "2025-12-27T21:47:45.889742"
   }
 ]

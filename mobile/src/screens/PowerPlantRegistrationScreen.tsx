@@ -4,7 +4,7 @@
  * Register small-scale solar/wind/ESS plants
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,9 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import {
   PowerPlant,
   PlantType,
@@ -31,7 +33,6 @@ import {
   estimateMonthlyGeneration,
   estimateRevenue,
   getEfficiencyStatus,
-  formatCapacity,
   formatRevenue,
   WeatherCondition,
 } from '../utils/powerPlantUtils';
@@ -88,6 +89,73 @@ export default function PowerPlantRegistrationScreen({
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showAddressModal, setShowAddressModal] = useState(false);
+
+  // Daum Postcode API HTML - iOS 호환 버전
+  const daumPostcodeHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>주소 검색</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
+    #wrap { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="wrap"></div>
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  <script>
+    function sendToApp(address, zonecode) {
+      try {
+        var msg = JSON.stringify({ type: 'ADDRESS', address: address, zonecode: zonecode });
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(msg);
+        } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ReactNativeWebView) {
+          window.webkit.messageHandlers.ReactNativeWebView.postMessage(msg);
+        }
+      } catch(e) {
+        console.error('sendToApp error:', e);
+      }
+    }
+
+    new daum.Postcode({
+      oncomplete: function(data) {
+        var fullAddr = data.roadAddress || data.jibunAddress || data.address;
+        if (data.buildingName && data.buildingName !== '') {
+          fullAddr += ' (' + data.buildingName + ')';
+        }
+        sendToApp(fullAddr, data.zonecode);
+      },
+      width: '100%',
+      height: '100%'
+    }).embed(document.getElementById('wrap'));
+  </script>
+</body>
+</html>
+  `;
+
+  // Handle address selection from WebView
+  const handleAddressMessage = (event: any) => {
+    try {
+      const rawData = event?.nativeEvent?.data;
+      if (!rawData || typeof rawData !== 'string') return;
+
+      const data = JSON.parse(rawData);
+      console.log('Address message received:', data);
+
+      if (data.type === 'ADDRESS' && data.address) {
+        setAddress(data.address);
+        setTimeout(() => setShowAddressModal(false), 100);
+      }
+    } catch (e) {
+      // 다른 WebView 내부 메시지 무시
+      console.log('Non-address message:', e);
+    }
+  };
 
   // Calculate estimates based on form values
   const estimates = useMemo(() => {
@@ -382,13 +450,27 @@ export default function PowerPlantRegistrationScreen({
         {/* Address */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>주소 (선택)</Text>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="예: 제주시 연동"
-            placeholderTextColor={colors.textMuted}
-          />
+          <View style={styles.addressRow}>
+            <TextInput
+              style={[styles.input, styles.addressInput]}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="주소 검색을 눌러주세요"
+              placeholderTextColor={colors.textMuted}
+              editable={false}
+            />
+            <TouchableOpacity
+              style={styles.addressSearchButton}
+              onPress={() => setShowAddressModal(true)}
+            >
+              <Text style={styles.addressSearchButtonText}>🔍 검색</Text>
+            </TouchableOpacity>
+          </View>
+          {address ? (
+            <TouchableOpacity onPress={() => setAddress('')}>
+              <Text style={styles.clearAddressText}>✕ 주소 삭제</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Estimates Summary */}
@@ -446,6 +528,38 @@ export default function PowerPlantRegistrationScreen({
         {/* Bottom padding */}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Address Search Modal */}
+      <Modal
+        visible={showAddressModal}
+        animationType="slide"
+        onRequestClose={() => setShowAddressModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>주소 검색</Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowAddressModal(false)}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <WebView
+            key="daum-postcode"
+            source={{ html: daumPostcodeHtml, baseUrl: 'https://postcode.map.daum.net' }}
+            onMessage={handleAddressMessage}
+            style={styles.webView}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            originWhitelist={['*']}
+            onError={(e) => console.log('WebView error:', e.nativeEvent)}
+            onHttpError={(e) => console.log('WebView HTTP error:', e.nativeEvent)}
+            startInLoadingState={true}
+            cacheEnabled={false}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -758,5 +872,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  // Address search styles
+  addressRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addressInput: {
+    flex: 1,
+  },
+  addressSearchButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addressSearchButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearAddressText: {
+    fontSize: 12,
+    color: colors.red,
+    marginTop: 6,
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    backgroundColor: colors.primary,
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalCloseText: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  webView: {
+    flex: 1,
   },
 });

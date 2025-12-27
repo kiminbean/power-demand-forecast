@@ -26,12 +26,13 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { useSMPForecast, useModelInfo, useAutoRefresh } from '../hooks/useApi';
+import { useSMPForecast, useModelInfo, useAutoRefresh, useCurrentSMP } from '../hooks/useApi';
 import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 export default function SMPPrediction() {
   const { data: forecast, loading, refetch } = useSMPForecast();
+  const { data: currentSMP, refetch: refetchCurrentSMP } = useCurrentSMP();
   const { data: modelInfo } = useModelInfo();
   const [, setSelectedHour] = useState<number | null>(null);
   const { isDark } = useTheme();
@@ -45,7 +46,7 @@ export default function SMPPrediction() {
     tooltipBorder: isDark ? '#374151' : '#e5e7eb',
   };
 
-  useAutoRefresh(refetch, 300000); // Refresh every 5 minutes
+  useAutoRefresh(() => { refetch(); refetchCurrentSMP(); }, 300000); // Refresh every 5 minutes
 
   const currentHour = new Date().getHours();
 
@@ -140,10 +141,20 @@ export default function SMPPrediction() {
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="card">
-            <p className="text-sm text-text-muted mb-1">현재 SMP</p>
-            <div className="text-2xl font-bold text-smp">{stats.current.toFixed(1)}</div>
+          <div className="card bg-gradient-to-br from-smp/10 to-transparent">
+            <p className="text-sm text-text-muted mb-1">현재 SMP (실시간)</p>
+            <div className="text-2xl font-bold text-smp">
+              {currentSMP?.current_smp?.toFixed(1) ?? stats.current.toFixed(1)}
+            </div>
             <p className="text-xs text-text-muted">원/kWh</p>
+            {currentSMP?.comparison && (
+              <p className={clsx(
+                'text-xs mt-1',
+                currentSMP.comparison.daily_change_pct >= 0 ? 'text-danger' : 'text-success'
+              )}>
+                일평균 대비 {currentSMP.comparison.daily_change_pct >= 0 ? '+' : ''}{currentSMP.comparison.daily_change_pct.toFixed(1)}%
+              </p>
+            )}
           </div>
           <div className="card">
             <p className="text-sm text-text-muted mb-1">평균 예측</p>

@@ -17,7 +17,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { apiService, SettlementRecord, SettlementStats, CurrentSMP, SMPForecast } from '../services/api';
+import { apiService, SettlementRecord, SettlementStats } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -107,8 +107,6 @@ export default function SettlementScreen() {
   // API data states
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [summary, setSummary] = useState<SettlementStats | null>(null);
-  const [currentSMPData, setCurrentSMPData] = useState<CurrentSMP | null>(null);
-  const [smpForecast, setSmpForecast] = useState<SMPForecast | null>(null);
 
   // Transform settlements to chart data format
   const revenueData = settlements.length > 0 ? settlements.slice(0, 7).map(s => ({
@@ -130,17 +128,13 @@ export default function SettlementScreen() {
 
     try {
       // Fetch all data in parallel
-      const [settlementsData, summaryData, smpData, forecastData] = await Promise.all([
+      const [settlementsData, summaryData] = await Promise.all([
         apiService.getRecentSettlements(7),
         apiService.getSettlementSummary(),
-        apiService.getCurrentSMP('jeju'),
-        apiService.getSMPForecast(),
       ]);
 
       setSettlements(settlementsData);
       setSummary(summaryData);
-      setCurrentSMPData(smpData);
-      setSmpForecast(forecastData);
     } catch (error) {
       console.log('API unavailable, using mock data:', error);
       // Keep mock data on error
@@ -165,19 +159,8 @@ export default function SettlementScreen() {
     ? Math.round(settlements.reduce((sum, s) => sum + s.accuracy_pct, 0) / settlements.length * 10) / 10
     : 0.0;
 
-  // Current SMP values
-  const currentSMP = currentSMPData?.current_smp ?? 71.2;
-  const currentHour = currentSMPData?.hour ?? new Date().getHours();
-
-  // SMP high/low from forecast
-  const smpHigh = smpForecast ? {
-    value: Math.round(Math.max(...smpForecast.q50)),
-    hour: smpForecast.q50.indexOf(Math.max(...smpForecast.q50)),
-  } : { value: 102, hour: 18 };
-  const smpLow = smpForecast ? {
-    value: Math.round(Math.min(...smpForecast.q50)),
-    hour: smpForecast.q50.indexOf(Math.min(...smpForecast.q50)),
-  } : { value: 71, hour: 12 };
+  // Average DA-SMP from settlement summary (7-day average)
+  const avgDaSmp = (summary as any)?.avg_da_smp ?? 85.0;
 
   return (
     <ScrollView
@@ -212,22 +195,12 @@ export default function SettlementScreen() {
         ))}
       </View>
 
-      {/* Current SMP Card */}
+      {/* Average DA-SMP Card */}
       <View style={styles.smpCard}>
-        <View style={styles.smpCardLeft}>
-          <Text style={styles.smpCardLabel}>현재 SMP ({currentHour}시)</Text>
-          <Text style={styles.smpCardValue}>{Math.round(currentSMP)}</Text>
+        <View style={styles.smpCardContent}>
+          <Text style={styles.smpCardLabel}>평균 DA-SMP (7일)</Text>
+          <Text style={styles.smpCardValue}>{Math.round(avgDaSmp)}</Text>
           <Text style={styles.smpCardUnit}>원/kWh</Text>
-        </View>
-        <View style={styles.smpCardRight}>
-          <View style={styles.smpHighLow}>
-            <Text style={styles.highLowIcon}>↗</Text>
-            <Text style={styles.highLowText}>최고 {smpHigh.value} ({smpHigh.hour}시)</Text>
-          </View>
-          <View style={styles.smpHighLow}>
-            <Text style={styles.highLowIcon}>↘</Text>
-            <Text style={styles.highLowText}>최저 {smpLow.value} ({smpLow.hour}시)</Text>
-          </View>
         </View>
       </View>
 
@@ -413,12 +386,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.smpCardBg,
     borderRadius: 16,
     padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 16,
   },
-  smpCardLeft: {
-    flex: 1,
+  smpCardContent: {
+    alignItems: 'center',
   },
   smpCardLabel: {
     fontSize: 13,
@@ -434,24 +405,6 @@ const styles = StyleSheet.create({
   smpCardUnit: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-  },
-  smpCardRight: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  smpHighLow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  highLowIcon: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    marginRight: 4,
-  },
-  highLowText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
   },
 
   // Stats Row

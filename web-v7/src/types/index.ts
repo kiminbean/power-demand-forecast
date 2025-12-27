@@ -320,6 +320,19 @@ export interface RTMModelInfo {
   };
 }
 
+// Current SMP (Real-time)
+export interface CurrentSMP {
+  current_smp: number;
+  hour: number;
+  region: string;
+  comparison: {
+    daily_avg: number;
+    weekly_avg: number;
+    daily_change_pct: number;
+    weekly_change_pct: number;
+  };
+}
+
 // Power Plant Types (v6.2.0)
 export type PlantType = 'solar' | 'wind' | 'ess';
 export type ContractType = 'net_metering' | 'ppa';

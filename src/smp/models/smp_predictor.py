@@ -105,6 +105,11 @@ class SMPPredictor:
         self.target_mean = None
         self.target_std = None
 
+        # Data cache for performance (avoid reading CSV on every request)
+        self._cached_data: Optional[pd.DataFrame] = None
+        self._cache_timestamp: Optional[datetime] = None
+        self._cache_ttl_minutes: int = 60  # Cache for 1 hour (SMP updates hourly)
+
         self._load_model()
 
     def _get_device(self) -> torch.device:
@@ -229,7 +234,7 @@ class SMPPredictor:
         return self.model is not None and self.scaler_info is not None
 
     def _load_recent_data(self, hours: int = 24) -> Optional[pd.DataFrame]:
-        """최근 SMP 데이터 로드
+        """최근 SMP 데이터 로드 (캐싱 적용)
 
         Args:
             hours: 필요한 시간 수
@@ -238,28 +243,50 @@ class SMPPredictor:
             최근 SMP 데이터 DataFrame
         """
         try:
-            if not self.data_path.exists():
-                logger.warning(f"데이터 파일 없음: {self.data_path}")
-                return None
+            # Check if cache is valid
+            now = datetime.now()
+            cache_valid = (
+                self._cached_data is not None and
+                self._cache_timestamp is not None and
+                (now - self._cache_timestamp).total_seconds() < self._cache_ttl_minutes * 60
+            )
 
-            df = pd.read_csv(self.data_path)
+            if not cache_valid:
+                # Load and cache data
+                if not self.data_path.exists():
+                    logger.warning(f"데이터 파일 없음: {self.data_path}")
+                    return None
 
-            # 유효 데이터만 (SMP > 0)
-            df = df[df['smp_mainland'] > 0].copy()
+                logger.info(f"SMP 데이터 캐시 갱신 중...")
+                df = pd.read_csv(self.data_path)
 
-            # 시간순 정렬
-            def fix_hour_24(timestamp):
-                if ' 24:00' in str(timestamp):
-                    date_part = str(timestamp).replace(' 24:00', '')
-                    dt = pd.to_datetime(date_part) + pd.Timedelta(days=1)
-                    return dt
-                return pd.to_datetime(timestamp)
+                # 유효 데이터만 (SMP > 0)
+                df = df[df['smp_mainland'] > 0].copy()
 
-            df['datetime'] = df['timestamp'].apply(fix_hour_24)
-            df = df.sort_values('datetime').reset_index(drop=True)
+                # 시간순 정렬 (벡터화된 datetime 파싱)
+                # '24:00' → 다음날 '00:00'으로 변환
+                timestamps = df['timestamp'].astype(str)
+                has_24 = timestamps.str.contains(' 24:00')
 
-            # 최근 hours 시간 데이터
-            recent_df = df.tail(hours)
+                # 기본 파싱
+                df['datetime'] = pd.to_datetime(
+                    timestamps.str.replace(' 24:00', ' 00:00', regex=False),
+                    format='mixed',
+                    errors='coerce'
+                )
+
+                # 24:00 → 다음날로 조정
+                df.loc[has_24, 'datetime'] = df.loc[has_24, 'datetime'] + pd.Timedelta(days=1)
+
+                df = df.sort_values('datetime').reset_index(drop=True)
+
+                # Cache the processed data
+                self._cached_data = df
+                self._cache_timestamp = now
+                logger.info(f"SMP 데이터 캐시 완료: {len(df)}행")
+
+            # Get recent data from cache
+            recent_df = self._cached_data.tail(hours).copy()
 
             if len(recent_df) < hours:
                 logger.warning(f"데이터 부족: {len(recent_df)}/{hours}")
@@ -271,6 +298,8 @@ class SMPPredictor:
 
         except Exception as e:
             logger.error(f"데이터 로드 실패: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _create_features(self, df: pd.DataFrame) -> np.ndarray:

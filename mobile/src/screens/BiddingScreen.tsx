@@ -20,6 +20,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  Switch,
 } from 'react-native';
 import { apiService, SMPForecast, MarketStatus, OptimizedBids, PowerPlant, DualSettlement } from '../services/api';
 import PowerPlantRegistrationScreen from './PowerPlantRegistrationScreen';
@@ -225,6 +226,17 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
 
   // Dual Settlement state (Phase 7)
   const [dualSettlement, setDualSettlement] = useState<DualSettlement | null>(null);
+
+  // Check if DAM is open (before 10:00 AM)
+  const currentHour = new Date().getHours();
+  const isDamOpen = currentHour < 10; // DAM closes at 10:00 AM
+
+  // Auto-switch to RTM when DAM is closed
+  useEffect(() => {
+    if (!isDamOpen && selectedMarket === 'dam') {
+      setSelectedMarket('rtm');
+    }
+  }, [isDamOpen, selectedMarket]);
 
   // Calculate totals
   const totalMW = segments.reduce((sum, s) => sum + s.quantity, 0);
@@ -838,13 +850,26 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         {/* DAM/RTM Market Tabs (Phase 6) */}
         <View style={styles.marketTabs}>
           <TouchableOpacity
-            style={[styles.marketTab, selectedMarket === 'dam' && styles.marketTabActive]}
-            onPress={() => setSelectedMarket('dam')}
+            style={[
+              styles.marketTab,
+              selectedMarket === 'dam' && styles.marketTabActive,
+              !isDamOpen && styles.marketTabDisabled,
+            ]}
+            onPress={() => isDamOpen && setSelectedMarket('dam')}
+            disabled={!isDamOpen}
           >
-            <Text style={[styles.marketTabTitle, selectedMarket === 'dam' && styles.marketTabTitleActive]}>
-              DAM
+            <Text style={[
+              styles.marketTabTitle,
+              selectedMarket === 'dam' && styles.marketTabTitleActive,
+              !isDamOpen && styles.marketTabTitleDisabled,
+            ]}>
+              {isDamOpen ? 'DAM' : 'DAM 마감'}
             </Text>
-            <Text style={[styles.marketTabSubtext, selectedMarket === 'dam' && styles.marketTabSubtextActive]}>
+            <Text style={[
+              styles.marketTabSubtext,
+              selectedMarket === 'dam' && styles.marketTabSubtextActive,
+              !isDamOpen && styles.marketTabSubtextDisabled,
+            ]}>
               D-1 10:00 마감
             </Text>
           </TouchableOpacity>
@@ -882,28 +907,6 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
             <Text style={styles.registerBtnText}>+ 발전소 등록</Text>
           </TouchableOpacity>
         </View>
-
-        {/* VPP Toggle - Only show if plants exist */}
-        {powerPlants.length > 0 && (
-          <View style={styles.vppToggleContainer}>
-            <View style={styles.vppToggleLeft}>
-              <Text style={styles.vppToggleLabel}>VPP 자동 입찰</Text>
-              <Text style={styles.vppToggleCapacity}>
-                {activePlantCapacityKw >= 1000
-                  ? `${(activePlantCapacityKw / 1000).toFixed(2)} MW 참여`
-                  : `${activePlantCapacityKw.toFixed(0)} kW 참여`}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.vppToggleBtn, vppBiddingEnabled && styles.vppToggleBtnActive]}
-              onPress={() => setVppBiddingEnabled(!vppBiddingEnabled)}
-            >
-              <Text style={[styles.vppToggleBtnText, vppBiddingEnabled && styles.vppToggleBtnTextActive]}>
-                {vppBiddingEnabled ? 'ON' : 'OFF'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* Registered Plants List */}
         {powerPlants.length > 0 ? (
@@ -1357,10 +1360,13 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
       {/* Simulation Buttons */}
       <View style={styles.simulationButtons}>
         <TouchableOpacity
-          style={styles.simulationBtn}
+          style={[styles.simulationBtn, !isDamOpen && styles.simulationBtnDisabled]}
           onPress={handleDAMSimulation}
+          disabled={!isDamOpen}
         >
-          <Text style={styles.simulationBtnText}>DAM 시뮬레이션</Text>
+          <Text style={[styles.simulationBtnText, !isDamOpen && styles.simulationBtnTextDisabled]}>
+            {isDamOpen ? 'DAM 시뮬레이션' : 'DAM 마감'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.simulationBtn, styles.rtmSimulationBtn]}
@@ -1660,88 +1666,64 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         <>
           {/* ===== Simplified UI for Small Capacity (< 1MW) ===== */}
 
-          {/* DAM/RTM Tabs for small capacity users too */}
-          {powerPlants.length > 0 && (
-            <View style={styles.marketTabs}>
-              <TouchableOpacity
-                style={[styles.marketTab, selectedMarket === 'dam' && styles.marketTabActive]}
-                onPress={() => setSelectedMarket('dam')}
-              >
-                <Text style={[styles.marketTabTitle, selectedMarket === 'dam' && styles.marketTabTitleActive]}>
-                  DAM
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.marketTab, selectedMarket === 'rtm' && styles.marketTabActive]}
-                onPress={() => setSelectedMarket('rtm')}
-              >
-                <Text style={[styles.marketTabTitle, selectedMarket === 'rtm' && styles.marketTabTitleActive]}>
-                  RTM
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* VPP Auto-Bidding Summary - Conditional on VPP toggle (Phase 1) */}
-          {vppBiddingEnabled ? (
-            <View style={styles.vppSummaryCard}>
-              <View style={styles.vppHeader}>
+          {/* VPP Auto-Bidding Card with Toggle */}
+          <View style={styles.vppSummaryCard}>
+            <View style={styles.vppHeaderWithToggle}>
+              <View style={styles.vppHeaderLeft}>
                 <Text style={styles.vppIcon}>🤖</Text>
                 <Text style={styles.vppTitle}>VPP 자동 입찰</Text>
               </View>
+              <Switch
+                value={vppBiddingEnabled}
+                onValueChange={setVppBiddingEnabled}
+                trackColor={{ false: '#e2e8f0', true: '#22c55e' }}
+                thumbColor={vppBiddingEnabled ? '#ffffff' : '#f4f3f4'}
+                ios_backgroundColor="#e2e8f0"
+              />
+            </View>
 
-              <View style={styles.vppContent}>
-                {powerPlants.length > 0 ? (
-                  <>
-                    <View style={styles.vppRow}>
-                      <Text style={styles.vppLabel}>오늘의 입찰량</Text>
-                      <Text style={styles.vppValue}>{recommendedCapacity.toFixed(1)} kWh</Text>
-                    </View>
-                    <View style={styles.vppRow}>
-                      <Text style={styles.vppLabel}>예상 수익</Text>
-                      <Text style={[styles.vppValue, { color: colors.green }]}>
-                        약 {(recommendedCapacity * (smpMid || 100)).toLocaleString()}원
-                      </Text>
-                    </View>
-                    <View style={styles.vppRow}>
-                      <Text style={styles.vppLabel}>현재 SMP</Text>
-                      <Text style={styles.vppValue}>{smpMid}원/kWh</Text>
-                    </View>
-                    <View style={styles.vppRow}>
-                      <Text style={styles.vppLabel}>날씨</Text>
-                      <Text style={styles.vppValue}>
-                        {currentWeather === 'clear' ? '맑음 ☀️' :
-                         currentWeather === 'partly_cloudy' ? '구름많음 ⛅' :
-                         currentWeather === 'cloudy' ? '흐림 ☁️' : '비 🌧️'}
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.vppEmptyState}>
-                    <Text style={styles.vppEmptyText}>
-                      발전소를 등록하면{'\n'}자동 입찰 정보를 확인할 수 있습니다
+            <View style={styles.vppContent}>
+              {powerPlants.length > 0 ? (
+                <>
+                  <View style={styles.vppRow}>
+                    <Text style={styles.vppLabel}>오늘의 입찰량</Text>
+                    <Text style={styles.vppValue}>{recommendedCapacity.toFixed(1)} kWh</Text>
+                  </View>
+                  <View style={styles.vppRow}>
+                    <Text style={styles.vppLabel}>예상 수익</Text>
+                    <Text style={[styles.vppValue, { color: colors.green }]}>
+                      약 {(recommendedCapacity * (smpMid || 100)).toLocaleString()}원
                     </Text>
                   </View>
-                )}
-              </View>
-
-              <View style={styles.vppFooter}>
-                <Text style={styles.vppFooterIcon}>ℹ️</Text>
-                <Text style={styles.vppFooterText}>
-                  VPP가 최적의 시간대와 가격으로 자동 입찰합니다
-                </Text>
-              </View>
+                  <View style={styles.vppRow}>
+                    <Text style={styles.vppLabel}>현재 SMP</Text>
+                    <Text style={styles.vppValue}>{smpMid}원/kWh</Text>
+                  </View>
+                  <View style={styles.vppRow}>
+                    <Text style={styles.vppLabel}>날씨</Text>
+                    <Text style={styles.vppValue}>
+                      {currentWeather === 'clear' ? '맑음 ☀️' :
+                       currentWeather === 'partly_cloudy' ? '구름많음 ⛅' :
+                       currentWeather === 'cloudy' ? '흐림 ☁️' : '비 🌧️'}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.vppEmptyState}>
+                  <Text style={styles.vppEmptyText}>
+                    발전소를 등록하면{'\n'}자동 입찰 정보를 확인할 수 있습니다
+                  </Text>
+                </View>
+              )}
             </View>
-          ) : (
-            /* VPP Disabled Card (Phase 1) */
-            <View style={styles.vppDisabledCard}>
-              <Text style={styles.vppDisabledIcon}>⏸</Text>
-              <Text style={styles.vppDisabledTitle}>VPP 자동입찰 비활성화</Text>
-              <Text style={styles.vppDisabledDesc}>
-                발전소 상태를 관리하거나{'\n'}VPP를 활성화하여 자동 입찰하세요
+
+            <View style={styles.vppFooter}>
+              <Text style={styles.vppFooterIcon}>ℹ️</Text>
+              <Text style={styles.vppFooterText}>
+                VPP가 최적의 시간대와 가격으로 자동 입찰합니다
               </Text>
             </View>
-          )}
+          </View>
 
           {/* Simple Status - Show VPP toggle state (Phase 1) */}
           {powerPlants.length > 0 && (
@@ -2099,6 +2081,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBg,
     borderRadius: 16,
     padding: 16,
+    marginTop: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(99, 102, 241, 0.3)',
@@ -2107,6 +2090,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
+    gap: 10,
+  },
+  vppHeaderWithToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  vppHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   vppIcon: {
@@ -2544,6 +2538,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.background,
+  },
+  simulationBtnDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  simulationBtnTextDisabled: {
+    color: '#9ca3af',
   },
 
   // Modal Styles
@@ -3043,6 +3043,17 @@ const styles = StyleSheet.create({
   },
   marketTabSubtextActive: {
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  marketTabDisabled: {
+    backgroundColor: '#f3f4f6',
+    borderColor: '#d1d5db',
+    opacity: 0.6,
+  },
+  marketTabTitleDisabled: {
+    color: '#9ca3af',
+  },
+  marketTabSubtextDisabled: {
+    color: '#9ca3af',
   },
 
   // Phase 6: RTM Badge Styles

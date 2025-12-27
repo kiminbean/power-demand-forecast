@@ -36,7 +36,34 @@ from api.renewable_ml_predictor import get_ml_predictor, RenewablePrediction
 # Settlement calculator
 from api.settlement_calculator import get_settlement_calculator
 
+# SMP Predictor (v3.2 Optuna BiLSTM+Attention model)
+try:
+    from src.smp.models.smp_predictor import SMPPredictor, get_smp_predictor
+    SMP_PREDICTOR_AVAILABLE = True
+except ImportError as e:
+    SMP_PREDICTOR_AVAILABLE = False
+    print(f"Warning: SMP Predictor not available: {e}")
+
 logger = logging.getLogger(__name__)
+
+# Initialize SMP Predictor (v3.2 Optuna - MAPE 7.17%, R² 0.77)
+_smp_predictor = None
+
+def get_or_create_smp_predictor():
+    """Get or create SMP predictor singleton"""
+    global _smp_predictor
+    if _smp_predictor is None and SMP_PREDICTOR_AVAILABLE:
+        try:
+            _smp_predictor = SMPPredictor(use_advanced=True)
+            if _smp_predictor.is_ready():
+                logger.info("SMP v3.2 Optuna model loaded (MAPE: 7.17%, R²: 0.77)")
+            else:
+                logger.warning("SMP model not ready, will use fallback")
+                _smp_predictor = None
+        except Exception as e:
+            logger.error(f"Failed to load SMP predictor: {e}")
+            _smp_predictor = None
+    return _smp_predictor
 
 # 프로젝트 루트
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -241,44 +268,66 @@ async def get_smp_forecast():
     """
     24시간 SMP 예측
 
-    실제 EPSIS 데이터 기반 + LSTM 모델 예측
+    BiLSTM+Attention v3.2 Optuna 모델 사용 (MAPE 7.17%, R² 0.77)
+    모델 미사용 시 EPSIS 실제 데이터 기반 폴백
     """
     try:
+        hours = list(range(1, 25))
+
+        # 1. Try to use the trained model first
+        predictor = get_or_create_smp_predictor()
+
+        if predictor is not None and predictor.is_ready():
+            # Use BiLSTM+Attention v3.2 Optuna model
+            result = predictor.predict_24h()
+
+            model_used = result.get('model_used', 'v3.2')
+            mape = result.get('mape', 7.17)
+
+            # Model predictions
+            q10 = [round(float(v), 2) for v in result['q10']]
+            q50 = [round(float(v), 2) for v in result['q50']]
+            q90 = [round(float(v), 2) for v in result['q90']]
+
+            logger.info(f"SMP forecast using model {model_used} (MAPE: {mape}%)")
+
+            return SMPForecastResponse(
+                q10=q10,
+                q50=q50,
+                q90=q90,
+                hours=hours,
+                model_used=f"BiLSTM+Attention v3.2 Optuna (MAPE: {mape}%)",
+                confidence=0.92,
+                created_at=datetime.now().isoformat(),
+                data_source="Model Prediction + EPSIS Historical"
+            )
+
+        # 2. Fallback to EPSIS actual data if model not available
+        logger.warning("SMP model not available, using EPSIS fallback")
         df = load_smp_data()
 
         if df.empty:
-            # 데이터가 없으면 에러
             raise HTTPException(status_code=503, detail="SMP data not available")
 
-        # 최근 24시간 실제 데이터를 기준으로 예측
-        # 실제 배포에서는 학습된 모델로 예측해야 함
         latest_date = df['date'].max()
         latest_data = df[df['date'] == latest_date].sort_values('hour')
 
-        # 시간별 SMP (제주)
-        hours = list(range(1, 25))
-
         if len(latest_data) >= 24:
-            # 실제 데이터 기반
             q50_raw = latest_data['smp_jeju'].values[:24].tolist()
-
-            # 0 값 처리 (이상치) - 육지 SMP 또는 이전 시간 값으로 대체
             mainland_smp = latest_data['smp_mainland'].values[:24].tolist()
             q50 = []
             for i, v in enumerate(q50_raw):
                 if v <= 0 or pd.isna(v):
-                    # 육지 SMP 사용 (없으면 이전 값)
                     fallback = mainland_smp[i] if mainland_smp[i] > 0 else (q50[-1] if q50 else 100.0)
                     q50.append(fallback)
                 else:
                     q50.append(v)
         else:
-            # 최근 7일 평균 패턴 사용
             recent = df.tail(24 * 7)
             hourly_avg = recent.groupby('hour')['smp_jeju'].mean()
             q50 = [hourly_avg.get(h, 100.0) for h in hours]
 
-        # 신뢰구간 계산 (표준편차 기반)
+        # Calculate confidence interval from historical std
         recent_30d = df.tail(24 * 30)
         hourly_std = recent_30d.groupby('hour')['smp_jeju'].std()
 
@@ -286,10 +335,9 @@ async def get_smp_forecast():
         q90 = []
         for i, h in enumerate(hours):
             std = hourly_std.get(h, 10.0)
-            # 최소값을 q50의 70%로 설정하여 0 방지
             q10_val = max(q50[i] * 0.7, q50[i] - 1.28 * std)
-            q10.append(round(q10_val, 2))  # 10% 분위
-            q90.append(round(q50[i] + 1.28 * std, 2))  # 90% 분위
+            q10.append(round(q10_val, 2))
+            q90.append(round(q50[i] + 1.28 * std, 2))
 
         q50 = [round(v, 2) for v in q50]
 
@@ -298,8 +346,8 @@ async def get_smp_forecast():
             q50=q50,
             q90=q90,
             hours=hours,
-            model_used="BiLSTM+Attention v3.2 Optuna + EPSIS Real Data",
-            confidence=0.92,
+            model_used="EPSIS Fallback (Model Unavailable)",
+            confidence=0.75,
             created_at=datetime.now().isoformat(),
             data_source="EPSIS (epsis.kpx.or.kr)"
         )
@@ -308,6 +356,8 @@ async def get_smp_forecast():
         raise
     except Exception as e:
         logger.error(f"Error getting SMP forecast: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

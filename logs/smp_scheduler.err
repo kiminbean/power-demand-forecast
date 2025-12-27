@@ -713,3 +713,43 @@
 2025-12-27 16:15:08,230 - INFO - Fetched 24 records for today
 2025-12-27 16:15:08,467 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
 2025-12-27 16:15:08,467 - INFO - Today's data updated: 24 records
+2025-12-27 17:15:17,234 - INFO - Running hourly update...
+2025-12-27 17:15:17,239 - INFO - Fetching today's data
+2025-12-27 17:15:17,578 - INFO - EPSIS 세션 초기화 완료
+2025-12-27 17:15:17,582 - INFO - 수집 중: 2025년 12월
+2025-12-27 17:15:17,735 - INFO -   → 수집 완료: 648건
+2025-12-27 17:15:18,465 - INFO - Fetched 24 records for today
+2025-12-27 17:15:18,787 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
+2025-12-27 17:15:18,788 - INFO - Today's data updated: 24 records
+2025-12-27 18:15:28,751 - INFO - Running hourly update...
+2025-12-27 18:15:28,762 - INFO - Fetching today's data
+2025-12-27 18:15:29,265 - INFO - EPSIS 세션 초기화 완료
+2025-12-27 18:15:29,267 - INFO - 수집 중: 2025년 12월
+2025-12-27 18:15:29,416 - INFO -   → 수집 완료: 648건
+2025-12-27 18:15:29,978 - INFO - Fetched 24 records for today
+2025-12-27 18:15:30,281 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
+2025-12-27 18:15:30,281 - INFO - Today's data updated: 24 records
+2025-12-27 19:15:43,195 - INFO - Running hourly update...
+2025-12-27 19:15:44,095 - INFO - Fetching today's data
+2025-12-27 19:15:46,916 - INFO - EPSIS 세션 초기화 완료
+2025-12-27 19:15:46,917 - INFO - 수집 중: 2025년 12월
+2025-12-27 19:15:47,194 - INFO -   → 수집 완료: 648건
+2025-12-27 19:15:48,351 - INFO - Fetched 24 records for today
+2025-12-27 19:15:49,409 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
+2025-12-27 19:15:49,512 - INFO - Today's data updated: 24 records
+2025-12-27 20:15:55,219 - INFO - Running hourly update...
+2025-12-27 20:15:55,227 - INFO - Fetching today's data
+2025-12-27 20:15:55,519 - INFO - EPSIS 세션 초기화 완료
+2025-12-27 20:15:55,520 - INFO - 수집 중: 2025년 12월
+2025-12-27 20:15:55,670 - INFO -   → 수집 완료: 648건
+2025-12-27 20:15:56,315 - INFO - Fetched 24 records for today
+2025-12-27 20:15:56,692 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
+2025-12-27 20:15:56,694 - INFO - Today's data updated: 24 records
+2025-12-27 21:15:02,248 - INFO - Running hourly update...
+2025-12-27 21:15:02,251 - INFO - Fetching today's data
+2025-12-27 21:15:02,734 - INFO - EPSIS 세션 초기화 완료
+2025-12-27 21:15:02,736 - INFO - 수집 중: 2025년 12월
+2025-12-27 21:15:02,877 - INFO -   → 수집 완료: 648건
+2025-12-27 21:15:03,487 - INFO - Fetched 24 records for today
+2025-12-27 21:15:03,747 - INFO - 저장 완료: /Users/ibkim/Ormi_1/power-demand-forecast/data/smp/smp_real_epsis.csv
+2025-12-27 21:15:03,747 - INFO - Today's data updated: 24 records

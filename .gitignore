@@ -101,3 +101,7 @@ requirements-full.txt
 # Docker secrets
 docker/.env
 docker/htpasswd
+
+# === Node.js ===
+node_modules/
+npm-debug.log
