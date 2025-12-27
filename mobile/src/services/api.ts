@@ -490,9 +490,22 @@ class ApiService {
     return this.fetch('/api/v1/power-plants');
   }
 
-  // Get a single power plant
-  async getPowerPlant(id: string): Promise<PowerPlant> {
-    return this.fetch(`/api/v1/power-plants/${id}`);
+  // Get a single power plant (returns null for 404 - locally-stored plants)
+  async getPowerPlant(id: string): Promise<PowerPlant | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/power-plants/${id}`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // Plant may only exist locally
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
+      return await response.json();
+    } catch {
+      return null; // Silently handle errors for local plants
+    }
   }
 
   // Create a new power plant
@@ -503,12 +516,24 @@ class ApiService {
     });
   }
 
-  // Update an existing power plant
-  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate>): Promise<PowerPlant> {
-    return this.fetch(`/api/v1/power-plants/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(plant),
-    });
+  // Update an existing power plant (silently handles 404 for locally-stored plants)
+  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate>): Promise<PowerPlant | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/power-plants/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(plant),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // Plant may only exist locally
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
+      return await response.json();
+    } catch {
+      return null; // Silently handle errors for local plants
+    }
   }
 
   // Delete a power plant (silently handles 404 for locally-stored plants)
