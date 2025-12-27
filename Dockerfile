@@ -29,12 +29,12 @@ FROM base as dependencies
 
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt .
+# Copy requirements (Docker-optimized with CPU PyTorch)
+COPY requirements-docker.txt .
 
 # Install dependencies
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements-docker.txt
 
 # -----------------------------------------------------------------------------
 # Stage 3: Test (optional, for CI)
@@ -67,6 +67,7 @@ RUN useradd --create-home --shell /bin/bash appuser
 # Copy application code
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser api/ ./api/
+COPY --chown=appuser:appuser tools/ ./tools/
 COPY --chown=appuser:appuser configs/ ./configs/
 
 # Create necessary directories

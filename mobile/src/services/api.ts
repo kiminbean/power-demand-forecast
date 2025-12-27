@@ -5,25 +5,29 @@
  */
 
 import { Platform } from 'react-native';
+import { API_URL, config } from '../config/environment';
 
-// API Base URL configuration for different platforms
-// - web: localhost works (same browser origin)
-// - ios: localhost works in simulator (shares network with host)
-// - android: 10.0.2.2 is special alias for host machine in Android emulator
-// For physical devices, use your computer's local IP address
+// API Base URL configuration
+// For external deployment (Docker + ngrok), use the URL from environment.ts
+// For local development, fallback to platform-specific URLs
 const getApiBaseUrl = (): string => {
+  // If environment is docker or production, use configured URL directly
+  if (config.isDocker || config.isProduction) {
+    return API_URL;
+  }
+
+  // For local development, use platform-specific URLs
   switch (Platform.OS) {
     case 'web':
       return 'http://localhost:8000';
     case 'android':
       // Android emulator uses 10.0.2.2 to access host's localhost
-      // For physical devices, change to your computer's IP: http://192.168.x.x:8000
       return 'http://10.0.2.2:8000';
     case 'ios':
       // iOS Simulator shares network with host, localhost works
       return 'http://localhost:8000';
     default:
-      return 'http://localhost:8000';
+      return API_URL;
   }
 };
 
