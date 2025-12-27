@@ -26,11 +26,11 @@
  * For production:
  *   API_URL = 'https://api.your-domain.com'
  */
-export const API_URL = 'http://localhost:8000';
+export const API_URL = 'https://fourpenny-homochrome-amir.ngrok-free.dev';
 
 // Environment type for conditional logic
 export type Environment = 'local' | 'docker' | 'production';
-export const CURRENT_ENV: Environment = 'local';
+export const CURRENT_ENV: Environment = 'docker';
 
 // ============================================
 // Derived Configuration (no need to modify)
