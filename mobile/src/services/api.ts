@@ -6,11 +6,28 @@
 
 import { Platform } from 'react-native';
 
-// API Base URL - different for web vs native
-// Uses FastAPI server on port 8000 with /api/v1 prefix
-const API_BASE_URL = Platform.OS === 'web'
-  ? 'http://localhost:8000'
-  : 'http://localhost:8000';  // Change to your server IP for device testing
+// API Base URL configuration for different platforms
+// - web: localhost works (same browser origin)
+// - ios: localhost works in simulator (shares network with host)
+// - android: 10.0.2.2 is special alias for host machine in Android emulator
+// For physical devices, use your computer's local IP address
+const getApiBaseUrl = (): string => {
+  switch (Platform.OS) {
+    case 'web':
+      return 'http://localhost:8000';
+    case 'android':
+      // Android emulator uses 10.0.2.2 to access host's localhost
+      // For physical devices, change to your computer's IP: http://192.168.x.x:8000
+      return 'http://10.0.2.2:8000';
+    case 'ios':
+      // iOS Simulator shares network with host, localhost works
+      return 'http://localhost:8000';
+    default:
+      return 'http://localhost:8000';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export interface SMPForecast {
@@ -119,6 +136,45 @@ export interface ModelInfo {
   mape?: number | string;
   coverage?: number | string;
   message?: string;
+}
+
+// Power Plant Types (v6.2.0)
+export type PlantType = 'solar' | 'wind' | 'ess';
+export type ContractType = 'net_metering' | 'ppa';
+export type RoofDirection = 'south' | 'east' | 'west' | 'flat';
+export type PlantStatus = 'active' | 'maintenance' | 'paused';
+
+export interface PowerPlant {
+  id: string;
+  name: string;
+  type: PlantType;
+  capacity: number;
+  installDate: string;
+  contractType: ContractType;
+  location: {
+    address: string;
+    lat?: number;
+    lng?: number;
+  };
+  roofDirection?: RoofDirection;
+  status?: PlantStatus;  // Operating status (default: active)
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PowerPlantCreate {
+  name: string;
+  type: PlantType;
+  capacity: number;
+  installDate: string;
+  contractType: ContractType;
+  location: {
+    address: string;
+    lat?: number;
+    lng?: number;
+  };
+  roofDirection?: RoofDirection;
+  status?: PlantStatus;  // Operating status (default: active)
 }
 
 // RTM (Real-Time Market) Prediction Types
@@ -394,6 +450,57 @@ class ApiService {
   // RTM Model Info
   async getRTMModelInfo(): Promise<RTMModelInfo> {
     return this.fetch('/smp/rtm/model/info');
+  }
+
+  // ============================================
+  // Power Plant Management (v6.2.0)
+  // ============================================
+
+  // Get all power plants
+  async getPowerPlants(): Promise<PowerPlant[]> {
+    return this.fetch('/api/v1/power-plants');
+  }
+
+  // Get a single power plant
+  async getPowerPlant(id: string): Promise<PowerPlant> {
+    return this.fetch(`/api/v1/power-plants/${id}`);
+  }
+
+  // Create a new power plant
+  async createPowerPlant(plant: PowerPlantCreate): Promise<PowerPlant> {
+    return this.fetch('/api/v1/power-plants', {
+      method: 'POST',
+      body: JSON.stringify(plant),
+    });
+  }
+
+  // Update an existing power plant
+  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate>): Promise<PowerPlant> {
+    return this.fetch(`/api/v1/power-plants/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(plant),
+    });
+  }
+
+  // Delete a power plant (silently handles 404 for locally-stored plants)
+  async deletePowerPlant(id: string): Promise<{ success: boolean }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/power-plants/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        // Silently return for 404 (plant may only exist locally)
+        if (response.status === 404) {
+          return { success: true };
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
+      return await response.json();
+    } catch {
+      // Silently fail - plant deletion from local storage already succeeded
+      return { success: true };
+    }
   }
 }
 
