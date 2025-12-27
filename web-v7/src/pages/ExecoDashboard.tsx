@@ -375,20 +375,6 @@ export default function ExecoDashboard() {
             </div>
           </div>
 
-          {/* 재생에너지 비율 - 실시간 데이터 */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">재생에너지 비율</span>
-            <div className="flex items-center gap-3.5 px-3.5">
-              <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#ff1d1d' }}>{renewableRatio.toFixed(1)}</span>
-                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#ff1d1d' }}>%</span>
-              </div>
-              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: '#ffeaea' }}>
-                <span className="text-xl tracking-[-0.72px]" style={{ color: '#ff1d1d' }}>태양광+풍력</span>
-              </div>
-            </div>
-          </div>
-
           {/* 계통 주파수 - 실시간 데이터 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
             <span className="text-2xl font-medium text-black tracking-[-0.8px]">계통 주파수</span>
@@ -401,6 +387,20 @@ export default function ExecoDashboard() {
                 <span className="text-xl tracking-[-0.72px]" style={{ color: gridFrequency >= 59.8 && gridFrequency <= 60.2 ? '#00c515' : '#ff1d1d' }}>
                   {gridFrequency >= 59.8 && gridFrequency <= 60.2 ? '정상' : '주의'}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 재생에너지 비율 - 실시간 데이터 */}
+          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-2xl font-medium text-black tracking-[-0.8px]">재생에너지 비율</span>
+            <div className="flex items-center gap-3.5 px-3.5">
+              <div className="flex items-end gap-1">
+                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#ff1d1d' }}>{renewableRatio.toFixed(1)}</span>
+                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#ff1d1d' }}>%</span>
+              </div>
+              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: '#ffeaea' }}>
+                <span className="text-xl tracking-[-0.72px]" style={{ color: '#ff1d1d' }}>태양광+풍력</span>
               </div>
             </div>
           </div>
@@ -431,7 +431,7 @@ export default function ExecoDashboard() {
               </div>
 
               {/* v6 스타일 간단한 차트 - 실측/예측 구분 */}
-              <div className="bg-white rounded-[14px] p-6 flex-1">
+              <div className="bg-white rounded-[14px] p-6" style={{ height: '640px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData} margin={{ top: 25, right: 30, left: 0, bottom: 10 }}>
                     <defs>

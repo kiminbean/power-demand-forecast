@@ -207,10 +207,10 @@ export default function AlanChatScreen({ onNavigate }: Props) {
   const [currentLevel, setCurrentLevel] = useState<'main' | 'sub'>('main');
   const [selectedMainKeyword, setSelectedMainKeyword] = useState<KeywordItem | null>(null);
 
-  // Add assistant message helper
+  // Add assistant message helper (use unique suffix to avoid duplicate keys)
   const addAssistantMessage = (content: string) => {
     const assistantMessage: AlanMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_assistant`,
       role: 'assistant',
       content,
       timestamp: new Date(),
@@ -241,9 +241,9 @@ export default function AlanChatScreen({ onNavigate }: Props) {
     setShowChat(true);
     setIsLoading(true);
 
-    // Add user selection as message
+    // Add user selection as message (use unique suffix to avoid duplicate keys)
     const userMessage: AlanMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_user`,
       role: 'user',
       content: `${label} 정보를 보여줘`,
       timestamp: new Date(),
@@ -483,9 +483,9 @@ export default function AlanChatScreen({ onNavigate }: Props) {
     setShowChat(true);
     setInputText('');
 
-    // Add user message
+    // Add user message (use unique suffix to avoid duplicate keys)
     const userMessage: AlanMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_user`,
       role: 'user',
       content: messageText,
       timestamp: new Date(),
@@ -498,9 +498,9 @@ export default function AlanChatScreen({ onNavigate }: Props) {
       // Call Alan API
       const response = await alanApi.sendMessage(messageText);
 
-      // Add assistant message
+      // Add assistant message (use unique suffix to avoid duplicate keys)
       const assistantMessage: AlanMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `${Date.now()}_assistant`,
         role: 'assistant',
         content: response.answer,
         timestamp: new Date(),
@@ -517,7 +517,7 @@ export default function AlanChatScreen({ onNavigate }: Props) {
     } catch (error) {
       console.error('[Alan] Error:', error);
       const errorMessage: AlanMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `${Date.now()}_error`,
         role: 'assistant',
         content: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해 주세요.',
         timestamp: new Date(),
