@@ -314,6 +314,86 @@ class TestAPISchemas:
 
 
 # ============================================================
+# CatBoost RTM Predictor Tests
+# ============================================================
+
+class TestCatBoostRTMPredictor:
+    """CatBoost v3.19 RTM 예측기 테스트"""
+
+    def test_catboost_import(self):
+        """CatBoost 예측기 임포트 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+        assert SMPCatBoostPredictor is not None
+
+    def test_catboost_model_load(self):
+        """CatBoost 모델 로드 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+
+        predictor = SMPCatBoostPredictor()
+        assert predictor.is_ready(), "CatBoost model should be loaded"
+
+    def test_catboost_model_info(self):
+        """모델 정보 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+
+        predictor = SMPCatBoostPredictor()
+        info = predictor.get_model_info()
+
+        assert info['status'] == 'ready'
+        assert info['model_type'] == 'CatBoost v3.19'
+        assert info['purpose'] == 'RTM (Real-Time Market)'
+        assert info['features'] == 68
+
+    def test_catboost_predict_next_hour(self):
+        """단일 시간 예측 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+
+        predictor = SMPCatBoostPredictor()
+        result = predictor.predict_next_hour()
+
+        assert 'time' in result
+        assert 'smp' in result
+        assert 'confidence_low' in result
+        assert 'confidence_high' in result
+        assert 'model_used' in result
+        assert result['model_used'] == 'CatBoost v3.19'
+        assert 0 < result['smp'] < 500  # SMP range check
+        assert result['confidence_low'] < result['smp'] < result['confidence_high']
+
+    def test_catboost_predict_multi_hours(self):
+        """다중 시간 예측 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+
+        predictor = SMPCatBoostPredictor()
+        result = predictor.predict_hours(6)
+
+        assert 'predictions' in result
+        assert len(result['predictions']) == 6
+        assert 'smp_values' in result
+        assert len(result['smp_values']) == 6
+        assert result['model_used'] == 'CatBoost v3.19 (recursive)'
+
+    def test_catboost_metrics(self):
+        """모델 메트릭 테스트"""
+        from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
+
+        predictor = SMPCatBoostPredictor()
+
+        # Expected metrics from v3.19
+        assert predictor.metrics.get('test_mape', 0) < 6.0  # MAPE < 6%
+        assert predictor.metrics.get('test_r2', 0) > 0.8    # R² > 0.8
+
+    def test_catboost_singleton(self):
+        """싱글톤 인스턴스 테스트"""
+        from src.smp.models.smp_catboost_predictor import get_catboost_predictor
+
+        predictor1 = get_catboost_predictor()
+        predictor2 = get_catboost_predictor()
+
+        assert predictor1 is predictor2
+
+
+# ============================================================
 # Integration Tests
 # ============================================================
 
