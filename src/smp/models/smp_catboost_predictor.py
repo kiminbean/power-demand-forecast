@@ -3,10 +3,11 @@
 SMP CatBoost Predictor for RTM (Real-Time Market)
 =================================================
 
-CatBoost v3.10 모델을 사용한 실시간 SMP 예측기
+CatBoost v3.19 모델을 사용한 실시간 SMP 예측기
 - 단일 스텝 예측 (다음 1시간)
-- R² 0.83, MAPE 5.25% (BiLSTM v3.2보다 우수)
+- R² 0.827, MAPE 5.28% (BiLSTM v3.2보다 우수)
 - RTM 실시간 의사결정에 최적화
+- 68개 피처 (EMA, MACD, Momentum 포함)
 
 Usage:
     predictor = SMPCatBoostPredictor()
@@ -15,7 +16,7 @@ Usage:
 
 Author: Claude Code
 Date: 2025-12
-Version: 1.0.0
+Version: 2.0.0 (Upgraded to v3.19)
 """
 
 import logging
@@ -34,10 +35,10 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 class SMPCatBoostPredictor:
     """CatBoost 기반 SMP 예측기 (RTM용)
 
-    단일 스텝 예측에 최적화된 CatBoost 모델을 사용합니다.
-    - MAPE: 5.25% (BiLSTM 7.17%보다 우수)
-    - R²: 0.83
-    - 60개 피처 (시간, 래그, 통계)
+    단일 스텝 예측에 최적화된 CatBoost v3.19 모델을 사용합니다.
+    - MAPE: 5.28% (BiLSTM 7.17%보다 우수)
+    - R²: 0.827
+    - 68개 피처 (시간, 래그, 통계, EMA, MACD, Momentum)
     """
 
     def __init__(self, model_path: Optional[str] = None):
@@ -47,7 +48,7 @@ class SMPCatBoostPredictor:
             model_path: CatBoost 모델 파일 경로 (.cbm)
         """
         self.model_path = Path(model_path) if model_path else \
-            PROJECT_ROOT / "models/smp_v3_10_catboost/catboost_model.cbm"
+            PROJECT_ROOT / "models/smp_v3_19_recent/catboost_model.cbm"
 
         self.model = None
         self.feature_names = []
@@ -92,25 +93,35 @@ class SMPCatBoostPredictor:
         if self.metrics and 'feature_names' in self.metrics:
             self.feature_names = self.metrics['feature_names']
         else:
-            # 기본 피처 이름 (60개)
+            # 기본 피처 이름 (68개 - v3.19)
             self.feature_names = [
+                # Time features (17개)
                 'hour', 'hour_sin', 'hour_cos',
                 'dayofweek', 'dow_sin', 'dow_cos', 'is_weekend',
                 'month', 'month_sin', 'month_cos',
                 'doy_sin', 'doy_cos',
                 'is_summer', 'is_winter',
                 'peak_morning', 'peak_evening', 'off_peak',
+                # Lag features (12개)
                 'smp_lag1', 'smp_lag2', 'smp_lag3', 'smp_lag4', 'smp_lag5', 'smp_lag6',
                 'smp_lag12', 'smp_lag24', 'smp_lag48', 'smp_lag72', 'smp_lag96', 'smp_lag168',
+                # Rolling statistics (24개)
                 'smp_ma6', 'smp_std6', 'smp_min6', 'smp_max6',
                 'smp_ma12', 'smp_std12', 'smp_min12', 'smp_max12',
                 'smp_ma24', 'smp_std24', 'smp_min24', 'smp_max24',
                 'smp_ma48', 'smp_std48', 'smp_min48', 'smp_max48',
                 'smp_ma72', 'smp_std72', 'smp_min72', 'smp_max72',
                 'smp_ma168', 'smp_std168', 'smp_min168', 'smp_max168',
+                # EMA features (5개) - v3.19 추가
+                'smp_ema6', 'smp_ema12', 'smp_ema24', 'smp_ema48', 'smp_ema168',
+                # Diff features (3개)
                 'smp_diff1', 'smp_diff24', 'smp_diff168',
+                # Ratio features (2개)
                 'smp_lag1_vs_ma24', 'smp_lag1_vs_ma168',
-                'smp_range24', 'smp_range168'
+                # Range features (2개)
+                'smp_range24', 'smp_range168',
+                # Momentum features (3개) - v3.19 추가
+                'smp_roc24', 'smp_roc168', 'smp_macd'
             ]
 
     def is_ready(self) -> bool:
@@ -206,6 +217,16 @@ class SMPCatBoostPredictor:
             features[f'smp_min{window}'] = np.min(window_data)
             features[f'smp_max{window}'] = np.max(window_data)
 
+        # === EMA features (v3.19 추가) ===
+        for span in [6, 12, 24, 48, 168]:
+            # EMA 계산
+            alpha = 2 / (span + 1)
+            ema_data = smp[-span:] if span <= len(smp) else smp
+            ema = ema_data[0]
+            for val in ema_data[1:]:
+                ema = alpha * val + (1 - alpha) * ema
+            features[f'smp_ema{span}'] = ema
+
         # === Diff features ===
         features['smp_diff1'] = smp[-1] - smp[-2] if len(smp) >= 2 else 0
         features['smp_diff24'] = smp[-1] - smp[-25] if len(smp) >= 25 else 0
@@ -218,6 +239,14 @@ class SMPCatBoostPredictor:
         # === Range features ===
         features['smp_range24'] = features['smp_max24'] - features['smp_min24']
         features['smp_range168'] = features['smp_max168'] - features['smp_min168']
+
+        # === Momentum features (v3.19 추가) ===
+        # Rate of Change (ROC)
+        features['smp_roc24'] = (smp[-1] / smp[-25] - 1) if len(smp) >= 25 and smp[-25] > 0 else 0
+        features['smp_roc168'] = (smp[-1] / smp[-169] - 1) if len(smp) >= 169 and smp[-169] > 0 else 0
+
+        # MACD (EMA12 - EMA26)
+        features['smp_macd'] = features.get('smp_ema12', smp[-1]) - features.get('smp_ema24', smp[-1])
 
         # 피처 배열 생성 (순서 중요)
         feature_array = np.array([features.get(name, 0) for name in self.feature_names])
@@ -265,8 +294,8 @@ class SMPCatBoostPredictor:
                 'smp': float(prediction),
                 'confidence_low': float(confidence_low),
                 'confidence_high': float(confidence_high),
-                'model_used': 'CatBoost v3.10',
-                'mape': self.metrics.get('test_mape', 5.25),
+                'model_used': 'CatBoost v3.19',
+                'mape': self.metrics.get('test_mape', 5.28),
                 'r2': self.metrics.get('test_r2', 0.83),
                 'timestamp': datetime.now().isoformat()
             }
@@ -328,8 +357,8 @@ class SMPCatBoostPredictor:
                 'predictions': predictions,
                 'times': [p['time'] for p in predictions],
                 'smp_values': [p['smp'] for p in predictions],
-                'model_used': 'CatBoost v3.10 (recursive)',
-                'mape': self.metrics.get('test_mape', 5.25),
+                'model_used': 'CatBoost v3.19 (recursive)',
+                'mape': self.metrics.get('test_mape', 5.28),
                 'warning': 'Recursive prediction - accuracy decreases with horizon',
                 'timestamp': datetime.now().isoformat()
             }
@@ -401,7 +430,7 @@ class SMPCatBoostPredictor:
         return {
             'status': 'ready' if self.is_ready() else 'not_ready',
             'model_path': str(self.model_path),
-            'model_type': 'CatBoost v3.10',
+            'model_type': 'CatBoost v3.19',
             'purpose': 'RTM (Real-Time Market)',
             'prediction_type': 'single-step (1 hour)',
             'mape': self.metrics.get('test_mape', 'N/A'),

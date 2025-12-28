@@ -414,7 +414,7 @@ def get_rtm_predictor():
             from src.smp.models.smp_catboost_predictor import SMPCatBoostPredictor
             _rtm_predictor = SMPCatBoostPredictor()
             if _rtm_predictor.is_ready():
-                logger.info("RTM CatBoost 모델 로드 완료 (MAPE: 5.25%, R²: 0.83)")
+                logger.info("RTM CatBoost 모델 로드 완료 (MAPE: 5.28%, R²: 0.827)")
             else:
                 logger.warning("RTM CatBoost 모델 준비 안됨, 폴백 모드 사용")
                 _rtm_predictor = None
@@ -432,8 +432,8 @@ def get_rtm_predictor():
 실시간시장(RTM)용 SMP 예측 - CatBoost 모델 사용
 
 **모델 성능:**
-- MAPE: 5.25% (BiLSTM 7.17%보다 우수)
-- R²: 0.83
+- MAPE: 5.28% (BiLSTM 7.17%보다 우수)
+- R²: 0.827
 
 **용도:** 실시간 의사결정, 단기 예측
 """
@@ -497,7 +497,7 @@ RTM용 다중 시간 SMP 예측 - CatBoost 재귀 예측
 **권장:** 1~6시간
 
 **모델 성능:**
-- 기본 MAPE: 5.25%
+- 기본 MAPE: 5.28%
 - 재귀 예측 시 오차 증가 가능
 """
 )
@@ -574,16 +574,16 @@ async def get_rtm_model_info():
         info = predictor.get_model_info()
         return {
             "status": "ready",
-            "model": "CatBoost v3.10",
+            "model": "CatBoost v3.19",
             "purpose": "RTM (Real-Time Market)",
             "prediction_type": "single-step (1 hour)",
-            "mape": info.get('mape', 5.25),
-            "r2": info.get('r2', 0.83),
-            "features": info.get('features', 60),
+            "mape": info.get('mape', 5.28),
+            "r2": info.get('r2', 0.827),
+            "features": info.get('features', 68),
             "comparison": {
                 "vs_bilstm": {
-                    "mape_improvement": "2.0%p better (5.25% vs 7.17%)",
-                    "r2_improvement": "0.06 better (0.83 vs 0.77)",
+                    "mape_improvement": "1.89%p better (5.28% vs 7.17%)",
+                    "r2_improvement": "0.057 better (0.827 vs 0.77)",
                 },
             },
             "timestamp": datetime.now().isoformat(),
