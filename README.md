@@ -28,6 +28,24 @@
 
 ---
 
+## 📚 모두의 창업 멘토링 자료 (NEW)
+
+1라운드 멘토링·사업계획서 작성용 종합 학습 허브를 제작했습니다.
+
+| 문서 | 내용 |
+|------|------|
+| [docs/mentoring_study_hub.html](docs/mentoring_study_hub.html) | 전력시장 도메인 지식, BiLSTM-Attention 기술 정리, 4주 학습 로드맵, 사업화 모델 4안, 사업계획서 구조, 멘토 질문 리스트(25문항), 용어 사전 |
+
+```bash
+# 로컬에서 열기 (서버 실행 시)
+python3 -m http.server 8799 --bind 0.0.0.0 -d docs
+# → http://localhost:8799/mentoring_study_hub.html
+```
+
+> 외부 공유는 Tailscale Funnel(https://ib-macbookpro.tail918684.ts.net) + LaunchAgent(`com.ibkim.studyhub-server`, KeepAlive)로 서빙됩니다.
+
+---
+
 ## 주요 기능
 
 ### 🧠 딥러닝 모델
