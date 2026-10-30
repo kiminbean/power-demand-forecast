@@ -102,7 +102,7 @@
 <h2><span class="num">0.</span>프로젝트 3분 요약 (엘리베이터 피치)</h2>
 
 <div class="card green">
-<strong>핵심 가설</strong> — 제주도에 설치된 뒷면 태양광(Behind-the-Meter, BTM)이 한전 계통 전력수요에 숨겨진 핵심 변수다. 태양광이 활발한 낮에는 자가소비로 계통수요가 줄고 일몰 후 급증하는 <em>덕 커브(Duck Curve)</em>가 발생한다. 이 숨겨진 태양광을 기상변수(일사량·전운량)로 간접 모델링해 예측 정확도를 높였다.
+<strong>핵심 가설</strong> — 제주도에 설치된 숨은 태양광(Behind-the-Meter, BTM)이 한전 계통 전력수요에 숨겨진 핵심 변수다. 태양광이 활발한 낮에는 자가소비로 계통수요가 줄고 일몰 후 급증하는 <em>덕 커브(Duck Curve)</em>가 발생한다. 이 숨겨진 태양광을 기상변수(일사량·전운량)로 간접 모델링해 예측 정확도를 높였다.
 </div>
 
 <p><strong>무엇을 만들었나:</strong> 기상 데이터와 KPX 실시간 데이터를 결합해 제주도 전력수요(1~24시간)와 SMP(계통한계가격)를 예측하는 딥러닝 시스템. 여기서 한 걸음 더 나아가 재생에너지 발전사업자가 KPX 시장에서 <strong>입찰가·입찰량을 최적화</strong>할 수 있는 RE-BMS(입찰관리 시스템)로 확장했다.</p>
@@ -475,7 +475,7 @@ Quantile 출력층 (q10 / q50 / q90)
 </div></details>
 <details open><summary>기술 · 모델</summary><div class="body">
 <ul>
-<li><strong>BTM (Behind-the-Meter)</strong> — 수용가 뒷면 태양광. 계통수요 데이터에 숨어있는 발전.</li>
+<li><strong>BTM (Behind-the-Meter)</strong> — 수용가 숨은 태양광. 계통수요 데이터에 숨어있는 발전.</li>
 <li><strong>덕 커브</strong> — 낮의 수요 골짜기 + 일몰 급등 패턴.</li>
 <li><strong>LSTM / BiLSTM</strong> — 시계열 순환신경망 / 양방향 확장.</li>
 <li><strong>Attention</strong> — 입력 시점별 중요도 가중 메커니즘.</li>
