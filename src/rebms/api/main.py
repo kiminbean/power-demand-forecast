@@ -17,7 +17,7 @@ Usage:
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -376,7 +376,7 @@ async def get_resources():
 
 @app.get("/api/v1/bidding/optimized-segments", tags=["Bidding"])
 async def get_optimized_segments(
-    capacity_mw: float = 50.0,
+    capacity_mw: float = Query(default=50.0, gt=0, le=500, allow_inf_nan=False),
     risk_level: str = "moderate",
 ):
     """Get AI-optimized bid segments for all 24 hours"""
@@ -416,23 +416,25 @@ async def get_optimized_segments(
         else:
             qty_weights = [0.10] * 10
 
+        remaining = capacity_mw
         for seg_id in range(1, 11):
             seg_ratio = (seg_id - 1) / 9
             price = price_min + (price_max - price_min) * seg_ratio
-            qty = capacity_mw * qty_weights[seg_id - 1]
+            qty = remaining if seg_id == 10 else min(capacity_mw * qty_weights[seg_id - 1], remaining)
+            remaining -= qty
             segments.append({
                 "segment_id": seg_id,
-                "quantity_mw": round(qty, 2),
+                "quantity_mw": qty,
                 "price_krw_mwh": round(price, 1),
             })
 
         total_mw = sum(s["quantity_mw"] for s in segments)
-        avg_price = sum(s["price_krw_mwh"] * s["quantity_mw"] for s in segments) / total_mw if total_mw > 0 else 0
+        avg_price = sum(s["price_krw_mwh"] * (s["quantity_mw"] / total_mw) for s in segments)
 
         hourly_bids.append({
             "hour": hour + 1,
             "segments": segments,
-            "total_mw": round(total_mw, 2),
+            "total_mw": total_mw,
             "avg_price": round(avg_price, 1),
             "smp_forecast": {"q10": round(q10[hour], 1), "q50": round(q50[hour], 1), "q90": round(q90[hour], 1)}
         })
@@ -442,7 +444,7 @@ async def get_optimized_segments(
         "capacity_mw": capacity_mw,
         "risk_level": risk_level,
         "hourly_bids": hourly_bids,
-        "total_daily_mwh": round(sum(b["total_mw"] for b in hourly_bids), 1),
+        "total_daily_mwh": sum(b["total_mw"] for b in hourly_bids),
         "model_used": model_version,
     }
 

@@ -45,84 +45,49 @@ interface DailyRevenue {
   imbalance: number;
 }
 
-// Mock revenue data
-const mockRevenueData: DailyRevenue[] = [
-  { date: '12/17', revenue: 180, imbalance: -5.2 },
-  { date: '12/18', revenue: 195, imbalance: -8.1 },
-  { date: '12/19', revenue: 175, imbalance: -3.5 },
-  { date: '12/20', revenue: 210, imbalance: -10.2 },
-  { date: '12/21', revenue: 188, imbalance: -6.8 },
-  { date: '12/22', revenue: 165, imbalance: -4.5 },
-  { date: '12/23', revenue: 138, imbalance: -7.0 },
-];
-
-// Transaction data type
-interface Transaction {
-  date: string;
-  type: 'generation' | 'imbalance' | 'settlement';
-  amount: number;
-  description: string;
-}
-
-// Mock transactions
-const mockTransactions: Transaction[] = [
-  { date: '12/23', type: 'generation', amount: 45.2, description: '발전 수익' },
-  { date: '12/23', type: 'imbalance', amount: -3.5, description: '불균형 정산' },
-  { date: '12/22', type: 'generation', amount: 52.1, description: '발전 수익' },
-  { date: '12/22', type: 'imbalance', amount: -4.2, description: '불균형 정산' },
-  { date: '12/21', type: 'settlement', amount: 158.3, description: '주간 정산' },
-];
-
-// Simple Revenue Chart Component
+// Signed values avoid presenting losses as positive bars.
 function RevenueChart({ data }: { data: DailyRevenue[] }) {
-  const maxRevenue = Math.max(...data.map(d => Math.abs(d.revenue)), 1);
-  const chartHeight = 100; // Fixed height for bars area
-
   return (
     <View style={styles.chartContainer}>
-      <View style={styles.chartArea}>
-        {data.map((item, index) => {
-          const barHeight = Math.max((Math.abs(item.revenue) / maxRevenue) * chartHeight, 4);
-          return (
-            <View key={`${item.date}-${index}`} style={styles.chartBarWrapper}>
-              <View style={[styles.chartBar, { height: barHeight }]} />
-              <Text style={styles.chartBarLabel}>{item.date.split('/')[1] || item.date}</Text>
-            </View>
-          );
-        })}
-      </View>
+      {data.map((item, index) => (
+        <View key={`${item.date}-${index}`} style={styles.revenueRow}>
+          <Text style={styles.revenueDate}>{item.date}</Text>
+          <Text style={styles.revenueAmount}>{item.revenue > 0 ? '+' : ''}{item.revenue} M</Text>
+        </View>
+      ))}
     </View>
   );
 }
-
-// Period type
-type Period = 'week' | 'month' | 'quarter';
 
 export default function SettlementScreen() {
   const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [period, setPeriod] = useState<Period>('week');
+  const [error, setError] = useState<'unavailable' | 'error' | null>(null);
+
 
   // API data states
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [summary, setSummary] = useState<SettlementStats | null>(null);
 
-  // Transform settlements to chart data format
-  const revenueData = settlements.length > 0 ? settlements.slice(0, 7).map(s => ({
-    date: s.date.slice(-5).replace('-', '/'), // Format: MM/DD
-    revenue: s.net_revenue_million,
-    imbalance: s.imbalance_million,
-  })) : mockRevenueData;
-
-  // Transform settlements to transaction format
-  const transactions = settlements.length > 0 ? settlements.flatMap(s => [
-    { date: s.date.slice(-5).replace('-', '/'), type: 'generation' as const, amount: s.revenue_million, description: '발전 수익' },
-    { date: s.date.slice(-5).replace('-', '/'), type: 'imbalance' as const, amount: s.imbalance_million, description: '불균형 정산' },
-  ]).slice(0, 6) : mockTransactions;
+  const validNumber = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isFinite(value);
+  const validDate = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+  const dateLabel = (date: string) => date.slice(-5).replace('-', '/');
+  const revenueData = settlements.filter(s => s && validDate(s.date) && validNumber(s.net_revenue_million))
+    .slice(0, 7).map(s => ({ date: dateLabel(s.date), revenue: s.net_revenue_million, imbalance: 0 }));
+  const transactions = settlements.flatMap(s => {
+    if (!s || !validDate(s.date)) return [];
+    const date = dateLabel(s.date);
+    return [
+      ...(validNumber(s.revenue_million) ? [{ date, amount: s.revenue_million, description: '발전 수익' }] : []),
+      ...(validNumber(s.imbalance_million) ? [{ date, amount: s.imbalance_million, description: '불균형 정산' }] : []),
+    ];
+  }).slice(0, 6);
 
   // Fetch settlement data from API
   const fetchSettlementData = useCallback(async (isRefresh = false) => {
+    setError(null);
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
@@ -133,11 +98,12 @@ export default function SettlementScreen() {
         apiService.getSettlementSummary(),
       ]);
 
-      setSettlements(settlementsData);
-      setSummary(summaryData);
+      setSettlements(Array.isArray(settlementsData) ? settlementsData : []);
+      setSummary(summaryData && typeof summaryData === 'object' && !Array.isArray(summaryData) ? summaryData : null);
     } catch (error) {
-      console.log('API unavailable, using mock data:', error);
-      // Keep mock data on error
+      setSettlements([]);
+      setSummary(null);
+      setError(error instanceof Error && error.message === 'API Error: 404' ? 'unavailable' : 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -150,17 +116,20 @@ export default function SettlementScreen() {
 
   const onRefresh = () => fetchSettlementData(true);
 
-  // Calculate display values from API or fallback to defaults
-  const totalRevenue = summary?.generation_revenue_million ?? 1251;
-  const totalImbalance = summary?.imbalance_charges_million ?? -45.3;
-  const accuracy = summary?.forecast_accuracy_pct ?? 94.5;
-  const totalGeneration = Math.round(settlements.reduce((sum, s) => sum + s.generation_mwh, 0) * 10) / 10;
-  const avgAccuracy = settlements.length > 0
-    ? Math.round(settlements.reduce((sum, s) => sum + s.accuracy_pct, 0) / settlements.length * 10) / 10
-    : 0.0;
-
-  // Average DA-SMP from settlement summary (7-day average)
-  const avgDaSmp = (summary as any)?.avg_da_smp ?? 85.0;
+  // A missing field is unavailable, not zero or a sample value.
+  const totalRevenue = summary?.generation_revenue_million;
+  const totalImbalance = summary?.imbalance_charges_million;
+  const accuracy = summary?.forecast_accuracy_pct;
+  const completeGeneration = settlements.length > 0 && settlements.every(s => s && validNumber(s.generation_mwh));
+  const completeAccuracy = settlements.length > 0 && settlements.every(s => s && validNumber(s.accuracy_pct));
+  const totalGeneration = completeGeneration
+    ? Math.round(settlements.reduce((sum, s) => sum + s.generation_mwh, 0) * 10) / 10 : null;
+  const avgAccuracy = completeAccuracy
+    ? Math.round(settlements.reduce((sum, s) => sum + s.accuracy_pct, 0) / settlements.length * 10) / 10 : null;
+  const smpSummary = summary as (SettlementStats & { avg_da_smp?: unknown; avg_rt_smp?: unknown }) | null;
+  const avgDaSmp = smpSummary?.avg_da_smp;
+  const avgRtSmp = smpSummary?.avg_rt_smp;
+  const display = (value: unknown) => validNumber(value) ? String(value) : '—';
 
   return (
     <ScrollView
@@ -178,28 +147,19 @@ export default function SettlementScreen() {
         <Text style={styles.subtitle}>KPX 제주 시범사업 이중 정산</Text>
       </View>
 
-      {/* Period Selector */}
-      <View style={styles.periodSelector}>
-        {(['week', 'month', 'quarter'] as const).map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.periodBtn, period === p && styles.periodBtnActive]}
-            onPress={() => setPeriod(p)}
-          >
-            <Text style={[styles.periodBtnText, period === p && styles.periodBtnTextActive]}>
-              {p === 'week' && '1주'}
-              {p === 'month' && '1개월'}
-              {p === 'quarter' && '분기'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {loading && <View><ActivityIndicator /><Text>정산 정보를 불러오는 중입니다.</Text></View>}
+      {error && <View><Text>{error === 'unavailable' ? '정산 정보를 현재 이용할 수 없습니다.' : '정산 정보를 불러오지 못했습니다.'}</Text>
+        <TouchableOpacity onPress={() => fetchSettlementData()}><Text>다시 시도</Text></TouchableOpacity>
+      </View>}
+      {!loading && !error && settlements.length === 0 && <Text>정산 내역이 없습니다.</Text>}
+      {!loading && !error && <>
+      <Text style={styles.periodLabel}>최근 7일 정산 내역</Text>
 
       {/* Average DA-SMP Card */}
       <View style={styles.smpCard}>
         <View style={styles.smpCardContent}>
           <Text style={styles.smpCardLabel}>평균 DA-SMP (7일)</Text>
-          <Text style={styles.smpCardValue}>{Math.round(avgDaSmp)}</Text>
+          <Text style={styles.smpCardValue}>{validNumber(avgDaSmp) ? Math.round(avgDaSmp) : '—'}</Text>
           <Text style={styles.smpCardUnit}>원/kWh</Text>
         </View>
       </View>
@@ -209,15 +169,15 @@ export default function SettlementScreen() {
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>총 발전량</Text>
           <View style={styles.statValueRow}>
-            <Text style={styles.statValue}>{totalGeneration}</Text>
+            <Text style={styles.statValue}>{display(totalGeneration)}</Text>
             <Text style={styles.statUnit}> MWh</Text>
           </View>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>예측 정확도</Text>
           <View style={styles.statValueRow}>
-            <Text style={[styles.statValue, { color: avgAccuracy >= 95 ? colors.green : colors.orange }]}>
-              {avgAccuracy.toFixed(1)}%
+            <Text style={[styles.statValue, { color: (avgAccuracy ?? 0) >= 95 ? colors.green : colors.orange }]}>
+              {avgAccuracy !== null ? `${avgAccuracy.toFixed(1)}%` : '—'}
             </Text>
             <Text style={styles.statUnit}> 평균</Text>
           </View>
@@ -229,14 +189,14 @@ export default function SettlementScreen() {
         <View style={styles.smpInfoCard}>
           <Text style={styles.smpInfoLabel}>평균 DA-SMP</Text>
           <Text style={[styles.smpInfoValue, { color: '#3b82f6' }]}>
-            {(summary as any)?.avg_da_smp?.toFixed(1) ?? '85.2'}
+            {validNumber(avgDaSmp) ? avgDaSmp.toFixed(1) : '—'}
             <Text style={styles.smpInfoUnit}> 원/kWh</Text>
           </Text>
         </View>
         <View style={styles.smpInfoCard}>
           <Text style={styles.smpInfoLabel}>평균 RT-SMP</Text>
           <Text style={[styles.smpInfoValue, { color: '#8b5cf6' }]}>
-            {(summary as any)?.avg_rt_smp?.toFixed(1) ?? '82.5'}
+            {validNumber(avgRtSmp) ? avgRtSmp.toFixed(1) : '—'}
             <Text style={styles.smpInfoUnit}> 원/kWh</Text>
           </Text>
         </View>
@@ -246,7 +206,7 @@ export default function SettlementScreen() {
       <View style={styles.chartSection}>
         <Text style={styles.sectionTitle}>일별 순수익</Text>
         <View style={styles.chartCard}>
-          <RevenueChart data={revenueData} />
+          {revenueData.length > 0 ? <RevenueChart data={revenueData} /> : <Text>수익 데이터가 없습니다.</Text>}
         </View>
       </View>
 
@@ -254,18 +214,18 @@ export default function SettlementScreen() {
       <View style={styles.revenueStatsRow}>
         <View style={styles.revenueStat}>
           <Text style={styles.revenueStatLabel}>발전수익</Text>
-          <Text style={styles.revenueStatValue}>{totalRevenue} M</Text>
+          <Text style={styles.revenueStatValue}>{display(totalRevenue)} M</Text>
         </View>
         <View style={styles.revenueStat}>
           <Text style={styles.revenueStatLabel}>불균형</Text>
           <Text style={[styles.revenueStatValue, { color: colors.orange }]}>
-            {totalImbalance} M
+            {display(totalImbalance)} M
           </Text>
         </View>
         <View style={styles.revenueStat}>
           <Text style={styles.revenueStatLabel}>정확도</Text>
           <Text style={[styles.revenueStatValue, { color: colors.blue }]}>
-            {accuracy}%
+            {validNumber(accuracy) ? `${accuracy}%` : '—'}
           </Text>
         </View>
       </View>
@@ -283,6 +243,7 @@ export default function SettlementScreen() {
 
       {isTransactionsExpanded && (
         <View style={styles.transactionList}>
+          {transactions.length === 0 && <Text>거래 내역이 없습니다.</Text>}
           {transactions.map((transaction, index) => (
             <View key={index} style={styles.transactionRow}>
               <View style={styles.transactionLeft}>
@@ -302,6 +263,7 @@ export default function SettlementScreen() {
         </View>
       )}
 
+      </>}
       {/* Bottom padding */}
       <View style={{ height: 100 }} />
     </ScrollView>
@@ -355,30 +317,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Period Selector
-  periodSelector: {
-    flexDirection: 'row',
-    backgroundColor: colors.cardBg,
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 16,
-  },
-  periodBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  periodBtnActive: {
-    backgroundColor: colors.blue,
-  },
-  periodBtnText: {
+  periodLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.textMuted,
-  },
-  periodBtnTextActive: {
-    color: '#ffffff',
+    color: colors.textSecondary,
+    marginBottom: 16,
   },
 
   // SMP Card
@@ -479,31 +422,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chartBg,
     borderRadius: 12,
     padding: 16,
-    height: 160,
   },
   chartContainer: {
-    flex: 1,
   },
-  chartArea: {
-    flex: 1,
+  revenueRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingBottom: 20,
-  },
-  chartBarWrapper: {
+    justifyContent: 'space-between',
     alignItems: 'center',
-    flex: 1,
+    paddingVertical: 4,
   },
-  chartBar: {
-    width: 24,
-    backgroundColor: '#94a3b8',
-    borderRadius: 4,
-    marginBottom: 8,
+  revenueDate: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
-  chartBarLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
+  revenueAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
 
   // Revenue Stats Row

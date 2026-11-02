@@ -7,7 +7,7 @@ import type {
   SMPForecast,
   MarketStatus,
   DashboardKPIs,
-  WeatherData,
+
   Resource,
   OptimizedBids,
   SettlementRecord,
@@ -163,7 +163,7 @@ class ApiService {
   }
 
   // Update an existing power plant
-  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate>): Promise<PowerPlant> {
+  async updatePowerPlant(id: string, plant: Partial<PowerPlantCreate> & Pick<Partial<PowerPlant>, 'status'>): Promise<PowerPlant> {
     return this.fetch(`/power-plants/${id}`, {
       method: 'PUT',
       body: JSON.stringify(plant),

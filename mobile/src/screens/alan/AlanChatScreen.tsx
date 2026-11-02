@@ -609,6 +609,7 @@ export default function AlanChatScreen({ onNavigate }: Props) {
     >
       {/* Gradient Background */}
       <View style={styles.gradientBg}>
+        <ScrollView style={styles.mainContent} keyboardShouldPersistTaps="handled">
         {/* Alan Robot */}
         <View style={styles.robotContainer}>
           <AlanRobot />
@@ -684,15 +685,14 @@ export default function AlanChatScreen({ onNavigate }: Props) {
           )}
         </View>
 
-        {/* Spacer */}
-        <View style={styles.spacer} />
+        </ScrollView>
 
         {/* Chat Input Area */}
         <View style={styles.inputArea}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
-              placeholder="발전소 주변 실시간 기상 정보 알려줘"
+              placeholder="무엇이든 물어보세요"
               placeholderTextColor={colors.textMuted}
               value={inputText}
               onChangeText={setInputText}
@@ -720,6 +720,9 @@ const styles = StyleSheet.create({
   gradientBg: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  mainContent: {
+    flex: 1,
   },
 
   // Robot Container

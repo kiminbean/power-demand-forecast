@@ -1,32 +1,13 @@
 /**
- * Environment Configuration for RE-BMS Mobile App
- * 
- * Change these values based on your deployment:
- * - LOCAL: Development on the same machine
- * - DOCKER: Docker deployment with ngrok or port forwarding
- * - PRODUCTION: Production server with custom domain
+ * API configuration for RE-BMS Mobile.
+ * Web defaults to the current origin; native builds default to the public Funnel.
+ * Set EXPO_PUBLIC_API_URL to override either default (origin or origin plus base path).
+ * Expo embeds EXPO_PUBLIC_* values in the bundle, so never put secrets here.
  */
-
-// ============================================
-// CONFIGURATION - MODIFY THIS SECTION
-// ============================================
-
-/**
- * API Server URL Configuration
- * 
- * For local development:
- *   API_URL = 'http://localhost:8000'
- * 
- * For Docker with ngrok:
- *   API_URL = 'https://xxxx-xxx-xxx.ngrok-free.app'
- * 
- * For Docker with port forwarding:
- *   API_URL = 'http://YOUR_PUBLIC_IP:8000'
- * 
- * For production:
- *   API_URL = 'https://api.your-domain.com'
- */
-export const API_URL = 'https://fourpenny-homochrome-amir.ngrok-free.dev';
+export const NATIVE_API_URL = 'https://ib-macbookpro.tail918684.ts.net:10000';
+declare const process: { env: { EXPO_PUBLIC_API_URL?: string } };
+export const API_URL_OVERRIDE = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || undefined;
+export const API_URL = API_URL_OVERRIDE || '';
 
 // Environment type for conditional logic
 export type Environment = 'local' | 'docker' | 'production';
@@ -36,12 +17,16 @@ export const CURRENT_ENV: Environment = 'docker';
 // Derived Configuration (no need to modify)
 // ============================================
 
+const environmentFlags = (environment: Environment) => ({
+  isProduction: environment === 'production',
+  isDocker: environment === 'docker',
+  isLocal: environment === 'local',
+});
+
 export const config = {
   apiUrl: API_URL,
   environment: CURRENT_ENV,
-  isProduction: CURRENT_ENV === 'production',
-  isDocker: CURRENT_ENV === 'docker',
-  isLocal: CURRENT_ENV === 'local',
+  ...environmentFlags(CURRENT_ENV),
   
   // API Timeout settings
   timeout: {

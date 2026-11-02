@@ -18,6 +18,7 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -819,6 +820,22 @@ class RealtimeAPIStatusResponse(BaseModel):
     overall_status: str
 
 
+def _smp_trade_date_status(trade_day: str, now: datetime) -> str:
+    """Classify the SMP trade date, not hourly freshness or connectivity."""
+    try:
+        if not isinstance(trade_day, str) or len(trade_day) != 8 or not trade_day.isascii() or not trade_day.isdigit():
+            return "unknown"
+        trade_date = datetime.strptime(trade_day, "%Y%m%d").date()
+    except ValueError:
+        return "unknown"
+    today = now.astimezone(ZoneInfo("Asia/Seoul")).date()
+    if trade_date < today:
+        return "historical"
+    if trade_date > today:
+        return "future"
+    return "current_date"
+
+
 @router.get("/realtime-status", response_model=RealtimeAPIStatusResponse)
 async def get_realtime_api_status():
     """
@@ -835,6 +852,9 @@ async def get_realtime_api_status():
         if smp_data:
             smp_status = {
                 "status": "connected",
+                "data_date_status": _smp_trade_date_status(
+                    smp_data.trade_day, datetime.now(ZoneInfo("Asia/Seoul"))
+                ),
                 "data": {
                     "smp_jeju": smp_data.smp_jeju,
                     "trade_hour": smp_data.trade_hour,
@@ -1211,7 +1231,10 @@ class OptimizedBidsResponse(BaseModel):
 
 
 @router.get("/bidding/optimized-segments", response_model=OptimizedBidsResponse)
-async def get_optimized_segments(capacity_mw: float = 50, risk_level: str = "moderate"):
+async def get_optimized_segments(
+    capacity_mw: float = Query(default=50, gt=0, le=500, allow_inf_nan=False),
+    risk_level: str = "moderate",
+):
     """
     AI 최적화 입찰 세그먼트 (실제 SMP 모델 연동)
 
@@ -1274,21 +1297,29 @@ async def get_optimized_segments(capacity_mw: float = 50, risk_level: str = "mod
 
         segments = []
         segment_qty = capacity_mw / 10
+        segment_quantities = []
+        remaining = capacity_mw
+        for _ in range(9):
+            quantity = min(segment_qty, remaining)
+            segment_quantities.append(quantity)
+            remaining -= quantity
+        segment_quantities.append(remaining)
         for i in range(10):
             segments.append(BidSegment(
                 segment_id=i + 1,
-                quantity_mw=segment_qty,
+                quantity_mw=segment_quantities[i],
                 price_krw_mwh=base_price + i * price_step
             ))
 
         hourly_bids = [
             HourlyBid(
-                hour=12,
+                hour=hour,
                 segments=segments,
                 total_mw=capacity_mw,
-                avg_price=base_price + 4.5 * price_step,
+                avg_price=round(sum(s.price_krw_mwh * (s.quantity_mw / capacity_mw) for s in segments), 1),
                 smp_forecast={"q10": 75.0, "q50": 95.0, "q90": 120.0}
             )
+            for hour in range(24)
         ]
 
         return OptimizedBidsResponse(

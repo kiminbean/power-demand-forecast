@@ -5,33 +5,18 @@
  */
 
 import { Platform } from 'react-native';
-import { API_URL, config } from '../config/environment';
+import { API_URL_OVERRIDE, NATIVE_API_URL } from '../config/environment';
 
-// API Base URL configuration
-// For external deployment (Docker + ngrok), use the URL from environment.ts
-// For local development, fallback to platform-specific URLs
 const getApiBaseUrl = (): string => {
-  // If environment is docker or production, use configured URL directly
-  if (config.isDocker || config.isProduction) {
-    return API_URL;
+  if (API_URL_OVERRIDE) {
+    return API_URL_OVERRIDE;
   }
-
-  // For local development, use platform-specific URLs
-  switch (Platform.OS) {
-    case 'web':
-      return 'http://localhost:8000';
-    case 'android':
-      // Android emulator uses 10.0.2.2 to access host's localhost
-      return 'http://10.0.2.2:8000';
-    case 'ios':
-      // iOS Simulator shares network with host, localhost works
-      return 'http://localhost:8000';
-    default:
-      return API_URL;
+  if (Platform.OS === 'web') {
+    // Endpoints begin with '/', so they resolve against the origin, not /mobile/.
+    return '';
   }
+  return NATIVE_API_URL;
 };
-
-const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export interface SMPForecast {
@@ -341,10 +326,10 @@ export interface DAMSimulationResult {
 
 // API Client using fetch (web compatible)
 class ApiService {
-  private baseUrl: string;
+  constructor(private readonly configuredBaseUrl?: string) {}
 
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+  private get baseUrl(): string {
+    return this.configuredBaseUrl ?? getApiBaseUrl();
   }
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {

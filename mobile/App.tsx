@@ -94,10 +94,6 @@ function Header({ title, showBack, onBack }: { title?: string; showBack?: boolea
         {title && <Text style={styles.headerTitle}>{title}</Text>}
       </View>
       <View style={styles.headerRight}>
-        <View style={styles.liveIndicator}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>Live</Text>
-        </View>
         <Text style={styles.versionText}>v6.1</Text>
       </View>
     </View>
@@ -108,18 +104,25 @@ function Header({ title, showBack, onBack }: { title?: string; showBack?: boolea
 function BottomTabBar({
   activeTab,
   onTabChange,
+  onOpenAlan,
 }: {
-  activeTab: TabKey;
+  activeTab: TabKey | null;
   onTabChange: (tab: TabKey) => void;
+  onOpenAlan?: () => void;
 }) {
   return (
     <View style={styles.tabBar}>
+      <View style={styles.tabsRow} accessibilityRole="tablist">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
           <TouchableOpacity
             key={tab.key}
             style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: isActive }}
+            aria-selected={isActive}
             onPress={() => onTabChange(tab.key)}
             activeOpacity={0.7}
           >
@@ -130,6 +133,20 @@ function BottomTabBar({
           </TouchableOpacity>
         );
       })}
+      </View>
+      {onOpenAlan && (
+        <TouchableOpacity
+          style={styles.alanNavButton}
+          accessibilityRole="button"
+          accessibilityLabel="Alan AI 채팅 열기"
+          onPress={onOpenAlan}
+          activeOpacity={0.8}
+        >
+          <View style={styles.alanAvatar}>
+            <Text style={styles.alanEmoji}>🤖</Text>
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -260,25 +277,13 @@ export default function App() {
         <Header />
         <View style={styles.content}>{renderScreen()}</View>
         <BottomTabBar
-          activeTab={activeTab}
+          activeTab={showAlanChat ? null : activeTab}
           onTabChange={(tab) => {
             setShowAlanChat(false);
             setActiveTab(tab);
           }}
+          onOpenAlan={!showAlanChat ? () => setShowAlanChat(true) : undefined}
         />
-
-        {/* Floating Alan AI Button */}
-        {!showAlanChat && (
-          <TouchableOpacity
-            style={styles.floatingAlanBtn}
-            onPress={() => setShowAlanChat(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.alanAvatar}>
-              <Text style={styles.alanEmoji}>🤖</Text>
-            </View>
-          </TouchableOpacity>
-        )}
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -329,26 +334,7 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 8,
   },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4caf50',
-  },
-  liveText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4caf50',
-  },
+
   versionText: {
     fontSize: 12,
     color: colors.textMuted,
@@ -357,11 +343,19 @@ const styles = StyleSheet.create({
   // Tab Bar
   tabBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,
     paddingTop: 8,
+  },
+  tabsRow: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  alanNavButton: {
+    paddingHorizontal: 8,
   },
   tabItem: {
     flex: 1,
@@ -411,22 +405,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Floating Alan Button
-  floatingAlanBtn: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
-    right: 20,
-    zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
+  // Alan button
   alanAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#f0f4f8',
     alignItems: 'center',
     justifyContent: 'center',

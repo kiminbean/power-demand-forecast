@@ -55,14 +55,22 @@ npm run web
 
 ### Backend Connection
 
-The mobile app connects to the RE-BMS FastAPI backend at `http://localhost:8506`.
+The native app defaults to the public Tailscale Funnel origin
+`https://ib-macbookpro.tail918684.ts.net:10000`. Web requests default to the
+current origin, including when the app is served under `/mobile/`.
 
-Make sure the backend is running:
+To use another API origin (or an origin with a base path), set
+`EXPO_PUBLIC_API_URL` before starting Expo or building the app, for example:
 
 ```bash
-cd ..
-uvicorn src.rebms.api.main:app --host 0.0.0.0 --port 8506 --reload
+EXPO_PUBLIC_API_URL=https://example.com/backend npm start
 ```
+
+The override applies to both native and web; an unset or blank value uses the
+platform default. Expo embeds public environment variables and the native default
+in the app bundle: changing the URL requires a new build/update of that bundle,
+and values must not contain secrets. The public proxy deliberately blocks sensitive
+endpoints; selecting its origin does not grant access to them.
 
 ## Project Structure
 

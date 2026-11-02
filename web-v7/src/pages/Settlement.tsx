@@ -40,8 +40,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 export default function Settlement() {
-  const { data: settlements, isLoading: settlementsLoading } = useSettlements(7);
-  const { data: summary, isLoading: summaryLoading } = useSettlementSummary();
+  const { data: settlements, loading: settlementsLoading } = useSettlements(7);
+  const { data: summary, loading: summaryLoading } = useSettlementSummary();
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('week');
   const { isDark } = useTheme();
 
@@ -415,7 +415,7 @@ export default function Settlement() {
                     outerRadius={100}
                     paddingAngle={2}
                     dataKey="value"
-                    label={({ name, value }) => `${value}h`}
+                    label={({ value }) => `${value}h`}
                     labelLine={false}
                   >
                     {tierData.map((entry, index) => (

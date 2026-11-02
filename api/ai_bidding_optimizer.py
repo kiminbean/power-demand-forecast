@@ -13,6 +13,7 @@ Date: 2025-12
 """
 
 import logging
+import math
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any, Tuple
@@ -248,6 +249,8 @@ class AIBiddingOptimizer:
             최적화된 입찰 세그먼트 리스트
         """
         # 리스크 수준별 가격 범위 설정
+        if not math.isfinite(capacity_mw) or not 0 < capacity_mw <= 500:
+            raise ValueError("capacity_mw must be finite and in (0, 500]")
         if risk_level == RiskLevel.CONSERVATIVE:
             # 보수적: q10 ~ q50 범위, 청산 확률 높음
             price_min = smp_q10 * 0.95
@@ -266,6 +269,14 @@ class AIBiddingOptimizer:
 
         # 세그먼트별 용량 (균등 분배)
         segment_qty = capacity_mw / num_segments
+        # 극소 용량도 음수 없이 부동소수점 정밀도 내에서 총량을 보존한다.
+        segment_quantities = []
+        remaining = capacity_mw
+        for _ in range(num_segments - 1):
+            quantity = min(segment_qty, remaining)
+            segment_quantities.append(quantity)
+            remaining -= quantity
+        segment_quantities.append(remaining)
 
         # 가격 분포 생성 (지수적 증가)
         # 낮은 가격에 더 많은 세그먼트 배치 (청산 확률 높음)
@@ -298,11 +309,11 @@ class AIBiddingOptimizer:
             )
 
             # 기대 수익 = 가격 × 용량 × 청산확률
-            expected_revenue = price * segment_qty * clearing_prob
+            expected_revenue = price * segment_quantities[i] * clearing_prob
 
             segments.append(BidSegment(
                 segment_id=i + 1,
-                quantity_mw=round(segment_qty, 2),
+                quantity_mw=segment_quantities[i],
                 price_krw_mwh=round(price, 1),
                 clearing_probability=round(clearing_prob, 3),
                 expected_revenue=round(expected_revenue, 2),
@@ -327,6 +338,8 @@ class AIBiddingOptimizer:
             OptimizationResult: 시간별 최적화된 입찰
         """
         # 리스크 레벨 변환
+        if not math.isfinite(capacity_mw) or not 0 < capacity_mw <= 500:
+            raise ValueError("capacity_mw must be finite and in (0, 500]")
         try:
             risk = RiskLevel(risk_level.lower())
         except ValueError:
@@ -361,9 +374,9 @@ class AIBiddingOptimizer:
 
             # 시간별 통계
             total_mw = sum(s.quantity_mw for s in segments)
-            avg_price = sum(s.price_krw_mwh * s.quantity_mw for s in segments) / total_mw
+            avg_price = sum(s.price_krw_mwh * (s.quantity_mw / total_mw) for s in segments)
             hour_revenue = sum(s.expected_revenue for s in segments)
-            avg_clearing = sum(s.clearing_probability * s.quantity_mw for s in segments) / total_mw
+            avg_clearing = sum(s.clearing_probability * (s.quantity_mw / total_mw) for s in segments)
 
             total_expected_revenue += hour_revenue
 
@@ -376,7 +389,7 @@ class AIBiddingOptimizer:
             hourly_bids.append(HourlyOptimizedBid(
                 hour=hour_val,
                 segments=segments,
-                total_mw=round(total_mw, 2),
+                total_mw=total_mw,
                 avg_price=round(avg_price, 1),
                 smp_forecast={
                     'q10': round(smp_q10, 1),
@@ -395,7 +408,7 @@ class AIBiddingOptimizer:
             capacity_mw=capacity_mw,
             risk_level=risk.value,
             hourly_bids=hourly_bids,
-            total_daily_mwh=round(capacity_mw * hours * 0.7, 2),  # 70% 이용률 가정
+            total_daily_mwh=capacity_mw * hours * 0.7,  # 70% 이용률 가정
             expected_daily_revenue=round(total_expected_revenue, 2),
             model_used=model_used,
             optimization_method="Quantile-based Probabilistic Clearing Model",

@@ -4,7 +4,7 @@
  * 실시간 데이터: FastAPI 백엔드 (port 8506) 연동
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Area,
   XAxis,
@@ -18,13 +18,11 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { useDashboardKPIs, useSMPForecast, useResources, usePowerSupply, useAutoRefresh, useRealtimeStatus } from '../hooks/useApi';
-import type { Resource, PowerSupplyHourlyData, RealtimeStatus } from '../types';
 
 // Local assets
-const JEJU_MAP = '/jeju-map.png';
-const LOGO = '/logo-light.png';  // v6 로고 (다크 배경용)
-const MENU_ICON = '/menu-icon.svg';
-const CHECK_ICON = '/check-icon.svg';
+const JEJU_MAP = `${import.meta.env.BASE_URL}jeju-map.png`;
+const LOGO = `${import.meta.env.BASE_URL}logo-light.png`;  // v6 로고 (다크 배경용)
+const CHECK_ICON = `${import.meta.env.BASE_URL}check-icon.svg`;
 
 // Types
 interface PowerPlant {
@@ -32,7 +30,7 @@ interface PowerPlant {
   name: string;
   type: 'solar' | 'wind' | 'ess';
   capacity: number;
-  generation: number;
+
   x: number;
   y: number;
   size: number;
@@ -113,85 +111,74 @@ const powerPlantsData = [
 const powerPlants: PowerPlant[] = powerPlantsData.map(plant => {
   const { x, y } = latLngToPixel(plant.lat, plant.lng);
 
-  // Generation is simulated (겨울철 오후 기준)
-  // 풍력: 60-70% 가동, 태양광: 정오 기준 최대, ESS: 충방전 30%
-  const generationRate = plant.type === 'ess' ? 0.3 : (plant.type === 'solar' ? 0.85 : 0.65);
-  const generation = Math.round(plant.capacity * generationRate * 10) / 10;
-
-  // Size based on generation (1.5x scale: min 12, max 30)
-  // 발전량 기준으로 크기 차별화
+  // 원 크기는 실측 발전량이 아닌 설비용량을 나타냄
   const baseSize = 12; // 최소 크기 (기존 8 * 1.5 = 12)
   const maxSize = 30;  // 최대 크기 (기존 20 * 1.5 = 30)
-  const size = Math.max(baseSize, Math.min(maxSize, baseSize + (generation / 5)));
+  const size = Math.max(baseSize, Math.min(maxSize, baseSize + (plant.capacity / 5)));
 
   return {
     id: plant.id,
     name: plant.name,
     type: plant.type,
     capacity: plant.capacity,
-    generation,
+
     x,
     y,
     size,
   };
 });
 
-// Plant marker component with hover
+// Plant markers support pointer, touch and keyboard selection.
 const PlantMarker: React.FC<{
   plant: PowerPlant;
-  onHover: (plant: PowerPlant | null) => void;
-  isHovered: boolean;
-}> = ({ plant, onHover, isHovered }) => {
-  const colors = {
-    solar: '#ff4a4a',
-    wind: '#4a89ff',
-    ess: '#ffbd00',
-  };
-
+  onSelect: (plant: PowerPlant) => void;
+  isSelected: boolean;
+}> = ({ plant, onSelect, isSelected }) => {
+  const colors = { solar: '#ff4a4a', wind: '#4a89ff', ess: '#ffbd00' };
   return (
-    <div
-      className="absolute rounded-full cursor-pointer transition-transform hover:scale-110"
+    <button
+      type="button"
+      data-plant-id={plant.id}
+      aria-label={`${plant.name} 상세 정보`}
+      aria-pressed={isSelected}
+      className="plant-marker absolute rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
       style={{
-        left: plant.x,
-        top: plant.y,
+        left: `${plant.x / MAP_WIDTH * 100}%`,
+        top: `${plant.y / MAP_HEIGHT * 100}%`,
         width: plant.size,
         height: plant.size,
         backgroundColor: colors[plant.type],
-        transform: `translate(-50%, -50%)`,
+        transform: 'translate(-50%, -50%)',
       }}
-      onMouseEnter={() => onHover(plant)}
-      onMouseLeave={() => onHover(null)}
-    >
-      {isHovered && (
-        <div
-          className="absolute bg-white rounded-xl shadow-lg p-4 z-50 whitespace-nowrap"
-          style={{
-            left: plant.size + 12,
-            top: -15,
-            minWidth: 200,
-          }}
-        >
-          <div className="font-bold text-xl text-gray-900">{plant.name}</div>
-          <div className="text-base text-gray-600 mt-2">
-            용량: {plant.capacity} MW
-          </div>
-          <div className="text-base mt-1">
-            발전량: <span className="font-bold text-green-600">{plant.generation.toFixed(1)} MW</span>
-          </div>
-        </div>
-      )}
-    </div>
+      onClick={() => onSelect(plant)}
+    />
   );
 };
 
 export default function ExecoDashboard() {
   const [hoveredPlant, setHoveredPlant] = useState<PowerPlant | null>(null);
+  const [overlappingPlants, setOverlappingPlants] = useState<PowerPlant[]>([]);
+  const mapRef = useRef<HTMLDivElement>(null);
+
+  const selectMarker = (selected: PowerPlant) => {
+    const markers = Array.from(mapRef.current?.querySelectorAll<HTMLButtonElement>('.plant-marker') ?? []);
+    const selectedRect = markers.find(marker => marker.dataset.plantId === selected.id)?.getBoundingClientRect();
+    const overlappingIds = new Set(markers.filter(marker => {
+      if (!selectedRect) return false;
+      const rect = marker.getBoundingClientRect();
+      return rect.left < selectedRect.right && rect.right > selectedRect.left &&
+        rect.top < selectedRect.bottom && rect.bottom > selectedRect.top;
+    }).map(marker => marker.dataset.plantId));
+    const nearby = powerPlants.filter(plant => overlappingIds.has(plant.id));
+    setOverlappingPlants(nearby.length > 1 ? nearby : []);
+    setHoveredPlant(current => current?.id === selected.id ? null : selected);
+  };
 
   // API 훅 - 실시간 데이터 로드
   const { data: kpis, refetch: refetchKPIs, error: kpisError } = useDashboardKPIs();
-  const { data: smpForecast, refetch: refetchSMP } = useSMPForecast();
-  const { data: resources, refetch: refetchResources } = useResources();
-  const { data: powerSupply, refetch: refetchPowerSupply } = usePowerSupply();
+  const { refetch: refetchSMP } = useSMPForecast();
+  const { data: resources, refetch: refetchResources, error: resourcesError } = useResources();
+  const { data: powerSupply, refetch: refetchPowerSupply, error: powerSupplyError } = usePowerSupply();
   const { data: realtimeStatus } = useRealtimeStatus();
 
   // 60초마다 자동 새로고침
@@ -238,22 +225,12 @@ export default function ExecoDashboard() {
 
   // KPI 데이터 (API 또는 기본값) - 실제 EPSIS/KMA 데이터 기반
   const currentDemand = kpis?.current_demand_mw ?? 685.0;  // 현재 전력 수요 (MW)
-  const totalCapacity = kpis?.total_capacity_mw ?? 369.4;
-  const utilizationPct = kpis?.utilization_pct ?? 94.5;  // 재생에너지 이용률 (%)
   const supplyReserveRate = kpis?.supply_reserve_rate ?? 25.0;  // 공급 예비율 (%)
   const currentSMP = kpis?.current_smp ?? 114.8;
   const smpChangePct = kpis?.smp_change_pct ?? -5.0;
   const gridFrequency = kpis?.grid_frequency ?? 60.01;  // 계통 주파수 (Hz)
   const renewableRatio = kpis?.renewable_ratio_pct ?? 24.6;  // 재생에너지 비율 (%)
   const weather = kpis?.weather ?? { temperature: 5.5, wind_speed: 3.2, humidity: 58.0, condition: '맑음' };
-
-  // 재생에너지 발전량 (resources에서)
-  const renewableStats = useMemo(() => {
-    if (!resources) return { solarMw: 142, windMw: 185 };
-    const solarOutput = resources.filter(r => r.type === 'solar').reduce((sum, r) => sum + r.current_output, 0);
-    const windOutput = resources.filter(r => r.type === 'wind').reduce((sum, r) => sum + r.current_output, 0);
-    return { solarMw: Math.round(solarOutput), windMw: Math.round(windOutput) };
-  }, [resources]);
 
   // 발전소 통계 (resources에서)
   const plantStats = useMemo(() => {
@@ -269,7 +246,9 @@ export default function ExecoDashboard() {
   }, [resources]);
 
   // 데이터 소스 표시 (API 연결 상태)
-  const dataSource = kpisError ? '데모 데이터' : 'EPSIS 실시간';
+  const fallbackSections = [kpisError && '현재 지표', resourcesError && '발전소 현황', powerSupplyError && '전력수급 차트'].filter(Boolean);
+  const loadingSections = [!kpis && !kpisError && '현재 지표', !resources && !resourcesError && '발전소 현황'].filter(Boolean);
+  const dataSource = kpisError ? '데모 데이터' : kpis ? 'KPI API 데이터' : '데이터 확인 중';
 
   // API 연결 상태 아이콘 색상
   const getStatusColor = (status: string | undefined) => {
@@ -280,7 +259,7 @@ export default function ExecoDashboard() {
     }
   };
 
-  // 전체 API 상태 라벨
+  // 모니터링 피드 연결 상태 라벨
   const getOverallStatusLabel = (status: string | undefined) => {
     switch (status) {
       case 'all_connected': return '전체 연결';
@@ -294,7 +273,7 @@ export default function ExecoDashboard() {
     <div className="min-h-screen bg-white">
       {/* Header - #04265e */}
       <header
-        className="h-[80px] px-6 flex items-center justify-between"
+        className="dashboard-header min-h-[80px] px-6 flex items-center justify-between"
         style={{ backgroundColor: '#04265e', borderBottom: '0.4px solid #d8d8d8' }}
       >
         <div className="h-[40px]">
@@ -332,20 +311,32 @@ export default function ExecoDashboard() {
               className="text-xs font-medium"
               style={{ color: getStatusColor(realtimeStatus?.overall_status === 'all_connected' ? 'connected' : realtimeStatus?.overall_status === 'partial' ? 'unknown' : 'error') }}
             >
-              {getOverallStatusLabel(realtimeStatus?.overall_status)}
+              모니터링 피드: {getOverallStatusLabel(realtimeStatus?.overall_status)}
             </span>
           </div>
           <span className="text-xs text-white/70">{dataSource}</span>
-          <button className="w-6 h-6">
-            <img src={MENU_ICON} alt="Menu" className="w-full h-full" />
-          </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="p-6 flex flex-col gap-6" style={{ height: 'calc(100vh - 80px)' }}>
+      <main className="dashboard-main p-6 flex flex-col gap-6">
+        {fallbackSections.length > 0 && (
+          <div role="status" className="demo-notice">
+            API 연결 실패로 데모 데이터를 표시 중입니다: {fallbackSections.join(', ')}
+          </div>
+        )}
+        {loadingSections.length > 0 && (
+          <div role="status" className="demo-notice">
+            로딩 중 임시 값을 표시합니다: {loadingSections.join(', ')}
+          </div>
+        )}
+        {kpis && !kpisError && (
+          <div className="text-sm text-gray-700">
+            KPI 출처: {kpis.data_source || '출처 정보 없음'} · 출처가 명시되지 않은 항목은 기본값일 수 있음 · 주파수는 시뮬레이션 · 재생에너지 비율은 예측 기반
+          </div>
+        )}
         {/* KPI Cards Row - 실시간 데이터 */}
-        <div className="flex gap-6">
+        <div className="dashboard-kpis flex gap-6">
           {/* 현재 수요 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
             <span className="text-2xl font-medium text-black tracking-[-0.8px]">현재 수요</span>
@@ -421,14 +412,15 @@ export default function ExecoDashboard() {
         </div>
 
         {/* Main Content Grid - 7:3 ratio */}
-        <div className="flex gap-6 flex-1">
+        <div className="dashboard-grid flex gap-6 flex-1">
           {/* Left - Chart Section (70%) */}
-          <div className="flex-[7] flex flex-col gap-2.5">
+          <div className="dashboard-chart flex-[7] flex flex-col gap-2.5">
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex-1 flex flex-col gap-6">
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <span className="text-3xl font-bold text-black tracking-[-0.96px]">제주 전력수급 현황</span>
-                <span className="text-lg text-black tracking-[-0.64px]">실측vs예측(MW)</span>
+                <span className="text-lg text-black tracking-[-0.64px]">시간별 패턴 및 예측(MW)</span>
               </div>
+              <span className="text-sm text-gray-700">전력수급 출처: {powerSupplyError ? '데모 데이터' : powerSupply?.data_source || '데이터 확인 중'} · 과거 시간도 패턴 기반이며 태양광·풍력은 예측값</span>
 
               {/* v6 스타일 간단한 차트 - 실측/예측 구분 */}
               <div className="bg-white rounded-[14px] p-6" style={{ height: '640px' }}>
@@ -480,12 +472,12 @@ export default function ExecoDashboard() {
                         borderRadius: '8px',
                         fontSize: '14px'
                       }}
-                      formatter={(value: number | undefined, name: string) => {
-                        if (value === undefined) return [null, null];
+                      formatter={(value, name) => {
+                        if (value === undefined) return null;
                         const labels: Record<string, string> = {
-                          supplyActual: '공급능력 (실측)',
+                          supplyActual: '공급능력 (패턴)',
                           supplyForecast: '공급능력 (예측)',
-                          demandActual: '전력수요 (실측)',
+                          demandActual: '전력수요 (패턴)',
                           demandForecast: '전력수요 (예측)',
                           solar: '태양광',
                           wind: '풍력',
@@ -499,9 +491,9 @@ export default function ExecoDashboard() {
                       wrapperStyle={{ paddingTop: 10, fontSize: '14px' }}
                       formatter={(value) => {
                         const labels: Record<string, string> = {
-                          supplyActual: '공급능력(실측)',
+                          supplyActual: '공급능력(패턴)',
                           supplyForecast: '공급능력(예측)',
-                          demandActual: '전력수요(실측)',
+                          demandActual: '전력수요(패턴)',
                           demandForecast: '전력수요(예측)',
                           solar: '태양광',
                           wind: '풍력',
@@ -602,17 +594,18 @@ export default function ExecoDashboard() {
           </div>
 
           {/* Right Panel - Map and Stats (30%) */}
-          <div className="flex-[3] flex flex-col gap-6">
+          <div className="dashboard-side flex-[3] flex flex-col gap-6">
             {/* Jeju Map */}
             <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex flex-col gap-6">
               <div className="flex items-center">
-                <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전량 히트맵 표시</span>
+                <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전소 위치 및 설비용량</span>
               </div>
 
               {/* Map Container - Centered */}
               <div className="flex flex-col items-center gap-4">
+                <span className="text-sm text-gray-600">원 크기: 설비용량 기준 · 실시간 발전량 정보 없음</span>
                 {/* Jeju Map with markers - Centered, exact fit */}
-                <div className="relative" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }}>
+                <div ref={mapRef} className="plant-map relative" style={{ maxWidth: MAP_WIDTH, aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}` }}>
                   <img
                     src={JEJU_MAP}
                     alt="Jeju Island Map"
@@ -624,14 +617,36 @@ export default function ExecoDashboard() {
                     <PlantMarker
                       key={plant.id}
                       plant={plant}
-                      onHover={setHoveredPlant}
-                      isHovered={hoveredPlant?.id === plant.id}
+                      onSelect={selectMarker}
+                      isSelected={hoveredPlant?.id === plant.id}
                     />
                   ))}
                 </div>
 
+                {overlappingPlants.length > 1 && (
+                  <div role="group" aria-label="겹친 발전소 선택" className="flex flex-wrap justify-center gap-2">
+                    <span className="w-full text-center text-sm text-gray-600">겹친 발전소 선택</span>
+                    {overlappingPlants.map(plant => (
+                      <button key={plant.id} type="button" aria-label={`${plant.name} 선택`}
+                        aria-pressed={hoveredPlant?.id === plant.id}
+                        className="min-h-[44px] rounded-md border border-gray-500 bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                        onClick={() => setHoveredPlant(plant)}>{plant.name}</button>
+                    ))}
+                  </div>
+                )}
+                <label className="plant-picker">
+                  발전소 선택
+                  <select value={hoveredPlant?.id ?? ''} onChange={event => { setOverlappingPlants([]); setHoveredPlant(powerPlants.find(plant => plant.id === event.target.value) ?? null); }}>
+                    <option value="">발전소를 선택하세요</option>
+                    {powerPlants.map(plant => <option key={plant.id} value={plant.id}>{plant.name}</option>)}
+                  </select>
+                </label>
+                <div className="plant-details" role="status" aria-live="polite">
+                  {hoveredPlant ? <><strong>{hoveredPlant.name}</strong> · 용량: {hoveredPlant.capacity} MW · 실시간 발전량 정보 없음</> : '지도에서 발전소를 선택하세요.'}
+                </div>
+
                 {/* Legend - Below map (1.2배 크기) */}
-                <div className="bg-white rounded-lg p-4 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex gap-7">
+                <div className="bg-white rounded-lg p-4 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex flex-wrap gap-4">
                   <span className="text-lg font-bold text-black tracking-[-0.64px]">발전소 유형</span>
                   <div className="flex gap-5 text-lg tracking-[-0.64px]">
                     <div className="flex items-center gap-1.5">
@@ -655,24 +670,25 @@ export default function ExecoDashboard() {
             <div className="bg-[#f8f8f8] rounded-lg p-6 flex-1 flex flex-col justify-between">
               <div className="flex flex-col gap-4">
                 <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전소 현황</span>
+                <span className="text-sm text-gray-700">발전소 출력 및 충방전은 시뮬레이션 값</span>
                 <div className="bg-white rounded-[14px] px-5 py-3 flex flex-col gap-2">
                   <div className="flex items-center gap-3">
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">태양광</span>
-                    <div className="flex items-center gap-2 text-[#232323]">
+                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.solar.count}개소 | {plantStats.solar.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.solar.output}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">풍력</span>
-                    <div className="flex items-center gap-2 text-[#232323]">
+                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.wind.count}개소 | {plantStats.wind.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.wind.output}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">ESS</span>
-                    <div className="flex items-center gap-2 text-[#232323]">
+                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.ess.count}개소 | {plantStats.ess.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(충방전 : {plantStats.ess.output}MW)</span>
                     </div>
@@ -682,8 +698,8 @@ export default function ExecoDashboard() {
 
               {/* Weather Info - 실시간 KMA 데이터 */}
               <div className="flex flex-col gap-1">
-                <span className="text-base text-black tracking-[-0.56px]">기상 정보 (KMA)</span>
-                <div className="flex gap-3.5 text-base font-medium text-[#232323] tracking-[-0.56px]">
+                <span className="text-base text-black tracking-[-0.56px]">기상 정보</span>
+                <div className="flex flex-wrap gap-3.5 text-base font-medium text-[#232323] tracking-[-0.56px]">
                   <span>기온 {weather.temperature.toFixed(1)}°C</span>
                   <span>|</span>
                   <span>풍속 {weather.wind_speed.toFixed(1)}m/s</span>
@@ -700,7 +716,7 @@ export default function ExecoDashboard() {
         {/* Footer */}
         <div className="text-center text-sm text-[#232323] tracking-[-0.48px] leading-4">
           <p>제주 전력 지도 v7.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
-          <p className="mt-2">데이터 출처: EPSIS, 기상청 AMOS | 모델: LSTM + Quantile Regression</p>
+          <p className="mt-2">데이터 출처와 예측·시뮬레이션 여부는 각 항목의 안내를 확인하세요.</p>
         </div>
       </main>
     </div>

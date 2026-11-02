@@ -36,6 +36,16 @@ import {
 import { PLANT_TYPE_LABELS, CONTRACT_TYPE_LABELS, ROOF_DIRECTION_LABELS, PLANT_STATUS_LABELS, PlantStatus } from '../types/powerPlant';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAX_BID_CAPACITY_MW = 500;
+const CAPACITY_VALIDATION_MESSAGE = '입찰 용량은 0 MW 초과, 500 MW 이하로 입력해 주세요.';
+const STALE_CAPACITY_MESSAGE = '용량이 변경되었습니다. AI 최적화를 다시 실행해 주세요.';
+const SEGMENT_CAPACITY_MESSAGE = '총 입찰량이 입찰 용량을 초과하거나 유효하지 않습니다.';
+const CAPACITY_ROUNDING_TOLERANCE_MW = 1e-9;
+
+function validBidCapacity(text: string): boolean {
+  const capacity = Number(text.trim());
+  return text.trim() !== '' && Number.isFinite(capacity) && capacity > 0 && capacity <= MAX_BID_CAPACITY_MW;
+}
 
 // Design colors from Figma
 const colors = {
@@ -209,12 +219,15 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
     totalExpectedRevenue: number;
   } | null>(null);
   const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [capacityError, setCapacityError] = useState<string | null>(null);
 
   // Review Modal state
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   // Power Plant states (v6.2.0)
   const [powerPlants, setPowerPlants] = useState<PowerPlant[]>([]);
+  const [plantStatus, setPlantStatus] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
+  const [plantsAreLocal, setPlantsAreLocal] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
   const [currentWeather, setCurrentWeather] = useState<WeatherCondition>('clear');
   const [vppBiddingEnabled, setVppBiddingEnabled] = useState(true); // VPP auto-bidding toggle
@@ -223,6 +236,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('dam');
   const [rtmSlots, setRtmSlots] = useState<RTMSlot[]>([]);
   const [rtmTimeRemaining, setRtmTimeRemaining] = useState('');
+
+  const [capacityRevision] = useState({ current: 0 });
+  const [segmentsStale, setSegmentsStale] = useState(false);
 
   // Dual Settlement state (Phase 7)
   const [dualSettlement, setDualSettlement] = useState<DualSettlement | null>(null);
@@ -324,14 +340,24 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
 
   // Handle AI optimization - calls real API (100% feature parity with web-v6.1)
   const handleAIOptimize = async () => {
+    const capacity = Number(totalCapacity.trim());
+    if (!validBidCapacity(totalCapacity)) {
+      setCapacityError(CAPACITY_VALIDATION_MESSAGE);
+      setOptimizationError(null);
+      setOptimizationInfo(null);
+      return;
+    }
+
+    setCapacityError(null);
     setIsOptimizing(true);
     setOptimizationError(null);
     setOptimizationInfo(null);
+    const revision = capacityRevision.current;
 
     try {
       // Call API for optimized segments
-      const capacity = parseInt(totalCapacity) || 50;
       const optimizedBids = await apiService.getOptimizedSegments(capacity, riskLevel);
+      if (revision !== capacityRevision.current) return;
 
       // Find the hourly bid for the selected hour
       const hourlyBid = optimizedBids.hourly_bids.find(bid => bid.hour === selectedHour)
@@ -357,6 +383,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         });
 
         setSegments(newSegments);
+        setSegmentsStale(false);
 
         // Calculate total expected revenue for this hour
         const totalExpectedRevenue = newSegments.reduce(
@@ -375,6 +402,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         throw new Error(`No optimization data for hour ${selectedHour}`);
       }
     } catch (error) {
+      if (revision !== capacityRevision.current) return;
       console.log('Optimization API failed, using local optimization:', error);
       setOptimizationError(
         error instanceof Error ? error.message : 'AI optimization failed'
@@ -383,7 +411,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
       // Fallback to simple client-side optimization with clearing probability
       const basePrice = smpLow * 0.9;
       const priceSpread = (smpHigh - smpLow) / 9;
-      const capacityPerSegment = (parseInt(totalCapacity) || 50) / 10;
+      const capacityPerSegment = capacity / 10;
       const newSegments: Segment[] = segments.map((s, i) => {
         const segPrice = Math.round(basePrice + i * priceSpread);
         const clearingProb = Math.max(0.1, 1 - (i * 0.08));
@@ -398,6 +426,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
         };
       });
       setSegments(newSegments);
+      setSegmentsStale(false);
 
       // Set optimization info for fallback
       const fallbackTotalRevenue = newSegments.reduce(
@@ -412,6 +441,25 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
     } finally {
       setIsOptimizing(false);
     }
+  };
+
+  const validateReview = (): boolean => {
+    if (!validBidCapacity(totalCapacity)) {
+      setCapacityError(CAPACITY_VALIDATION_MESSAGE);
+      return false;
+    }
+    if (segmentsStale || isOptimizing) {
+      setCapacityError(STALE_CAPACITY_MESSAGE);
+      return false;
+    }
+    if (segments.some(segment => !Number.isFinite(segment.quantity) || segment.quantity < 0) ||
+        !Number.isFinite(totalMW) || totalMW <= 0 ||
+        totalMW > Number(totalCapacity.trim()) + CAPACITY_ROUNDING_TOLERANCE_MW) {
+      setCapacityError(SEGMENT_CAPACITY_MESSAGE);
+      return false;
+    }
+    setCapacityError(null);
+    return true;
   };
 
   // Handle KPX submit
@@ -510,17 +558,28 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
 
   // Load power plants from API or localStorage
   const loadPowerPlants = useCallback(async () => {
+    setPlantStatus('loading');
     try {
       const plants = await apiService.getPowerPlants();
+      if (!Array.isArray(plants)) throw new Error('Invalid power plant response');
       setPowerPlants(plants);
+      setPlantsAreLocal(false);
+      setPlantStatus('ready');
     } catch (error) {
+      setPlantStatus(error instanceof Error && error.message === 'API Error: 404' ? 'unavailable' : 'error');
+      setPowerPlants([]);
+      setPlantsAreLocal(false);
       // Fallback to localStorage
       try {
         const stored = Platform.OS === 'web'
           ? localStorage.getItem('powerPlants')
           : null;
         if (stored) {
-          setPowerPlants(JSON.parse(stored));
+          const plants: unknown = JSON.parse(stored);
+          if (Array.isArray(plants) && plants.length > 0) {
+            setPowerPlants(plants);
+            setPlantsAreLocal(true);
+          }
         }
       } catch (e) {
         console.log('No stored power plants');
@@ -549,8 +608,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
       savePowerPlantsToStorage(updated);
       return updated;
     });
+    if (plantStatus !== 'ready') setPlantsAreLocal(true);
     setShowRegistration(false);
-  }, [savePowerPlantsToStorage]);
+  }, [savePowerPlantsToStorage, plantStatus]);
 
   // Delete a power plant
   const handlePlantDelete = useCallback(async (plantId: string) => {
@@ -908,8 +968,18 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
           </TouchableOpacity>
         </View>
 
+        {plantStatus === 'loading' && <Text>발전소 정보를 불러오는 중입니다.</Text>}
+        {(plantStatus === 'unavailable' || plantStatus === 'error') && (
+          <View style={styles.emptyPlantCard}>
+            <Text style={styles.emptyPlantText}>
+              {plantStatus === 'unavailable' ? '발전소 정보를 현재 이용할 수 없습니다.' : '발전소 정보를 불러오지 못했습니다.'}
+            </Text>
+            {plantsAreLocal && <Text style={styles.emptyPlantSubtext}>기기에 저장된 발전소 정보입니다. 서버 정보와 다를 수 있습니다.</Text>}
+            <TouchableOpacity style={styles.registerBtn} onPress={loadPowerPlants}><Text style={styles.registerBtnText}>다시 시도</Text></TouchableOpacity>
+          </View>
+        )}
         {/* Registered Plants List */}
-        {powerPlants.length > 0 ? (
+        {plantStatus !== 'loading' && powerPlants.length > 0 ? (
           <>
             {powerPlants.map((plant) => {
               const efficiency = calculateEfficiency(plant.installDate);
@@ -1016,7 +1086,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               </Text>
             </View>
           </>
-        ) : (
+        ) : plantStatus === 'ready' ? (
           <View style={styles.emptyPlantCard}>
             <Text style={styles.emptyPlantIcon}>🏭</Text>
             <Text style={styles.emptyPlantText}>등록된 발전소가 없습니다</Text>
@@ -1024,7 +1094,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               발전소를 등록하면 효율과 날씨를 고려한{'\n'}맞춤 입찰량을 추천받을 수 있습니다
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Conditional UI based on capacity */}
@@ -1071,8 +1141,17 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               <TextInput
                 style={styles.capacityInput}
                 value={totalCapacity}
-                onChangeText={setTotalCapacity}
-                keyboardType="numeric"
+                onChangeText={(value) => {
+                  if (value !== totalCapacity) {
+                    capacityRevision.current += 1;
+                    setSegmentsStale(true);
+                    setOptimizationInfo(null);
+                    setOptimizationError(null);
+                  }
+                  setTotalCapacity(value);
+                  setCapacityError(null);
+                }}
+                keyboardType="decimal-pad"
                 placeholder="50"
                 placeholderTextColor={colors.textMuted}
               />
@@ -1138,6 +1217,15 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
       )}
 
       {/* Optimization Error Alert */}
+      {capacityError && (
+        <View style={styles.optimizationErrorAlert}>
+          <Text style={styles.optimizationErrorIcon}>⚠️</Text>
+          <View style={styles.statusAlertContent}>
+            <Text style={styles.optimizationErrorTitle}>입찰 용량 확인</Text>
+            <Text style={styles.optimizationErrorDesc}>{capacityError}</Text>
+          </View>
+        </View>
+      )}
       {optimizationError && (
         <View style={styles.optimizationErrorAlert}>
           <Text style={styles.optimizationErrorIcon}>⚠️</Text>
@@ -1220,7 +1308,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
             (marketStatus === 'closed' || bidStatus !== 'draft') && styles.submitBtnDisabled,
           ]}
           onPress={() => {
-            if (marketStatus === 'open' && bidStatus === 'draft') {
+            if (marketStatus === 'open' && bidStatus === 'draft' && validateReview()) {
               setIsReviewModalOpen(true);
             }
           }}
@@ -1711,7 +1799,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               ) : (
                 <View style={styles.vppEmptyState}>
                   <Text style={styles.vppEmptyText}>
-                    발전소를 등록하면{'\n'}자동 입찰 정보를 확인할 수 있습니다
+                    {plantStatus === 'ready'
+                      ? <>발전소를 등록하면{'\n'}자동 입찰 정보를 확인할 수 있습니다</>
+                      : '발전소 정보가 없어 자동 입찰 정보를 확인할 수 없습니다.'}
                   </Text>
                 </View>
               )}
@@ -1843,6 +1933,10 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               <TouchableOpacity
                 style={styles.modalApproveBtn}
                 onPress={() => {
+                  if (!validateReview()) {
+                    setIsReviewModalOpen(false);
+                    return;
+                  }
                   // Simulate KPX submission workflow
                   setBidStatus('validating');
                   setIsReviewModalOpen(false);
@@ -2905,7 +2999,8 @@ const styles = StyleSheet.create({
   emptyPlantCard: {
     backgroundColor: colors.cardBg,
     borderRadius: 12,
-    padding: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
@@ -2919,6 +3014,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.textSecondary,
+    textAlign: 'center',
     marginBottom: 4,
   },
   emptyPlantSubtext: {

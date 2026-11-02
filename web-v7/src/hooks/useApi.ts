@@ -37,10 +37,10 @@ function useApiData<T>(
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const result = await fetchFn();
       setData(result);
+      setError(null);
     } catch (err) {
       console.error('API Error, using mock data:', err);
       setError('API unavailable, showing demo data');
@@ -151,10 +151,20 @@ export function useSettlementSummary(): UseApiState<SettlementStats> {
       generation_change_pct: 5.2,
       imbalance_charges_million: -45.3,
       imbalance_change_pct: -12.5,
+      capacity_payment_million: 0,
       net_revenue_million: 1205.2,
       net_change_pct: 6.8,
       forecast_accuracy_pct: 94.5,
       accuracy_change_pct: 1.2,
+      total_cleared_mwh: 0,
+      total_actual_mwh: 0,
+      avg_da_smp: 0,
+      avg_rt_smp: 0,
+      avg_deviation_pct: 0,
+      total_hours_tier1: 0,
+      total_hours_tier2: 0,
+      total_hours_tier3: 0,
+      total_hours_zero_risk: 0,
     })
   );
 }

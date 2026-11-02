@@ -27,7 +27,7 @@ import {
   getEfficiencyStatus,
   formatCapacity,
   formatRevenue,
-  mapWeatherCondition,
+
 } from '../utils/powerPlantUtils';
 import {
   XAxis,
@@ -70,7 +70,7 @@ export default function Bidding() {
   // Power Plant state (v6.2.0)
   const [powerPlants, setPowerPlants] = useState<PowerPlant[]>([]);
   const [showRegistration, setShowRegistration] = useState(false);
-  const [currentWeather, setCurrentWeather] = useState<WeatherCondition>('clear');
+  const [currentWeather] = useState<WeatherCondition>('clear');
   const [isLoadingPlants, setIsLoadingPlants] = useState(false);
   const [vppBiddingEnabled, setVppBiddingEnabled] = useState(true); // VPP auto-bidding toggle
 
