@@ -43,6 +43,7 @@ from .schemas import (
 )
 from .service import get_prediction_service, initialize_service, PredictionService
 from .daily_predictor import get_daily_predictor, initialize_daily_predictor, DailyPredictor
+from .day_ahead_routes import router as day_ahead_router
 
 # SMP/Bidding 라우터 (v2.0)
 try:
@@ -141,6 +142,7 @@ app.add_middleware(
 )
 
 # SMP/Bidding 라우터 등록 (v2.0)
+app.include_router(day_ahead_router)
 if SMP_ROUTES_AVAILABLE:
     app.include_router(smp_router)
     app.include_router(bidding_router)

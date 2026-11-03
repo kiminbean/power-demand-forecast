@@ -2,7 +2,7 @@
  * Custom hooks for API data fetching
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService, mockData, isApiAvailable } from '../services/api';
 import type {
   SMPForecast,
@@ -16,6 +16,7 @@ import type {
   PowerSupplyResponse,
   RealtimeStatus,
   CurrentSMP,
+  DayAheadSMP,
 } from '../types';
 
 interface UseApiState<T> {
@@ -66,19 +67,48 @@ export function useSMPForecast(): UseApiState<SMPForecast> {
   );
 }
 
-// Current SMP Hook (Real-time)
+// SMP 공표값은 오류 시 이전 값이나 예시 값으로 대체하지 않는다.
+function usePublishedData<T>(fetchFn: () => Promise<T>): UseApiState<T> {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const fetch = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true);
+    try {
+      const result = await fetchFn();
+      if (id === requestId.current) { setData(result); setError(null); }
+    } catch (err) {
+      console.error('SMP API error:', err);
+      if (id === requestId.current) { setData(null); setError('SMP API unavailable'); }
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
+  }, [fetchFn]);
+  useEffect(() => {
+    fetch();
+    return () => { requestId.current++; };
+  }, [fetch]);
+  return { data, loading, error, refetch: fetch };
+}
+
+const fetchCurrentSMP = () => apiService.getCurrentSMP();
+const fetchDayAheadSMP = () => apiService.getDayAheadSMP();
+
 export function useCurrentSMP(): UseApiState<CurrentSMP> {
-  return useApiData(
-    () => apiService.getCurrentSMP(),
-    () => mockData.getCurrentSMP()
-  );
+  return usePublishedData(fetchCurrentSMP);
+}
+
+export function useDayAheadSMP(): UseApiState<DayAheadSMP> {
+  return usePublishedData(fetchDayAheadSMP);
 }
 
 // Dashboard KPIs Hook
 export function useDashboardKPIs(): UseApiState<DashboardKPIs> {
   return useApiData(
     () => apiService.getDashboardKPIs(),
-    () => mockData.getDashboardKPIs()
+    () => ({ ...mockData.getDashboardKPIs(), current_smp: null, smp_change_pct: null, daily_revenue_million: null })
   );
 }
 

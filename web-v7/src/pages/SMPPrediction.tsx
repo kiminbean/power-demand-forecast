@@ -26,13 +26,15 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { useSMPForecast, useModelInfo, useAutoRefresh, useCurrentSMP } from '../hooks/useApi';
+import { useSMPForecast, useModelInfo, useAutoRefresh, useCurrentSMP, useDayAheadSMP } from '../hooks/useApi';
+import { PublishedSMPCard, DayAheadSMPCard } from '../components/Cards/PublishedSMPCards';
 import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 export default function SMPPrediction() {
-  const { data: forecast, loading, refetch } = useSMPForecast();
+  const { data: forecast, loading, error: forecastError, refetch } = useSMPForecast();
   const { data: currentSMP, refetch: refetchCurrentSMP } = useCurrentSMP();
+  const { data: dayAheadSMP, refetch: refetchDayAheadSMP } = useDayAheadSMP();
   const { data: modelInfo } = useModelInfo();
   const [, setSelectedHour] = useState<number | null>(null);
   const { isDark } = useTheme();
@@ -46,7 +48,7 @@ export default function SMPPrediction() {
     tooltipBorder: isDark ? '#374151' : '#e5e7eb',
   };
 
-  useAutoRefresh(() => { refetch(); refetchCurrentSMP(); }, 300000); // Refresh every 5 minutes
+  useAutoRefresh(() => { refetch(); refetchCurrentSMP(); refetchDayAheadSMP(); }, 300000); // Refresh every 5 minutes
 
   const currentHour = new Date().getHours();
 
@@ -67,7 +69,7 @@ export default function SMPPrediction() {
     min: Math.min(...forecast.q50),
     max: Math.max(...forecast.q50),
     avg: forecast.q50.reduce((a, b) => a + b, 0) / forecast.q50.length,
-    current: forecast.q50[currentHour],
+
     peakHour: forecast.q50.indexOf(Math.max(...forecast.q50)),
     lowHour: forecast.q50.indexOf(Math.min(...forecast.q50)),
   } : null;
@@ -123,7 +125,7 @@ export default function SMPPrediction() {
             </div>
           )}
           <button
-            onClick={() => refetch()}
+            onClick={() => { refetch(); refetchCurrentSMP(); refetchDayAheadSMP(); }}
             className="btn-secondary flex items-center gap-2 whitespace-nowrap"
             disabled={loading}
           >
@@ -138,24 +140,15 @@ export default function SMPPrediction() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <PublishedSMPCard data={currentSMP} />
+        <DayAheadSMPCard data={dayAheadSMP} />
+      </div>
+      {forecastError && <p className="text-sm text-text-muted">데모 예측 데이터 (API 연결 실패)</p>}
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="card bg-gradient-to-br from-smp/10 to-transparent">
-            <p className="text-sm text-text-muted mb-1">현재 SMP (실시간)</p>
-            <div className="text-2xl font-bold text-smp">
-              {currentSMP?.current_smp?.toFixed(1) ?? stats.current.toFixed(1)}
-            </div>
-            <p className="text-xs text-text-muted">원/kWh</p>
-            {currentSMP?.comparison && (
-              <p className={clsx(
-                'text-xs mt-1',
-                currentSMP.comparison.daily_change_pct >= 0 ? 'text-danger' : 'text-success'
-              )}>
-                일평균 대비 {currentSMP.comparison.daily_change_pct >= 0 ? '+' : ''}{currentSMP.comparison.daily_change_pct.toFixed(1)}%
-              </p>
-            )}
-          </div>
+
           <div className="card">
             <p className="text-sm text-text-muted mb-1">평균 예측</p>
             <div className="text-2xl font-bold text-text-primary">{stats.avg.toFixed(1)}</div>
@@ -203,7 +196,7 @@ export default function SMPPrediction() {
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 px-2 py-1 text-xs bg-smp/20 text-smp rounded">
               <Activity className="w-3 h-3" />
-              실시간
+              예측
             </span>
           </div>
         </div>

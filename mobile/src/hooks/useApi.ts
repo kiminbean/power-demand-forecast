@@ -42,6 +42,7 @@ function useFetch<T>(
       const result = await fetchFn();
       setData(result);
     } catch (err) {
+      setData(null);
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       setLoading(false);

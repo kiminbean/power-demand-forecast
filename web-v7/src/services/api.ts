@@ -21,6 +21,7 @@ import type {
   PowerPlant,
   PowerPlantCreate,
   CurrentSMP,
+  DayAheadSMP,
 } from '../types';
 
 const API_BASE_URL = '/api/v1';
@@ -55,6 +56,10 @@ class ApiService {
   // SMP Forecast (24h predictions with quantiles)
   async getSMPForecast(): Promise<SMPForecast> {
     return this.fetch('/smp-forecast');
+  }
+
+  async getDayAheadSMP(): Promise<DayAheadSMP> {
+    return this.fetch('/smp/day-ahead');
   }
 
   // Market Status (DAM/RTM status and deadlines)
@@ -292,22 +297,6 @@ export const mockData = {
     };
   },
 
-  // Current SMP Mock Data
-  getCurrentSMP(): CurrentSMP {
-    const currentHour = new Date().getHours();
-    const baseSMP = 95 + Math.sin((currentHour - 6) * Math.PI / 12) * 25;
-    return {
-      current_smp: Math.round(baseSMP * 10) / 10,
-      hour: currentHour,
-      region: 'jeju',
-      comparison: {
-        daily_avg: Math.round(baseSMP * 0.95 * 10) / 10,
-        weekly_avg: Math.round(baseSMP * 0.92 * 10) / 10,
-        daily_change_pct: 5.2,
-        weekly_change_pct: 8.3,
-      },
-    };
-  },
 
   getPowerSupply(): PowerSupplyResponse {
     const currentHour = new Date().getHours();

@@ -17,7 +17,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { apiService, DashboardKPIs, PowerSupplyData, Resource } from '../services/api';
+import { apiService, DashboardKPIs, PowerSupplyData, Resource, CurrentSMP } from '../services/api';
+import { describeCurrentSmp, formatNullableNumber, publishedSmpPrice } from '../utils/smpPresentation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -127,6 +128,7 @@ export default function ExecoDashboardScreen() {
 
   // API data states
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
+  const [publishedSmp, setPublishedSmp] = useState<CurrentSMP | null>(null);
   const [powerSupply, setPowerSupply] = useState<PowerSupplyData | null>(null);
   const [resources, setResources] = useState<Resource[] | null>(null);
   const [apiStatus, setApiStatus] = useState({
@@ -141,11 +143,14 @@ export default function ExecoDashboardScreen() {
       setError(null);
 
       // Fetch all data in parallel
-      const [kpisData, supplyData, resourcesData] = await Promise.allSettled([
+      const [kpisData, supplyData, resourcesData, smpData] = await Promise.allSettled([
         apiService.getDashboardKPIs(),
         apiService.getPowerSupply(),
         apiService.getResources(),
+        apiService.getCurrentSMP(),
       ]);
+
+      setPublishedSmp(smpData.status === 'fulfilled' ? smpData.value : null);
 
       // Process KPIs
       if (kpisData.status === 'fulfilled') {
@@ -153,17 +158,7 @@ export default function ExecoDashboardScreen() {
         setApiStatus(prev => ({ ...prev, smp: 'connected' }));
       } else {
         setApiStatus(prev => ({ ...prev, smp: 'error' }));
-        // Set fallback values
-        setKpis({
-          total_capacity_mw: 369.4,
-          current_output_mw: 168.5,
-          utilization_pct: 45.6,
-          daily_revenue_million: 38.5,
-          revenue_change_pct: 8.3,
-          current_smp: 95.0,
-          smp_change_pct: 2.1,
-          resource_count: 21,
-        });
+        setKpis(null);
       }
 
       // Process Power Supply
@@ -186,7 +181,9 @@ export default function ExecoDashboardScreen() {
 
     } catch (err: any) {
       console.error('API Error:', err);
-      setError('데이터 로드 실패. 기본값 사용 중.');
+      setError('데이터 로드 실패.');
+      setKpis(null);
+      setPublishedSmp(null);
     } finally {
       setLoading(false);
     }
@@ -263,8 +260,7 @@ export default function ExecoDashboardScreen() {
   // KPI values with defaults
   const currentDemand = kpis?.current_output_mw ?? 685.0;
   const supplyReserve = kpis?.utilization_pct ? (100 - kpis.utilization_pct) : 25.0;
-  const currentSMP = kpis?.current_smp ?? 95.0;
-  const smpChange = kpis?.smp_change_pct ?? 2.1;
+
   const renewableRatio = 24.6; // From weather/renewable calculation
   const gridFrequency = 59.99;
   const temperature = 5.5;
@@ -299,7 +295,7 @@ export default function ExecoDashboardScreen() {
           <StatusIndicator label="기상" status={apiStatus.weather} />
         </View>
         <Text style={styles.statusText}>
-          {apiStatus.smp === 'connected' ? '실시간 데이터' : '데모 데이터'}
+          {apiStatus.smp === 'connected' ? 'API 연결됨 (최신성 미확인)' : 'API 연결 불가'}
         </Text>
       </View>
 
@@ -319,10 +315,9 @@ export default function ExecoDashboardScreen() {
           subtitle={`예비율 ${supplyReserve.toFixed(1)}%`}
         />
         <KPICard
-          title="현재 SMP"
-          value={currentSMP.toFixed(1)}
+          title={describeCurrentSmp(publishedSmp)}
+          value={formatNullableNumber(publishedSmpPrice(publishedSmp))}
           unit="원"
-          subtitle={`${smpChange >= 0 ? '+' : ''}${smpChange.toFixed(1)}%`}
           valueColor="#0048ff"
           subtitleColor="#0048ff"
         />

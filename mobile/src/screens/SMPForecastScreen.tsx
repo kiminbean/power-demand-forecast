@@ -5,7 +5,7 @@
  * Uses real API data from backend
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { apiService, SMPForecast, ModelInfo } from '../services/api';
+import { apiService, DayAheadSMP, SMPForecast, ModelInfo } from '../services/api';
+import { describeDayAhead, formatNullableNumber, isAvailableDayAhead } from '../utils/smpPresentation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -56,20 +57,6 @@ const transformSMPData = (forecast: SMPForecast): SMPHourlyData[] => {
   }));
 };
 
-// Fallback mock data when API is unavailable
-const generateMockSMPData = (): SMPHourlyData[] => {
-  const basePrice = 71;
-  return Array.from({ length: 24 }, (_, i) => {
-    const variation = Math.sin(i * 0.5) * 15 + Math.random() * 10;
-    const price = Math.round((basePrice + variation) * 10) / 10;
-    return {
-      hour: `${String(i).padStart(2, '0')}시`,
-      price,
-      rangeMin: Math.round(price * 0.75),
-      rangeMax: Math.round(price * 1.5),
-    };
-  });
-};
 
 // Simple Line Chart Component
 function SMPChart({ data }: { data: SMPHourlyData[] }) {
@@ -131,6 +118,8 @@ function SMPChart({ data }: { data: SMPHourlyData[] }) {
 
 export default function SMPForecastScreen() {
   const [smpData, setSmpData] = useState<SMPHourlyData[]>([]);
+  const [dayAheadSmp, setDayAheadSmp] = useState<DayAheadSMP | null>(null);
+  const dayAheadRequestId = useRef(0);
   const [currentSMP, setCurrentSMP] = useState(71.2);
   const [highSMP, setHighSMP] = useState({ price: 102, hour: 18 });
   const [lowSMP, setLowSMP] = useState({ price: 71, hour: 12 });
@@ -147,12 +136,23 @@ export default function SMPForecastScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
+    // 하루전 가격과 예측은 서로 독립적으로 조회한다.
+    const requestId = ++dayAheadRequestId.current;
+    setDayAheadSmp(null);
+    void apiService.getDayAheadSMP()
+      .then(data => { if (requestId === dayAheadRequestId.current) setDayAheadSmp(data); })
+      .catch(() => { if (requestId === dayAheadRequestId.current) setDayAheadSmp(null); });
+
     try {
       // Fetch forecast and model info in parallel
       const [forecast, model] = await Promise.all([
         apiService.getSMPForecast(),
         apiService.getModelInfo(),
       ]);
+
+      if (![forecast.q10, forecast.q50, forecast.q90].every(values => Array.isArray(values) && values.length === 24 && values.every(Number.isFinite))) {
+        throw new Error('Invalid SMP forecast');
+      }
 
       // Transform data
       const transformedData = transformSMPData(forecast);
@@ -189,10 +189,8 @@ export default function SMPForecastScreen() {
       setLastUpdate(`${ampm} ${hour12}:${String(minutes).padStart(2, '0')}`);
 
     } catch (error) {
-      console.log('API unavailable, using mock data:', error);
-      // Fallback to mock data
-      const mockData = generateMockSMPData();
-      setSmpData(mockData);
+      console.log('SMP forecast unavailable:', error);
+      setSmpData([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -204,10 +202,16 @@ export default function SMPForecastScreen() {
 
     // Auto refresh every 5 minutes
     const interval = setInterval(() => fetchSMPData(), 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); dayAheadRequestId.current++; };
   }, [fetchSMPData]);
 
   const onRefresh = () => fetchSMPData(true);
+  const dayAheadCard = (
+    <View style={styles.chartSection}>
+      <Text style={styles.sectionTitle}>{describeDayAhead(dayAheadSmp)}</Text>
+      <Text>{formatNullableNumber(isAvailableDayAhead(dayAheadSmp) ? dayAheadSmp.current_smp : null)} 원/kWh</Text>
+    </View>
+  );
 
   // Show loading spinner on initial load
   if (loading && smpData.length === 0) {
@@ -216,6 +220,15 @@ export default function SMPForecastScreen() {
         <ActivityIndicator size="large" color={colors.secondary} />
         <Text style={styles.loadingText}>SMP 데이터 로딩중...</Text>
       </View>
+    );
+  }
+
+  if (smpData.length === 0) {
+    return (
+      <ScrollView contentContainerStyle={styles.loadingContainer} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        {dayAheadCard}
+        <Text style={styles.loadingText}>SMP 예측 데이터 없음</Text>
+      </ScrollView>
     );
   }
 
@@ -239,10 +252,12 @@ export default function SMPForecastScreen() {
           <Text style={styles.subtitle}>{modelInfo}</Text>
         </View>
 
+        {dayAheadCard}
+
         {/* Current SMP Card */}
         <View style={styles.smpCard}>
           <View style={styles.smpCardLeft}>
-            <Text style={styles.smpCardLabel}>현재 SMP ({currentHour}시)</Text>
+            <Text style={styles.smpCardLabel}>예측 SMP ({currentHour}시)</Text>
             <Text style={styles.smpCardValue}>{currentSMP}</Text>
             <Text style={styles.smpCardUnit}>원/kWh</Text>
           </View>

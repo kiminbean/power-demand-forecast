@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { alanApi, AlanMessage, AlanResponse } from '../../services/alan/alanApi';
 import { apiService } from '../../services/api';
+import { describeCurrentSmp, formatNullableNumber, publishedSmpPrice } from '../../utils/smpPresentation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -339,7 +340,7 @@ export default function AlanChatScreen({ onNavigate }: Props) {
           const maxHour = forecast.q50.indexOf(max);
           const minHour = forecast.q50.indexOf(min);
           response = `💹 SMP 예측 (24시간)\n\n` +
-            `📍 현재 SMP: ${current.toFixed(0)}원/kWh\n\n` +
+            `📍 0시 예측 SMP: ${formatNullableNumber(current, 0)}원/kWh\n\n` +
             `📈 최고가: ${max.toFixed(0)}원 (${maxHour}시)\n` +
             `📉 최저가: ${min.toFixed(0)}원 (${minHour}시)\n\n` +
             `🎯 예측 신뢰도: ${(forecast.confidence * 100).toFixed(0)}%\n` +
@@ -369,12 +370,13 @@ export default function AlanChatScreen({ onNavigate }: Props) {
         // ========== 발전소 상태 ==========
         case 'show_realtime_status': {
           const kpis = await apiService.getDashboardKPIs();
+          const published = await apiService.getCurrentSMP().catch(() => null);
           response = `⚡ 실시간 발전 현황\n\n` +
             `🏭 총 설비용량: ${kpis.total_capacity_mw.toFixed(0)}MW\n` +
             `⚡ 현재 출력: ${kpis.current_output_mw.toFixed(1)}MW\n` +
             `📊 가동률: ${kpis.utilization_pct.toFixed(1)}%\n\n` +
-            `💰 금일 수익: ${kpis.daily_revenue_million.toFixed(1)}백만원\n` +
-            `💹 현재 SMP: ${kpis.current_smp.toFixed(0)}원/kWh`;
+            `💰 금일 수익: ${formatNullableNumber(kpis.daily_revenue_million)}백만원\n` +
+            `💹 ${describeCurrentSmp(published)}: ${formatNullableNumber(publishedSmpPrice(published), 0)}원/kWh`;
           break;
         }
 
@@ -424,11 +426,7 @@ export default function AlanChatScreen({ onNavigate }: Props) {
         case 'show_smp_price': {
           const currentSMP = await apiService.getCurrentSMP();
           response = `💹 SMP 시세 정보\n\n` +
-            `📍 현재 SMP: ${currentSMP.current_smp.toFixed(0)}원/kWh\n` +
-            `   (${currentSMP.hour}시 기준, ${currentSMP.region})\n\n` +
-            `📊 비교 분석:\n` +
-            `   일평균: ${currentSMP.comparison.daily_avg.toFixed(0)}원 (${currentSMP.comparison.daily_change_pct >= 0 ? '+' : ''}${currentSMP.comparison.daily_change_pct.toFixed(1)}%)\n` +
-            `   주평균: ${currentSMP.comparison.weekly_avg.toFixed(0)}원 (${currentSMP.comparison.weekly_change_pct >= 0 ? '+' : ''}${currentSMP.comparison.weekly_change_pct.toFixed(1)}%)`;
+            `📍 ${describeCurrentSmp(currentSMP)}: ${formatNullableNumber(publishedSmpPrice(currentSMP), 0)}원/kWh`;
           break;
         }
 

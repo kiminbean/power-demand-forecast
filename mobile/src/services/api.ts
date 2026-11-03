@@ -47,10 +47,10 @@ export interface DashboardKPIs {
   total_capacity_mw: number;
   current_output_mw: number;
   utilization_pct: number;
-  daily_revenue_million: number;
+  daily_revenue_million: number | null;
   revenue_change_pct: number;
-  current_smp: number;
-  smp_change_pct: number;
+  current_smp: number | null;
+  smp_change_pct: number | null;
   resource_count: number;
 }
 
@@ -243,7 +243,7 @@ export interface RTMModelInfo {
 }
 
 export interface CurrentSMP {
-  current_smp: number;
+  current_smp: number | null;
   hour: number;
   region: string;
   comparison: {
@@ -251,7 +251,28 @@ export interface CurrentSMP {
     weekly_avg: number;
     daily_change_pct: number;
     weekly_change_pct: number;
-  };
+  } | null;
+  data_date_status: 'current_date' | 'historical' | 'future' | 'unknown' | 'no_data';
+  trade_day: string | null;
+  data_source: string | null;
+  latest_smp?: {
+    price: number;
+    trade_day: string | null;
+    trade_hour: number | null;
+    data_source: string | null;
+    market: string;
+    region: string;
+  } | null;
+}
+
+export interface DayAheadSMP {
+  status: 'available' | 'no_data';
+  current_smp: number | null;
+  trade_day: string | null;
+  trade_hour: number | null;
+  market_type: 'day_ahead';
+  data_source: string | null;
+  source_url: string | null;
 }
 
 export interface BiddingStrategy {
@@ -403,9 +424,13 @@ class ApiService {
     return this.fetch('/api/v1/model/info');
   }
 
-  // Current SMP (real-time)
+  // Published SMP; trade date does not establish real-time freshness.
   async getCurrentSMP(region: string = 'jeju'): Promise<CurrentSMP> {
     return this.fetch(`/api/v1/smp/current?region=${region}`);
+  }
+
+  async getDayAheadSMP(): Promise<DayAheadSMP> {
+    return this.fetch('/api/v1/smp/day-ahead');
   }
 
   // Power Supply Data (24-hour)

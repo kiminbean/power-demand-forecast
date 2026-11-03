@@ -251,7 +251,7 @@ class AlanApiService {
     // SMP related
     if (lowerMessage.includes('smp') || lowerMessage.includes('가격')) {
       return {
-        answer: '현재 제주 SMP는 71.2원/kWh입니다. 오늘 평균 대비 4.23% 낮은 수준이에요. 피크 시간대(10-14시)에는 85-95원 수준으로 상승할 것으로 예측됩니다.',
+        answer: 'SMP 데이터를 확인할 수 없습니다. SMP 시세 또는 예측 화면에서 확인해 주세요.',
         action: hasNavigationIntent ? { type: 'show_data', target: 'smp_forecast' } : undefined,
         suggestions: ['SMP 예측 보기', '입찰 최적화', '수익 시뮬레이션'],
       };

@@ -19,6 +19,7 @@ Sources:
 """
 
 import os
+import math
 import httpx
 import logging
 from datetime import datetime, timedelta
@@ -329,9 +330,20 @@ class RealtimeAPIClient:
 
             # Calculate average SMP for the hour (across all gugan)
             hour_items = [item for item in items if item.get("date") == trade_date and item.get("hour") == trade_hour]
+            # 실시간 가격이 누락되거나 유효하지 않으면 하루전 가격으로 대체하지 않는다.
+            rt_prices = [item.get("jsmpRt") for item in hour_items]
+            if not rt_prices or any(
+                isinstance(price, bool)
+                or not isinstance(price, (int, float))
+                or not math.isfinite(price)
+                or price <= 0
+                for price in rt_prices
+            ):
+                logger.warning("No valid real-time Jeju SMP for the latest hour")
+                return None
             if hour_items:
                 avg_jsmp = sum(item.get("jsmp", 0) for item in hour_items) / len(hour_items)
-                avg_jsmp_rt = sum(item.get("jsmpRt", 0) for item in hour_items) / len(hour_items)
+                avg_jsmp_rt = sum(rt_prices) / len(rt_prices)
                 avg_demand = sum(item.get("jlfd", 0) for item in hour_items) / len(hour_items)
                 avg_demand_rt = sum(item.get("jlfdRt", 0) for item in hour_items) / len(hour_items)
             else:
@@ -344,7 +356,7 @@ class RealtimeAPIClient:
                 trade_day=trade_date,
                 trade_hour=trade_hour,
                 smp_land=avg_jsmp,  # 하루전 SMP (육지와 동일하게 저장)
-                smp_jeju=avg_jsmp_rt if avg_jsmp_rt > 0 else avg_jsmp,  # 실시간 SMP 우선
+                smp_jeju=avg_jsmp_rt,  # 실시간 SMP만 사용
                 timestamp=datetime.now(),
                 data_source=f"KPX 제주시범사업 API (수요: {avg_demand_rt:.0f}MW)",
             )
@@ -390,8 +402,7 @@ class RealtimeAPIClient:
 
         Priority order:
         1. 제주시범사업 API (Jeju SMP + demand forecast)
-        2. Web crawler (no API key required)
-        3. KPX API (requires approval)
+        2. KPX API (requires approval)
 
         Args:
             area_code: "1" for 육지(mainland), "9" for 제주(Jeju)
@@ -399,6 +410,10 @@ class RealtimeAPIClient:
         Returns:
             SMPData object or None if failed
         """
+        # 제주 가격은 원천 정렬·시장 구분을 검증하기 전까지 제공하지 않는다.
+        if area_code == "9":
+            return None
+
         cache_key = f"smp_{area_code}"
 
         # Check cache
@@ -415,12 +430,7 @@ class RealtimeAPIClient:
                 self._smp_cache[cache_key] = (smp_data, datetime.now())
                 return smp_data
 
-        # Try crawler second
-        if self.use_crawlers:
-            smp_data = self._get_smp_via_crawler()
-            if smp_data:
-                self._smp_cache[cache_key] = (smp_data, datetime.now())
-                return smp_data
+        # 현재 크롤러는 수요예측 표와 추정치를 가격으로 반환할 수 있어 사용하지 않는다.
 
         # Fallback to old KPX API
         try:

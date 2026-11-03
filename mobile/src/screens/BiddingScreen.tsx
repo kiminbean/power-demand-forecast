@@ -1543,7 +1543,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
           {/* SMP Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>현재 SMP</Text>
+              <Text style={styles.statLabel}>예측 SMP (참고값)</Text>
               <Text style={styles.statValue}>{smpMid}</Text>
             </View>
             <View style={styles.statCard}>
@@ -1784,7 +1784,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
                     </Text>
                   </View>
                   <View style={styles.vppRow}>
-                    <Text style={styles.vppLabel}>현재 SMP</Text>
+                    <Text style={styles.vppLabel}>예측 SMP (참고값)</Text>
                     <Text style={styles.vppValue}>{smpMid}원/kWh</Text>
                   </View>
                   <View style={styles.vppRow}>

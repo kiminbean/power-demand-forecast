@@ -17,12 +17,13 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts';
-import { useDashboardKPIs, useSMPForecast, useResources, usePowerSupply, useAutoRefresh, useRealtimeStatus } from '../hooks/useApi';
+import { useDashboardKPIs, useSMPForecast, useResources, usePowerSupply, useAutoRefresh, useRealtimeStatus, useCurrentSMP, useDayAheadSMP } from '../hooks/useApi';
+import { PublishedSMPCard, DayAheadSMPCard } from '../components/Cards/PublishedSMPCards';
 
 // Local assets
 const JEJU_MAP = `${import.meta.env.BASE_URL}jeju-map.png`;
 const LOGO = `${import.meta.env.BASE_URL}logo-light.png`;  // v6 로고 (다크 배경용)
-const CHECK_ICON = `${import.meta.env.BASE_URL}check-icon.svg`;
+
 
 // Types
 interface PowerPlant {
@@ -177,6 +178,8 @@ export default function ExecoDashboard() {
   // API 훅 - 실시간 데이터 로드
   const { data: kpis, refetch: refetchKPIs, error: kpisError } = useDashboardKPIs();
   const { refetch: refetchSMP } = useSMPForecast();
+  const { data: publishedSMP, refetch: refetchPublishedSMP } = useCurrentSMP();
+  const { data: dayAheadSMP, refetch: refetchDayAheadSMP } = useDayAheadSMP();
   const { data: resources, refetch: refetchResources, error: resourcesError } = useResources();
   const { data: powerSupply, refetch: refetchPowerSupply, error: powerSupplyError } = usePowerSupply();
   const { data: realtimeStatus } = useRealtimeStatus();
@@ -185,6 +188,8 @@ export default function ExecoDashboard() {
   useAutoRefresh(() => {
     refetchKPIs();
     refetchSMP();
+    refetchPublishedSMP();
+    refetchDayAheadSMP();
     refetchResources();
     refetchPowerSupply();
   }, 60000);
@@ -226,8 +231,7 @@ export default function ExecoDashboard() {
   // KPI 데이터 (API 또는 기본값) - 실제 EPSIS/KMA 데이터 기반
   const currentDemand = kpis?.current_demand_mw ?? 685.0;  // 현재 전력 수요 (MW)
   const supplyReserveRate = kpis?.supply_reserve_rate ?? 25.0;  // 공급 예비율 (%)
-  const currentSMP = kpis?.current_smp ?? 114.8;
-  const smpChangePct = kpis?.smp_change_pct ?? -5.0;
+
   const gridFrequency = kpis?.grid_frequency ?? 60.01;  // 계통 주파수 (Hz)
   const renewableRatio = kpis?.renewable_ratio_pct ?? 24.6;  // 재생에너지 비율 (%)
   const weather = kpis?.weather ?? { temperature: 5.5, wind_speed: 3.2, humidity: 58.0, condition: '맑음' };
@@ -351,19 +355,9 @@ export default function ExecoDashboard() {
             </div>
           </div>
 
-          {/* 현재 SMP */}
+          {/* 공표 SMP */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">현재 SMP (제주)</span>
-            <div className="flex items-center gap-3.5 px-3.5">
-              <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#0048ff' }}>{currentSMP.toFixed(1)}</span>
-                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#0048ff' }}>원</span>
-              </div>
-              <div className="rounded-lg px-3.5 py-1 flex items-center gap-1" style={{ backgroundColor: 'rgba(0,72,255,0.1)' }}>
-                <span className="text-xl tracking-[-0.72px]" style={{ color: '#0048ff' }}>{smpChangePct >= 0 ? '+' : ''}{smpChangePct.toFixed(1)}%</span>
-                <img src={CHECK_ICON} alt="" className="w-7 h-7" />
-              </div>
-            </div>
+            <PublishedSMPCard data={publishedSMP} />
           </div>
 
           {/* 계통 주파수 - 실시간 데이터 */}
@@ -410,6 +404,8 @@ export default function ExecoDashboard() {
             </div>
           </div>
         </div>
+
+        <DayAheadSMPCard data={dayAheadSMP} />
 
         {/* Main Content Grid - 7:3 ratio */}
         <div className="dashboard-grid flex gap-6 flex-1">

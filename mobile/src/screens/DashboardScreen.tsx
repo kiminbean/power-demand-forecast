@@ -48,22 +48,23 @@ const iconMap: { [key: string]: string } = {
 };
 
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { apiService, SMPForecast, DashboardKPIs, MarketStatus, ModelInfo } from '../services/api';
+import { apiService, SMPForecast, DashboardKPIs, MarketStatus, ModelInfo, CurrentSMP, DayAheadSMP } from '../services/api';
+import { describeCurrentSmp, describeDayAhead, formatNullableNumber, isAvailableDayAhead, publishedSmpPrice } from '../utils/smpPresentation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 // Helper to format SMP data for chart
 function formatSMPDataForChart(forecast: SMPForecast | null) {
-  if (!forecast || !forecast.q50) {
+  if (!forecast || forecast.q50.length < 24 || !forecast.q50.every(Number.isFinite)) {
     return {
-      labels: ['00', '04', '08', '12', '16', '20', '24'],
-      datasets: [{ data: [95, 88, 102, 145, 168, 152, 112], color: () => colors.chart.smp, strokeWidth: 2 }],
+      labels: [],
+      datasets: [{ data: [], color: () => colors.chart.smp, strokeWidth: 2 }],
     };
   }
 
   // Sample every 4 hours for labels
   const labels = ['00', '04', '08', '12', '16', '20', '24'];
-  const sampledData = [0, 4, 8, 12, 16, 20, 23].map(i => forecast.q50[i] || 100);
+  const sampledData = [0, 4, 8, 12, 16, 20, 23].map(i => forecast.q50[i]);
 
   return {
     labels,
@@ -136,6 +137,8 @@ export default function DashboardScreen() {
 
   // API data states
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
+  const [publishedSmp, setPublishedSmp] = useState<CurrentSMP | null>(null);
+  const [dayAheadSmp, setDayAheadSmp] = useState<DayAheadSMP | null>(null);
   const [smpForecast, setSmpForecast] = useState<SMPForecast | null>(null);
   const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
@@ -144,31 +147,28 @@ export default function DashboardScreen() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const [kpisData, forecastData, statusData, modelData] = await Promise.all([
-        apiService.getDashboardKPIs(),
-        apiService.getSMPForecast(),
-        apiService.getMarketStatus(),
-        apiService.getModelInfo(),
+      const [kpisData, forecastData, statusData, modelData, publishedData, dayAheadData] = await Promise.all([
+        apiService.getDashboardKPIs().catch(() => null),
+        apiService.getSMPForecast().catch(() => null),
+        apiService.getMarketStatus().catch(() => null),
+        apiService.getModelInfo().catch(() => null),
+        apiService.getCurrentSMP().catch(() => null),
+        apiService.getDayAheadSMP().catch(() => null),
       ]);
 
       setKpis(kpisData);
       setSmpForecast(forecastData);
       setMarketStatus(statusData);
       setModelInfo(modelData);
+      setPublishedSmp(publishedData);
+      setDayAheadSmp(dayAheadData);
     } catch (err: any) {
       console.error('API Error:', err);
-      setError('Failed to load data. Using fallback values.');
-      // Set fallback values
-      setKpis({
-        total_capacity_mw: 225,
-        current_output_mw: 168.5,
-        utilization_pct: 74.9,
-        daily_revenue_million: 38.5,
-        revenue_change_pct: 8.3,
-        current_smp: 95.0,
-        smp_change_pct: 2.1,
-        resource_count: 4,
-      });
+      setError('Failed to load data.');
+      setKpis(null);
+      setSmpForecast(null);
+      setPublishedSmp(null);
+      setDayAheadSmp(null);
     } finally {
       setLoading(false);
     }
@@ -191,13 +191,13 @@ export default function DashboardScreen() {
   const chartData = formatSMPDataForChart(smpForecast);
 
   // Calculate min/max/avg from forecast
-  const smpStats = smpForecast?.q50
+  const smpStats = smpForecast?.q50?.length && smpForecast.q50.every(Number.isFinite)
     ? {
         min: Math.min(...smpForecast.q50).toFixed(1),
         max: Math.max(...smpForecast.q50).toFixed(1),
         avg: (smpForecast.q50.reduce((a, b) => a + b, 0) / smpForecast.q50.length).toFixed(1),
       }
-    : { min: '88.2', max: '168.5', avg: '135.1' };
+    : { min: '—', max: '—', avg: '—' };
 
   if (loading) {
     return (
@@ -251,11 +251,16 @@ export default function DashboardScreen() {
       {/* Key Metrics Grid */}
       <View style={styles.metricsGrid}>
         <MetricCard
-          title="Current SMP"
-          value={(kpis?.current_smp || 95).toFixed(1)}
+          title={describeCurrentSmp(publishedSmp)}
+          value={formatNullableNumber(publishedSmpPrice(publishedSmp))}
           unit="₩/kWh"
-          trend={kpis && kpis.smp_change_pct > 0 ? 'up' : 'down'}
-          trendValue={`${kpis?.smp_change_pct?.toFixed(1) || '0'}%`}
+          icon="flash"
+          color={colors.chart.smp}
+        />
+        <MetricCard
+          title={describeDayAhead(dayAheadSmp)}
+          value={formatNullableNumber(isAvailableDayAhead(dayAheadSmp) ? dayAheadSmp.current_smp : null)}
+          unit="₩/kWh"
           icon="flash"
           color={colors.chart.smp}
         />
@@ -277,7 +282,7 @@ export default function DashboardScreen() {
         />
         <MetricCard
           title="Daily Revenue"
-          value={(kpis?.daily_revenue_million || 38.5).toFixed(1)}
+          value={formatNullableNumber(kpis?.daily_revenue_million)}
           unit="M₩"
           trend={kpis && kpis.revenue_change_pct > 0 ? 'up' : 'down'}
           trendValue={`+${kpis?.revenue_change_pct?.toFixed(1) || '8.3'}%`}
@@ -292,10 +297,10 @@ export default function DashboardScreen() {
           <Text style={styles.chartTitle}>24H SMP Forecast</Text>
           <View style={styles.chartLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.chart.smp }]} />
-            <Text style={styles.legendText}>{smpForecast?.model_used || 'v3.1'} Model</Text>
+            <Text style={styles.legendText}>{smpForecast?.model_used || '예측 데이터 없음'}</Text>
           </View>
         </View>
-        {Platform.OS === 'web' ? (
+        {!chartData.labels.length ? <Text style={styles.statLabel}>예측 데이터 없음</Text> : Platform.OS === 'web' ? (
           <View style={[styles.chart, { height: 220, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, padding: spacing.md }]}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: 10 }}>
               {chartData.datasets[0].data.map((val, i) => (
@@ -306,7 +311,7 @@ export default function DashboardScreen() {
                 </View>
               ))}
             </View>
-            <Text style={{ color: colors.text.muted, fontSize: 10, textAlign: 'center', marginTop: 8 }}>₩/kWh by Hour (Real Model)</Text>
+            <Text style={{ color: colors.text.muted, fontSize: 10, textAlign: 'center', marginTop: 8 }}>₩/kWh by Hour (Forecast)</Text>
           </View>
         ) : LineChart && (
           <LineChart

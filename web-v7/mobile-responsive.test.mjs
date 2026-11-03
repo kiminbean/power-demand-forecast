@@ -84,9 +84,33 @@ test('API failure is disclosed and assets use the deployment prefix', async () =
   try {
     assert.match(await page.$eval('.demo-notice', element => element.textContent), /데모 데이터.*현재 지표.*발전소 현황.*전력수급 차트/s);
     const images = await page.$$eval('img', elements => elements.map(element => ({ src: new URL(element.src).pathname, loaded: element.complete && element.naturalWidth > 0 })));
-    for (const name of ['jeju-map.png', 'logo-light.png', 'check-icon.svg']) {
+    for (const name of ['jeju-map.png', 'logo-light.png']) {
       assert.ok(images.some(image => image.src === `/v7/${name}` && image.loaded), `${name}: ${JSON.stringify(images)}`);
     }
+  } finally {
+    await page.close();
+  }
+});
+
+test('live power chart legend fits a phone viewport', async () => {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 390, height: 844 });
+  try {
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (url.pathname === '/api/v1/power-supply') {
+        request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ current_hour: 9, data_source: 'test', data: Array.from({ length: 24 }, (_, hour) => ({ hour, demand_mw: 600, supply_mw: 900, solar_mw: 20, wind_mw: 40 })) }) });
+      } else if (url.pathname.startsWith('/api/') || url.hostname !== '127.0.0.1') request.abort();
+      else request.continue();
+    });
+    await page.goto(baseURL, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.recharts-legend-wrapper');
+    const dimensions = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+    }));
+    assert.ok(dimensions.document <= dimensions.viewport + 1, JSON.stringify(dimensions));
   } finally {
     await page.close();
   }

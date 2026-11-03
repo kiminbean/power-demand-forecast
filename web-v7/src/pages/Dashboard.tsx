@@ -11,10 +11,11 @@ import {
   Battery,
   Activity,
   Clock,
-  DollarSign,
+
   BarChart3,
 } from 'lucide-react';
 import KPICard from '../components/Cards/KPICard';
+import { PublishedSMPCard } from '../components/Cards/PublishedSMPCards';
 import SMPChart from '../components/Charts/SMPChart';
 import PowerSupplyChart from '../components/Charts/PowerSupplyChart';
 import {
@@ -23,6 +24,7 @@ import {
   useMarketStatus,
   useResources,
   useAutoRefresh,
+  useCurrentSMP,
 } from '../hooks/useApi';
 import clsx from 'clsx';
 
@@ -65,7 +67,8 @@ function MarketBadge({ market, status, deadline, hoursRemaining }: MarketBadgePr
 
 export default function Dashboard() {
   const { data: kpis, refetch: refetchKPIs } = useDashboardKPIs();
-  const { data: smpForecast, refetch: refetchSMP } = useSMPForecast();
+  const { data: smpForecast, error: forecastError, refetch: refetchSMP } = useSMPForecast();
+  const { data: publishedSMP, refetch: refetchPublishedSMP } = useCurrentSMP();
   const { data: marketStatus } = useMarketStatus();
   const { data: resources } = useResources();
 
@@ -73,6 +76,7 @@ export default function Dashboard() {
   useAutoRefresh(() => {
     refetchKPIs();
     refetchSMP();
+    refetchPublishedSMP();
   }, 60000);
 
   // Calculate resource stats
@@ -89,9 +93,6 @@ export default function Dashboard() {
       }
     : null;
 
-  // Get current SMP from forecast
-  const currentHour = new Date().getHours();
-  const currentSMP = smpForecast?.q50?.[currentHour] ?? kpis?.current_smp ?? 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -112,6 +113,7 @@ export default function Dashboard() {
             onClick={() => {
               refetchKPIs();
               refetchSMP();
+              refetchPublishedSMP();
             }}
             className="btn-secondary flex items-center gap-2 whitespace-nowrap"
           >
@@ -138,14 +140,7 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="현재 SMP"
-          value={currentSMP.toFixed(1)}
-          unit="원/kWh"
-          change={kpis?.smp_change_pct}
-          icon={DollarSign}
-          color="smp"
-        />
+        <PublishedSMPCard data={publishedSMP} />
         <KPICard
           title="총 발전량"
           value={resourceStats?.currentOutput.toFixed(1) ?? kpis?.current_output_mw ?? 0}
@@ -200,6 +195,7 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+          {forecastError && <p className="text-sm text-text-muted">데모 예측 데이터 (API 연결 실패)</p>}
           <SMPChart forecast={smpForecast} height={280} />
         </div>
       </div>
@@ -258,7 +254,7 @@ export default function Dashboard() {
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-text-muted">예상 수익</span>
                 <span className="text-success font-mono">
-                  {(kpis?.daily_revenue_million ?? 245.8).toFixed(1)}백만원
+                  {kpis?.daily_revenue_million != null ? `${kpis.daily_revenue_million.toFixed(1)}백만원` : '데이터 없음'}
                 </span>
               </div>
               <div className="h-2 bg-background rounded-full overflow-hidden">

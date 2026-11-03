@@ -42,10 +42,10 @@ export interface DashboardKPIs {
   current_output_mw: number;
   utilization_pct: number;
   supply_reserve_rate: number;   // 공급 예비율 (%)
-  daily_revenue_million: number;
+  daily_revenue_million: number | null;
   revenue_change_pct: number;
-  current_smp: number;
-  smp_change_pct: number;
+  current_smp: number | null;
+  smp_change_pct: number | null;
   current_demand_mw: number;     // 현재 수요 (MW)
   renewable_ratio_pct: number;   // 재생에너지 비율 (%)
   grid_frequency: number;        // 계통 주파수 (Hz)
@@ -320,17 +320,38 @@ export interface RTMModelInfo {
   };
 }
 
-// Current SMP (Real-time)
+// Published SMP: date status is not a real-time guarantee.
 export interface CurrentSMP {
-  current_smp: number;
-  hour: number;
+  current_smp: number | null;
+  hour: number | null;
   region: string;
+  data_date_status: 'current_date' | 'historical' | 'future' | 'unknown' | 'no_data';
+  trade_day: string | null;
+  data_source: string | null;
+  latest_smp?: {
+    price: number;
+    trade_day: string | null;
+    trade_hour: number | null;
+    data_source: string | null;
+    market: string;
+    region: string;
+  } | null;
   comparison: {
     daily_avg: number;
     weekly_avg: number;
     daily_change_pct: number;
     weekly_change_pct: number;
-  };
+  } | null;
+}
+
+export interface DayAheadSMP {
+  status: 'available' | 'no_data';
+  current_smp: number | null;
+  trade_day: string | null;
+  trade_hour: number | null;
+  market_type: 'day_ahead';
+  data_source: string | null;
+  source_url: string | null;
 }
 
 // Power Plant Types (v6.2.0)

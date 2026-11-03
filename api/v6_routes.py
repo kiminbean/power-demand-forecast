@@ -105,10 +105,10 @@ class DashboardKPIsResponse(BaseModel):
     current_output_mw: float
     utilization_pct: float  # 재생에너지 이용률 (%)
     supply_reserve_rate: float  # 공급 예비율 (%)
-    daily_revenue_million: float
-    revenue_change_pct: float
-    current_smp: float
-    smp_change_pct: float
+    daily_revenue_million: Optional[float]
+    revenue_change_pct: Optional[float]
+    current_smp: Optional[float]
+    smp_change_pct: Optional[float]
     current_demand_mw: float  # 현재 수요 (MW)
     renewable_ratio_pct: float  # 재생에너지 비율 (%)
     grid_frequency: float  # 계통 주파수 (Hz)
@@ -365,14 +365,14 @@ async def get_smp_forecast():
 @router.get("/dashboard/kpis", response_model=DashboardKPIsResponse)
 async def get_dashboard_kpis():
     """
-    대시보드 KPI - 실시간 공공데이터 API 연동
+    대시보드 KPI - 공공데이터 API 연동
 
     Data Sources:
-    - SMP: KPX 계통한계가격 API (실시간)
+    - SMP 및 수익: 최신성을 확인할 수 없어 제공하지 않음
     - 전력수급: KPX 현재전력수급현황 API (실시간)
     - 기상: 기상청 초단기실황 API (실시간)
 
-    Fallback: 과거 EPSIS/KMA 파일 데이터
+    Fallback: 전력수급과 기상에는 과거 EPSIS/KMA 파일 데이터 사용
     """
     try:
         now = datetime.now()
@@ -388,28 +388,7 @@ async def get_dashboard_kpis():
         # 데이터 소스 추적
         data_sources = []
 
-        # ===== 실시간 SMP (KPX API) =====
-        current_smp = 120.0  # 기본값
-        smp_change = 0.0
-        rt_smp = await realtime_client.get_smp_realtime(area_code="9")  # 제주
-
-        if rt_smp and rt_smp.smp_jeju > 0:
-            current_smp = rt_smp.smp_jeju
-            data_sources.append(rt_smp.data_source)
-            logger.info(f"Real-time SMP (Jeju): {current_smp} 원/kWh via {rt_smp.data_source}")
-        else:
-            # Fallback: 과거 EPSIS 파일 데이터
-            smp_df = load_smp_data()
-            if not smp_df.empty:
-                latest = smp_df.tail(1)
-                current_smp = float(latest['smp_jeju'].values[0])
-                data_sources.append("EPSIS SMP (파일)")
-
-                # 전일 동시간 대비 변화율
-                yesterday = smp_df[smp_df['hour'] == hour].tail(2)
-                if len(yesterday) >= 2:
-                    prev_smp = yesterday.iloc[0]['smp_jeju']
-                    smp_change = ((current_smp - prev_smp) / prev_smp) * 100
+        # 날짜만으로는 현재 가격인지 확인할 수 없다.
 
         # ===== 실시간 전력수급 (KPX Crawler - 제주 직접 데이터) =====
         current_demand = 650.0  # 기본값
@@ -499,9 +478,7 @@ async def get_dashboard_kpis():
         # 한국전력 표준: 60Hz ± 0.2Hz (시뮬레이션)
         grid_frequency = 60.00 + rng.uniform(-0.03, 0.03)
 
-        # ===== 일일 수익 계산 =====
-        daily_mwh = current_output * 24 * 0.7
-        daily_revenue = (daily_mwh * current_smp) / 1000000
+        # 실제 일일 발전량과 비교 수익이 없어 일일 수익을 산출하지 않는다.
 
         # 데이터 소스 표시
         data_source = " + ".join(data_sources) if data_sources else "Simulated"
@@ -511,10 +488,10 @@ async def get_dashboard_kpis():
             current_output_mw=round(current_output, 1),
             utilization_pct=round(utilization, 1),
             supply_reserve_rate=round(supply_reserve_rate, 1),
-            daily_revenue_million=round(daily_revenue, 1),
-            revenue_change_pct=round(3.2 + rng.uniform(-1, 1), 1),
-            current_smp=round(current_smp, 1),
-            smp_change_pct=round(smp_change, 1),
+            daily_revenue_million=None,
+            revenue_change_pct=None,
+            current_smp=None,
+            smp_change_pct=None,
             current_demand_mw=round(current_demand, 1),
             renewable_ratio_pct=round(renewable_ratio, 1),
             grid_frequency=round(grid_frequency, 2),
@@ -930,44 +907,64 @@ async def get_realtime_api_status():
 # Mobile App Endpoints (for RE-BMS Mobile)
 # ============================================================
 
+class DatedSMPResponse(BaseModel):
+    """거래일과 출처가 표시된 최신 수신 SMP; 시장 구분은 확인되지 않음."""
+    price: float
+    trade_day: Optional[str]
+    trade_hour: Optional[int]
+    data_source: Optional[str]
+    market: str
+    region: str
+
+
 class CurrentSMPResponse(BaseModel):
     """현재 SMP 응답"""
-    current_smp: float
+    current_smp: Optional[float]
     hour: int
     region: str
-    comparison: Dict[str, float]
+    comparison: Optional[Dict[str, float]]
+    data_date_status: str = Field(description="거래일 기준 상태; 실시간성이나 시간별 최신성을 보증하지 않음")
+    trade_day: Optional[str]
+    data_source: Optional[str]
+    latest_smp: Optional[DatedSMPResponse]
 
 
 @router.get("/smp/current", response_model=CurrentSMPResponse)
 async def get_current_smp(region: str = "jeju"):
     """
-    현재 시간 SMP 가져오기 (모바일용)
+    최신 수신 SMP를 거래일 및 미확인 시장 정보와 함께 제공한다.
     """
     try:
         current_hour = datetime.now().hour
 
-        # Try real-time SMP
+        # 거래일 분류는 시간별 최신성이나 실시간 연결을 보증하지 않는다.
         rt_smp = await realtime_client.get_smp_realtime(area_code="9")
-        if rt_smp:
-            current_smp = rt_smp.smp_jeju
-        else:
-            # Fallback to prediction
-            current_smp = 95.0 + (current_hour - 12) * 2.5
-
-        # Get daily average from prediction
-        daily_avg = current_smp * 0.95
-        weekly_avg = current_smp * 0.92
+        date_status = (
+            _smp_trade_date_status(rt_smp.trade_day, datetime.now(ZoneInfo("Asia/Seoul")))
+            if rt_smp is not None else "no_data"
+        )
+        # 원천 데이터는 실시간 정산과 하루전 가격을 구분하지 않을 수 있다.
+        latest_smp = (
+            DatedSMPResponse(
+                price=rt_smp.smp_jeju,
+                trade_day=rt_smp.trade_day,
+                trade_hour=rt_smp.trade_hour,
+                data_source=rt_smp.data_source,
+                market="unknown",
+                region="jeju",
+            )
+            if rt_smp is not None else None
+        )
 
         return CurrentSMPResponse(
-            current_smp=round(current_smp, 1),
+            current_smp=None,
             hour=current_hour,
             region=region,
-            comparison={
-                "daily_avg": round(daily_avg, 1),
-                "weekly_avg": round(weekly_avg, 1),
-                "daily_change_pct": round((current_smp - daily_avg) / daily_avg * 100, 1),
-                "weekly_change_pct": round((current_smp - weekly_avg) / weekly_avg * 100, 1),
-            }
+            comparison=None,
+            data_date_status=date_status,
+            trade_day=rt_smp.trade_day if rt_smp is not None else None,
+            data_source=rt_smp.data_source if rt_smp is not None else None,
+            latest_smp=latest_smp,
         )
     except Exception as e:
         logger.error(f"Error getting current SMP: {e}")

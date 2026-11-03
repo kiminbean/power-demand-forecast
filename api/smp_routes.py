@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from .smp_schemas import (
     SMPRegion,
-    SMPDataPoint,
+
     SMPCurrentResponse,
     SMPPredictionRequest,
     SMPPredictionPoint,
@@ -137,37 +137,13 @@ def get_real_smp_prediction(hours: int = 24) -> dict:
     "/current",
     response_model=SMPCurrentResponse,
     summary="현재 SMP 조회",
-    description="현재 시점의 SMP를 조회합니다. (실제 모델 기반)"
+    description="검증된 현재 SMP 관측값을 사용할 수 없어 일시적으로 제공되지 않습니다."
 )
 async def get_current_smp(
     region: SMPRegion = Query(SMPRegion.JEJU, description="지역")
 ):
-    """현재 SMP 조회"""
-    try:
-        # 실제 모델 예측 사용
-        prediction = get_real_smp_prediction(1)
-        current_smp = float(prediction['q50'][0])
-
-        # 제주는 육지보다 약간 낮음
-        if region == SMPRegion.JEJU:
-            current_smp *= 0.95
-
-        now = datetime.now()
-
-        return SMPCurrentResponse(
-            region=region,
-            current_smp=round(current_smp, 2),
-            hour=now.hour + 1,
-            timestamp=now,
-            comparison={
-                "daily_avg": round(float(np.mean(prediction['q50'])), 2),
-                "weekly_avg": round(float(np.mean(prediction['q50'])) * 0.98, 2),
-                "vs_daily_avg_percent": round((current_smp - float(np.mean(prediction['q50']))) / float(np.mean(prediction['q50'])) * 100, 2),
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error getting current SMP: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Reject predictions when verified current observations are unavailable."""
+    raise HTTPException(status_code=503, detail="Verified current SMP data unavailable")
 
 
 @router.post(
@@ -243,35 +219,18 @@ async def predict_smp(request: SMPPredictionRequest):
     "/compare",
     response_model=SMPComparisonResponse,
     summary="육지/제주 SMP 비교",
-    description="육지와 제주의 SMP를 비교합니다."
+    description="검증된 SMP 관측값이 없어 비교 결과를 제공하지 않습니다."
 )
 async def compare_smp():
-    """육지/제주 SMP 비교"""
-    try:
-        # 실제 모델 예측 사용
-        prediction = get_real_smp_prediction(1)
-        mainland_smp = float(prediction['q50'][0])
-        jeju_smp = mainland_smp * 0.95
-
-        difference = mainland_smp - jeju_smp
-
-        return SMPComparisonResponse(
-            mainland_current=round(mainland_smp, 2),
-            jeju_current=round(jeju_smp, 2),
-            difference=round(difference, 2),
-            difference_percent=round(difference / mainland_smp * 100, 2),
-            historical_avg_diff=round(8.5, 2),
-        )
-    except Exception as e:
-        logger.error(f"Error comparing SMP: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Reject comparisons without verified current and historical data."""
+    raise HTTPException(status_code=503, detail="Verified SMP comparison data unavailable")
 
 
 @router.get(
     "/historical",
     response_model=SMPHistoricalResponse,
     summary="과거 SMP 조회",
-    description="과거 SMP 데이터를 조회합니다."
+    description="검증된 과거 SMP 데이터가 없어 일시적으로 제공되지 않습니다."
 )
 async def get_historical_smp(
     start_date: datetime = Query(..., description="시작일"),
@@ -295,50 +254,9 @@ async def get_historical_smp(
                 detail=f"Maximum date range is {max_days} days"
             )
 
-        # 데모 데이터 생성 (과거 데이터는 실제 EPSIS 데이터 필요)
-        hours = int((end_date - start_date).total_seconds() / 3600) + 1
-        data = []
-
-        for i in range(min(hours, 24 * max_days)):
-            timestamp = start_date + timedelta(hours=i)
-            hour = timestamp.hour
-
-            # 시간대별 패턴
-            if 6 <= hour < 9:
-                base = 130
-            elif 9 <= hour < 18:
-                base = 160
-            elif 18 <= hour < 22:
-                base = 145
-            else:
-                base = 110
-
-            smp_mainland = base + np.random.normal(0, 10)
-            smp_jeju = smp_mainland * 0.95 + np.random.normal(0, 5)
-
-            data.append(SMPDataPoint(
-                timestamp=timestamp,
-                hour=hour + 1,
-                smp_mainland=round(smp_mainland, 2),
-                smp_jeju=round(smp_jeju, 2),
-            ))
-
-        # 지역 필터
-        smp_values = [d.smp_jeju if region == SMPRegion.JEJU else d.smp_mainland for d in data]
-
-        return SMPHistoricalResponse(
-            data=data,
-            summary={
-                "mean": round(np.mean(smp_values), 2),
-                "max": round(np.max(smp_values), 2),
-                "min": round(np.min(smp_values), 2),
-                "std": round(np.std(smp_values), 2),
-                "count": len(data),
-            },
-            period={
-                "start": start_date,
-                "end": end_date,
-            }
+        # 검증된 관측 자료가 없으면 임의 데이터를 반환하지 않는다.
+        raise HTTPException(
+            status_code=503, detail="Verified historical SMP data unavailable"
         )
     except HTTPException:
         raise
