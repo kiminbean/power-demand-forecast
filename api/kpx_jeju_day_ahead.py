@@ -110,6 +110,9 @@ def parse_jeju_day_ahead(html: str, now: datetime | None = None) -> JejuDayAhead
             hour = int(match[1])
             if hour in rows:
                 return None
+            # 빈 셀 삽입으로 날짜별 가격이 밀리는 경우를 거부한다.
+            if any(not _PRICE.fullmatch(cell.get_text(" ", strip=True)) for cell in cells[1:]):
+                return None
             rows[hour] = cells[-1].get_text(" ", strip=True)
         elif label in {"최대", "최소", "가중평균"} and label not in summaries:
             summaries.add(label)

@@ -84,6 +84,14 @@ def test_target_date_absent_fails_closed():
     assert parse_jeju_day_ahead(page(NOW - timedelta(days=1)), NOW) is None
 
 
+def test_missing_target_cell_with_inserted_empty_cell_fails_closed():
+    original = "<td>13h</td>" + "<td>100.0</td>" * 6 + "<td>165.47</td>"
+    shifted = "<td>13h</td><td></td>" + "<td>100.0</td>" * 6
+    html = page().replace(original, shifted)
+    assert html != page()
+    assert parse_jeju_day_ahead(html, NOW) is None
+
+
 @pytest.mark.parametrize("now", [
     datetime(2027, 1, 1, 0, 15, tzinfo=SEOUL),
     datetime(2026, 12, 31, 23, 15, tzinfo=SEOUL),
