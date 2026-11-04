@@ -915,3 +915,205 @@ def compare_horizons(
         })
 
     return pd.DataFrame(comparison)
+
+
+# ============================================================
+# 분위수·구간 예측 평가 지표 (EVAL)
+# - pinball_loss: 분위수 회귀 손실 (quantile loss)
+# - coverage: 명시적 하한/상한 구간의 실측 커버리지 (%)
+# - interval_score: Winkler interval score (낮을수록 좋음)
+# - evaluate_quantile_forecast: q10/q50/q90 통합 평가
+# 기존 compute_prediction_intervals (잔차 정규분포 가정)과 달리
+# 모델이 명시적으로 출력한 분위수 예측에 적용한다.
+# ============================================================
+
+def _validate_quantile_arrays(*values: np.ndarray) -> Tuple[np.ndarray, ...]:
+    """Validate nonempty, finite and equally sized 1-D metric inputs."""
+    arrays = tuple(np.asarray(value, dtype=float) for value in values)
+    if any(array.ndim != 1 or array.size == 0 for array in arrays):
+        raise ValueError("입력은 비어 있지 않은 1차원 배열이어야 합니다")
+    if any(array.shape != arrays[0].shape for array in arrays[1:]):
+        raise ValueError("실측값과 예측값의 길이가 일치해야 합니다")
+    if any(not np.isfinite(array).all() for array in arrays):
+        raise ValueError("실측값과 예측값은 모두 유한해야 합니다")
+    return arrays
+
+
+def pinball_loss(
+    y_true: np.ndarray,
+    y_pred_quantile: np.ndarray,
+    quantile: float,
+) -> float:
+    """
+    분위수 τ에 대한 pinball loss (quantile loss) 계산.
+
+    ρ_τ(u) = u*(τ - 1{u<0}), u = y - q 의 평균.
+    과소예측(u>=0)은 τ배, 과대예측(u<0)은 (1-τ)배 페널티.
+
+    Args:
+        y_true: 실측값 (1차원)
+        y_pred_quantile: 분위수 τ 예측값 (1차원)
+        quantile: 분위수 (0 < τ < 1)
+
+    Returns:
+        평균 pinball loss
+
+    Example:
+        >>> pinball_loss(np.array([10.0]), np.array([8.0]), quantile=0.9)
+        1.8
+    """
+    if not 0.0 < quantile < 1.0:
+        raise ValueError(f"분위수는 0<τ<1 이어야 합니다: {quantile}")
+
+    y_true, y_pred_quantile = _validate_quantile_arrays(y_true, y_pred_quantile)
+
+    u = y_true - y_pred_quantile
+    losses = np.where(u >= 0, u * quantile, -u * (1.0 - quantile))
+    return float(np.mean(losses))
+
+
+def coverage(
+    y_true: np.ndarray,
+    y_lower: np.ndarray,
+    y_upper: np.ndarray,
+) -> float:
+    """
+    명시적 구간 [lower, upper]의 실측 커버리지 (%) 계산 (폐구간).
+
+    Args:
+        y_true: 실측값
+        y_lower: 구간 하한
+        y_upper: 구간 상한
+
+    Returns:
+        커버리지 (0~100 %)
+
+    Example:
+        >>> coverage(np.array([1.0, 5.0]), np.zeros(2), np.array([4.0, 4.0]))
+        50.0
+    """
+    y_true, y_lower, y_upper = _validate_quantile_arrays(y_true, y_lower, y_upper)
+    if np.any(y_lower > y_upper):
+        raise ValueError("구간 하한은 상한보다 클 수 없습니다")
+
+    inside = (y_true >= y_lower) & (y_true <= y_upper)
+    return float(np.mean(inside) * 100.0)
+
+
+def interval_score(
+    y_true: np.ndarray,
+    y_lower: np.ndarray,
+    y_upper: np.ndarray,
+    alpha: float,
+) -> float:
+    """
+    중앙 (1-α) 예측구간의 Winkler interval score 계산 (낮을수록 좋음).
+
+    IS = (u - l)
+         + (2/α)*(l - y)*1{y < l}
+         + (2/α)*(y - u)*1{y > u}
+
+    구간 내 실측은 폭만, 구간 밖 실측은 폭 + 누출 벌점.
+
+    Args:
+        y_true: 실측값
+        y_lower: 구간 하한
+        y_upper: 구간 상한
+        alpha: 유의수준 (0 < α < 1, 예: 80% 구간 → 0.2)
+
+    Returns:
+        평균 interval score
+
+    Example:
+        >>> interval_score(np.array([10.0]), np.array([8.0]), np.array([12.0]), alpha=0.2)
+        4.0
+    """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha는 0<α<1 이어야 합니다: {alpha}")
+
+    y_true, y_lower, y_upper = _validate_quantile_arrays(y_true, y_lower, y_upper)
+    if np.any(y_lower > y_upper):
+        raise ValueError("구간 하한은 상한보다 클 수 없습니다")
+
+    width = y_upper - y_lower
+    penalty_below = np.where(y_true < y_lower, (2.0 / alpha) * (y_lower - y_true), 0.0)
+    penalty_above = np.where(y_true > y_upper, (2.0 / alpha) * (y_true - y_upper), 0.0)
+    scores = width + penalty_below + penalty_above
+    return float(np.mean(scores))
+
+
+def diagnose_quantile_forecast(
+    y_true: np.ndarray,
+    q10: np.ndarray,
+    q50: np.ndarray,
+    q90: np.ndarray,
+) -> Dict[str, Union[int, float]]:
+    """Report quantile crossing and individual losses without repairing forecasts.
+
+    Args:
+        y_true: Nonempty, finite one-dimensional observations.
+        q10: Forecasts at the 10th percentile.
+        q50: Forecasts at the 50th percentile.
+        q90: Forecasts at the 90th percentile.
+
+    Returns:
+        Counts, percentage of rows with crossing, and individual pinball losses.
+        Crossing counts overlap when both adjacent pairs cross in the same row.
+    """
+    y_true, q10, q50, q90 = _validate_quantile_arrays(y_true, q10, q50, q90)
+    lower_crossed = q10 > q50
+    upper_crossed = q50 > q90
+    crossing_count = int(np.count_nonzero(lower_crossed | upper_crossed))
+    return {
+        "sample_count": int(y_true.size),
+        "crossing_count": crossing_count,
+        "crossing_rate_pct": float(100.0 * crossing_count / y_true.size),
+        "q10_gt_q50_count": int(np.count_nonzero(lower_crossed)),
+        "q50_gt_q90_count": int(np.count_nonzero(upper_crossed)),
+        "pinball_q10": pinball_loss(y_true, q10, 0.1),
+        "pinball_q50": pinball_loss(y_true, q50, 0.5),
+        "pinball_q90": pinball_loss(y_true, q90, 0.9),
+    }
+
+
+def evaluate_quantile_forecast(
+    y_true: np.ndarray,
+    q10: np.ndarray,
+    q50: np.ndarray,
+    q90: np.ndarray,
+) -> Dict[str, float]:
+    """
+    q10/q50/q90 분위수 예측 통합 평가.
+
+    80% 중앙 구간 [q10, q90]의 커버리지·Winkler 점수와
+    각 분위수의 pinball loss를 한 번에 계산한다.
+
+    Args:
+        y_true: 실측값
+        q10: 10분위 예측 (구간 하한)
+        q50: 중앙값(50분위) 예측
+        q90: 90분위 예측 (구간 상한)
+
+    Returns:
+        dict: pinball_q10, pinball_q50, pinball_q90,
+              coverage_80, interval_score_80, mean_interval_width
+
+    Example:
+        >>> y = np.array([10.0, 20.0])
+        >>> res = evaluate_quantile_forecast(y, q10=y-5, q50=y.copy(), q90=y+5)
+        >>> res["coverage_80"]
+        100.0
+    """
+    y_true, q10, q50, q90 = _validate_quantile_arrays(y_true, q10, q50, q90)
+    if np.any(q10 > q50) or np.any(q50 > q90):
+        raise ValueError("분위수 예측은 q10 ≤ q50 ≤ q90 이어야 합니다")
+    return {
+        "pinball_q10": pinball_loss(y_true, q10, quantile=0.1),
+        "pinball_q50": pinball_loss(y_true, q50, quantile=0.5),
+        "pinball_q90": pinball_loss(y_true, q90, quantile=0.9),
+        "coverage_80": coverage(y_true, q10, q90),
+        "interval_score_80": interval_score(y_true, q10, q90, alpha=0.2),
+        "mean_interval_width": float(
+            np.mean(np.asarray(q90, dtype=float) - np.asarray(q10, dtype=float))
+        ),
+    }

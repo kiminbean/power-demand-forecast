@@ -3,7 +3,7 @@
 jeju_air_crawler 실제 동작 검증 테스트
 
 실행 방법:
-    cd /Users/ibkim/Ormi_1/power-demand-forecast
+    cd /Users/ibkim/Projects/power-demand-forecast
     python scripts/verify_air_crawler.py
 
 Gemini + Claude 크로스 체크 결과:

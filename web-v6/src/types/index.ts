@@ -38,6 +38,7 @@ export interface DashboardKPIs {
   current_smp: number;
   smp_change_pct: number;
   resource_count: number;
+  data_source?: string;
 }
 
 // Resource (Power Plant)

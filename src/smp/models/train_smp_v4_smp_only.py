@@ -30,6 +30,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 
+from src.smp.models.time_split_scaling import carve_validation_from_train
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 logger = logging.getLogger(__name__)
@@ -61,6 +63,7 @@ class ConfigV41:
     n_splits: int = 5
     train_window: int = 365 * 24  # 1 year
     test_window: int = 30 * 24    # 1 month
+    val_split: float = 0.1        # 마지막 10%를 val로 사용 (스케일러 fit에서 제외)
 
 
 class SMPOnlyDataPipeline:
@@ -471,25 +474,30 @@ class SMPTrainerV41:
 
     def create_split_loaders(self, features, targets, train_start, train_end, test_start, test_end):
         """Create dataloaders for a specific split"""
-        # Reset and fit scaler on training data
+        # Reset scaler for this split. 스케일러는 val 포함 전체가 아니라
+        # val을 잘라낸 순수 train 구간에만 fit한다 (통계 누출 방지).
         self.pipeline.scaler = StandardScaler()
 
+        val_size = carve_validation_from_train(train_end - train_start, self.config.val_split)
+
         train_features, train_targets = self.pipeline.normalize(
-            features[train_start:train_end], targets[train_start:train_end], fit=True
+            features[train_start:train_end - val_size], targets[train_start:train_end - val_size], fit=True
+        )
+
+        val_features, val_targets = self.pipeline.normalize(
+            features[train_end - val_size:train_end], targets[train_end - val_size:train_end], fit=False
         )
 
         test_features, test_targets = self.pipeline.normalize(
             features[test_start:test_end], targets[test_start:test_end], fit=False
         )
 
-        # Use last 10% of training for validation
-        val_size = int(len(train_features) * 0.1)
         train_dataset = SMPDatasetV41(
-            train_features[:-val_size], train_targets[:-val_size],
+            train_features, train_targets,
             self.config.input_hours, self.config.output_hours
         )
         val_dataset = SMPDatasetV41(
-            train_features[-val_size:], train_targets[-val_size:],
+            val_features, val_targets,
             self.config.input_hours, self.config.output_hours
         )
         test_dataset = SMPDatasetV41(

@@ -4,7 +4,21 @@
 - **프로젝트**: 제주도 전력 수요 예측 (Power Demand Forecasting)
 - **위치**: `/Users/ibkim/Ormi_1/power-demand-forecast`
 - **파이프라인**: Anthropic State Persistence + DeepMind IMO 2025 Verification Loop
-- **최종 업데이트**: 2024-12-14
+- **최종 업데이트**: 2026-11-05
+
+---
+
+## 2026-11 업데이트 (최신)
+
+이 문서의 아래 섹션은 2024-12 하이브리드 에이전트 파이프라인 초기 구축 당시 기록이며 현재 상태를 반영하지 않는다. 현재 작업 트리의 구현·확인 범위는 `docs/2026-11-02-forecast-upgrade-status.md`가 단일 기준이다.
+
+### 2026-11-04: SMP 학습 스케일러 누수 수정 (우선 후속 과제 1번, 코드 수정 완료)
+
+- 신규: `src/smp/models/time_split_scaling.py` — `fit_transform_time_split`(train 슬라이스만 fit), `temporal_split_bounds`, `carve_validation_from_train`
+- 수정: `train_smp_v4.py`(0.8/0.1), `train_smp_v3_4_kpx_generation.py`(0.7/0.15), `train_smp_v4_smp_only.py`(val carve 방식, split별 스케일러 리셋) — 시간 분할 이후 train 구간에만 스케일러 fit
+- 버그 수정: `train_smp_v4.py`·`train_smp_v4_enhanced.py`의 `np.save(dict)` 예외 → `np.savez('smp_v4_scaler.npz')`
+- 회귀 테스트: `tests/test_smp_time_split_scaling.py` 16/16 통과 (`.venv/bin/python -m pytest` 직접 호출)
+- 미수행: 수정 코드로의 재학습과 시간외 평가 — 기존 체크포인트는 누수 버전이므로 재학습 전까지 신뢰 불가
 
 ---
 

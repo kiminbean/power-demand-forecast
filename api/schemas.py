@@ -44,6 +44,7 @@ class TimeSeriesData(BaseModel):
 
     class Config:
         populate_by_name = True
+        allow_inf_nan = False
         json_schema_extra = {
             "example": {
                 "datetime": "2024-01-15T14:00:00",

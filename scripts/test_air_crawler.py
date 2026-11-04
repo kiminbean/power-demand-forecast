@@ -3,7 +3,7 @@
 jeju_air_crawler 실제 동작 테스트 스크립트
 
 실행 방법:
-    cd /Users/ibkim/Ormi_1/power-demand-forecast
+    cd /Users/ibkim/Projects/power-demand-forecast
     python scripts/test_air_crawler.py
 
 테스트 항목:

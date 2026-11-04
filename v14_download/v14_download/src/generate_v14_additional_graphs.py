@@ -17,8 +17,8 @@ import os
 plt.rcParams['font.family'] = 'AppleGothic'
 plt.rcParams['axes.unicode_minus'] = False
 
-RESULTS_DIR = '/Users/ibkim/Ormi_1/power-demand-forecast/results'
-DATA_DIR = '/Users/ibkim/Ormi_1/power-demand-forecast'
+RESULTS_DIR = '/Users/ibkim/Projects/power-demand-forecast/results'
+DATA_DIR = '/Users/ibkim/Projects/power-demand-forecast'
 
 # 디바이스 설정
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")

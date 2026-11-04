@@ -7,11 +7,11 @@ export default defineConfig({
     port: 8508,
     proxy: {
       '/api': {
-        target: 'http://localhost:8506',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://localhost:8506',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },

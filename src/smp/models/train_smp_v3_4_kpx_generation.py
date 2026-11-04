@@ -24,6 +24,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_percentage_error, r2_score
 from datetime import datetime
 
+from src.smp.models.time_split_scaling import fit_transform_time_split, temporal_split_bounds
+
 warnings.filterwarnings('ignore')
 
 # Setup logging
@@ -293,20 +295,18 @@ def main():
     logger.info(f"Target: {target_col}, mean={df[target_col].mean():.2f}, std={df[target_col].std():.2f}")
 
     # Prepare data
-    X = df[feature_cols].values
-    y = df[target_col].values
+    X = np.asarray(df[feature_cols].values, dtype=float)
+    y = np.asarray(df[target_col].values, dtype=float)
 
-    # Scale
+    # Split indices first (chronological), then fit scalers on train only.
+    # 인과성 보장: 스케일러 통계는 훈련 구간에만 fit한다 (시간 분할 이전 fit 금지).
     scaler_X = StandardScaler()
     scaler_y = StandardScaler()
 
-    X_scaled = scaler_X.fit_transform(X)
-    y_scaled = scaler_y.fit_transform(y.reshape(-1, 1)).flatten()
-
-    # Train/Val/Test split (70/15/15)
-    n = len(X_scaled)
-    train_end = int(n * 0.7)
-    val_end = int(n * 0.85)
+    n = len(X)
+    train_end, val_end = temporal_split_bounds(n, 0.7, 0.15)
+    X_scaled = fit_transform_time_split(scaler_X, X, train_end)
+    y_scaled = fit_transform_time_split(scaler_y, y.reshape(-1, 1), train_end).flatten()
 
     X_train, y_train = X_scaled[:train_end], y_scaled[:train_end]
     X_val, y_val = X_scaled[train_end:val_end], y_scaled[train_end:val_end]

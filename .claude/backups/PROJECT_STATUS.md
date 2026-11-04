@@ -1,16 +1,93 @@
 # Project Status Backup
-> Last Updated: 2025-12-26 (Mobile App v7.0.0 Complete)
+> Last Updated: 2025-01-10 (SMP Model Version History Image)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
-- **Repository**: https://github.com/kiminbean/power-demand-forecast (PRIVATE)
+- **Repository**: https://github.com/kiminbean/power-demand-forecast (PRIVATE) ✅ Confirmed
 - **Current Version**: v8.0.0 (Real-time API Edition) ✅ Complete
 - **Previous Version**: v7.0.0 (React Desktop Web Application)
 - **License**: Proprietary (All Rights Reserved)
 
 ---
 
-## Current Session (2025-12-26)
+## Current Session (2025-01-10)
+
+### Task: SMP Model Version History & Documentation ✅ COMPLETE
+
+#### Completed Work
+
+1. **SMP 모델 버전 이력 이미지 생성**
+   - 파일: `results/smp_model_version_history.png`
+   - 24개 SMP 모델 버전 (v1.0 ~ v5.0) 정리
+   - MAPE, R², 학습일자, 모델 아키텍처, 설명 포함
+
+2. **SMP 모델 학습 코드 위치 정리**
+   - 디렉토리: `src/smp/models/`
+   - 주요 파일: `train_smp_v3_12_stacking.py` (BEST), `train_smp_v3_19_recent.py` (Production)
+
+3. **GitHub 저장소 Private 변경**
+   - `gh repo edit --visibility private` 실행
+   - 상태: ✅ PRIVATE
+
+4. **세션 요약 저장**
+   - 파일: `.claude/backups/SESSION_SUMMARY_2025-01-10.md`
+
+#### SMP Model Summary
+
+| 버전 | MAPE | R² | 상태 |
+|------|------|-----|------|
+| v3.12 Stacking | 5.25% | 0.834 | ⭐ BEST |
+| v3.19 CatBoost | 5.28% | 0.827 | ⭐ Production |
+
+---
+
+## Previous Session (2025-12-28)
+
+### Task: CatBoost v3.19 Documentation & Volatility Analysis ✅ COMPLETE
+
+#### Completed Work
+
+1. **CatBoost v3.19 Deployment**
+   - Updated `smp_catboost_predictor.py` with v3.19 version
+   - Updated `api/smp_routes.py` with v3.19 metrics
+   - Model: MAPE 5.28%, R² 0.827
+
+2. **Colab Notebooks Created**
+   - `notebooks/CatBoost_v3_19_Validation_Colab.ipynb` - Model verification
+   - `notebooks/CatBoost_v3_19_Full_Pipeline_Colab.ipynb` - Train/Val/Test pipeline
+
+3. **Volatility-Based Performance Analysis**
+   | Volatility | Samples | MAPE |
+   |------------|---------|------|
+   | Normal (<10%) | 97.6% | 2.21% |
+   | High (10-20%) | 1.9% | 8.17% |
+   | Very High (20-30%) | 0.3% | 13.69% |
+   | Extreme (>30%) | 0.2% | 40.68% |
+
+4. **Colab vs Original Metrics Difference Explained**
+   - Original: 2024-12-16 ~ (367 days, 8,741 samples, 6.36% volatility)
+   - Colab: 2025-03-18 ~ (275 days, 6,556 samples, 6.04% volatility)
+   - Original includes volatile winter period (Dec-Feb)
+   - `smp_lag1` dominance (61.59%) → high accuracy in stable periods
+
+5. **Technical Documentation Updated**
+   - Added Section 9: SMP 예측 모델 (CatBoost v3.19)
+   - Version updated to 6.0.0
+   - Committed: `c6b8d5d7`
+
+6. **Unit Tests Added**
+   - 7 new CatBoost-specific tests in `tests/test_smp.py`
+   - All 24 tests passed
+
+#### Key Findings
+
+- Model relies heavily on `smp_lag1` (61.59% importance) → "Naive Forecast" behavior
+- Works excellently in stable markets (MAPE ~2%), fails in volatile periods (MAPE ~40%)
+- Different test periods explain Colab (0.99%) vs Original (5.28%) MAPE difference
+
+---
+
+## Previous Session (2025-12-26)
 
 ### Task: Mobile App v7.0.0 Cross-Platform Edition ✅ COMPLETE
 

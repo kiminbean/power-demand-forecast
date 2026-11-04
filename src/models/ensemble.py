@@ -244,6 +244,8 @@ class WeightedAverageEnsemble(BaseEnsemble):
                         weights = [w1, w2, w3][:self.n_models]
                         if len(weights) < self.n_models:
                             weights.extend([0] * (self.n_models - len(weights)))
+                        if not any(weights):
+                            continue
                         mse = objective(weights)
                         if mse < best_mse:
                             best_mse = mse

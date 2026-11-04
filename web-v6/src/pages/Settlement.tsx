@@ -26,7 +26,6 @@ import {
   Area,
   Cell,
 } from 'recharts';
-import { useSettlements, useSettlementSummary } from '../hooks/useApi';
 import { useTheme } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
@@ -61,8 +60,6 @@ function generateDemoData() {
 }
 
 export default function Settlement() {
-  useSettlements(30); // Load settlements data
-  useSettlementSummary(); // Load summary data
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const { isDark } = useTheme();
 
@@ -72,7 +69,7 @@ export default function Settlement() {
     axis: isDark ? '#9ca3af' : '#6b7280',
   };
 
-  // Use demo data if no API data
+  // 정산 화면은 현재 실제 API 결과가 아닌 데모 데이터를 표시한다.
   const settlementData = generateDemoData();
 
   // Calculate period totals
@@ -167,6 +164,10 @@ export default function Settlement() {
             <span className="sm:hidden">다운로드</span>
           </button>
         </div>
+      </div>
+
+      <div role="status" className="rounded-lg border border-warning bg-warning/10 p-4 text-sm text-text-primary">
+        데모 데이터: 이 화면의 수치는 실제 정산 데이터가 아닙니다.
       </div>
 
       {/* Summary Cards */}

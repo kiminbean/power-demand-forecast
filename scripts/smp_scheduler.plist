@@ -7,19 +7,19 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/ibkim/Ormi_1/power-demand-forecast/.venv/bin/python</string>
+        <string>/Users/ibkim/Projects/power-demand-forecast/.venv/bin/python</string>
         <string>-m</string>
         <string>src.smp.crawlers.scheduler</string>
         <string>--foreground</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PYTHONPATH</key>
-        <string>/Users/ibkim/Ormi_1/power-demand-forecast</string>
+        <string>/Users/ibkim/Projects/power-demand-forecast</string>
     </dict>
 
     <key>RunAtLoad</key>
@@ -29,10 +29,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/smp_scheduler.out</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast/logs/smp_scheduler.out</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/smp_scheduler.err</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast/logs/smp_scheduler.err</string>
 
     <key>ProcessType</key>
     <string>Background</string>

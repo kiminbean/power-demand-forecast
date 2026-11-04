@@ -106,7 +106,9 @@ class SolarMLPredictor:
         df = df.copy()
 
         # 시간 피처
-        df['datetime'] = pd.to_datetime(df['일시'])
+        df['datetime'] = pd.to_datetime(df['일시'], errors='raise')
+        if df['datetime'].isna().any():
+            raise ValueError("Solar training contains missing timestamps")
         df['hour'] = df['datetime'].dt.hour
         df['month'] = df['datetime'].dt.month
         df['day_of_year'] = df['datetime'].dt.dayofyear
@@ -132,7 +134,6 @@ class SolarMLPredictor:
         logger.info("Training solar ML model...")
 
         try:
-            from sklearn.model_selection import train_test_split
             from sklearn.preprocessing import StandardScaler
             from sklearn.ensemble import GradientBoostingRegressor
 
@@ -144,24 +145,29 @@ class SolarMLPredictor:
             df = pd.read_csv(self.SOLAR_DATA_PATH)
             df = self._prepare_features(df)
 
-            # 결측치 제거
-            df = df.dropna(subset=['target'])
+            # 시간순으로 정렬하고 동일 시각이 양쪽에 섞이지 않게 분할
+            df = df.dropna(subset=['target', 'datetime']).sort_values('datetime', kind='stable')
+            split_index = int(len(df) * 0.8)
+            if split_index == 0 or split_index == len(df):
+                raise ValueError("Solar training requires at least two dated samples")
+            split_time = df['datetime'].iloc[split_index]
+            if split_time == df['datetime'].iloc[0]:
+                later_times = df.loc[df['datetime'] > split_time, 'datetime']
+                if later_times.empty:
+                    raise ValueError("Solar training requires at least two distinct timestamps")
+                split_time = later_times.iloc[0]
+            train = df[df['datetime'] < split_time]
+            test = df[df['datetime'] >= split_time]
 
-            # 피처와 타겟 분리
-            X = df[self.feature_names].copy()
-            y = df['target'].values
+            X_train = train[self.feature_names].fillna(0)
+            X_test = test[self.feature_names].fillna(0)
+            y_train = train['target'].values
+            y_test = test['target'].values
 
-            # 결측치 처리
-            X = X.fillna(0)
-
-            # 스케일링
+            # 학습 데이터에서만 스케일러를 학습
             self.scaler = StandardScaler()
-            X_scaled = self.scaler.fit_transform(X)
-
-            # 학습/테스트 분할
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_scaled, y, test_size=0.2, random_state=42
-            )
+            X_train = self.scaler.fit_transform(X_train)
+            X_test = self.scaler.transform(X_test)
 
             # 모델 학습 (GradientBoosting - sklearn 기본 제공)
             self.model = GradientBoostingRegressor(
@@ -173,10 +179,18 @@ class SolarMLPredictor:
             )
             self.model.fit(X_train, y_train)
 
-            # 성능 평가
-            train_score = self.model.score(X_train, y_train)
-            test_score = self.model.score(X_test, y_test)
-            logger.info(f"Solar model trained - Train R²: {train_score:.3f}, Test R²: {test_score:.3f}")
+            # 관측 일사량 기반 평가는 추정 일사량을 사용하는 기본 예측 성능이 아님
+            logger.info(
+                "Solar model evaluation uses measured irradiance (missing values filled with zero); "
+                "default inference estimates irradiance, so its performance is not evaluated here"
+            )
+            for label, features, targets in (
+                ("train", X_train, y_train), ("holdout", X_test, y_test)
+            ):
+                if len(targets) < 2:
+                    logger.info("Solar %s R² unavailable: fewer than two samples", label)
+                else:
+                    logger.info("Solar %s R²: %.3f", label, self.model.score(features, targets))
 
             # 모델 저장
             with open(SOLAR_MODEL_PATH, 'wb') as f:

@@ -352,7 +352,9 @@ class PerturbationExplainer:
             for _ in range(self.n_samples):
                 # 피처 교란
                 perturbed = inputs.clone()
-                noise = torch.randn(1, device=device) * self.perturbation_std * inputs[..., feat_idx].std()
+                feature_values = inputs[..., feat_idx]
+                correction = 0 if feature_values.numel() == 1 else 1
+                noise = torch.randn(1, device=device) * self.perturbation_std * feature_values.std(correction=correction)
                 perturbed[..., feat_idx] = perturbed[..., feat_idx] + noise
 
                 # 교란된 예측

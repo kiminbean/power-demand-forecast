@@ -14,6 +14,7 @@ Date: 2024-12
 """
 
 import sys
+from numbers import Integral
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from data.dataset import TimeSeriesScaler, get_device
+from inference.feature_preprocessing import prepare_inference_features
 from models.lstm import create_model
 from features import (
     add_time_features,
@@ -37,6 +39,25 @@ from features import (
 )
 
 warnings.filterwarnings('ignore')
+
+
+def _scaled_tensor(scaler, sequence: np.ndarray, device: torch.device) -> torch.Tensor:
+    """Scale a sequence and reject non-finite float32 model inputs."""
+    scaled = scaler.transform(sequence)
+    tensor = torch.as_tensor(scaled, dtype=torch.float32, device=device).unsqueeze(0)
+    if not torch.isfinite(tensor).all().item():
+        raise ValueError("Scaled inference inputs must contain finite values")
+    return tensor
+
+
+def _validated_prediction(pred: torch.Tensor, scaler) -> float:
+    """Reject non-finite model and inverse-transformed outputs."""
+    if not torch.isfinite(pred).all().item():
+        raise ValueError("Model output must contain finite values")
+    values = scaler.inverse_transform_target(pred.cpu().numpy().flatten())
+    if not np.isfinite(values).all():
+        raise ValueError("Inverse-transformed prediction must contain finite values")
+    return float(values[0])
 
 
 # ============================================================
@@ -163,23 +184,21 @@ class ProductionPredictor:
     def _prepare_features(
         self,
         df: pd.DataFrame,
-        include_weather: bool = False
+        include_weather: bool = False,
+        selected_features: Optional[List[str]] = None,
     ) -> pd.DataFrame:
-        """피처 준비"""
-        df = df.copy()
+        """피처 준비 — API 추론 경로와 동일한 공유 정책 사용
 
-        # Ensure datetime index
-        if 'datetime' in df.columns:
-            df.set_index('datetime', inplace=True)
+        기존 dropna()는 내부 결측 행을 제거해 168시간 시퀀스의
+        시간 연속성이 끊기는 문제가 있어 src/inference/feature_preprocessing.py
+        의 인과적 정책(ffill 후 선행 warm-up 행 제거)으로 통일됨.
+        완전한 입력에서는 기존 dropna와 행 수·값이 동일하다(비파괴).
+        """
+        from inference.feature_preprocessing import prepare_inference_features
 
-        # Feature engineering
-        df = add_time_features(df, include_holiday=True)
-        df = add_lag_features(df, demand_col='power_demand')
-
-        if include_weather and '기온' in df.columns:
-            df = add_weather_features(df, include_thi=True, include_hdd_cdd=True)
-
-        return df.dropna()
+        return prepare_inference_features(
+            df, include_weather=include_weather, selected_features=selected_features
+        )
 
     def _get_sequence(
         self,
@@ -219,32 +238,25 @@ class ProductionPredictor:
         self._check_loaded()
 
         # Prepare features
-        df_prep = self._prepare_features(df, include_weather=False)
         features = self.config_demand['features']
+        df_prep = self._prepare_features(df, include_weather=False, selected_features=features)
         seq_length = self.config_demand['training_config']['seq_length']
 
         # Get sequence
         sequence = self._get_sequence(df_prep, features, seq_length)
 
-        # Scale
-        scaled = self.scaler_demand.transform(sequence)
-
-        # To tensor
-        X = torch.FloatTensor(scaled).unsqueeze(0).to(self.device)
+        X = _scaled_tensor(self.scaler_demand, sequence, self.device)
 
         # Predict
         with torch.no_grad():
             pred = self.model_demand(X)
 
         if return_tensor:
+            if not torch.isfinite(pred).all().item():
+                raise ValueError("Model output must contain finite values")
             return pred
 
-        # Inverse transform
-        pred_value = self.scaler_demand.inverse_transform_target(
-            pred.cpu().numpy().flatten()
-        )[0]
-
-        return float(pred_value)
+        return _validated_prediction(pred, self.scaler_demand)
 
     def predict_weather_full(
         self,
@@ -270,32 +282,25 @@ class ProductionPredictor:
             raise RuntimeError("weather_full model not loaded")
 
         # Prepare features
-        df_prep = self._prepare_features(df, include_weather=True)
         features = self.config_weather['features']
+        df_prep = self._prepare_features(df, include_weather=True, selected_features=features)
         seq_length = self.config_weather['training_config']['seq_length']
 
         # Get sequence
         sequence = self._get_sequence(df_prep, features, seq_length)
 
-        # Scale
-        scaled = self.scaler_weather.transform(sequence)
-
-        # To tensor
-        X = torch.FloatTensor(scaled).unsqueeze(0).to(self.device)
+        X = _scaled_tensor(self.scaler_weather, sequence, self.device)
 
         # Predict
         with torch.no_grad():
             pred = self.model_weather(X)
 
         if return_tensor:
+            if not torch.isfinite(pred).all().item():
+                raise ValueError("Model output must contain finite values")
             return pred
 
-        # Inverse transform
-        pred_value = self.scaler_weather.inverse_transform_target(
-            pred.cpu().numpy().flatten()
-        )[0]
-
-        return float(pred_value)
+        return _validated_prediction(pred, self.scaler_weather)
 
     def predict_conditional(
         self,
@@ -328,7 +333,12 @@ class ProductionPredictor:
             timestamp = datetime.now()
 
         # Check if winter
-        month = timestamp.month
+        from inference.feature_preprocessing import MODEL_TIMEZONE
+
+        calendar_time = pd.Timestamp(timestamp)
+        if calendar_time.tzinfo is not None:
+            calendar_time = calendar_time.tz_convert(MODEL_TIMEZONE)
+        month = calendar_time.month
         is_winter = month in [12, 1, 2]
 
         # Predict with demand_only
@@ -403,9 +413,16 @@ class ProductionPredictor:
         """
         self._check_loaded()
 
+        if not isinstance(step, Integral) or isinstance(step, bool) or step <= 0:
+            raise ValueError("Batch step must be a positive integer")
+        step = int(step)
+
+        # API 배치 계약과 동일하게 조건부 배치는 수요 전용 모델을 사용한다.
+        if model == 'conditional':
+            model = 'demand_only'
+
         # Prepare data
-        include_weather = model in ['weather_full', 'conditional']
-        df_prep = self._prepare_features(df, include_weather=include_weather)
+        include_weather = model == 'weather_full'
 
         if model == 'demand_only':
             features = self.config_demand['features']
@@ -418,6 +435,15 @@ class ProductionPredictor:
             scaler = self.scaler_weather
             model_obj = self.model_weather
 
+        df_prep = self._prepare_features(
+            df, include_weather=include_weather, selected_features=features
+        )
+
+        if len(df_prep) < seq_length:
+            raise ValueError(
+                f"Insufficient preprocessed data: need {seq_length} rows, got {len(df_prep)}"
+            )
+
         available = [f for f in features if f in df_prep.columns]
         data = df_prep[available].values
 
@@ -429,16 +455,12 @@ class ProductionPredictor:
 
         for i in range(0, n_samples, step):
             sequence = data[i:i + seq_length]
-            scaled = scaler.transform(sequence)
-
-            X = torch.FloatTensor(scaled).unsqueeze(0).to(self.device)
+            X = _scaled_tensor(scaler, sequence, self.device)
 
             with torch.no_grad():
                 pred = model_obj(X)
 
-            pred_value = scaler.inverse_transform_target(
-                pred.cpu().numpy().flatten()
-            )[0]
+            pred_value = _validated_prediction(pred, scaler)
 
             predictions.append(pred_value)
             timestamps.append(df_prep.index[i + seq_length - 1])

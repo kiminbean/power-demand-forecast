@@ -40,6 +40,13 @@ from .metrics import (
     analyze_residuals,
     compute_prediction_intervals,
 
+    # 분위수 예측 평가 및 교차 진단
+    pinball_loss,
+    coverage,
+    interval_score,
+    diagnose_quantile_forecast,
+    evaluate_quantile_forecast,
+
     # 평가 리포트
     EvaluationReport,
     generate_evaluation_report,
@@ -78,6 +85,13 @@ __all__ = [
     # 잔차 분석
     'analyze_residuals',
     'compute_prediction_intervals',
+
+    # 분위수 예측 평가 및 교차 진단
+    'pinball_loss',
+    'coverage',
+    'interval_score',
+    'diagnose_quantile_forecast',
+    'evaluate_quantile_forecast',
 
     # 평가 리포트
     'EvaluationReport',

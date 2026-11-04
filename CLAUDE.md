@@ -120,7 +120,7 @@ rm -rf ~/.claude/todos/*.json
 rm -rf ~/.claude/todos_backup/
 
 # 3. Nuclear option (clear all session data)
-rm -rf ~/.claude/projects/-Users-ibkim-Ormi-1-power-demand-forecast/
+rm -rf ~/.claude/projects/-Users-ibkim-Project-power-demand-forecast/
 ```
 
 ### Preventive Checks

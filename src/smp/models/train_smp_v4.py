@@ -50,6 +50,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.smp.models.smp_lstm import get_device
+from src.smp.models.time_split_scaling import fit_transform_time_split, temporal_split_bounds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -555,13 +556,11 @@ class TrainerV4:
         df = pipeline.load_data()
         features, targets = pipeline.create_features(df)
 
-        # Scale
-        features_scaled = pipeline.scaler.fit_transform(features)
-
-        # Split
-        n = len(features_scaled)
-        train_end = int(n * 0.8)
-        val_end = int(n * 0.9)
+        # Split indices first, then fit the scaler on the training slice only.
+        # 인과성 보장: 스케일러 통계는 훈련 구간에만 fit한다 (시간 분할 이전 fit 금지).
+        n = len(features)
+        train_end, val_end = temporal_split_bounds(n, 0.8, 0.1)
+        features_scaled = fit_transform_time_split(pipeline.scaler, features, train_end)
 
         train_features = features_scaled[:train_end]
         train_targets = targets[:train_end]
@@ -738,11 +737,12 @@ class TrainerV4:
         with open(self.output_dir / 'smp_v4_metrics.json', 'w') as f:
             json.dump(metrics, f, indent=2)
 
-        # Save scaler
-        np.save(self.output_dir / 'smp_v4_scaler.npy', {
-            'mean': pipeline.scaler.mean_,
-            'scale': pipeline.scaler.scale_
-        })
+        # Save scaler (object arrays require npz format; np.save(dict)는 저장 실패)
+        np.savez(
+            self.output_dir / 'smp_v4_scaler.npz',
+            mean=np.asarray(pipeline.scaler.mean_, dtype=float),
+            scale=np.asarray(pipeline.scaler.scale_, dtype=float),
+        )
 
         logger.info(f"Model saved to {self.output_dir}")
 

@@ -24,7 +24,7 @@ plt.rcParams['font.family'] = 'AppleGothic'
 plt.rcParams['axes.unicode_minus'] = False
 
 # 결과 폴더 생성
-RESULTS_DIR = '/Users/ibkim/Ormi_1/power-demand-forecast/results'
+RESULTS_DIR = '/Users/ibkim/Projects/power-demand-forecast/results'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # 디바이스 설정
@@ -44,7 +44,7 @@ print("\n" + "=" * 60)
 print("데이터 로드 및 전처리 시작...")
 print("=" * 60)
 
-BASE_PATH = '/Users/ibkim/Ormi_1/power-demand-forecast'
+BASE_PATH = '/Users/ibkim/Projects/power-demand-forecast'
 
 # 전력 데이터
 power_df = pd.read_csv(f'{BASE_PATH}/jeju_daily_power_2013_2024.csv')

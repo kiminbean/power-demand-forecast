@@ -10,7 +10,7 @@ JejuFerryEstimator 테스트 코드
 5. 검증 (기존 크롤러 대비 정확도)
 
 실행:
-    cd /Users/ibkim/Ormi_1/power-demand-forecast
+    cd /Users/ibkim/Projects/power-demand-forecast
     python -m pytest tools/crawlers/test_ferry_estimator.py -v
     
     # 또는 직접 실행

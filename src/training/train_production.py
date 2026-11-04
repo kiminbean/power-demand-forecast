@@ -39,6 +39,7 @@ from data.dataset import (
 from models.lstm import create_model
 from training.trainer import Trainer, create_scheduler
 from evaluation.metrics import compute_all_metrics
+from inference.feature_preprocessing import MODEL_TIMEZONE
 
 from features import (
     add_time_features,
@@ -93,13 +94,58 @@ TRAINING_CONFIG = {
 }
 
 
+def _validate_hourly_continuity(index: pd.DatetimeIndex, stage: str) -> None:
+    """Reject non-hourly adjacent timestamps with the first offending interval."""
+    intervals = index[1:] - index[:-1]
+    invalid = np.flatnonzero(intervals != pd.Timedelta(hours=1))
+    if len(invalid):
+        position = invalid[0]
+        raise ValueError(
+            f"Hourly continuity violated {stage}: {index[position]} to "
+            f"{index[position + 1]} (interval {intervals[position]})"
+        )
+
+
 def load_data(
     data_path: str,
     include_weather: bool = False
 ) -> Tuple[pd.DataFrame, list]:
     """데이터 로드 및 전처리"""
-    df = pd.read_csv(data_path, parse_dates=['datetime'])
+    df = pd.read_csv(data_path)
+    try:
+        timestamps = pd.to_datetime(df['datetime'], errors='coerce')
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid datetime values in training data") from exc
+    if timestamps.isna().any() or not pd.api.types.is_datetime64_any_dtype(
+        timestamps.dtype
+    ):
+        raise ValueError("Invalid or missing datetime values in training data")
+    if timestamps.duplicated().any():
+        raise ValueError("Duplicate datetime values in training data")
+    df['datetime'] = timestamps
     df.set_index('datetime', inplace=True)
+    # 시간대가 있는 학습 입력도 추론과 같은 제주 현지 달력 기준을 사용한다.
+    time_index = pd.DatetimeIndex(df.index)
+    if time_index.tz is not None:
+        df.index = time_index.tz_convert(MODEL_TIMEZONE)
+    # 지연 변수와 시퀀스가 과거에서 미래 순서를 따르도록 정렬한다.
+    df.sort_index(inplace=True)
+    _validate_hourly_continuity(pd.DatetimeIndex(df.index), "before lag creation")
+
+    # 선택된 원본의 무한대가 이동평균과 파생식에서 숨겨지지 않도록 검사한다.
+    raw_features = ['power_demand'] + (WEATHER_FEATURES.copy() if include_weather else [])
+    if include_weather and '기온' in df.columns and 'temp_mean' in df.columns:
+        # 재계산으로 덮어쓰는 기상 피처는 원본 값 대신 계산 결과를 검사한다.
+        raw_features = [name for name in raw_features if name not in {'HDD', 'CDD'}]
+        raw_features.append('temp_mean')
+        if 'dewpoint_mean' in df.columns:
+            raw_features.remove('THI')
+            raw_features.append('dewpoint_mean')
+    for column in raw_features:
+        if column in df.columns:
+            values = pd.Series(pd.to_numeric(df[column], errors='raise')).dropna()
+            if not np.isfinite(values.to_numpy(dtype=float)).all():
+                raise ValueError(f"Raw training feature {column} must contain finite values")
 
     # Feature Engineering
     df = add_time_features(df, include_holiday=True)
@@ -107,8 +153,6 @@ def load_data(
 
     if include_weather and '기온' in df.columns:
         df = add_weather_features(df, include_thi=True, include_hdd_cdd=True)
-
-    df = df.dropna()
 
     # Feature Selection
     target = 'power_demand'
@@ -120,6 +164,11 @@ def load_data(
                 features.append(col)
 
     available = [f for f in features if f in df.columns]
+    # 모델이 사용하지 않는 열의 결측치는 학습 행을 제거하지 않는다.
+    df = df.dropna(subset=available)
+    if not np.isfinite(df[available].to_numpy(dtype=float)).all():
+        raise ValueError("Selected training features must contain finite values")
+    _validate_hourly_continuity(pd.DatetimeIndex(df.index), "after dropna")
     return df[available].copy(), available
 
 

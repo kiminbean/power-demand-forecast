@@ -72,16 +72,16 @@ export default function Map() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
+    <div className="min-w-0 flex flex-col gap-4 lg:h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">제주 전력 지도</h1>
-          <p className="text-text-muted mt-1">재생에너지 발전소 실시간 현황</p>
+          <p className="text-text-muted mt-1">재생에너지 발전소 현황 · 데모 데이터</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Stats */}
-          <div className="flex items-center gap-4 px-4 py-2 bg-card rounded-lg border border-border">
+          <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-card rounded-lg border border-border">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-success" />
               <span className="text-sm text-text-muted">총 발전:</span>
@@ -121,9 +121,9 @@ export default function Map() {
       </div>
 
       {/* Map and Sidebar */}
-      <div className="flex-1 flex gap-4">
+      <div className="flex-1 min-h-0 flex flex-col gap-4 lg:flex-row">
         {/* Map Container */}
-        <div className="flex-1 rounded-xl overflow-hidden border border-border">
+        <div className="h-80 min-w-0 shrink-0 rounded-xl overflow-hidden border border-border lg:h-auto lg:flex-1 lg:shrink">
           <MapContainer
             center={JEJU_CENTER}
             zoom={JEJU_ZOOM}
@@ -131,8 +131,8 @@ export default function Map() {
             className="bg-background"
           >
             <TileLayer
-              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
             {/* Plant Markers */}
@@ -189,7 +189,7 @@ export default function Map() {
         </div>
 
         {/* Sidebar - Plant List */}
-        <div className="w-80 card overflow-hidden flex flex-col">
+        <div className="w-full max-h-96 card overflow-hidden flex flex-col lg:w-80 lg:max-h-none lg:shrink-0">
           <div className="p-4 border-b border-border">
             <h3 className="font-semibold text-text-primary">발전소 목록</h3>
             <p className="text-sm text-text-muted">{plants.length}개 발전소</p>

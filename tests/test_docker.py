@@ -38,8 +38,10 @@ class TestDockerfile:
         assert "WORKDIR /app" in dockerfile_content
 
     def test_dockerfile_copies_requirements(self, dockerfile_content):
-        """requirements 복사"""
-        assert "COPY requirements.txt" in dockerfile_content
+        """Docker 전용 의존성 파일을 복사하고 설치한다."""
+        assert (PROJECT_ROOT / "requirements-docker.txt").is_file()
+        assert "COPY requirements-docker.txt ." in dockerfile_content
+        assert "pip install -r requirements-docker.txt" in dockerfile_content
 
     def test_dockerfile_installs_dependencies(self, dockerfile_content):
         """의존성 설치"""

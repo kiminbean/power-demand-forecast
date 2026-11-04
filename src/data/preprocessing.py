@@ -22,6 +22,70 @@ import json
 from datetime import datetime
 
 
+class CausalProductionPreprocessor:
+    """Opt-in forward fill and fixed IQR clipping fitted on a training period.
+
+    Input must contain unique, increasing timestamps in a ``datetime`` column.
+    ``train_end`` is inclusive. Transform a continuous history at once to carry
+    observations across split boundaries; separate calls do not share fill state.
+    Leading missing values remain missing. Training-period bounds use all training
+    observations, so training rows themselves are not point-in-time causal.
+    This cannot establish whether the input was previously preprocessed with
+    future data, nor whether features are available at prediction time.
+    """
+
+    def __init__(self, columns: List[str], k: float = 1.5) -> None:
+        if not columns or len(set(columns)) != len(columns):
+            raise ValueError('columns must be nonempty and unique')
+        if not np.isfinite(k) or k < 0:
+            raise ValueError('k must be finite and nonnegative')
+        self.columns = list(columns)
+        self.k = k
+        self.bounds: Optional[Dict[str, Tuple[float, float]]] = None
+
+    def _validate(self, df: pd.DataFrame) -> pd.Series:
+        if 'datetime' not in df.columns:
+            raise ValueError('datetime column is required')
+        dates = pd.to_datetime(df['datetime'], errors='raise')
+        if dates.isna().any() or not dates.is_monotonic_increasing or dates.duplicated().any():
+            raise ValueError('datetime values must be non-null, unique and increasing')
+        for col in self.columns:
+            if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
+                raise ValueError(f'{col} must be a numeric column')
+            if np.isinf(df[col].dropna().to_numpy(dtype=float)).any():
+                raise ValueError(f'{col} contains infinite values')
+        return dates
+
+    def fit(self, df: pd.DataFrame, train_end: datetime) -> 'CausalProductionPreprocessor':
+        """Fit clipping bounds using rows at or before the inclusive cutoff."""
+        self.bounds = None
+        dates = self._validate(df)
+        cutoff = pd.Timestamp(train_end)
+        if pd.isna(cutoff):
+            raise ValueError('train_end must be a valid timestamp')
+        training = df.loc[dates <= cutoff]
+        bounds = {}
+        for col in self.columns:
+            values = training[col].dropna()
+            if values.empty:
+                raise ValueError(f'no training observations for {col}')
+            q1, q3 = values.quantile([0.25, 0.75])
+            iqr = q3 - q1
+            bounds[col] = (float(q1 - self.k * iqr), float(q3 + self.k * iqr))
+        self.bounds = bounds
+        return self
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply fitted bounds and past-only fill without modifying the input."""
+        if self.bounds is None:
+            raise ValueError('fit must be called before transform')
+        self._validate(df)
+        result = df.copy()
+        for col, (lower, upper) in self.bounds.items():
+            result[col] = result[col].clip(lower=lower, upper=upper).ffill()
+        return result
+
+
 def interpolate_missing_values(
     df: pd.DataFrame,
     columns: Optional[List[str]] = None,
@@ -171,7 +235,9 @@ def preprocess_weather_data(
         df['datetime'] = pd.to_datetime(df['일시'])
 
     if 'datetime' in df.columns:
-        df = df.set_index('datetime')
+        # 보간 전에 시간순으로 정렬하여 입력 행 순서의 영향을 방지
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        df = df.set_index('datetime').sort_index(kind='stable')
 
     # Step 1: 특수 컬럼 처리
     special_cols = {}

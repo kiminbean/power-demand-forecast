@@ -340,6 +340,13 @@ def split_data_by_time(
     - Validation: 2023-01-01 ~ 2023-06-30
     - Test: 2023-07-01 ~ 2024-12-31
 
+    경계 시각은 정확한 시각으로 해석합니다. Train은 train_end 이하,
+    Validation은 train_end 초과 val_end 이하, Test는 val_end 초과입니다.
+    경계는 train_end <= val_end 순서여야 하며 인덱스에 NaT가 없어야 합니다.
+    인덱스는 시간 오름차순이어야 합니다.
+    시간대가 있는 인덱스의 시간대 없는 경계는 해당 인덱스의 현지 시각으로 해석합니다.
+    시간대가 없는 인덱스에 시간대가 있는 경계는 허용하지 않습니다.
+
     Args:
         df: 입력 DataFrame (datetime 인덱스)
         train_end: 학습 데이터 종료 시점
@@ -348,9 +355,27 @@ def split_data_by_time(
     Returns:
         Tuple[DataFrame, DataFrame, DataFrame]: train, val, test
     """
-    train_df = df.loc[:train_end]
-    val_df = df.loc[train_end:val_end].iloc[1:]  # 중복 제외
-    test_df = df.loc[val_end:].iloc[1:]
+    train_boundary = pd.Timestamp(train_end)
+    val_boundary = pd.Timestamp(val_end)
+    if not isinstance(train_boundary, pd.Timestamp) or not isinstance(val_boundary, pd.Timestamp):
+        raise ValueError("Split boundaries and index must not contain NaT")
+    if df.index.hasnans:
+        raise ValueError("Split boundaries and index must not contain NaT")
+    if not df.index.is_monotonic_increasing:
+        raise ValueError("Data index must be in chronological order")
+    if isinstance(df.index, pd.DatetimeIndex):
+        if df.index.tz is not None:
+            if train_boundary.tz is None:
+                train_boundary = train_boundary.tz_localize(df.index.tz)
+            if val_boundary.tz is None:
+                val_boundary = val_boundary.tz_localize(df.index.tz)
+        elif train_boundary.tz is not None or val_boundary.tz is not None:
+            raise ValueError("Timezone-aware boundary requires a timezone-aware index")
+    if train_boundary > val_boundary:
+        raise ValueError("train_end must be less than or equal to val_end")
+    train_df = df.loc[df.index <= train_boundary]
+    val_df = df.loc[(df.index > train_boundary) & (df.index <= val_boundary)]
+    test_df = df.loc[df.index > val_boundary]
 
     return train_df, val_df, test_df
 

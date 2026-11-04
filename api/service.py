@@ -8,6 +8,7 @@ Prediction Service
 import sys
 import time
 import logging
+from numbers import Integral
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -19,7 +20,10 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from inference.predict import ProductionPredictor, PredictionResult, BatchPredictionResult
+from inference.predict import (
+    ProductionPredictor, PredictionResult, BatchPredictionResult,
+    _scaled_tensor, _validated_prediction,
+)
 from data.dataset import get_device
 
 from .config import settings
@@ -135,35 +139,35 @@ class PredictionService:
             records.append(record)
 
         df = pd.DataFrame(records)
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        aware = [value.utcoffset() is not None for value in df['datetime']]
+        if any(aware) and not all(aware):
+            raise ValueError("Cannot mix naive and timezone-aware timestamps")
+        if all(aware) and aware:
+            from inference.feature_preprocessing import MODEL_TIMEZONE
+
+            df['datetime'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert(MODEL_TIMEZONE)
+        else:
+            df['datetime'] = pd.to_datetime(df['datetime'])
         df.set_index('datetime', inplace=True)
         df.sort_index(inplace=True)
 
         return df
 
-    def _prepare_features_for_api(self, df: pd.DataFrame, include_weather: bool = False) -> pd.DataFrame:
-        """API용 피처 준비 (NaN 처리 포함)"""
-        from features import add_time_features, add_lag_features, add_weather_features
+    def _prepare_features_for_api(
+        self, df: pd.DataFrame, include_weather: bool = False,
+        selected_features: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """API용 피처 준비 — 직접 추론 경로와 동일한 공유 정책 사용
 
-        df = df.copy()
+        기존 bfill().ffill() + fillna(0)은 미래 정보 누수(bfill)와
+        스케일러 왜곡(0 채움) 문제가 있어 src/inference/feature_preprocessing.py
+        의 인과적 정책(ffill 후 선행 warm-up 행 제거)로 통일됨.
+        """
+        from inference.feature_preprocessing import prepare_inference_features
 
-        # 시간 피처 추가
-        df = add_time_features(df, include_holiday=True)
-
-        # 지연 피처 추가
-        df = add_lag_features(df, demand_col='power_demand')
-
-        # 기상 피처 추가 (선택적)
-        if include_weather and '기온' in df.columns:
-            df = add_weather_features(df, include_thi=True, include_hdd_cdd=True)
-
-        # NaN 처리: backward fill 후 forward fill (시작과 끝 부분 모두 처리)
-        df = df.bfill().ffill()
-
-        # 여전히 NaN이 있으면 0으로 채움
-        df = df.fillna(0)
-
-        return df
+        return prepare_inference_features(
+            df, include_weather=include_weather, selected_features=selected_features
+        )
 
     def _run_prediction(
         self,
@@ -188,11 +192,13 @@ class PredictionService:
         if model is None:
             raise RuntimeError(f"Model '{model_name}' not loaded")
 
+        features = config['features']
         # 피처 준비 (NaN 처리 포함)
-        df_prep = self._prepare_features_for_api(df, include_weather=include_weather)
+        df_prep = self._prepare_features_for_api(
+            df, include_weather=include_weather, selected_features=features
+        )
 
         # 필요한 피처만 추출
-        features = config['features']
         seq_length = config['training_config']['seq_length']
 
         available = [f for f in features if f in df_prep.columns]
@@ -207,21 +213,13 @@ class PredictionService:
         # 시퀀스 추출
         sequence = data[-seq_length:]
 
-        # 스케일링
-        scaled = scaler.transform(sequence)
-
         # 텐서 변환 및 예측
-        X = torch.FloatTensor(scaled).unsqueeze(0).to(self.predictor.device)
+        X = _scaled_tensor(scaler, sequence, self.predictor.device)
 
         with torch.no_grad():
             pred = model(X)
 
-        # 역변환
-        pred_value = scaler.inverse_transform_target(
-            pred.cpu().numpy().flatten()
-        )[0]
-
-        return float(pred_value)
+        return _validated_prediction(pred, scaler)
 
     def predict(
         self,
@@ -402,6 +400,10 @@ class PredictionService:
         if not self.is_ready():
             raise RuntimeError("Service not initialized")
 
+        if not isinstance(step, Integral) or isinstance(step, bool) or step <= 0:
+            raise ValueError("Batch step must be a positive integer")
+        step = int(step)
+
         start_time = time.perf_counter()
 
         # Convert to DataFrame
@@ -422,11 +424,18 @@ class PredictionService:
             config = self.predictor.config_demand
             include_weather = False
 
-        # Prepare features
-        df_prep = self._prepare_features_for_api(df, include_weather=include_weather)
-
         features = config['features']
+        # Prepare features
+        df_prep = self._prepare_features_for_api(
+            df, include_weather=include_weather, selected_features=features
+        )
+
         seq_length = config['training_config']['seq_length']
+
+        if len(df_prep) < seq_length:
+            raise ValueError(
+                f"Insufficient preprocessed data: need {seq_length} rows, got {len(df_prep)}"
+            )
 
         available = [f for f in features if f in df_prep.columns]
         data_array = df_prep[available].values
@@ -438,16 +447,12 @@ class PredictionService:
 
         for i in range(0, n_samples, step):
             sequence = data_array[i:i + seq_length]
-            scaled = scaler.transform(sequence)
-
-            X = torch.FloatTensor(scaled).unsqueeze(0).to(self.predictor.device)
+            X = _scaled_tensor(scaler, sequence, self.predictor.device)
 
             with torch.no_grad():
                 pred = model(X)
 
-            pred_value = scaler.inverse_transform_target(
-                pred.cpu().numpy().flatten()
-            )[0]
+            pred_value = _validated_prediction(pred, scaler)
 
             predictions_list.append(pred_value)
             timestamps_list.append(df_prep.index[i + seq_length - 1])
@@ -464,12 +469,15 @@ class PredictionService:
         ]
 
         # Calculate statistics
-        statistics = {
-            "mean": round(float(predictions_array.mean()), 2),
-            "std": round(float(predictions_array.std()), 2),
-            "min": round(float(predictions_array.min()), 2),
-            "max": round(float(predictions_array.max()), 2)
-        }
+        with np.errstate(over="ignore", invalid="ignore"):
+            statistics = {
+                "mean": round(float(predictions_array.mean()), 2),
+                "std": round(float(predictions_array.std()), 2),
+                "min": round(float(predictions_array.min()), 2),
+                "max": round(float(predictions_array.max()), 2)
+            }
+        if not all(np.isfinite(value) for value in statistics.values()):
+            raise ValueError("Batch statistics must contain finite values")
 
         processing_time = (time.perf_counter() - start_time) * 1000
 

@@ -4,7 +4,7 @@
 기존 입도객 데이터를 활용하여 체류인구 계산
 
 실행 방법:
-    cd /Users/ibkim/Ormi_1/power-demand-forecast
+    cd /Users/ibkim/Projects/power-demand-forecast
     python scripts/collect_jeju_population.py
 
 입력 파일:

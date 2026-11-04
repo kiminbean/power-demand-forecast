@@ -8,11 +8,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/ibkim/Ormi_1/power-demand-forecast/.git/hooks/auto-commit.sh</string>
+        <string>/Users/ibkim/Projects/power-demand-forecast/.git/hooks/auto-commit.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast</string>
 
     <key>StartInterval</key>
     <integer>1800</integer> <!-- 30분마다 실행 -->
@@ -21,10 +21,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/autocommit.log</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast/logs/autocommit.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/ibkim/Ormi_1/power-demand-forecast/logs/autocommit.error.log</string>
+    <string>/Users/ibkim/Projects/power-demand-forecast/logs/autocommit.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

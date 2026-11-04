@@ -48,6 +48,9 @@ python3 -m http.server 8799 --bind 0.0.0.0 -d docs
 
 ## 주요 기능
 
+현재 작업 트리의 기능별 구현·검증 범위와 미해결 과제는
+[고도화 현황](docs/2026-11-02-forecast-upgrade-status.md)을 참고하세요.
+
 ### 🧠 딥러닝 모델
 | 모델 | 설명 |
 |------|------|
@@ -236,7 +239,8 @@ print(f"Stages completed: {result['stages_completed']}")
 # API 서버 시작
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 
-# 또는 Docker로 실행
+# Docker Compose는 별도의 API 앱(api.main:app)을 실행합니다.
+# 위의 로컬 명령은 src.api.main:app을 실행하므로 동일하지 않습니다.
 docker-compose up -d
 ```
 

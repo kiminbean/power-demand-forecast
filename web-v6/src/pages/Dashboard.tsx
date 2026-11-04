@@ -64,10 +64,10 @@ function MarketBadge({ market, status, deadline, hoursRemaining }: MarketBadgePr
 }
 
 export default function Dashboard() {
-  const { data: kpis, refetch: refetchKPIs } = useDashboardKPIs();
-  const { data: smpForecast, refetch: refetchSMP } = useSMPForecast();
-  const { data: marketStatus } = useMarketStatus();
-  const { data: resources } = useResources();
+  const { data: kpis, error: kpiError, refetch: refetchKPIs } = useDashboardKPIs();
+  const { data: smpForecast, error: forecastError, refetch: refetchSMP } = useSMPForecast();
+  const { data: marketStatus, error: marketError } = useMarketStatus();
+  const { data: resources, error: resourcesError } = useResources();
 
   // Auto refresh every 60 seconds
   useAutoRefresh(() => {
@@ -89,9 +89,9 @@ export default function Dashboard() {
       }
     : null;
 
-  // Get current SMP from forecast
-  const currentHour = new Date().getHours();
-  const currentSMP = smpForecast?.q50?.[currentHour] ?? kpis?.current_smp ?? 0;
+  const currentSMP = kpiError ? null : kpis?.current_smp;
+  const solarOutput = resourcesError ? undefined : resourceStats?.solarOutput;
+  const errors = [kpiError && 'KPI', forecastError && 'SMP 예측', marketError && '시장 상태', resourcesError && '발전소'].filter(Boolean);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -99,13 +99,13 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">대시보드</h1>
-          <p className="text-text-muted mt-1">제주 전력 시스템 실시간 현황</p>
+          <p className="text-text-muted mt-1">제주 전력 시스템 현황 (일부 시뮬레이션 및 예시)</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-lg border border-border">
             <Clock className="w-4 h-4 text-text-muted flex-shrink-0" />
             <span className="text-sm text-text-muted whitespace-nowrap">
-              업데이트: {new Date().toLocaleTimeString('ko-KR')}
+              관측 시각이 제공되지 않음
             </span>
           </div>
           <button
@@ -120,6 +120,15 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {errors.length > 0 && (
+        <div role="alert" className="p-3 rounded-lg bg-warning/10 text-warning">
+          API 오류 ({errors.join(', ')}): 일부 화면에 데모 데이터가 표시됩니다.
+        </div>
+      )}
+      {kpis?.data_source && !kpiError && (
+        <p className="text-xs text-text-muted">KPI 데이터 출처: {kpis.data_source} (SMP는 과거값 또는 기본값일 수 있음)</p>
+      )}
 
       {/* Market Status */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -139,15 +148,15 @@ export default function Dashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title="현재 SMP"
-          value={currentSMP.toFixed(1)}
+          title="SMP (KPI 제공값)"
+          value={currentSMP != null ? currentSMP.toFixed(1) : '—'}
           unit="원/kWh"
-          change={kpis?.smp_change_pct}
+          change={kpiError ? undefined : kpis?.smp_change_pct}
           icon={DollarSign}
           color="smp"
         />
         <KPICard
-          title="총 발전량"
+          title="총 발전량 (시뮬레이션)"
           value={resourceStats?.currentOutput.toFixed(1) ?? kpis?.current_output_mw ?? 0}
           unit="MW"
           change={kpis?.revenue_change_pct}
@@ -155,14 +164,14 @@ export default function Dashboard() {
           color="primary"
         />
         <KPICard
-          title="태양광 발전"
-          value={resourceStats?.solarOutput.toFixed(1) ?? 45.2}
+          title="태양광 발전 (시뮬레이션)"
+          value={solarOutput?.toFixed(1) ?? '—'}
           unit="MW"
           icon={Sun}
           color="solar"
         />
         <KPICard
-          title="풍력 발전"
+          title="풍력 발전 (시뮬레이션)"
           value={resourceStats?.windOutput.toFixed(1) ?? 123.3}
           unit="MW"
           icon={Wind}
@@ -178,7 +187,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-text-primary">전력수급 현황</h2>
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
-                실시간
+                예시 데이터
               </span>
             </div>
           </div>
@@ -191,7 +200,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-text-primary">24시간 SMP 예측</h2>
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
-                AI 예측
+                {forecastError ? '데모 데이터' : smpForecast?.model_used ?? '데이터 없음'}
               </span>
               {smpForecast && (
                 <span className="text-xs text-text-muted">
@@ -208,7 +217,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Resource Summary */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-text-primary mb-4">발전소 현황</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">발전소 현황 (출력 시뮬레이션)</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-background rounded-lg">
               <div className="flex items-center gap-3">
@@ -237,13 +246,13 @@ export default function Dashboard() {
                 <div>
                   <div className="text-text-primary font-medium">태양광 발전소</div>
                   <div className="text-sm text-text-muted">
-                    {resources?.filter((r) => r.type === 'solar').length ?? 6}개 운영중
+                    {resourcesError || !resources ? '정보 없음' : `${resources.filter((r) => r.type === 'solar').length}개`}
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-solar font-bold">
-                  {resourceStats?.solarOutput.toFixed(1) ?? 45.2} MW
+                  {solarOutput?.toFixed(1) ?? '—'} MW
                 </div>
               </div>
             </div>
@@ -252,7 +261,7 @@ export default function Dashboard() {
 
         {/* Daily Stats */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-text-primary mb-4">일일 실적</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">일일 실적 (일부 예시)</h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-1">
@@ -302,7 +311,7 @@ export default function Dashboard() {
         {/* Alerts */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-text-primary">알림</h3>
+            <h3 className="text-lg font-semibold text-text-primary">알림 (예시)</h3>
             <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
               정상
             </span>

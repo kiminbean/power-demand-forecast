@@ -871,7 +871,8 @@ st.markdown("""
     /* 숨기기 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    [data-testid="stHeader"] { background: #0f172a; color: #e2e8f0; }
+    [data-testid="stHeader"] button { color: #e2e8f0; }
 
     /* Metric 스타일 오버라이드 */
     [data-testid="stMetricValue"] {
@@ -886,6 +887,77 @@ st.markdown("""
     [data-testid="stMetricDelta"] svg {
         display: none;
     }
+
+    /* 대시보드의 정보 밀도와 작은 화면 대응 */
+    .main .block-container {
+        max-width: 1600px;
+        padding-top: 4.5rem;
+        padding-bottom: 2rem;
+    }
+    .main-header {
+        gap: 1.5rem;
+        background: linear-gradient(120deg, #123761, #274475 58%, #493f80);
+        border: 1px solid rgba(148, 193, 255, 0.22);
+        padding: 1.5rem 1.75rem;
+    }
+    .main-header h1.main-title {
+        color: #fff;
+        font-size: clamp(1.5rem, 2.3vw, 2rem);
+        line-height: 1.2;
+        padding: 0;
+    }
+    .main-subtitle { margin: 0.45rem 0; }
+    .header-meta { text-align: right; color: #fff; flex-shrink: 0; }
+    .header-meta-label { font-size: 0.8rem; color: #dbeafe; }
+    .header-meta-time { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .header-meta-source { font-size: 0.75rem; color: #dbeafe; margin-top: 0.3rem; }
+    .info-card {
+        min-height: 138px;
+        padding: 1.15rem;
+        margin-bottom: 0;
+        background: #1b2a40;
+        border-color: #34465f;
+    }
+    .info-card-title { color: #c0cee0; letter-spacing: 0; }
+    .info-card-value { font-size: clamp(1.45rem, 2vw, 1.9rem); font-variant-numeric: tabular-nums; }
+    .info-card-change { color: #cbd5e1; font-size: 0.8rem; }
+    .positive { color: #6ee7b7; }
+    .negative { color: #fca5a5; }
+    .status-online { color: #a7f3d0; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stCheckbox"] label p { color: #e2e8f0; }
+    [data-testid="stSidebar"] [data-testid="stAlert"] p { color: #bfdbfe; }
+    .stTabs [data-baseweb="tab-list"] { gap: 0.25rem; overflow-x: auto; }
+    .stTabs [data-baseweb="tab"] { min-height: 44px; white-space: nowrap; color: #cbd5e1; }
+    .stTabs [data-baseweb="tab"]:focus-visible,
+    button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    @media (max-width: 640px) {
+        .main .block-container { padding: 4rem 1rem 1.5rem; }
+        .main-header { flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.2rem; }
+        .header-meta { text-align: left; }
+        div[data-testid="stHorizontalBlock"]:has(.info-card) {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: 0.65rem;
+            row-gap: 1.75rem;
+        }
+        div[data-testid="stHorizontalBlock"]:has(.info-card) > div[data-testid="column"] {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+        .info-card { min-height: 126px; padding: 0.85rem; }
+        .info-card-title { font-size: 0.78rem; }
+        .info-card-value { font-size: 1.4rem; }
+        .status-badge { padding: 0.2rem 0.45rem; }
+        .alert-banner { flex-wrap: wrap; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .status-critical { animation: none; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -897,9 +969,12 @@ st.markdown("""
 def _fix_timestamp_24h(df: pd.DataFrame) -> pd.DataFrame:
     """Fix 24:00 timestamp format (convert to 00:00 of next day)"""
     if 'timestamp' in df.columns:
-        # Replace 24:00 with 00:00 (pandas will handle as string first)
-        df['timestamp'] = df['timestamp'].astype(str).str.replace(' 24:00', ' 00:00')
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        ts = df['timestamp'].astype(str)
+        is_24h = ts.str.contains(' 24:00')
+        # 24:00 → 같은 날 00:00이 아니라 다음 날 00:00으로 변환
+        ts = ts.str.replace(' 24:00', ' 00:00')
+        df['timestamp'] = pd.to_datetime(ts, errors='coerce')
+        df.loc[is_24h, 'timestamp'] = df.loc[is_24h, 'timestamp'] + pd.Timedelta(days=1)
         df = df.dropna(subset=['timestamp'])
     return df
 
@@ -1342,6 +1417,45 @@ def get_current_power_status() -> Dict:
     }
 
 
+def _format_observation_age(data_date: object, now: Optional[datetime] = None) -> Tuple[str, str]:
+    """수요 데이터의 관측 시각과 경과 시간 텍스트를 계산한다.
+
+    EPSIS 파일 데이터는 관측 시점이 며칠 과거일 수 있어,
+    '현재 수요' 카드에 관측 시각과 경과 시간을 함께 표시해야
+    데이터 신선도가 사용자에게 드러난다.
+
+    Args:
+        data_date: power_status['data_date'] 값 (문자열 또는 날짜).
+        now: 경과 시간 계산 기준 시각 (기본: 현재 시각, 테스트 주입용).
+
+    Returns:
+        (관측 시각 텍스트, 경과 시간 텍스트). 파싱 불가 시 경과는 'N/A'.
+    """
+    if now is None:
+        now = datetime.now()
+    observed_text = str(data_date)
+    try:
+        observed = pd.to_datetime(str(data_date))
+    except (ValueError, TypeError):
+        return observed_text, "N/A"
+    if pd.isna(observed):
+        return observed_text, "N/A"
+    elapsed = now - observed.to_pydatetime()
+    if elapsed.total_seconds() < 0:
+        elapsed = timedelta(0)
+    total_hours = int(elapsed.total_seconds() // 3600)
+    days, hours = divmod(total_hours, 24)
+    # 날짜 단위 파일 데이터는 'N일 N시간 경과'로, 당일은 'N시간/N분 경과'로 표시
+    if days > 0:
+        elapsed_text = f"{days}일 {hours}시간 경과"
+    elif hours > 0:
+        elapsed_text = f"{hours}시간 경과"
+    else:
+        minutes = max(1, int(elapsed.total_seconds() // 60))
+        elapsed_text = f"{minutes}분 경과"
+    return observed_text, elapsed_text
+
+
 @st.cache_data(ttl=60)
 def get_smp_data() -> Dict:
     """SMP 데이터 (EPSIS 실제 데이터 기반)"""
@@ -1373,16 +1487,16 @@ def get_smp_data() -> Dict:
         else:
             current_smp = float(recent_df[recent_df['smp_jeju'] > 0]['smp_jeju'].mean())
 
-        # 이전 시간 SMP
+        # 이전 시간 SMP (실측 이전값이 없으면 변화율을 만들지 않는다)
         prev_hour_data = smp_df[smp_df['hour'] == ((current_hour - 1) if current_hour > 1 else 24)]
         if not prev_hour_data.empty:
             valid_prev = prev_hour_data[prev_hour_data['smp_jeju'] > 0]
             if not valid_prev.empty:
                 prev_smp = float(valid_prev['smp_jeju'].iloc[-1])
             else:
-                prev_smp = current_smp * 0.98
+                prev_smp = None
         else:
-            prev_smp = current_smp * 0.98
+            prev_smp = None
 
         # 시간대별 평균 SMP (0이 아닌 값만)
         valid_smp = smp_df[smp_df['smp_jeju'] > 0]
@@ -1415,10 +1529,14 @@ def get_smp_data() -> Dict:
                 "q90": round(q90, 1),
             })
 
-        # 통계
-        daily_avg = float(smp_df['smp_jeju'].mean())
-        daily_max = float(smp_df['smp_jeju'].max())
-        daily_min = float(smp_df['smp_jeju'].min())
+        # 통계 (마지막 날짜 기준 1일 통계 - '일평균/일최고/일최저' 라벨과 일치)
+        latest_date = smp_df['date'].max()
+        latest_day = smp_df[smp_df['date'] == latest_date]
+        latest_valid = latest_day[latest_day['smp_jeju'] > 0]
+        stats_df = latest_valid if not latest_valid.empty else valid_smp
+        daily_avg = float(stats_df['smp_jeju'].mean())
+        daily_max = float(stats_df['smp_jeju'].max())
+        daily_min = float(stats_df['smp_jeju'].min())
 
         data_source = "EPSIS 실데이터"
         data_range = f"{smp_df['date'].min().strftime('%Y-%m-%d')} ~ {smp_df['date'].max().strftime('%Y-%m-%d')}"
@@ -1457,13 +1575,19 @@ def get_smp_data() -> Dict:
         data_range = "N/A"
         record_count = 0
 
-    change = current_smp - prev_smp
-    change_pct = (change / prev_smp * 100) if prev_smp > 0 else 0
+    # SMP 변화 — 이전 실측값이 없으면 가짜 변화율을 만들지 않는다
+    if prev_smp is not None and prev_smp > 0:
+        change = current_smp - prev_smp
+        change_pct = change / prev_smp * 100
+    else:
+        change = None
+        change_pct = None
 
     return {
         "current": round(current_smp, 1),
-        "change": round(change, 1),
-        "change_pct": round(change_pct, 1),
+        "change": round(change, 1) if change is not None else None,
+        "change_pct": round(change_pct, 1) if change_pct is not None else None,
+        "prev_available": prev_smp is not None and prev_smp > 0,
         "predictions": predictions,
         "daily_avg": round(daily_avg, 1),
         "daily_max": round(daily_max, 1),
@@ -1500,7 +1624,7 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
     # 제주도 중심 좌표
     jeju_center = [33.3846, 126.5535]
 
-    # 지도 생성 (다크 테마)
+    # 제주도 지도 생성
     m = folium.Map(
         location=jeju_center,
         zoom_start=10,
@@ -1508,11 +1632,11 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         control_scale=True,
     )
 
-    # 다크 테마 타일 추가
+    # OpenStreetMap 지도 타일 추가
     folium.TileLayer(
-        tiles='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        attr='CartoDB Dark',
-        name='Dark Mode',
+        tiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        name='OpenStreetMap',
         control=False,
     ).add_to(m)
 
@@ -1561,13 +1685,13 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
                     <td style="text-align: right; font-weight: bold;">{plant['capacity']:.1f} MW</td>
                 </tr>
                 <tr>
-                    <td style="color: #666;">현재 발전량</td>
+                    <td style="color: #666;">현재 발전량 (추정)</td>
                     <td style="text-align: right; font-weight: bold; color: #10b981;">
                         {plant['generation']:.1f} MW
                     </td>
                 </tr>
                 <tr>
-                    <td style="color: #666;">이용률</td>
+                    <td style="color: #666;">이용률 (추정)</td>
                     <td style="text-align: right; font-weight: bold;">{plant['utilization']:.1f}%</td>
                 </tr>
                 <tr>
@@ -1589,6 +1713,7 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
                 </tr>
             </table>
             <div style="margin-top: 8px; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 5px;">
+                발전량·이용률은 시뮬레이션 추정치 (실측 아님)<br/>
                 데이터 출처: {source}
             </div>
         </div>
@@ -2049,7 +2174,7 @@ def create_realtime_power_chart() -> go.Figure:
         template='plotly_dark',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=60, r=30, t=80, b=50),
+        margin=dict(l=60, r=30, t=140, b=50),
         height=450,
         hovermode='x unified'
     )
@@ -2058,26 +2183,41 @@ def create_realtime_power_chart() -> go.Figure:
 
 
 def create_gauge_chart(value: float, title: str, max_val: float = 100,
-                       color: str = '#3b82f6', suffix: str = '') -> go.Figure:
-    """게이지 차트 생성"""
+                       color: str = '#3b82f6', suffix: str = '',
+                       reserve: bool = False) -> go.Figure:
+    """Create a gauge chart, using low-value risk bands for reserve margins."""
+    if reserve:
+        # 예비율은 낮을수록 위험하며 표시 범위는 실제 값을 포함한다.
+        low = min(0, value)
+        max_val = max(max_val, value * 1.1)
+        steps = [
+            {'range': [low, 10], 'color': 'rgba(239, 68, 68, 0.3)'},
+            {'range': [10, 15], 'color': 'rgba(245, 158, 11, 0.3)'},
+            {'range': [15, max_val], 'color': 'rgba(16, 185, 129, 0.3)'},
+        ]
+        threshold = 10
+    else:
+        low = 0
+        steps = [
+            {'range': [0, max_val * 0.5], 'color': 'rgba(30, 41, 59, 0.3)'},
+            {'range': [max_val * 0.5, max_val * 0.8], 'color': 'rgba(30, 41, 59, 0.2)'},
+        ]
+        threshold = max_val * 0.9
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
-        number={'suffix': suffix, 'font': {'size': 36, 'color': color}},
+        number={'suffix': suffix, 'font': {'size': 20, 'color': color}},
         title={'text': title, 'font': {'size': 14, 'color': '#94a3b8'}},
         gauge={
-            'axis': {'range': [0, max_val], 'tickfont': {'color': '#64748b'}},
+            'axis': {'range': [low, max_val], 'tickfont': {'color': '#64748b'}},
             'bar': {'color': color},
             'bgcolor': 'rgba(30, 41, 59, 0.5)',
             'borderwidth': 0,
-            'steps': [
-                {'range': [0, max_val * 0.5], 'color': 'rgba(30, 41, 59, 0.3)'},
-                {'range': [max_val * 0.5, max_val * 0.8], 'color': 'rgba(30, 41, 59, 0.2)'},
-            ],
+            'steps': steps,
             'threshold': {
                 'line': {'color': '#ef4444', 'width': 2},
                 'thickness': 0.8,
-                'value': max_val * 0.9
+                'value': threshold
             }
         }
     ))
@@ -2086,7 +2226,7 @@ def create_gauge_chart(value: float, title: str, max_val: float = 100,
         template='plotly_dark',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=30, r=30, t=50, b=20),
+        margin=dict(l=8, r=8, t=50, b=20),
         height=200,
     )
 
@@ -2117,6 +2257,15 @@ def create_supply_donut(power_status: Dict) -> go.Figure:
         x=0.5, y=0.5,
         font=dict(size=20, color='white'),
         showarrow=False,
+    )
+
+    # 시뮬레이션 값임을 표기 (실측 아님)
+    fig.add_annotation(
+        text="시뮬레이션 추정",
+        x=0, y=1.12,
+        xref="paper", yref="paper",
+        showarrow=False,
+        font=dict(size=11, color='#f59e0b'),
     )
 
     fig.update_layout(
@@ -2187,6 +2336,16 @@ def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
         x=current_hour,
         line_dash="dash",
         line_color="#10b981",
+    )
+
+    # 시뮬레이션 값임을 표기 (실측 아님)
+    fig.add_annotation(
+        text="시뮬레이션 추정치 (실측 아님)",
+        x=0.99, y=1.12,
+        xref="paper", yref="paper",
+        xanchor="right",
+        showarrow=False,
+        font=dict(size=11, color='#f59e0b'),
     )
 
     fig.update_layout(
@@ -2339,12 +2498,12 @@ def main():
                 </span>
             </div>
         </div>
-        <div style="text-align: right; color: white;">
-            <div style="font-size: 0.9rem; opacity: 0.8;">마지막 업데이트</div>
-            <div style="font-size: 1.2rem; font-weight: bold;">
+        <div class="header-meta">
+            <div class="header-meta-label">화면 갱신 시각</div>
+            <div class="header-meta-time">
                 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             </div>
-            <div style="font-size: 0.75rem; opacity: 0.6; margin-top: 3px;">
+            <div class="header-meta-source">
                 SMP: {smp_data.get('record_count', 0):,}건 | 수요: {power_source}
             </div>
         </div>
@@ -2450,6 +2609,11 @@ def main():
     # ========== 상단 메트릭 카드 ==========
     col1, col2, col3, col4, col5 = st.columns(5)
 
+    # 수요 데이터 관측 시각·경과 시간 (EPSIS 파일 데이터는 며칠 묵은 값일 수 있음)
+    demand_observed_text, demand_elapsed_text = _format_observation_age(
+        power_status.get('data_date', 'N/A')
+    )
+
     with col1:
         st.markdown(f"""
         <div class="info-card">
@@ -2458,17 +2622,28 @@ def main():
             <div class="info-card-change">
                 <span class="status-badge {reserve_class}">예비율 {reserve_rate:.1f}% ({reserve_text})</span>
             </div>
+            <div class="info-card-meta" style="font-size: 0.7rem; color: #64748B; margin-top: 4px;">
+                관측: {demand_observed_text} · {demand_elapsed_text}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
-        smp_change_class = "positive" if smp_data['change'] >= 0 else "negative"
-        smp_arrow = "↑" if smp_data['change'] >= 0 else "↓"
+        # 이전 시간 실측값이 없으면 화살표/변화율 대신 안내 문구를 표시한다
+        if smp_data.get('prev_available', False) and smp_data['change'] is not None:
+            smp_change_class = "positive" if smp_data['change'] >= 0 else "negative"
+            smp_arrow = "↑" if smp_data['change'] >= 0 else "↓"
+            smp_change_html = (
+                f'{smp_arrow} {abs(smp_data["change"]):.1f}원 ({smp_data["change_pct"]:+.1f}%)'
+            )
+        else:
+            smp_change_class = ""
+            smp_change_html = "이전 시간 데이터 없음"
         st.markdown(f"""
         <div class="info-card">
-            <div class="info-card-title">현재 SMP (제주)</div>
+            <div class="info-card-title">최근 SMP (제주)</div>
             <div class="info-card-value">{smp_data['current']} <span style="font-size: 1rem;">원</span></div>
-            <div class="info-card-change {smp_change_class}">{smp_arrow} {abs(smp_data['change']):.1f}원 ({smp_data['change_pct']:+.1f}%)</div>
+            <div class="info-card-change {smp_change_class}">{smp_change_html}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2477,7 +2652,7 @@ def main():
         <div class="info-card">
             <div class="info-card-title">재생에너지 비율</div>
             <div class="info-card-value">{power_status['renewable_ratio']:.1f} <span style="font-size: 1rem;">%</span></div>
-            <div class="info-card-change">태양광 + 풍력</div>
+            <div class="info-card-change">태양광 + 풍력 (추정치)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2486,7 +2661,7 @@ def main():
         <div class="info-card">
             <div class="info-card-title">계통 주파수</div>
             <div class="info-card-value">{power_status['frequency']:.2f} <span style="font-size: 1rem;">Hz</span></div>
-            <div class="info-card-change"><span class="status-badge status-online">정상</span></div>
+            <div class="info-card-change"><span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2496,6 +2671,7 @@ def main():
             <div class="info-card-title">기상 현황</div>
             <div class="info-card-value">{weather['temperature']:.0f} <span style="font-size: 1rem;">°C</span></div>
             <div class="info-card-change">풍속 {weather['wind_speed']:.1f} m/s</div>
+            <div class="info-card-change"><span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2539,7 +2715,8 @@ def main():
                     title='예비율 (%)',
                     max_val=30,
                     color=reserve_color,
-                    suffix='%'
+                    suffix='%',
+                    reserve=True
                 )
                 st.plotly_chart(reserve_gauge, width="stretch")
 
@@ -2595,10 +2772,10 @@ def main():
                         {optimal_bid:.1f} 원/kWh
                     </div>
                     <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">
-                        현재가 대비 5% 할인
+                        예시: 현재가에 고정 할인율 5% 적용 (최적화 결과 아님)
                     </div>
                     <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                        <div style="font-size: 0.8rem; color: #94a3b8;">예상 낙찰 확률</div>
+                        <div style="font-size: 0.8rem; color: #94a3b8;">낙찰 확률 예시 (고정값, 실제 낙찰 확률 아님)</div>
                         <div style="font-size: 1.2rem; font-weight: bold; color: #fbbf24;">85%</div>
                     </div>
                 </div>
@@ -2611,14 +2788,14 @@ def main():
 
         with col_donut:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.markdown("### ⚡ 전력 공급 구성")
+            st.markdown("### ⚡ 전력 공급 구성 (시뮬레이션 추정)")
             fig = create_supply_donut(power_status)
             st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_timeline:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.markdown("### 📊 시간대별 발전량")
+            st.markdown("### 📊 시간대별 발전량 (시뮬레이션)")
             fig = create_generation_timeline(plants_df)
             st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -2661,16 +2838,13 @@ def main():
             <div class="info-card">
                 <div class="info-card-title">🧠 XAI 분석 요약</div>
                 <div style="margin-top: 15px; color: white;">
-                    <p><strong>모델 예측 근거:</strong></p>
+                    <p><strong>예시 (실제 모델 분석 결과 아님)</strong></p>
                     <ul style="color: #94a3b8; margin: 10px 0;">
                         <li>기온 상승 (+2°C) → 수요 증가 영향 15%</li>
                         <li>일사량 감소 → 태양광 발전 감소 예상</li>
                         <li>풍속 증가 → 풍력 발전 증가 기대</li>
                         <li>과거 동일 시간대 패턴 반영 40%</li>
                     </ul>
-                    <p style="font-size: 0.85rem; color: #94a3b8;">
-                        * Attention 가중치 기반 분석 결과
-                    </p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -2679,6 +2853,7 @@ def main():
             <div class="info-card">
                 <div class="info-card-title">📊 모델 성능</div>
                 <div style="margin-top: 15px;">
+                    <p style="color: #cbd5e1;">고정 참고값 (평가 조건 미확인, 현재 예측 성능 아님)</p>
                     <div style="display: flex; justify-content: space-between; margin: 10px 0; color: white;">
                         <span style="color: #94a3b8;">MAPE</span>
                         <span style="color: #10b981; font-weight: bold;">10.68%</span>
@@ -2704,6 +2879,7 @@ def main():
             <div class="info-card">
                 <div class="info-card-title">⚠️ 리스크 알림</div>
                 <div style="margin-top: 15px;">
+                    <p style="color: #cbd5e1;">예시 (실제 운영 경보 또는 입찰 권고 아님)</p>
                     <div style="background: rgba(245, 158, 11, 0.2); border-left: 3px solid #f59e0b;
                                 padding: 10px; margin: 10px 0; border-radius: 0 8px 8px 0;">
                         <div style="color: #f59e0b; font-weight: bold;">덕커브 주의</div>
@@ -2733,6 +2909,7 @@ def main():
             <div class="info-card">
                 <div class="info-card-title">📈 일간 요약</div>
                 <div style="margin-top: 15px; color: white;">
+                    <p style="color: #cbd5e1;">고정 예시 (실제 일간 집계 아님)</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div style="text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
                             <div style="color: #94a3b8; font-size: 0.8rem;">총 발전량</div>
@@ -2760,7 +2937,8 @@ def main():
     <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.85rem;">
         <p>제주 전력 지도 v4.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
         <p style="font-size: 0.75rem;">
-            데이터 출처: EPSIS, 기상청 AMOS | 모델: LSTM + Quantile Regression
+            데이터 출처: EPSIS, KPX | 모델: LSTM + Quantile Regression<br>
+            (기상·발전량 비율 등 일부 지표는 추정치 포함)
         </p>
     </div>
     """, unsafe_allow_html=True)

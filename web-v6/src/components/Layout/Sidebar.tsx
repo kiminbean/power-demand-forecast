@@ -34,10 +34,10 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-64 bg-secondary border-r border-border flex flex-col transition-colors duration-200">
+    <aside className="w-16 shrink-0 md:w-64 bg-secondary border-r border-border flex flex-col transition-colors duration-200">
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2">
+      <nav className="flex-1 p-2 md:p-4 space-y-1">
+        <div className="hidden md:block text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2">
           메인
         </div>
         {navItems.slice(0, 5).map((item) => (
@@ -49,16 +49,16 @@ export default function Sidebar() {
             }
           >
             {item.icon}
-            <span className="flex-1">{item.label}</span>
+            <span className="sr-only md:not-sr-only md:flex-1">{item.label}</span>
             {item.badge && (
-              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-primary/20 text-primary rounded">
+              <span className="hidden md:inline px-1.5 py-0.5 text-[10px] font-bold bg-primary/20 text-primary rounded">
                 {item.badge}
               </span>
             )}
           </NavLink>
         ))}
 
-        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2 mt-4">
+        <div className="hidden md:block text-xs font-semibold text-text-muted uppercase tracking-wider px-4 py-2 mt-4">
           분석
         </div>
         {navItems.slice(5).map((item) => (
@@ -70,13 +70,13 @@ export default function Sidebar() {
             }
           >
             {item.icon}
-            <span className="flex-1">{item.label}</span>
+            <span className="sr-only md:not-sr-only md:flex-1">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border">
+      <div className="hidden md:block p-4 border-t border-border">
         <div className="card p-3 bg-background">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
