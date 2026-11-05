@@ -12,6 +12,8 @@ import type {
   SettlementRecord,
   SettlementStats,
   ModelInfo,
+  DayAheadSMP,
+  PowerSupplyResponse,
   RTMPrediction,
   RTMMultiPrediction,
   RTMModelInfo,
@@ -66,6 +68,16 @@ class ApiService {
   // Resources Portfolio (Jeju Power Plants)
   async getResources(): Promise<Resource[]> {
     return this.fetch('/resources');
+  }
+
+  // KPX 제주 하루전시장 SMP (현재 거래시간) — v7·모바일과 같은 원천
+  async getDayAheadSMP(): Promise<DayAheadSMP> {
+    return this.fetch('/smp/day-ahead');
+  }
+
+  // 전력수급 24시간 (v7 차트와 같은 원천)
+  async getPowerSupply(): Promise<PowerSupplyResponse> {
+    return this.fetch('/power-supply');
   }
 
   // AI-Optimized Bid Segments
@@ -188,8 +200,8 @@ export const mockData = {
       q10,
       q50,
       q90,
-      model_used: 'BiLSTM+Attention v3.2 Optuna',
-      confidence: 0.87,
+      model_used: 'BiLSTM+Attention v3.2 Optuna (데모)',
+      confidence: null,
       created_at: new Date().toISOString(),
     };
   },
@@ -241,8 +253,9 @@ export const mockData = {
       version: 'v3.2',
       type: 'BiLSTM+Attention (Optuna)',
       device: 'MPS',
-      mape: 7.17,
-      coverage: 94.5,
+      // 누수 시절 지표(7.17%)·근거 없는 coverage는 표시하지 않는다.
+      mape: null,
+      coverage: null,
     };
   },
 

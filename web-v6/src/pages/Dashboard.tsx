@@ -23,8 +23,20 @@ import {
   useMarketStatus,
   useResources,
   useAutoRefresh,
+  useDayAheadSMP,
+  usePowerSupply,
+  useModelInfo,
 } from '../hooks/useApi';
+import type { PowerChartData } from '../types';
 import clsx from 'clsx';
+
+// KPX 예비율 경보 기준 (Streamlit 대시보드와 동일)
+function reserveLevel(rate: number) {
+  if (rate < 5) return '위험';
+  if (rate < 10) return '주의';
+  if (rate < 15) return '관심';
+  return '정상';
+}
 
 interface MarketBadgeProps {
   market: 'DAM' | 'RTM';
@@ -68,12 +80,33 @@ export default function Dashboard() {
   const { data: smpForecast, error: forecastError, refetch: refetchSMP } = useSMPForecast();
   const { data: marketStatus, error: marketError } = useMarketStatus();
   const { data: resources, error: resourcesError } = useResources();
+  const { data: dayAhead, error: dayAheadError, refetch: refetchDayAhead } = useDayAheadSMP();
+  const { data: powerSupply, error: powerSupplyError } = usePowerSupply();
+  const { data: modelInfo } = useModelInfo();
 
   // Auto refresh every 60 seconds
   useAutoRefresh(() => {
     refetchKPIs();
     refetchSMP();
+    refetchDayAhead();
   }, 60000);
+
+  const powerChartData: PowerChartData[] = powerSupply?.data.map((d) => ({
+    time: d.time,
+    demand: d.demand,
+    supply: d.supply,
+    reserve: d.supply - d.demand,
+    solar: d.solar,
+    wind: d.wind,
+    forecast: d.is_forecast,
+  })) ?? [];
+  // 응답 일부가 빠져도 페이지가 깨지지 않도록 숫자일 때만 쓴다.
+  const reserveRate = !kpiError && typeof kpis?.supply_reserve_rate === 'number' ? kpis.supply_reserve_rate : undefined;
+  const utilization = !kpiError && typeof kpis?.utilization_pct === 'number' ? kpis.utilization_pct : undefined;
+  // 예측 배열의 인덱스 i는 i시~i+1시 구간(거래시간 i+1)이며 v5·모바일과 같이 시작 시각으로 표기한다.
+  const forecastPeak = smpForecast && !forecastError && smpForecast.q50.length > 0
+    ? smpForecast.q50.reduce((best, v, i) => (v > best.value ? { hour: i, value: v } : best), { hour: 0, value: smpForecast.q50[0] })
+    : null;
 
   // Calculate resource stats
   const resourceStats = resources
@@ -89,9 +122,11 @@ export default function Dashboard() {
       }
     : null;
 
-  const currentSMP = kpiError ? null : kpis?.current_smp;
+  // v7·모바일과 같은 KPX 제주 하루전시장 현재 거래시간 가격
+  const currentSMP = !dayAheadError && dayAhead?.status === 'available' ? dayAhead.current_smp : null;
   const solarOutput = resourcesError ? undefined : resourceStats?.solarOutput;
-  const errors = [kpiError && 'KPI', forecastError && 'SMP 예측', marketError && '시장 상태', resourcesError && '발전소'].filter(Boolean);
+  const windOutput = resourcesError ? undefined : resourceStats?.windOutput;
+  const errors = [kpiError && 'KPI', forecastError && 'SMP 예측', marketError && '시장 상태', resourcesError && '발전소', powerSupplyError && '전력수급'].filter(Boolean);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -127,7 +162,7 @@ export default function Dashboard() {
         </div>
       )}
       {kpis?.data_source && !kpiError && (
-        <p className="text-xs text-text-muted">KPI 데이터 출처: {kpis.data_source} (SMP는 과거값 또는 기본값일 수 있음)</p>
+        <p className="text-xs text-text-muted">KPI 데이터 출처: {kpis.data_source} · SMP: {dayAhead?.data_source ?? '확인 불가'}</p>
       )}
 
       {/* Market Status */}
@@ -148,18 +183,16 @@ export default function Dashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title="SMP (KPI 제공값)"
+          title={dayAhead?.trade_hour != null ? `제주 하루전시장 SMP (${String(dayAhead.trade_hour).padStart(2, '0')}h)` : '제주 하루전시장 SMP'}
           value={currentSMP != null ? currentSMP.toFixed(1) : '—'}
           unit="원/kWh"
-          change={kpiError ? undefined : kpis?.smp_change_pct}
           icon={DollarSign}
           color="smp"
         />
         <KPICard
           title="총 발전량 (시뮬레이션)"
-          value={resourceStats?.currentOutput.toFixed(1) ?? kpis?.current_output_mw ?? 0}
+          value={resourcesError ? '—' : resourceStats?.currentOutput.toFixed(1) ?? '—'}
           unit="MW"
-          change={kpis?.revenue_change_pct}
           icon={Zap}
           color="primary"
         />
@@ -172,7 +205,7 @@ export default function Dashboard() {
         />
         <KPICard
           title="풍력 발전 (시뮬레이션)"
-          value={resourceStats?.windOutput.toFixed(1) ?? 123.3}
+          value={windOutput?.toFixed(1) ?? '—'}
           unit="MW"
           icon={Wind}
           color="wind"
@@ -187,11 +220,14 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-text-primary">전력수급 현황</h2>
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
-                예시 데이터
+                {powerChartData.length > 0 ? '패턴·예측' : '데모 데이터'}
               </span>
             </div>
           </div>
-          <PowerSupplyChart data={[]} height={280} />
+          {powerSupply?.data_source && (
+            <p className="text-xs text-text-muted mb-2">출처: {powerSupply.data_source}</p>
+          )}
+          <PowerSupplyChart data={powerChartData} height={280} />
         </div>
 
         {/* SMP Forecast Chart */}
@@ -202,7 +238,10 @@ export default function Dashboard() {
               <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
                 {forecastError ? '데모 데이터' : smpForecast?.model_used ?? '데이터 없음'}
               </span>
-              {smpForecast && (
+              {smpForecast?.forecast_date && !forecastError && (
+                <span className="text-xs text-text-muted">예측일 {smpForecast.forecast_date}</span>
+              )}
+              {smpForecast?.confidence != null && (
                 <span className="text-xs text-text-muted">
                   신뢰도: {(smpForecast.confidence * 100).toFixed(0)}%
                 </span>
@@ -227,13 +266,13 @@ export default function Dashboard() {
                 <div>
                   <div className="text-text-primary font-medium">풍력 발전소</div>
                   <div className="text-sm text-text-muted">
-                    {resources?.filter((r) => r.type === 'wind').length ?? 14}개 운영중
+                    {resourcesError || !resources ? '정보 없음' : `${resources.filter((r) => r.type === 'wind').length}개 운영중`}
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-wind font-bold">
-                  {resourceStats?.windOutput.toFixed(1) ?? 123.3} MW
+                  {windOutput?.toFixed(1) ?? '—'} MW
                 </div>
               </div>
             </div>
@@ -261,48 +300,39 @@ export default function Dashboard() {
 
         {/* Daily Stats */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-text-primary mb-4">일일 실적 (일부 예시)</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-4">일일 실적</h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-text-muted">예상 수익</span>
                 <span className="text-success font-mono">
-                  {(kpis?.daily_revenue_million ?? 245.8).toFixed(1)}백만원
+                  {!kpiError && typeof kpis?.daily_revenue_million === 'number' ? `${kpis.daily_revenue_million.toFixed(1)}백만원` : '산출 불가'}
                 </span>
               </div>
-              <div className="h-2 bg-background rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-success rounded-full"
-                  style={{ width: '78%' }}
-                />
-              </div>
+              <p className="text-xs text-text-muted">실제 발전량·정산 데이터가 없어 산출하지 않습니다.</p>
             </div>
 
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-text-muted">설비 가동률</span>
+                <span className="text-text-muted">설비 가동률 (시뮬레이션)</span>
                 <span className="text-primary font-mono">
-                  {(kpis?.utilization_pct ?? 74.9).toFixed(1)}%
+                  {utilization != null ? `${utilization.toFixed(1)}%` : '—'}
                 </span>
               </div>
               <div className="h-2 bg-background rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full"
-                  style={{ width: `${kpis?.utilization_pct ?? 74.9}%` }}
+                  style={{ width: `${utilization != null ? Math.min(100, utilization) : 0}%` }}
                 />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-text-muted">예측 정확도</span>
-                <span className="text-smp font-mono">94.5%</span>
-              </div>
-              <div className="h-2 bg-background rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-smp rounded-full"
-                  style={{ width: '94.5%' }}
-                />
+                <span className="text-text-muted">SMP 예측 정확도</span>
+                <span className="text-smp font-mono">
+                  {typeof modelInfo?.mape === 'number' ? `MAPE ${modelInfo.mape.toFixed(2)}%` : '재검증 전'}
+                </span>
               </div>
             </div>
           </div>
@@ -311,9 +341,9 @@ export default function Dashboard() {
         {/* Alerts */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-text-primary">알림 (예시)</h3>
+            <h3 className="text-lg font-semibold text-text-primary">알림</h3>
             <span className="px-2 py-1 text-xs bg-success/20 text-success rounded">
-              정상
+              {reserveRate != null ? reserveLevel(reserveRate) : '확인 불가'}
             </span>
           </div>
           <div className="space-y-3">
@@ -321,9 +351,11 @@ export default function Dashboard() {
               <Battery className="w-5 h-5 text-success mt-0.5" />
               <div>
                 <div className="text-text-primary text-sm font-medium">
-                  예비율 정상 범위
+                  {reserveRate != null ? `예비율 ${reserveLevel(reserveRate)}` : '예비율 확인 불가'}
                 </div>
-                <div className="text-text-muted text-xs">현재 예비율 127%</div>
+                <div className="text-text-muted text-xs">
+                  {reserveRate != null ? `현재 예비율 ${reserveRate.toFixed(1)}%` : 'KPI 데이터 없음'}
+                </div>
               </div>
             </div>
 
@@ -331,9 +363,11 @@ export default function Dashboard() {
               <BarChart3 className="w-5 h-5 text-primary mt-0.5" />
               <div>
                 <div className="text-text-primary text-sm font-medium">
-                  SMP 예측 모델 업데이트
+                  SMP 예측 모델
                 </div>
-                <div className="text-text-muted text-xs">v3.1 모델 적용됨</div>
+                <div className="text-text-muted text-xs">
+                  {modelInfo ? `${modelInfo.version} 사용 중 · ${modelInfo.status}` : '모델 정보 없음'}
+                </div>
               </div>
             </div>
 
@@ -341,9 +375,11 @@ export default function Dashboard() {
               <TrendingUp className="w-5 h-5 text-text-muted mt-0.5" />
               <div>
                 <div className="text-text-primary text-sm font-medium">
-                  오후 피크 예상
+                  예측 최고 SMP
                 </div>
-                <div className="text-text-muted text-xs">14:00-16:00 SMP 상승 예상</div>
+                <div className="text-text-muted text-xs">
+                  {forecastPeak ? `${forecastPeak.hour}시 ${forecastPeak.value.toFixed(1)}원/kWh${smpForecast?.forecast_date ? ` (${smpForecast.forecast_date})` : ''}` : '예측 데이터 없음'}
+                </div>
               </div>
             </div>
           </div>

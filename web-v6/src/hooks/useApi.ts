@@ -10,6 +10,8 @@ import type {
   DashboardKPIs,
   Resource,
   ModelInfo,
+  DayAheadSMP,
+  PowerSupplyResponse,
   SettlementRecord,
   SettlementStats,
   OptimizedBids,
@@ -85,6 +87,15 @@ export function useResources(): UseApiState<Resource[]> {
     () => apiService.getResources(),
     () => mockData.getResources()
   );
+}
+
+// 하루전시장 SMP·전력수급은 오류 시 가짜 값을 만들지 않고 null(데이터 없음)로 둔다.
+export function useDayAheadSMP(): UseApiState<DayAheadSMP | null> {
+  return useApiData<DayAheadSMP | null>(() => apiService.getDayAheadSMP(), () => null);
+}
+
+export function usePowerSupply(): UseApiState<PowerSupplyResponse | null> {
+  return useApiData<PowerSupplyResponse | null>(() => apiService.getPowerSupply(), () => null);
 }
 
 // Model Info Hook

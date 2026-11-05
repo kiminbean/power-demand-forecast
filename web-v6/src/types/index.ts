@@ -7,9 +7,40 @@ export interface SMPForecast {
   q10: number[];
   q50: number[];
   q90: number[];
+  hours?: number[];
   model_used: string;
-  confidence: number;
+  // 검증된 지표가 없으면 null (v3.2는 성능 재검증 전)
+  confidence: number | null;
   created_at: string;
+  forecast_date?: string | null;
+}
+
+// 제주 하루전시장 SMP (KPX 공식, 현재 거래시간)
+export interface DayAheadSMP {
+  status: 'available' | 'no_data';
+  current_smp: number | null;
+  trade_day: string | null;
+  trade_hour: number | null;
+  market_type: 'day_ahead';
+  data_source: string | null;
+  source_url: string | null;
+}
+
+// 전력수급 (EPSIS 패턴 + 재생에너지 예측)
+export interface PowerSupplyHour {
+  hour: number;
+  time: string;
+  supply: number;
+  demand: number;
+  solar: number;
+  wind: number;
+  is_forecast: boolean;
+}
+
+export interface PowerSupplyResponse {
+  current_hour: number;
+  data: PowerSupplyHour[];
+  data_source: string;
 }
 
 // Market Status
@@ -33,10 +64,12 @@ export interface DashboardKPIs {
   total_capacity_mw: number;
   current_output_mw: number;
   utilization_pct: number;
-  daily_revenue_million: number;
-  revenue_change_pct: number;
-  current_smp: number;
-  smp_change_pct: number;
+  daily_revenue_million: number | null;
+  revenue_change_pct: number | null;
+  current_smp: number | null;
+  smp_change_pct: number | null;
+  supply_reserve_rate?: number;
+  current_demand_mw?: number;
   resource_count: number;
   data_source?: string;
 }
@@ -119,8 +152,8 @@ export interface ModelInfo {
   version: string;
   type?: string;
   device?: string;
-  mape?: number | string;
-  coverage?: number | string;
+  mape?: number | string | null;
+  coverage?: number | string | null;
   message?: string;
 }
 

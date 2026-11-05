@@ -118,7 +118,9 @@ export default function SMPPrediction() {
               <span className="text-sm text-text-muted whitespace-nowrap">
                 {modelInfo.type} {modelInfo.version}
               </span>
-              <span className="text-xs text-success whitespace-nowrap">MAPE: {modelInfo.mape}%</span>
+              <span className="text-xs text-success whitespace-nowrap">
+                {typeof modelInfo.mape === 'number' ? `MAPE: ${modelInfo.mape}%` : 'MAPE 재검증 전'}
+              </span>
             </div>
           )}
           <button
@@ -141,7 +143,8 @@ export default function SMPPrediction() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="card">
-            <p className="text-sm text-text-muted mb-1">현재 SMP</p>
+            {/* q50[i]는 i시~i+1시 구간의 예측값이며 실제 공표 가격이 아니다. */}
+            <p className="text-sm text-text-muted mb-1">예측 SMP ({currentHour}시)</p>
             <div className="text-2xl font-bold text-smp">{stats.current.toFixed(1)}</div>
             <p className="text-xs text-text-muted">원/kWh</p>
           </div>
@@ -169,9 +172,9 @@ export default function SMPPrediction() {
           <div className="card">
             <p className="text-sm text-text-muted mb-1">신뢰도</p>
             <div className="text-2xl font-bold text-primary">
-              {((forecast?.confidence ?? 0.87) * 100).toFixed(0)}%
+              {forecast?.confidence != null ? `${(forecast.confidence * 100).toFixed(0)}%` : '재검증 전'}
             </div>
-            <p className="text-xs text-text-muted">AI 모델</p>
+            <p className="text-xs text-text-muted">{forecast?.forecast_date ? `예측일 ${forecast.forecast_date}` : 'AI 모델'}</p>
           </div>
           <div className="card">
             <p className="text-sm text-text-muted mb-1">업데이트</p>
