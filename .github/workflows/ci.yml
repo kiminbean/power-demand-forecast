@@ -204,6 +204,45 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/src
 
   # ----------------------------------------
+  # Web v7 Dashboard (TypeScript + browser regression)
+  # ----------------------------------------
+  web-v7:
+    name: Web v7 (tsc + build + regression)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-v7/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-v7
+        run: npm ci
+
+      - name: Type check and build
+        working-directory: web-v7
+        run: npm run build:check
+
+      # Browser tests use puppeteer-core, which needs an explicit Chrome path
+      - name: Install Chrome for browser tests
+        working-directory: web-v7
+        run: |
+          OUT=$(npx -y @puppeteer/browsers install chrome@stable --path "$HOME/browsers")
+          BIN=$(echo "$OUT" | tail -n 1 | awk '{print $NF}')
+          echo "CHROME_BIN=$BIN" >> "$GITHUB_ENV"
+          echo "Installed Chrome at $BIN"
+
+      - name: Run Node regression tests
+        working-directory: web-v7
+        run: node --test *.test.mjs
+
+  # ----------------------------------------
   # Build Verification
   # ----------------------------------------
   build:
