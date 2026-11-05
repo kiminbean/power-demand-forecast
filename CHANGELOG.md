@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-11-05
+
+### Fixed
+- **SMP 스케일러 데이터 누수**: 시간 분할 이전에 스케일러를 fit하던 누수 수정 — SMP 학습 스크립트 3종이 공통 헬퍼(`src/smp/models/time_split_scaling.py`)로 분할 이후 train 슬라이스에만 fit. `np.save`(dict) 예외는 `np.savez`로 수정.
+- **SMP 3개 모델 재학습(누수 수정 코드)**: v4.0 test MAPE 17.17%·R² 0.124·커버리지 77.5%, v4.1 walk-forward 평균 MAPE 8.76%·R² 0.463·MAE 10.53원/kWh·커버리지 68.6%, v3.4 test MAPE 21.28%·R² -0.537(사용 보류). 재학습 전 수치(MAPE 7.83%·R² 0.736 등)는 누수로 부풀려져 무효. 누수 버전 기준치는 `models/_pre_retrain_backup_2026-11-05/`에 보관.
+- **평가 지표 통일**: 구간 MAPE를 zero-denominator 정책을 갖는 WMAPE로 통일.
+
+### Changed
+- **문서 정정**: 멘토링 문서 2종(`docs/mentor-tech-explainer.html`·`docs/mentoring_study_hub.html`)의 SMP 수치를 원본 메트릭 기준으로 정정하고 hub 표면 정리(강조색 축소·표 행 구분선만·오탈자 수정). 구 수치가 남아 있던 기술문서(RE-BMS v5/v6, BiLSTM v3.1, system_architecture)와 CLAUDE.md, CHANGELOG에 무효 명시+현행값 병기.
+- **정산 결과 구분**: 모의계산 결과에 `is_simulated`/`data_source` 배지 추가로 실계산·모의계산 구분.
+- 웹 v7 라우팅·CI 복구, rolling-origin 평가 도구 추가.
+
 ## [4.0.4] - 2025-12-19
 
 ### Highlights

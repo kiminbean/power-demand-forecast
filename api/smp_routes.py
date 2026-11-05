@@ -3,11 +3,11 @@ SMP API Routes
 ===============
 
 SMP 예측 및 분석 API 엔드포인트
-실제 학습된 모델 (v3.2 Optuna BiLSTM+Attention) 연동
+SMP quantile 모델 (v4.1, 2026-11-05 재학습) 연동
 
-v3.2 모델 성능:
-- MAPE: 7.17% (v3.1: 7.83% → 0.66%p 개선)
-- R²: 0.77 (v3.1: 0.74 → 0.03 개선)
+v4.1 모델 성능(스케일러 누수 수정 후 재평가):
+- MAPE: walk-forward 평균 8.76% (구버전 7%대 수치는 누수로 무효)
+- R²: 0.463 (구버전 0.7대 수치는 누수로 무효)
 """
 
 import logging
@@ -119,9 +119,9 @@ def get_real_smp_prediction(hours: int = 24) -> dict:
                 'q10': result['q10'][:hours],
                 'q50': result['q50'][:hours],
                 'q90': result['q90'][:hours],
-                'model_used': result.get('model_used', 'v3.2'),
-                'mape': result.get('mape', 7.17),
-                'coverage': result.get('coverage', 89.4),
+                'model_used': result.get('model_used', 'v4.1'),
+                'mape': result.get('mape', 8.76),
+                'coverage': result.get('coverage', 68.6),
             }
         except Exception as e:
             logger.error(f"모델 예측 실패, 폴백 사용: {e}")
@@ -194,8 +194,8 @@ async def predict_smp(request: SMPPredictionRequest):
 
         # 실제 모델 사용 시 추가 정보 (문자열로 변환)
         if model_used != 'fallback':
-            model_info["mape"] = str(prediction.get('mape', 7.83))
-            model_info["coverage_80"] = str(prediction.get('coverage', 89.4))
+            model_info["mape"] = str(prediction.get('mape', 8.76))
+            model_info["coverage_80"] = str(prediction.get('coverage', 68.6))
             model_info["quantiles"] = "0.1, 0.5, 0.9"
 
         return SMPPredictionResponse(
@@ -278,9 +278,9 @@ async def get_model_info():
         info = predictor.get_model_info()
         return {
             "status": "ready",
-            "model": "BiLSTM+Attention (v3.2 Optuna)",
-            "mape": 7.17,
-            "coverage_80": 89.4,
+            "model": "SMP quantile (v4.1, 2026-11-05 재학습)",
+            "mape": 8.76,
+            "coverage_80": 68.6,
             "features": 22,
             "quantiles": [0.1, 0.5, 0.9],
             "details": info,

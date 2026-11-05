@@ -11,7 +11,10 @@
 BiLSTM+Attention v3.1은 제주도 전력시장의 **계통한계가격(SMP)**을 예측하는 딥러닝 모델입니다. 양방향 LSTM과 Multi-Head Self-Attention 메커니즘을 결합하여 시계열 패턴을 학습하고, Quantile Regression을 통해 예측 불확실성을 정량화합니다.
 
 ### Key Metrics
-| Metric | Value | Description |
+
+> **⚠️ 무효 수치 — 2026-11-05 재평가**: 아래 수치는 스케일러 누수(시간 분할 전 스케일러 fit)로 부풀려져 신뢰할 수 없다. v3.1 계열은 더 이상 사용하지 않는다. 현재 생산 모델 v4.1의 시간외(walk-forward) 재평가 지표: **MAPE 8.76% · R² 0.463 · 80% 구간 커버리지 68.6%**(`models/smp_v4/smp_v41_metrics.json`, 경위 `docs/2026-11-02-forecast-upgrade-status.md`).
+
+| Metric | Value(구버전·무효) | Description |
 |--------|-------|-------------|
 | **MAPE** | 7.83% | Mean Absolute Percentage Error |
 | **RMSE** | 12.02원 | Root Mean Square Error |
@@ -277,6 +280,8 @@ result = optimizer.optimize_hourly_bids(capacity_mw=50, risk_level='moderate')
 ---
 
 ## 8. Performance Comparison
+
+> **⚠️ 무효 수치 — 2026-11-05 재평가**: 아래 비교 수치 전체가 스케일러 누수로 부풀려져 신뢰할 수 없다. 누수 수정 후 재학습된 현재 생산 모델(v4.1)의 walk-forward 지표는 MAPE 8.76%·R² 0.463·커버리지 68.6%다(`models/smp_v4/smp_v41_metrics.json`).
 
 | Model Version | MAPE | R² | Coverage | Parameters |
 |---------------|------|-----|----------|------------|

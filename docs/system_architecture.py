@@ -183,7 +183,7 @@ def create_system_architecture():
     # LEGEND
     # ============================================================
     legend_y = 0.3
-    ax.text(1, legend_y, '⭐ Key: BiLSTM+Attention v3.1 = SMP 예측 핵심 모델 (MAPE 7.83%)',
+    ax.text(1, legend_y, '⭐ Key: SMP 예측 v4.1 (2026-11-05 재학습) walk-forward MAPE 8.76% — 구 v3.1 수치는 누수로 무효',
            fontsize=10, color='#1565C0', fontweight='bold')
 
     # Save

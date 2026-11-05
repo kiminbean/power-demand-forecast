@@ -171,17 +171,16 @@ find ~/.claude -name "*.json" -exec grep -l '[가-힣]' {} \; 2>/dev/null
 
 ## SMP Model Improvement Roadmap (R² 0.9+ Target)
 
-**Last Updated**: 2025-12-26 (v3.2 Optuna completed)
+**Last Updated**: 2026-11-05 (SMP 스케일러 누수 수정·재학습 이후 재평가)
 
 ### Current Status
 
 | Model Version | MAPE | R² | Status |
 |---------------|------|-----|--------|
-| v3.1 (baseline) | 7.83% | 0.736 | Baseline |
-| **v3.2 (Optuna)** | **7.42%** | **0.760** | ✅ **Best (Current)** |
-| v5.0 (Transformer) | 8.25% | 0.537 | Rejected (unsuitable for data size) |
-| v6.0 (BiLSTM+Weather) | 7.83% | 0.707 | Comparable |
-| v7.0 (BiLSTM+Full) | 9.62% | 0.57 | Unstable (synthetic data issue) |
+| v1.0~v8.1 (구버전 전체) | 무효 | 무효 | 스케일러 누수(시간 분할 전 fit)로 평가 자체가 무효 — 아래 2025-12-26 표는 역사 기록 |
+| **v4.0 (2026-11-05 재학습)** | 17.17% (test) | 0.124 | 시간외 평가·신뢰 가능하나 성능 미달 |
+| **v4.1 (2026-11-05 재학습, 현재 생산)** | **8.76% (walk-forward 평균)** | **0.463** | 구버전 수치와 직접 비교 불가(평가 방식 상이). MAE 10.53원/kWh·커버리지 68.6% |
+| v3.4 (2026-11-05 재학습) | 21.28% (test) | -0.537 | 사용 보류(일반화 실패) |
 | **Target** | <5% | **0.9+** | Requires power generation data |
 
 ### API Keys Status
@@ -279,9 +278,19 @@ src/crawlers/
 
 ---
 
-## Model Training Results (2025-12-26)
+## Model Training Results
 
-### Latest Experiments
+### 2026-11-05 재학습 결과 (누수 수정 후 · 현재 기준)
+
+| Model | 평가 | MAPE | R² | 비고 |
+|-------|------|------|-----|------|
+| v4.0 | test(시간외) | 17.17% | 0.124 | 80% 구간 커버리지 77.5% |
+| **v4.1** | **walk-forward 평균** | **8.76%** | **0.463** | MAE 10.53원/kWh·커버리지 68.6% — 현재 생산 |
+| v3.4 | test(시간외) | 21.28% | -0.537 | 사용 보류(일반화 실패) |
+
+원본: `models/smp_v4/smp_v4_metrics.json`, `models/smp_v4/smp_v41_metrics.json`, `models/smp_v3_4_kpx/metrics.json`. 경위·누수 버전 백업(`models/_pre_retrain_backup_2026-11-05/`): `docs/2026-11-02-forecast-upgrade-status.md`.
+
+### 2025-12-26 실험 기록 (스케일러 누수 시대 — 수치 무효, 역사 참고용)
 
 | Model | Features | MAPE | R² | Notes |
 |-------|----------|------|-----|-------|

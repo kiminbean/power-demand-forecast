@@ -129,7 +129,7 @@ flowchart TB
 
 | Model | Type | Input | Output | Performance |
 |-------|------|-------|--------|-------------|
-| **SMP Predictor** | BiLSTM+Attention v3.1 | SMP history, Weather, Demand | 24h SMP (q10, q50, q90) | MAPE 7.83% |
+| **SMP Predictor** | 딥러닝 quantile (v4.1, 2026-11-05 재학습) | SMP history, Weather, Demand | 24h SMP (q10, q50, q90) | walk-forward MAPE 8.76% |
 | **Demand Predictor** | BiLSTM | Demand history, Calendar | 24h Demand | MAPE 6.32% |
 | **Solar Predictor** | LightGBM | Weather, Calendar | Solar generation | R² 0.92 |
 | **Wind Estimator** | Rule-based | Wind speed, Capacity | Wind generation | - |

@@ -184,7 +184,7 @@ def create_model_architecture():
     draw_box(2, 1, 5, 1.5, '24h SMP Forecast', colors['result'],
             sublabel='q10, q50, q90 (won/kWh)', highlight=True)
     draw_box(8, 1, 3, 1.5, 'Attention', colors['result'], sublabel='XAI weights')
-    draw_box(11.5, 1, 3, 1.5, 'Metrics', colors['result'], sublabel='MAPE: 7.83%')
+    draw_box(11.5, 1, 3, 1.5, 'Metrics', colors['result'], sublabel='MAPE 7.83% (무효·누수)')
 
     draw_arrow((3.25, 4.8), (3.5, 2.5))
     draw_arrow((6.25, 4.8), (4, 2.5))
@@ -195,7 +195,7 @@ def create_model_architecture():
     # ==========================================================================
     # LEGEND
     # ==========================================================================
-    ax.text(8, 0.2, 'BiLSTM+Attention v3.1 | MAPE: 7.83% | R2: 0.736 | Coverage: 89.4% | Params: 249,952',
+    ax.text(8, 0.2, 'BiLSTM+Attention v3.1 | MAPE: 7.83% | R2: 0.736 | Coverage: 89.4% — 무효 수치(스케일러 누수). 현재 생산 v4.1 walk-forward MAPE 8.76%',
            ha='center', fontsize=9, color='#666666')
 
     plt.tight_layout()
