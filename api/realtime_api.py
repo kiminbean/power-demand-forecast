@@ -19,6 +19,7 @@ Sources:
 """
 
 import os
+import json
 import math
 import httpx
 import logging
@@ -26,6 +27,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
@@ -78,6 +80,8 @@ JEJU_NY = 38
 # Cache TTL (seconds)
 SMP_CACHE_TTL = 300  # 5 minutes
 JEJU_SMP_STALE_MAX_SECONDS = 24 * 3600  # API 실패 시 마지막 검증값을 쓸 수 있는 최대 경과 시간
+# 재시작·API 한도 소진이 겹쳐도 마지막 검증값을 쓸 수 있도록 디스크에도 남긴다.
+JEJU_SMP_LAST_PATH = Path(__file__).resolve().parents[1] / "data" / "smp" / "jeju_rt_smp_last.json"
 POWER_SUPPLY_CACHE_TTL = 60  # 1 minute
 WEATHER_CACHE_TTL = 600  # 10 minutes
 
@@ -160,9 +164,46 @@ class RealtimeAPIClient:
 
         # Cache storage with timestamps
         self._smp_cache: Dict[str, tuple[Any, datetime]] = {}
+        # None이면 호출 시점의 JEJU_SMP_LAST_PATH를 쓴다 (테스트가 모듈 경로를 바꿀 수 있도록).
+        self.jeju_smp_last_path: Optional[Path] = None
         self._power_cache: Optional[tuple[PowerSupplyData, datetime]] = None
         self._weather_cache: Optional[tuple[WeatherData, datetime]] = None
         self._jeju_power_cache: Optional[tuple[Any, datetime]] = None  # Jeju specific
+
+    def _last_jeju_smp_path(self) -> Path:
+        return self.jeju_smp_last_path or JEJU_SMP_LAST_PATH
+
+    def _save_last_jeju_smp(self, data: "SMPData") -> None:
+        """마지막 검증 제주 SMP를 디스크에 남긴다. 실패해도 응답에는 영향을 주지 않는다."""
+        path = self._last_jeju_smp_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({
+                "trade_day": data.trade_day, "trade_hour": data.trade_hour,
+                "smp_land": data.smp_land, "smp_jeju": data.smp_jeju,
+                "data_source": data.data_source, "saved_at": datetime.now().isoformat(),
+            }, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(path)
+        except OSError as exc:
+            logger.warning("Could not persist last Jeju SMP: %s", exc)
+
+    def _load_last_jeju_smp(self) -> Optional["SMPData"]:
+        """24시간 이내에 저장된 유효한 검증값만 돌려준다."""
+        try:
+            saved = json.loads(self._last_jeju_smp_path().read_text(encoding="utf-8"))
+            saved_at = datetime.fromisoformat(saved["saved_at"])
+            values = (saved["smp_land"], saved["smp_jeju"])
+            if (not self._is_cache_valid(saved_at, JEJU_SMP_STALE_MAX_SECONDS)
+                    or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values)
+                    or not isinstance(saved["trade_day"], str) or not isinstance(saved["trade_hour"], int)):
+                return None
+            logger.warning("Jeju SMP API failed; serving last verified price saved at %s", saved_at)
+            return SMPData(trade_day=saved["trade_day"], trade_hour=saved["trade_hour"],
+                           smp_land=float(saved["smp_land"]), smp_jeju=float(saved["smp_jeju"]),
+                           timestamp=saved_at, data_source=str(saved.get("data_source", "KPX 제주시범사업 API")))
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
 
     def _is_cache_valid(self, cache_time: Optional[datetime], ttl_seconds: int) -> bool:
         """Check if cache is still valid"""
@@ -431,6 +472,7 @@ class RealtimeAPIClient:
             smp_data = await self._get_jeju_smp_via_api()
             if smp_data:
                 self._smp_cache[cache_key] = (smp_data, datetime.now())
+                self._save_last_jeju_smp(smp_data)
                 return smp_data
 
         # 제주 가격은 검증된 제주시범사업 API(jsmpRt)만 사용하고 구 KPX API로 대체하지 않는다.
@@ -441,7 +483,7 @@ class RealtimeAPIClient:
             if cached is not None and self._is_cache_valid(cached[1], JEJU_SMP_STALE_MAX_SECONDS):
                 logger.warning("Jeju SMP API failed; serving last verified price from %s", cached[1])
                 return cached[0]
-            return None
+            return self._load_last_jeju_smp()
 
         # 현재 크롤러는 수요예측 표와 추정치를 가격으로 반환할 수 있어 사용하지 않는다.
 
