@@ -56,11 +56,11 @@ def get_smp_predictor():
     if _smp_predictor is None and not _model_load_attempted:
         _model_load_attempted = True
         try:
-            from src.smp.models.smp_predictor import SMPPredictor
-            # v3.2 Optuna 최적화 모델 사용 (MAPE 7.17%, R² 0.77)
-            _smp_predictor = SMPPredictor(use_advanced=True)
+            # 공개 API와 같은 공유 서빙 예측기 (v4.1 우선, v3.2 대체)
+            from src.smp.models.serving import get_serving_smp_predictor
+            _smp_predictor = get_serving_smp_predictor()
             if _smp_predictor.is_ready():
-                logger.info("SMP v3.2 모델 로드 완료 (MAPE: 7.17%, R²: 0.77)")
+                logger.info("SMP 공유 서빙 예측기 준비 완료")
             else:
                 logger.warning("SMP 모델 준비 안됨, 폴백 모드 사용")
                 _smp_predictor = None
@@ -119,9 +119,10 @@ def get_real_smp_prediction(hours: int = 24) -> dict:
                 'q10': result['q10'][:hours],
                 'q50': result['q50'][:hours],
                 'q90': result['q90'][:hours],
-                'model_used': result.get('model_used', 'v4.1'),
-                'mape': result.get('mape', 8.76),
-                'coverage': result.get('coverage', 68.6),
+                'model_used': result.get('model_used'),
+                'model_version': result.get('model_version'),
+                'mape': result.get('mape'),  # v3.2는 검증 지표가 없어 None
+                'coverage': result.get('coverage'),
             }
         except Exception as e:
             logger.error(f"모델 예측 실패, 폴백 사용: {e}")
@@ -188,14 +189,16 @@ async def predict_smp(request: SMPPredictionRequest):
         # 모델 정보 (Dict[str, str] 형식으로 모든 값을 문자열로 변환)
         model_info = {
             "model_type": "BiLSTM+Attention" if model_used != 'fallback' else "fallback",
-            "version": "3.1.0" if model_used != 'fallback' else "demo",
+            "version": str(prediction.get('model_version') or model_used) if model_used != 'fallback' else "demo",
             "mode": "production" if model_used != 'fallback' else "demo",
         }
 
-        # 실제 모델 사용 시 추가 정보 (문자열로 변환)
+        # 실제 모델 사용 시 추가 정보 (문자열로 변환). 검증 지표가 없으면 넣지 않는다.
         if model_used != 'fallback':
-            model_info["mape"] = str(prediction.get('mape', 8.76))
-            model_info["coverage_80"] = str(prediction.get('coverage', 68.6))
+            if prediction.get('mape') is not None:
+                model_info["mape"] = str(round(prediction['mape'], 2))
+            if prediction.get('coverage') is not None:
+                model_info["coverage_80"] = str(round(prediction['coverage'], 1))
             model_info["quantiles"] = "0.1, 0.5, 0.9"
 
         return SMPPredictionResponse(
@@ -275,13 +278,13 @@ async def get_model_info():
     predictor = get_smp_predictor()
 
     if predictor is not None and predictor.is_ready():
-        info = predictor.get_model_info()
+        info = predictor.model_info()
         return {
             "status": "ready",
-            "model": "SMP quantile (v4.1, 2026-11-05 재학습)",
-            "mape": 8.76,
-            "coverage_80": 68.6,
-            "features": 22,
+            "model": info.get("label"),
+            "version": info.get("version"),
+            "mape": info.get("mape"),
+            "coverage_80": info.get("coverage"),
             "quantiles": [0.1, 0.5, 0.9],
             "details": info,
             "timestamp": datetime.now().isoformat(),

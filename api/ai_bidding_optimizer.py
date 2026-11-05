@@ -115,10 +115,11 @@ class AIBiddingOptimizer:
             return self._smp_predictor
 
         try:
-            from src.smp.models.smp_predictor import SMPPredictor
-            self._smp_predictor = SMPPredictor(use_advanced=True)
+            # SMP 예측 페이지와 같은 예측을 쓰도록 공유 서빙 예측기(v4.1 우선, v3.2 대체)를 쓴다.
+            from src.smp.models.serving import get_serving_smp_predictor
+            self._smp_predictor = get_serving_smp_predictor()
             if self._smp_predictor.is_ready():
-                logger.info("AI Bidding: SMP v3.2 model loaded (MAPE: 7.17%, R²: 0.77)")
+                logger.info("AI Bidding: shared SMP serving predictor ready")
                 self._model_loaded = True
             else:
                 logger.warning("AI Bidding: SMP model not ready, using fallback")
@@ -142,8 +143,8 @@ class AIBiddingOptimizer:
                     'q50': result['q50'][:hours],
                     'q90': result['q90'][:hours],
                     'times': result['times'][:hours],
-                    'model_used': 'BiLSTM+Attention v3.2 Optuna',
-                    'mape': 7.17,
+                    'model_used': result.get('model_label', result.get('model_used')),
+                    'mape': result.get('mape'),  # v3.2는 검증 지표가 없어 None
                 }
             except Exception as e:
                 logger.error(f"SMP prediction failed: {e}")

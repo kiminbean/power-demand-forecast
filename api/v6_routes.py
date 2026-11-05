@@ -37,9 +37,10 @@ from api.renewable_ml_predictor import get_ml_predictor, RenewablePrediction
 # Settlement calculator
 from api.settlement_calculator import get_settlement_calculator
 
-# SMP Predictor (v3.2 Optuna BiLSTM+Attention model)
+# SMP 예측: v4.1(제주 하루전, walk-forward 평가 통과)을 우선 쓰고, 안 되면 v3.2(성능 재검증 전)로 대체한다.
+# 입찰 최적화·smp_routes도 같은 예측기를 써서 페이지마다 예측이 다르지 않게 한다.
 try:
-    from src.smp.models.smp_predictor import SMPPredictor, get_smp_predictor
+    from src.smp.models.serving import get_serving_smp_predictor
     SMP_PREDICTOR_AVAILABLE = True
 except ImportError as e:
     SMP_PREDICTOR_AVAILABLE = False
@@ -47,27 +48,22 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
-# Initialize SMP Predictor (v3.2 Optuna). 이 체크포인트는 스케일러 누수 상태로 학습돼
-# 기록된 MAPE·R²가 무효이며 재학습·재검증되지 않았다. 지표를 표시하지 않는다.
-SMP_MODEL_LABEL = "BiLSTM+Attention v3.2 Optuna (성능 재검증 전)"
-SMP_MODEL_STATUS = "active (성능 재검증 전)"
-_smp_predictor = None
 
 def get_or_create_smp_predictor():
-    """Get or create SMP predictor singleton"""
-    global _smp_predictor
-    if _smp_predictor is None and SMP_PREDICTOR_AVAILABLE:
-        try:
-            _smp_predictor = SMPPredictor(use_advanced=True)
-            if _smp_predictor.is_ready():
-                logger.info("SMP v3.2 Optuna model loaded (metrics pending re-validation)")
-            else:
-                logger.warning("SMP model not ready, will use fallback")
-                _smp_predictor = None
-        except Exception as e:
-            logger.error(f"Failed to load SMP predictor: {e}")
-            _smp_predictor = None
-    return _smp_predictor
+    """공유 서빙 예측기 (없으면 None)"""
+    if not SMP_PREDICTOR_AVAILABLE:
+        return None
+    try:
+        return get_serving_smp_predictor()
+    except Exception as e:
+        logger.error(f"Failed to load SMP predictor: {e}")
+        return None
+
+
+def _forecast_label(result: Dict[str, Any]) -> str:
+    label = result.get('model_label', 'SMP 예측 모델')
+    mape = result.get('mape')
+    return f"{label} · 검증 MAPE {mape:.2f}%" if isinstance(mape, (int, float)) else label
 
 # 프로젝트 루트
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -284,7 +280,7 @@ async def get_smp_forecast():
     """
     24시간 SMP 예측
 
-    BiLSTM+Attention v3.2 Optuna 모델 사용 (성능 재검증 전 — 지표 미표시)
+    v4.1(제주 하루전 SMP) 우선, 안 되면 v3.2(성능 재검증 전 — 지표 미표시)
     모델 미사용 시 EPSIS 실제 데이터 기반 폴백
     """
     try:
@@ -294,7 +290,6 @@ async def get_smp_forecast():
         predictor = get_or_create_smp_predictor()
 
         if predictor is not None and predictor.is_ready():
-            # Use BiLSTM+Attention v3.2 Optuna model
             result = predictor.predict_24h()
 
             # Model predictions
@@ -311,10 +306,12 @@ async def get_smp_forecast():
                 q50=q50,
                 q90=q90,
                 hours=hours,
-                model_used="패턴 기반 대체값 (모델 예측 실패)" if is_fallback else SMP_MODEL_LABEL,
+                model_used="패턴 기반 대체값 (모델 예측 실패)" if is_fallback else _forecast_label(result),
                 confidence=None,
                 created_at=datetime.now().isoformat(),
-                data_source="EPSIS 평균 패턴" if is_fallback else "Model Prediction + EPSIS Historical",
+                data_source=("EPSIS 평균 패턴" if is_fallback
+                             else "제주 하루전 SMP 이력 (제주시범사업 API·EPSIS)" if result.get('model_version') == 'v4.1'
+                             else "Model Prediction + EPSIS Historical"),
                 forecast_date=None if is_fallback else result.get('forecast_date'),
             )
 
@@ -609,11 +606,25 @@ def simulate_resources(now: datetime) -> List[ResourceResponse]:
 
 @router.get("/model/info", response_model=ModelInfoResponse)
 async def get_model_info():
-    """SMP 예측 모델 정보"""
-    # 서빙 중인 v3.2 체크포인트의 기록 지표(MAPE 7.17%)는 스케일러 누수로 무효이고, coverage 94.5%는
+    """현재 서빙 중인 SMP 예측 모델 정보 (/smp-forecast와 같은 모델)"""
+    predictor = get_or_create_smp_predictor()
+    info = predictor.model_info() if predictor is not None else {"version": "none", "mape": None, "coverage": None}
+    if info["version"] == "v4.1":
+        # MAPE·coverage는 서빙 산출물의 walk-forward 평가(일 단위, 매일 0시 기준 1~24시 예측) 값이다.
+        return ModelInfoResponse(
+            status="active",
+            version="v4.1",
+            type="BiLSTM+Attention (제주 하루전 SMP)",
+            device="CPU",
+            mape=info["mape"],
+            coverage=info["coverage"],
+            last_trained=info.get("last_trained"),
+            data_source=f"제주 하루전 SMP (제주시범사업 API·EPSIS), 평가 기간 끝 {info.get('eval_end')}",
+        )
+    # v3.2 체크포인트의 기록 지표(MAPE 7.17%)는 스케일러 누수로 무효이고, coverage 94.5%는
     # 어떤 지표 파일에도 근거가 없었다. 재검증 전까지 지표를 null로 내보낸다.
     return ModelInfoResponse(
-        status=SMP_MODEL_STATUS,
+        status="active (성능 재검증 전)",
         version="v3.2",
         type="BiLSTM+Attention (Optuna)",
         device="MPS (Apple Silicon)",

@@ -32,8 +32,8 @@ from sklearn.preprocessing import StandardScaler
 
 from src.smp.models.time_split_scaling import carve_validation_from_train
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
+# 로깅 설정은 스크립트 실행 시에만 한다 (API가 이 모듈의 클래스를 import할 때 전역 로깅을 바꾸지 않도록).
+LOG_FORMAT = '%(asctime)s | %(levelname)s | %(message)s'
 logger = logging.getLogger(__name__)
 
 
@@ -823,4 +823,5 @@ def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     main()

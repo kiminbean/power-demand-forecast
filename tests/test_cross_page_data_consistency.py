@@ -60,15 +60,25 @@ def test_kpi_output_and_utilization_equal_resources_sum(offline_realtime):
     assert kpis["utilization_pct"] == pytest.approx(round(output / capacity * 100, 1), abs=0.051)
 
 
-def test_model_info_has_no_invalid_metrics():
+@pytest.fixture
+def serving_v32_only(monkeypatch):
+    """v4.1 산출물 유무와 관계없이 v3.2 대체 경로를 검증한다 (메인 체크아웃에는 v4.1 산출물이 있다)."""
+    from src.smp.models.serving import ServingSMPPredictor
+    serving = ServingSMPPredictor(primary=None, fallback=SMPPredictor(use_advanced=True))
+    monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)
+    return serving
+
+
+def test_model_info_has_no_invalid_metrics(serving_v32_only):
     with TestClient(app) as client:
         info = client.get("/api/v1/model/info").json()
+    assert info["version"] == "v3.2"
     assert info["mape"] is None
     assert info["coverage"] is None
     assert "재검증" in info["status"]
 
 
-def test_forecast_reports_target_date_without_invalid_metrics():
+def test_forecast_reports_target_date_without_invalid_metrics(serving_v32_only):
     with TestClient(app) as client:
         forecast = client.get("/api/v1/smp-forecast").json()
     assert forecast["confidence"] is None

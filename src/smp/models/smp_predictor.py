@@ -571,7 +571,8 @@ class SMPPredictor:
             if recent_df is None:
                 return self._generate_fallback_predictions(times)
             forecast_start = self.forecast_start(recent_df)
-            times = [forecast_start + timedelta(hours=i + 1) for i in range(24)]
+            # 구간 시작 시각 (00:00 = 거래시간 1). smp_routes(hour % 24 + 1)·입찰(hour)이 이 규칙을 가정한다.
+            times = [forecast_start + timedelta(hours=i) for i in range(24)]
 
             # 피처 생성 및 정규화
             features = self._create_features(recent_df)
