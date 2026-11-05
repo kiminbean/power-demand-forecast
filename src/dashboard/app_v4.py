@@ -1319,11 +1319,21 @@ def _finite_number(value) -> bool:
 
 
 def _backend_kpi_overrides() -> Dict:
-    """API 서버의 재생에너지 비율(섬 전체 ML 추정)·계통 주파수(시뮬레이션)를 그대로 쓴다."""
+    """API 서버의 수요·예비율·재생에너지 비율(섬 전체 ML 추정)·계통 주파수(시뮬레이션)를 그대로 쓴다.
+
+    같은 KPX 크롤러라도 이 앱과 API 서버가 서로 다른 시점에 조회하면 값이 어긋나므로
+    (2026-11-05 16:57: 713.0 MW·122.3% vs 712.0 MW·124.0%) API 서버 값을 단일 원천으로 쓴다.
+    """
     kpis = fetch_backend_json("/api/v1/dashboard/kpis")
     if not isinstance(kpis, dict):
         return {}
     overrides = {}
+    if _finite_number(kpis.get("current_demand_mw")) and _finite_number(kpis.get("supply_reserve_rate")):
+        overrides["demand"] = round(float(kpis["current_demand_mw"]), 1)
+        overrides["reserve_rate"] = round(float(kpis["supply_reserve_rate"]), 1)
+        # 파일·시뮬레이션 대체 경로에서도 출처 라벨이 실제 값의 출처와 맞도록 함께 바꾼다.
+        overrides["data_source"] = "KPX 실시간 (API 서버)"
+        overrides["data_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     if _finite_number(kpis.get("renewable_ratio_pct")):
         overrides["renewable_ratio"] = round(float(kpis["renewable_ratio_pct"]), 1)
         # 같은 화면의 공급 구성(로컬 추정)과 계산 근거가 다르므로 출처를 밝힌다.
