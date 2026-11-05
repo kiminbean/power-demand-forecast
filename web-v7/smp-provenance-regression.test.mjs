@@ -34,6 +34,7 @@ async function setup(component, initial) {
   let dayAhead = { status: 'available', current_smp: 145.6, trade_day: '20261103', trade_hour: 14, market_type: 'day_ahead', data_source: 'EPSIS day ahead', source_url: 'https://example.com/source' };
   let mode = 'success';
   await page.evaluateOnNewDocument(() => {
+    window.smpText = () => `${document.body.innerText} ${document.querySelector('[data-testid="published-smp"]')?.title ?? ''}`;
     const original = window.setInterval;
     window.setInterval = (fn, delay, ...args) => {
       if (delay === 60000 || delay === 300000) window.smpRefresh = () => fn(...args);
@@ -66,16 +67,17 @@ async function setup(component, initial) {
       ReactDOM.createRoot(target).render(React.createElement(ThemeProvider, null, React.createElement(Component)));
     }, component);
   }
-  await page.waitForFunction(() => document.body.innerText.includes('SMP'));
+  await page.waitForFunction(() => window.smpText().includes('SMP'));
   return { page, setMode: next => { mode = next; }, setCurrent: next => { current = next; }, setDayAhead: next => { dayAhead = next; } };
 }
-const body = page => page.$eval('body', element => element.innerText);
+// eXeco KPI 카드는 출처 정보를 화면 대신 title 툴팁에 두므로 함께 검사한다.
+const body = page => page.evaluate(() => window.smpText());
 
 for (const component of ['ExecoDashboard', 'Dashboard', 'SMPPrediction']) {
   test(`${component}: date provenance and nullable comparisons are explicit`, async () => {
     const { page, setCurrent } = await setup(component, sample('historical'));
     try {
-      await page.waitForFunction(() => document.body.innerText.includes('123.4'));
+      await page.waitForFunction(() => window.smpText().includes('123.4'));
       let text = await body(page);
       assert.match(text, /과거/);
       assert.match(text, /20261102/);
@@ -87,7 +89,7 @@ for (const component of ['ExecoDashboard', 'Dashboard', 'SMPPrediction']) {
       assert.doesNotMatch(text, /777\.0/);
       setCurrent(sample('current_date', 0));
       await page.evaluate(() => window.smpRefresh());
-      await page.waitForFunction(() => document.body.innerText.includes('0.0') && document.body.innerText.includes('당일'));
+      await page.waitForFunction(() => window.smpText().includes('0.0') && window.smpText().includes('당일'));
       text = await body(page);
       assert.match(text, /실시간.*확인.*불가|실시간 여부.*확인/);
     } finally { await page.close(); }
@@ -95,21 +97,21 @@ for (const component of ['ExecoDashboard', 'Dashboard', 'SMPPrediction']) {
   test(`${component}: null and failed refresh never fall back to forecasts or mock SMP`, async () => {
     const { page, setCurrent, setMode } = await setup(component, sample('future'));
     try {
-      await page.waitForFunction(() => document.body.innerText.includes('123.4'));
+      await page.waitForFunction(() => window.smpText().includes('123.4'));
       assert.match(await body(page), /미래/);
       setCurrent(sample('unknown', 124.5));
       await page.evaluate(() => window.smpRefresh());
-      await page.waitForFunction(() => document.body.innerText.includes('124.5'));
+      await page.waitForFunction(() => window.smpText().includes('124.5'));
       assert.match(await body(page), /날짜.*확인.*불가/);
       setCurrent(sample('no_data', null));
       await page.evaluate(() => window.smpRefresh());
-      await page.waitForFunction(() => !document.body.innerText.includes('124.5') && document.body.innerText.includes('SMP 데이터 없음'));
+      await page.waitForFunction(() => !window.smpText().includes('124.5') && window.smpText().includes('SMP 데이터 없음'));
       setCurrent(sample('historical'));
       await page.evaluate(() => window.smpRefresh());
-      await page.waitForFunction(() => document.body.innerText.includes('123.4'));
+      await page.waitForFunction(() => window.smpText().includes('123.4'));
       setMode('fail');
       await page.evaluate(() => window.smpRefresh());
-      await page.waitForFunction(() => !document.body.innerText.includes('123.4') && document.body.innerText.includes('SMP 데이터 없음'));
+      await page.waitForFunction(() => !window.smpText().includes('123.4') && window.smpText().includes('SMP 데이터 없음'));
       const text = await body(page);
       assert.doesNotMatch(text, /777\.0|114\.8|102\.5/);
       if (component !== 'ExecoDashboard') assert.match(text, /데모.*예측|예측.*데모/);

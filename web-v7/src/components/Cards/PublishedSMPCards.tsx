@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { CurrentSMP, DayAheadSMP } from '../../types';
 
 const dateStatusLabels: Record<CurrentSMP['data_date_status'], string> = {
@@ -19,17 +18,6 @@ const KPI_UNIT = 'text-2xl font-bold text-black leading-9 tracking-[-0.8px]';
 const KPI_EMPTY = 'text-2xl font-bold text-[#9a9a9a] leading-[60px] tracking-[-0.8px]';
 const KPI_BADGE = 'bg-white rounded-lg px-3.5 py-1';
 const KPI_BADGE_TEXT = 'text-xl text-[#272727] tracking-[-0.72px]';
-// 거래 정보는 한 줄로 자르고(title에 전체), 출처는 숨기지 않도록 단어 단위로 줄바꿈한다.
-const KPI_META = 'w-full text-center text-sm text-gray-700 leading-5';
-
-function KpiMeta({ lines, children }: { lines: [string, string]; children?: ReactNode }) {
-  return (
-    <div className="w-full min-w-0 flex flex-col gap-0.5">
-      <p className={`${KPI_META} truncate`} title={lines[0]}>{lines[0]}</p>
-      <p className={`${KPI_META} break-keep`}>{lines[1]} {children}</p>
-    </div>
-  );
-}
 
 function formatHour(hour: number | null | undefined) {
   return hour != null ? `${String(hour).padStart(2, '0')}h` : '확인 불가';
@@ -59,22 +47,16 @@ export function PublishedSMPCard({ data, variant = 'card' }: { data: CurrentSMP 
     : null;
 
   if (variant === 'kpi') {
-    const meta: [string, string] = [
-      `거래일 ${tradeDay} · 거래시간 ${formatHour(tradeHour)} · ${market}`,
-      `출처: ${source} · 실시간 여부 확인 불가`,
-    ];
+    // 화면에는 값만 두고, 거래일·출처 등 출처 정보는 지우지 않고 마우스 오버 툴팁으로 남긴다.
+    const provenance = [dateLabel, `거래일 ${tradeDay}`, `거래시간 ${formatHour(tradeHour)}`, market, `출처: ${source}`, '실시간 여부 확인 불가', comparison]
+      .filter(Boolean)
+      .join(' · ');
     return (
-      <div className={KPI_BOX} data-testid="published-smp">
+      <div className={KPI_BOX} data-testid="published-smp" title={provenance}>
         <span className={KPI_TITLE}>공표 SMP ({region})</span>
         <div className="flex flex-wrap items-center justify-center gap-3.5 px-3.5">
           <KpiValue value={hasValue ? price : null} />
-          {dateLabel && (
-            <div className={KPI_BADGE}>
-              <span className={KPI_BADGE_TEXT}>{comparison ? `${dateLabel} · ${comparison}` : dateLabel}</span>
-            </div>
-          )}
         </div>
-        <KpiMeta lines={meta} />
       </div>
     );
   }
@@ -95,12 +77,9 @@ export function DayAheadSMPCard({ data, variant = 'card' }: { data: DayAheadSMP 
   const link = data?.source_url && <a href={data.source_url} target="_blank" rel="noreferrer">원문</a>;
 
   if (variant === 'kpi') {
-    const meta: [string, string] = [
-      `거래일 ${data?.trade_day || '확인 불가'} · 거래시간 ${formatHour(data?.trade_hour)}`,
-      `출처: ${data?.data_source || '확인 불가'}`,
-    ];
+    const provenance = `거래일 ${data?.trade_day || '확인 불가'} · 거래시간 ${formatHour(data?.trade_hour)} · 출처: ${data?.data_source || '확인 불가'}`;
     return (
-      <div className={KPI_BOX} data-testid="day-ahead-smp">
+      <div className={KPI_BOX} data-testid="day-ahead-smp" title={provenance}>
         <span className={KPI_TITLE}>제주 하루전시장 SMP (Day-ahead)</span>
         <div className="flex flex-wrap items-center justify-center gap-3.5 px-3.5">
           <KpiValue value={hasValue ? data!.current_smp : null} />
@@ -108,7 +87,6 @@ export function DayAheadSMPCard({ data, variant = 'card' }: { data: DayAheadSMP 
             <span className={KPI_BADGE_TEXT}>하루전시장(DA)</span>
           </div>
         </div>
-        <KpiMeta lines={meta}>{link}</KpiMeta>
       </div>
     );
   }
