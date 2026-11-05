@@ -77,6 +77,7 @@ JEJU_NY = 38
 
 # Cache TTL (seconds)
 SMP_CACHE_TTL = 300  # 5 minutes
+JEJU_SMP_STALE_MAX_SECONDS = 24 * 3600  # API 실패 시 마지막 검증값을 쓸 수 있는 최대 경과 시간
 POWER_SUPPLY_CACHE_TTL = 60  # 1 minute
 WEATHER_CACHE_TTL = 600  # 10 minutes
 
@@ -433,7 +434,13 @@ class RealtimeAPIClient:
                 return smp_data
 
         # 제주 가격은 검증된 제주시범사업 API(jsmpRt)만 사용하고 구 KPX API로 대체하지 않는다.
+        # API가 실패하면(예: data.go.kr 일일 한도 429) 24시간 이내의 마지막 검증값을 계속 쓴다.
+        # 원천이 이틀 늦게 공표되고 응답에 거래일이 함께 나가므로 최신 값처럼 보이지 않는다.
         if area_code == "9":
+            cached = self._smp_cache.get(cache_key)
+            if cached is not None and self._is_cache_valid(cached[1], JEJU_SMP_STALE_MAX_SECONDS):
+                logger.warning("Jeju SMP API failed; serving last verified price from %s", cached[1])
+                return cached[0]
             return None
 
         # 현재 크롤러는 수요예측 표와 추정치를 가격으로 반환할 수 있어 사용하지 않는다.
