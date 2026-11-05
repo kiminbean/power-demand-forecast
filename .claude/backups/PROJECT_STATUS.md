@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-06 (Demand LSTM residual retrain + OOT validation)
+> Last Updated: 2026-11-06 (Competitor benchmark of demand/SMP/solar forecasts)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -11,6 +11,22 @@
 ---
 
 ## Current Session (2026-11-06)
+
+### Task: Competitor benchmark (MAPE/R² vs operators, companies, papers) ✅ COMPLETE
+
+- 보고서: `docs/2026-11-06-competitor-benchmark.md` · 재현 스크립트: `docs/benchmark-2026-11-06/verify_{ar,smp,solar}.py`
+- 수요 LSTM: 같은 목표(KPX 제주 전력거래량) 경쟁자 없음 → 판정 불가. 단 원본 목표 기준 4.31%/R² 0.926으로 시간대별 선형 AR(3.75%/0.951)에 고정 test·walk-forward 4/4 연도 모두 짐 (DM +10.65)
+- 수요 목표가 694.658 MWh에서 잘려 있음(test 포함 전체 기간 Q3+1.5·IQR, `src/data/preprocessing.py` handle_outliers) → 기존 4.03%/0.937은 외부 보고 금지
+- SMP: 서빙 naive(MAE 11.97, 2025H2 walk-forward)는 vpp-capstone LightGBM(naive 대비 −17%, 2025)·VOLTA(−10~27%, 2024)보다 나쁨. 0.5×어제 + 0.5×7일 중앙값 혼합이 MAE −8.8~9.6%
+- 태양광(RE-BMS): KPX 오차율 17.0%로 월×시간 기후값 12.5%보다 나쁨. "R²=0.95"는 무작위 분할·전체 fit 스케일러·측정 일사량 평가 수치
+- CLAUDE.md 정정: SMP v4.1 8.76%는 육지 SMP 목표 수치, 현재 생산은 naive
+- 운영: 2026-11-06 01:04부터 제주 SMP API 429(조사 작업의 대량 수집 직후 일일 한도 소진) → 00:58 마지막 검증 가격으로 폴백 중. 실패 시 backoff 없음(약 30초마다 재호출)
+
+### Next Steps (competitor benchmark)
+- 수요: 클리핑 제거 후 원본 목표 재학습, 배포 게이트에 AR·7일 ramp 추가
+- SMP: 혼합 규칙 서빙 검토 → LightGBM(D-1 11:00 정보만)
+- 태양광: "R²=0.95" 라벨 제거, 시간순 재학습 + 기상청 예보 입력, KPX 규칙 평가
+- SMP API 캐시(일일 한도 보호)
 
 ### Task: Demand LSTM retrain + out-of-time validation ✅ COMPLETE
 

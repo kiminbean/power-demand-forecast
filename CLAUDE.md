@@ -45,9 +45,11 @@
 /.claude/       - Claude backups
 ```
 
-**Model Performance (v3.2 Optuna - Best SMP Model)**:
-- MAPE: 7.42%
-- R²: 0.760
+**Model Performance (2026-11-06 경쟁 비교 기준 · 상세 `docs/2026-11-06-competitor-benchmark.md`)**:
+- 전력수요 LSTM(1h, 전력거래량): MAPE 4.31% / R² 0.926 (원본 목표, 고정 test). 시간대별 선형 AR(3.75% / 0.951)보다 나쁨
+- SMP: 서빙 = 어제 같은 시각 naive (MAE 11.97원/kWh, MAPE 11.75%, R² 0.20; walk-forward 2025-07-22~12-18)
+- 태양광(RE-BMS): KPX 오차율 17.0% (월×시간 기후값 12.5%보다 나쁨). 화면의 "R²=0.95"는 누수 평가
+- v3.2 Optuna(7.42% / 0.760)는 스케일러 누수로 무효
 
 ---
 
@@ -171,7 +173,7 @@ find ~/.claude -name "*.json" -exec grep -l '[가-힣]' {} \; 2>/dev/null
 
 ## SMP Model Improvement Roadmap (R² 0.9+ Target)
 
-**Last Updated**: 2026-11-05 (SMP 스케일러 누수 수정·재학습 이후 재평가)
+**Last Updated**: 2026-11-06 (v4.1 8.76%가 육지 SMP 목표 수치였음을 정정, 현재 생산 = naive)
 
 ### Current Status
 
@@ -179,7 +181,8 @@ find ~/.claude -name "*.json" -exec grep -l '[가-힣]' {} \; 2>/dev/null
 |---------------|------|-----|--------|
 | v1.0~v8.1 (구버전 전체) | 무효 | 무효 | 스케일러 누수(시간 분할 전 fit)로 평가 자체가 무효 — 아래 2025-12-26 표는 역사 기록 |
 | **v4.0 (2026-11-05 재학습)** | 17.17% (test) | 0.124 | 시간외 평가·신뢰 가능하나 성능 미달 |
-| **v4.1 (2026-11-05 재학습, 현재 생산)** | **8.76% (walk-forward 평균)** | **0.463** | 구버전 수치와 직접 비교 불가(평가 방식 상이). MAE 10.53원/kWh·커버리지 68.6% |
+| v4.1 (2026-11-05 재학습) | 8.76% (walk-forward 평균) | 0.463 | **육지 SMP 목표**로 학습된 수치(제주 아님). 제주 하루전 재학습은 16.82% / R² 0.136, MAE 15.34로 naive보다 나빠 게이트 불합격 (`models/smp_v41_serving/`) |
+| **seasonal naive 24h (현재 생산)** | **11.75% (walk-forward 분할 평균)** | **0.203** | 어제 같은 시각 가격. MAE 11.97원/kWh. 경쟁 모델은 이 naive 대비 MAE −17% (`docs/2026-11-06-competitor-benchmark.md`) |
 | v3.4 (2026-11-05 재학습) | 21.28% (test) | -0.537 | 사용 보류(일반화 실패) |
 | **Target** | <5% | **0.9+** | Requires power generation data |
 
@@ -285,7 +288,8 @@ src/crawlers/
 | Model | 평가 | MAPE | R² | 비고 |
 |-------|------|------|-----|------|
 | v4.0 | test(시간외) | 17.17% | 0.124 | 80% 구간 커버리지 77.5% |
-| **v4.1** | **walk-forward 평균** | **8.76%** | **0.463** | MAE 10.53원/kWh·커버리지 68.6% — 현재 생산 |
+| v4.1 | walk-forward 평균 | 8.76% | 0.463 | 육지 SMP 목표 수치(제주 아님). 제주 재학습 16.82% / 0.136 → 게이트 불합격 |
+| **seasonal naive 24h** | **walk-forward 분할 평균** | **11.75%** | **0.203** | MAE 11.97원/kWh — 현재 생산 |
 | v3.4 | test(시간외) | 21.28% | -0.537 | 사용 보류(일반화 실패) |
 
 원본: `models/smp_v4/smp_v4_metrics.json`, `models/smp_v4/smp_v41_metrics.json`, `models/smp_v3_4_kpx/metrics.json`. 경위·누수 버전 백업(`models/_pre_retrain_backup_2026-11-05/`): `docs/2026-11-02-forecast-upgrade-status.md`.
@@ -299,6 +303,7 @@ src/crawlers/
 | **demand_only** (17 피처) | **4.03% / 0.937** | **3.61% / 0.935** | 5.12% / 4.49% |
 | **weather_full** (18 피처, 기상은 기온 하나) | 4.14% / 0.933 | 3.60% / 0.935 | 5.12% / 4.49% |
 
+- **주의 (2026-11-06 경쟁 비교):** 위 수치는 694.658 MWh에서 잘린 목표 기준이다. 상한이 test를 포함한 전체 기간으로 계산돼 누수가 있다. 원본 목표 기준 고정 test는 demand_only 4.31% / R² 0.926, weather_full 4.41% / 0.924, persistence 5.28%다. 시간대별 선형 AR이 3.75% / 0.951로 LSTM보다 우수하고, walk-forward 4/4 연도 모두 우위다 → `docs/2026-11-06-competitor-benchmark.md`
 - 합격 기준: 고정 test와 walk-forward 평균 모두 MAPE·RMSE가 persistence보다 낮을 것 → 두 모델 합격, walk-forward 4/4 fold 모두 우위
 - 체크포인트 `model_config.residual_target: true` → `src/inference/predict.py`가 자동으로 래핑. 이 플래그 없이 기본 모델만 쓰면 보정량(≈0)을 수요로 내보내므로 주의
 - 재현: `python src/training/retrain_demand_oot.py --residual` · 리포트 `models/production/training_report.json`, `models/demand_retrain_2026-11-05_residual_v2/*/oot_report.json` · 이전 버전 백업 `models/_pre_retrain_backup_2026-11-05/demand_lstm/`

@@ -1,0 +1,63 @@
+{
+ "rows_with_target": 54113,
+ "chronological_split_time": "2022-12-10 18:00:00",
+ "holdout_range": [
+  "2022-12-10 18:00:00",
+  "2024-05-28 23:00:00"
+ ],
+ "provenance": {
+  "scaler_n_samples_seen": 54113,
+  "scaler_mean_max_abs_diff_vs_all_rows": 0.0,
+  "scaler_mean_max_abs_diff_vs_chrono_train": 33.443098163332365,
+  "init_constant": 39.425697836682836,
+  "y_mean_all_rows": 39.29926430229335,
+  "y_mean_chrono_train": 35.42658512358513,
+  "y_mean_random_split_train_rs42": 39.425697836682836,
+  "max_capacity_in_chrono_train": 368.121
+ },
+ "holdout_days": 421,
+ "results": {
+  "served_issue_D-1_10h_fixed446": {
+   "kpx_mean_error_pct": 17.0,
+   "scored_hours": 3373,
+   "months_passing_10pct": "0/17",
+   "R2_all_hours": 0.411
+  },
+  "served_issue_D-1_10h_true_capacity": {
+   "kpx_mean_error_pct": 14.48,
+   "scored_hours": 3373,
+   "months_passing_10pct": "1/17",
+   "R2_all_hours": 0.52
+  },
+  "served_issue_D_00h_fixed446": {
+   "kpx_mean_error_pct": 16.65,
+   "scored_hours": 3404,
+   "months_passing_10pct": "0/17",
+   "R2_all_hours": 0.479
+  },
+  "climatology_month_hour": {
+   "kpx_mean_error_pct": 12.54,
+   "scored_hours": 3404,
+   "months_passing_10pct": "1/17",
+   "R2_all_hours": 0.709
+  },
+  "persistence_D-2_same_hour": {
+   "kpx_mean_error_pct": 16.31,
+   "scored_hours": 3200,
+   "months_passing_10pct": "0/17",
+   "R2_all_hours": 0.485
+  },
+  "clean_retrain_served_D-1_10h_true_capacity": {
+   "kpx_mean_error_pct": 14.37,
+   "scored_hours": 3373,
+   "months_passing_10pct": "1/17",
+   "R2_all_hours": 0.598
+  },
+  "clean_retrain_measured_irradiance_same_hour_UNAVAILABLE_AT_ISSUE": {
+   "kpx_mean_error_pct": 8.4,
+   "scored_hours": 3404,
+   "months_passing_10pct": "13/17",
+   "R2_all_hours": 0.898
+  }
+ }
+}
