@@ -762,14 +762,15 @@ class SMPTrainerV41:
         torch.save(checkpoint, output_dir / 'smp_v41_model.pt')
         logger.info(f"  Model saved: {output_dir / 'smp_v41_model.pt'}")
 
-        # Save scaler
-        np.save(output_dir / 'smp_v41_scaler.npy', {
-            'feature_scaler_mean': self.pipeline.scaler.mean_,
-            'feature_scaler_scale': self.pipeline.scaler.scale_,
-            'target_mean': self.pipeline.target_mean,
-            'target_std': self.pipeline.target_std,
-            'feature_names': self.pipeline.feature_names
-        })
+        # Save scaler (object arrays require npz format; np.save(dict)는 저장 실패)
+        np.savez(
+            output_dir / 'smp_v41_scaler.npz',
+            mean=np.asarray(self.pipeline.scaler.mean_, dtype=float),
+            scale=np.asarray(self.pipeline.scaler.scale_, dtype=float),
+            target_mean=float(self.pipeline.target_mean),
+            target_std=float(self.pipeline.target_std),
+            feature_names=np.array(self.pipeline.feature_names),
+        )
 
         # Save metrics
         metrics_full = {

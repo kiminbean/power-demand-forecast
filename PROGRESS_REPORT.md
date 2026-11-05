@@ -18,7 +18,16 @@
 - 수정: `train_smp_v4.py`(0.8/0.1), `train_smp_v3_4_kpx_generation.py`(0.7/0.15), `train_smp_v4_smp_only.py`(val carve 방식, split별 스케일러 리셋) — 시간 분할 이후 train 구간에만 스케일러 fit
 - 버그 수정: `train_smp_v4.py`·`train_smp_v4_enhanced.py`의 `np.save(dict)` 예외 → `np.savez('smp_v4_scaler.npz')`
 - 회귀 테스트: `tests/test_smp_time_split_scaling.py` 16/16 통과 (`.venv/bin/python -m pytest` 직접 호출)
-- 미수행: 수정 코드로의 재학습과 시간외 평가 — 기존 체크포인트는 누수 버전이므로 재학습 전까지 신뢰 불가
+
+### 2026-11-05: SMP 3개 모델 재학습·시간외 평가 완료 (우선 후속 과제 1번 완결)
+
+- 수정 코드(a2dcaf75)로 v4.0·v4.1 SMP 전용·v3.4 KPX 결합 모델 재학습(로그: `logs/retrain_2026-11-05_{v4,v41,v34}.log`, 각 exit 0)
+- 새 시간외 성능 vs 누수 버전(백업: `models/_pre_retrain_backup_2026-11-05/`):
+  - v4.0: test MAPE 22.67%→17.17%, R² -0.886→0.124, 80% 커버리지 51.7%→77.5%
+  - v4.1: walk-forward 평균 MAPE 8.83%→8.76%, R² 0.426→0.463, 커버리지 71.7%→68.6%
+  - v3.4: test MAPE 17.58%→21.28%, R² -0.105→-0.537 — 재학습 후에도 일반화 실패, 추가 데이터 결합 전까지 사용 보류
+- 재학습 후 발견·수정: `train_smp_v4_smp_only.py`가 v41 스케일러를 `np.save`(dict) npy로 저장(a2dcaf75 수정 누락) → `np.savez`로 전환, 아티팩트 `smp_v41_scaler.npz` 복원, 누수 버전 스케일러 npy 2건 삭제
+- 재검증: `pytest tests/test_smp_time_split_scaling.py` 16/16 통과
 
 ---
 

@@ -11,7 +11,7 @@
 | 기상 예측 | 선택된 기상 지연 그룹과 파생 그룹만 계산하고 사용 원본의 비유한값을 검사한다. 선택 목록이 없는 경로도 계산 원본의 비유한값을 검사한다. 추론에서 유효한 두 원본으로 계산한 humidity와 필요한 THI의 비유한값은 forward-fill 전에 거부한다. humidity만 선택한 경우 사용하지 않는 THI의 비유한값은 검사하지 않는다. 기온 열이 없는 이전 경로에서는 제공된 선택 파생값을 보존한다. 학습 시 재계산으로 덮어쓰는 기상값은 원본 대신 계산 결과를 검사한다. 무관한 잘못된 입력과 실제 체크포인트 회귀 테스트 통과. | 추론의 다른 기상 공식 및 학습 경로의 모든 유한 입력 유효 범위를 검증한 것은 아니다. 모든 가능한 체크포인트와 실측 기상 데이터 조합, 새 전처리의 결측 입력 호환성과 운영 성능은 미검증이다. |
 | 조건부 및 배치 | 부족한 유효 이력 및 양수가 아닌 배치 step은 오류로 처리. NumPy 정수 step을 수용하고 비유한 배치 통계를 거부한다. 직접 conditional 배치는 API 배치와 같이 demand-only를 사용하며 겨울/여름 및 기상 모델 유무를 회귀 검증. | HTTP 스키마는 일부 정수형이 아닌 입력도 정수로 변환하며 직접 호출과 다르다. 배치 conditional은 단일 conditional의 겨울 기상 혼합과 다르다. 이는 기존 API 배치 계약의 보존이며 이전 직접 배치 동작과는 다르다. 계절별 배치 블렌딩은 구현되지 않았다. |
 | 평가 | 점·분위수 지표, rolling-origin 분할과 기준선 코드 및 회귀 테스트 존재. | `src/evaluation/rolling_origin.py`의 구간별 `MAPE`는 평균 절대오차를 실측 평균으로 나눈 값으로 표준 MAPE 및 `src/evaluation/metrics.py`의 MAPE와 다르다. 수정 전에는 둘을 비교하면 안 된다. 실제 운영 평가 workflow 연결과 최신 데이터의 성능·예측구간 보정은 확인하지 않았다. |
-| SMP 학습·전처리 | SMP 학습 스크립트와 모델 구현 존재. 2026-11-04 스케일러 누수 코드 수정: `train_smp_v4.py`·`train_smp_v3_4_kpx_generation.py`·`train_smp_v4_smp_only.py`가 공통 헬퍼(`src/smp/models/time_split_scaling.py`)로 시간 분할 이후 train 슬라이스에만 스케일러를 fit한다. 두 v4 경로의 학습 정상 종료 시 `np.save`(dict) 예외도 `np.savez`로 수정했다. | 수정은 코드 수준이며 재학습과 시간외 평가는 아직 수행하지 않았다. 기존 체크포인트·아티팩트는 누수 버전으로 만들어졌으므로 재학습 전까지 신뢰할 수 없다. 두 v4 경로의 초기 lag는 backward fill한다. 공통 데이터셋도 분할별 `ffill().bfill()`을 사용하므로 분할 내 선행 결측에 미래 값이 들어갈 수 있다. |
+| SMP 학습·전처리 | SMP 학습 스크립트와 모델 구현 존재. 2026-11-04 스케일러 누수 코드 수정: 세 학습 스크립트가 공통 헬퍼(`src/smp/models/time_split_scaling.py`)로 시간 분할 이후 train 슬라이스에만 스케일러를 fit한다. `np.save`(dict) 예외는 `np.savez`로 수정했다(v41 경로의 저장 누락은 2026-11-05 재학습 후 발견해 추가 수정). 2026-11-05 수정 코드로 3개 모델 재학습 완료: v4.0 시간외(test) MAPE 17.17%·R² 0.124·80% 구간 커버리지 77.5%, v4.1 walk-forward 평균 MAPE 8.76%·R² 0.463·커버리지 68.6%, v3.4 test MAPE 21.28%·R² -0.537. 누수 버전 기준치는 `models/_pre_retrain_backup_2026-11-05/`에 보관. | v4.1의 지표는 walk-forward(시간외) 평균으로 신뢰 가능하다. v3.4는 재학습 후에도 test R²가 음수로 학습 구간 대비 일반화 실패 — 추가 데이터 결합 없이는 사용하지 않는다. 두 v4 경로의 초기 lag는 backward fill한다. 공통 데이터셋도 분할별 `ffill().bfill()`을 사용하므로 분할 내 선행 결측에 미래 값이 들어갈 수 있다. v3.4는 스케일러를 아티팩트로 저장하지 않는다. |
 | SMP 예측·입찰 보조 | SMP 예측 API와 입찰 최적화 코드 존재. | SMP 예측은 모델 실패 시 생성된 데모 데이터로 대체할 수 있으며 응답의 model_info에 모드가 표시된다. 제주 예측은 고정 배율, 신뢰도는 고정값을 사용한다. 입찰 최적화에도 패턴 기반 대체 예측이 있다. 운영 검증된 가격이나 입찰 결과를 뜻하지 않는다. |
 | 인과 전처리 | `src/data/preprocessing.py`에 CausalProductionPreprocessor 존재. | 운영 학습 파이프라인 통합은 확인되지 않았다. 기존 보간 경로를 무조건 대체하면 모델 의미가 바뀔 수 있어 별도 검증이 필요하다. |
 | FastAPI·Streamlit | 2026-11-02 23:31 로컬 API(8001) 및 Streamlit(8504)을 현재 작업 트리로 재시작했다. API 모델 로드·단일/조건부/배치 예측, 비유한 입력 거부, 대시보드 기본 화면 표시를 확인했다. | 원격 배포, 실제 데이터에 대한 예측 정확도 및 대시보드 전체 사용자 흐름은 검증하지 않았다. 프로세스는 현재 Hermes 실행 환경의 자식이며 자동 재기동은 보장되지 않는다. |
@@ -31,6 +31,7 @@
 
 - Python 3.13.1: `PYTHONDONTWRITEBYTECODE=1 /usr/bin/arch -arm64 .venv/bin/python -m pytest tests/ -q --tb=short -p no:cacheprovider` → 1,843 passed, 3 skipped, 42 warnings (41.60초).
 - 2026-11-04: `pytest tests/test_smp_time_split_scaling.py -v` → 16 passed (train-only fit 동등성·분할 경계·수정 스크립트 5개 모듈 import 스모크 포함). 수정 파일 py_compile 통과. flake8은 현재 가상환경에 설치되지 않아 실행하지 못했다.
+- 2026-11-05: 누수 수정 코드로 3개 SMP 모델 재학습 완료(logs/retrain_2026-11-05_{v4,v41,v34}.log, 각 exit 0). 새 지표: v4.0 test MAPE 17.17%·R² 0.124·커버리지 77.5%(models/smp_v4/smp_v4_metrics.json), v4.1 walk-forward 평균 MAPE 8.76%·R² 0.463·커버리지 68.6%(smp_v41_metrics.json), v3.4 test MAPE 21.28%·R² -0.537(models/smp_v3_4_kpx/metrics.json). 재학습 후 v41 스케일러가 npy(dict)로 저장된 것을 발견해 `train_smp_v4_smp_only.py`를 `np.savez`로 수정하고 아티팩트를 `smp_v41_scaler.npz`(mean/scale)로 복원. 재검증: `pytest tests/test_smp_time_split_scaling.py -q` → 16 passed.
 - 웹 v6 디렉터리에서 `node --test *.test.mjs` → 4 passed; `npm run build` → 성공.
 - 웹 v7 디렉터리에서 `node --test *.test.mjs` → 1 passed; `npm run build` → 성공. `npm run build:check` → tsc 모듈 누락으로 실패. v6 TypeScript 실행기를 이용한 `tsc --noEmit` → 타입 검사 실패.
 - 모바일 디렉터리에서 `node --test tests/*.test.cjs` → 10 passed.
@@ -38,7 +39,7 @@
 
 ## 우선 후속 과제
 
-1. SMP 학습의 시간 분할 이전 스케일러 fit — 2026-11-04 코드 수정 완료(공통 헬퍼 `time_split_scaling.py` 적용, 누수 회귀 테스트 추가). 남은 작업: 수정 코드로 재학습하고 시간외 평가를 별도 수행한다.
+1. SMP 학습의 시간 분할 이전 스케일러 fit — 2026-11-04 코드 수정 + 2026-11-05 재학습·시간외 평가 완료. v4.1 walk-forward MAPE 8.76%(누수 버전 8.83%와 유사, 커버리지는 71.7%→68.6%), v4.0 test MAPE 22.67%→17.17%·R² -0.886→0.124로 개선. v3.4는 여전히 test R² -0.537로 사용 불가.
 2. 웹 v7 의존성 및 타입 오류를 수정하고 테스트를 CI에 연결한다. 브라우저 및 실제 기기 E2E는 별도로 수행한다.
 3. 체크포인트별 학습 시간대·결측 정책을 명시하고, 신규 전처리와 운영 데이터 기준 성능을 비교한다.
 4. rolling-origin 평가를 재현 가능한 실행 경로로 연결하고 기준선 대비 성능과 구간 보정을 기록한다.

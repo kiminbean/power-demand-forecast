@@ -59,6 +59,9 @@ data/raw/*.pkl
 # Experiment outputs (자동 커밋 대상)
 # logs/, results/는 자동 커밋에 포함
 
+# 누수 버전 재학습 전 백업(2026-11-05) — 신뢰 불가 체크포인트, 커밋 금지
+models/_pre_retrain_backup_*/
+
 # Temporary files
 *.tmp
 *.bak
