@@ -209,6 +209,17 @@ def test_api_reports_the_baseline_when_it_serves(monkeypatch):
     assert "150일" in info["data_source"]
 
 
+def test_model_info_rounds_metrics_for_display(monkeypatch):
+    baseline = _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 12.476786533138402, "coverage": None},
+                     mape=12.476786533138402, coverage=None)
+    baseline.backtest = {"days": 150}
+    monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor",
+                        lambda: ServingSMPPredictor(_Fake(ready=False), baseline, None))
+    with TestClient(app) as client:
+        info = client.get("/api/v1/model/info").json()
+    assert info["mape"] == 12.48
+
+
 def test_api_reports_the_model_that_actually_served(monkeypatch):
     serving = ServingSMPPredictor(_Fake({**FORECAST, "model_used": "v4.1", "mape": 9.5, "coverage": 76.0}), None, None)
     monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)

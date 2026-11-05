@@ -610,6 +610,8 @@ async def get_model_info():
     """현재 서빙 중인 SMP 예측 모델 정보 (/smp-forecast와 같은 모델)"""
     predictor = get_or_create_smp_predictor()
     info = predictor.model_info() if predictor is not None else {"version": "none", "mape": None, "coverage": None}
+    # 화면들이 값을 그대로 붙여 쓰므로(예: "MAPE 12.476786…%") 표시 정밀도로 맞춰 내보낸다.
+    info = {**info, **{k: round(info[k], 2) for k in ("mape", "coverage") if isinstance(info.get(k), (int, float))}}
     if info["version"] == "v4.1":
         # MAPE·coverage는 서빙 산출물의 walk-forward 평가(일 단위, 매일 0시 기준 1~24시 예측) 값이다.
         return ModelInfoResponse(
