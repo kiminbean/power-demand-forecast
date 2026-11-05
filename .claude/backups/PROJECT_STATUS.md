@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2025-01-10 (SMP Model Version History Image)
+> Last Updated: 2026-11-06 (Demand LSTM residual retrain + OOT validation)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -7,6 +7,22 @@
 - **Current Version**: v8.0.0 (Real-time API Edition) ✅ Complete
 - **Previous Version**: v7.0.0 (React Desktop Web Application)
 - **License**: Proprietary (All Rights Reserved)
+
+---
+
+## Current Session (2026-11-06)
+
+### Task: Demand LSTM retrain + out-of-time validation ✅ COMPLETE
+
+- 기존 production 수요 LSTM은 리포트 MAPE 6.06%를 재현 못 함(재현 10.05%), persistence(t-1) 5.12%보다 나쁨
+- 직접 타깃 재학습(7.74%/8.46%)도 persistence 미달 → 중단
+- 잔차 타깃 LSTM(`LastValueResidual`)으로 재학습: demand_only test 4.03%/R² 0.937, weather_full 4.14%/0.933, walk-forward 2021~2024 평균 3.6% (persistence 4.49%), 4/4 fold 우위
+- models/production 교체(이전 버전 백업: models/_pre_retrain_backup_2026-11-05/demand_lstm/), API(launchd com.powerdemand.api, :8001) 재시작 후 /predict가 학습 예측과 일치 확인
+- 코드: src/training/retrain_demand_oot.py, src/models/lstm.py(LastValueResidual), src/inference/predict.py(residual_target 래핑), train_production.train_model(model_wrapper 인자), tests/test_retrain_demand_oot.py
+
+### Next Steps
+- 다중 시점(24h) 예측에도 잔차 구조 적용 검토
+- tools/generate_model_figures.py 그림 재생성 (새 training_report.json 스키마 호환)
 
 ---
 

@@ -31,7 +31,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from data.dataset import TimeSeriesScaler, get_device
 from inference.feature_preprocessing import prepare_inference_features
-from models.lstm import create_model
+from models.lstm import LastValueResidual, create_model
 from features import (
     add_time_features,
     add_weather_features,
@@ -48,6 +48,19 @@ def _scaled_tensor(scaler, sequence: np.ndarray, device: torch.device) -> torch.
     if not torch.isfinite(tensor).all().item():
         raise ValueError("Scaled inference inputs must contain finite values")
     return tensor
+
+
+def _wrap_if_residual(model: torch.nn.Module, checkpoint: dict) -> torch.nn.Module:
+    """잔차 타깃으로 학습된 체크포인트면 persistence 앵커를 더하는 래퍼로 감싼다.
+
+    표시 없이 기본 모델만 쓰면 보정량(≈0)을 수요로 내보내므로 반드시 감싸야 한다.
+    """
+    if not checkpoint['model_config'].get('residual_target', False):
+        return model
+    features = checkpoint['features']
+    if features[0] != 'power_demand':
+        raise ValueError("Residual checkpoint requires power_demand as the first feature")
+    return LastValueResidual(model, target_idx=0, zero_init=False)
 
 
 def _validated_prediction(pred: torch.Tensor, scaler) -> float:
@@ -141,7 +154,7 @@ class ProductionPredictor:
                 dropout=checkpoint['model_config']['dropout']
             ).to(self.device)
             self.model_demand.load_state_dict(checkpoint['model_state_dict'])
-            self.model_demand.eval()
+            self.model_demand = _wrap_if_residual(self.model_demand, checkpoint).eval()
 
             self.scaler_demand = TimeSeriesScaler()
             self.scaler_demand.load(str(self.model_dir / "demand_only_scaler.pkl"))
@@ -164,7 +177,7 @@ class ProductionPredictor:
                 dropout=checkpoint['model_config']['dropout']
             ).to(self.device)
             self.model_weather.load_state_dict(checkpoint['model_state_dict'])
-            self.model_weather.eval()
+            self.model_weather = _wrap_if_residual(self.model_weather, checkpoint).eval()
 
             self.scaler_weather = TimeSeriesScaler()
             self.scaler_weather.load(str(self.model_dir / "weather_full_scaler.pkl"))

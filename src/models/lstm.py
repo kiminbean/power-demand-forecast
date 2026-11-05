@@ -392,6 +392,35 @@ class ResidualLSTM(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
+class LastValueResidual(nn.Module):
+    """
+    예측 = 입력 마지막 시점의 (스케일된) 타깃 값 + 기본 모델 출력
+
+    1시간 앞 수요 예측은 persistence(t-1)가 매우 강하므로, 기본 모델은 그 위의
+    보정량만 학습한다. 체크포인트에는 기본 모델 가중치만 저장하고
+    model_config['residual_target'] = True로 표시한다.
+
+    Args:
+        base: 감쌀 기본 모델 (예: LSTMModel)
+        target_idx: 입력 피처 중 타깃 열 인덱스
+        zero_init: True면 마지막 Linear를 0으로 초기화해 학습 시작점을 persistence로 맞춘다.
+            학습된 가중치를 불러온 뒤 감쌀 때는 반드시 False.
+    """
+
+    def __init__(self, base: nn.Module, target_idx: int = 0, zero_init: bool = True):
+        super().__init__()
+        self.base = base
+        self.target_idx = target_idx
+        if zero_init:
+            last = [m for m in base.modules() if isinstance(m, nn.Linear)][-1]
+            nn.init.zeros_(last.weight)
+            nn.init.zeros_(last.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        anchor = x[:, -1, self.target_idx:self.target_idx + 1]
+        return anchor + self.base(x)
+
+
 def create_model(
     model_type: str,
     input_size: int,

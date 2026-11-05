@@ -18,7 +18,7 @@ from pathlib import Path
 import argparse
 import json
 from datetime import datetime
-from typing import Dict, Tuple, Optional
+from typing import Callable, Dict, Tuple, Optional
 import warnings
 
 import numpy as np
@@ -179,9 +179,14 @@ def train_model(
     device: torch.device,
     config: Dict,
     seed: int = 42,
-    verbose: int = 1
+    verbose: int = 1,
+    model_wrapper: Optional[Callable[[nn.Module], nn.Module]] = None
 ) -> Tuple[nn.Module, TimeSeriesScaler, Dict]:
-    """모델 학습"""
+    """모델 학습
+
+    model_wrapper가 주어지면 생성된 기본 모델을 감싼 모듈로 학습한다
+    (예: 잔차 타깃 래퍼). 기본값 None이면 기존 동작과 같다.
+    """
     torch.manual_seed(seed)
     np.random.seed(seed)
 
@@ -213,6 +218,8 @@ def train_model(
         num_layers=MODEL_CONFIG['num_layers'],
         dropout=MODEL_CONFIG['dropout']
     ).to(device)
+    if model_wrapper is not None:
+        model = model_wrapper(model).to(device)
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])

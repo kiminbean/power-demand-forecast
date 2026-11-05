@@ -290,6 +290,19 @@ src/crawlers/
 
 원본: `models/smp_v4/smp_v4_metrics.json`, `models/smp_v4/smp_v41_metrics.json`, `models/smp_v3_4_kpx/metrics.json`. 경위·누수 버전 백업(`models/_pre_retrain_backup_2026-11-05/`): `docs/2026-11-02-forecast-upgrade-status.md`.
 
+### 2026-11-06 전력수요 LSTM 재학습 (models/production · 현재 생산)
+
+1시간 앞 수요 예측. 기존 체크포인트는 리포트 MAPE 6.06%를 재현하지 못했고(재현 10.05%), persistence(t-1, MAPE 5.12%)보다도 나빴다. 직접 타깃 재학습도 persistence를 못 넘어(7.74%/8.46%) **잔차 타깃**(예측 = 현재 수요 + LSTM 보정량, `LastValueResidual`)으로 교체했다.
+
+| Model | 고정 test 2023-07~2024-12 MAPE / R² | walk-forward 2021~2024 평균 MAPE / R² | persistence (test / wf) |
+|-------|------|------|------|
+| **demand_only** (17 피처) | **4.03% / 0.937** | **3.61% / 0.935** | 5.12% / 4.49% |
+| **weather_full** (18 피처, 기상은 기온 하나) | 4.14% / 0.933 | 3.60% / 0.935 | 5.12% / 4.49% |
+
+- 합격 기준: 고정 test와 walk-forward 평균 모두 MAPE·RMSE가 persistence보다 낮을 것 → 두 모델 합격, walk-forward 4/4 fold 모두 우위
+- 체크포인트 `model_config.residual_target: true` → `src/inference/predict.py`가 자동으로 래핑. 이 플래그 없이 기본 모델만 쓰면 보정량(≈0)을 수요로 내보내므로 주의
+- 재현: `python src/training/retrain_demand_oot.py --residual` · 리포트 `models/production/training_report.json`, `models/demand_retrain_2026-11-05_residual_v2/*/oot_report.json` · 이전 버전 백업 `models/_pre_retrain_backup_2026-11-05/demand_lstm/`
+
 ### 2025-12-26 실험 기록 (스케일러 누수 시대 — 수치 무효, 역사 참고용)
 
 | Model | Features | MAPE | R² | Notes |

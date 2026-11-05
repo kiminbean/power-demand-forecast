@@ -1,6 +1,6 @@
 {
   "model_name": "demand_only",
-  "timestamp": "2025-12-16T04:55:31.403770",
+  "timestamp": "2026-11-05T22:26:32.883395",
   "features": [
     "power_demand",
     "hour_sin",
@@ -26,7 +26,8 @@
     "hidden_size": 128,
     "num_layers": 2,
     "dropout": 0.2,
-    "bidirectional": false
+    "bidirectional": false,
+    "residual_target": true
   },
   "training_config": {
     "seq_length": 168,
@@ -38,15 +39,15 @@
     "scheduler": "plateau"
   },
   "metrics": {
-    "MAPE": 6.467241048812866,
-    "R2": 0.8457607626914978,
-    "MSE": 1651.029052734375,
-    "RMSE": 40.63285827636719,
-    "MAE": 30.408126831054688,
-    "sMAPE": 6.342609226703644,
-    "MBE": -3.789558172225952,
-    "CV_RMSE": 8.18551778793335,
-    "MaxError": 303.20233154296875,
-    "MedianAE": 24.260543823242188
+    "MAPE": 4.02762564794809,
+    "R2": 0.9365643772465844,
+    "MSE": 673.6603419605053,
+    "RMSE": 25.954967577720172,
+    "MAE": 19.01055269373034,
+    "sMAPE": 4.013573223946419,
+    "MBE": 0.4535740312000834,
+    "CV_RMSE": 5.291124112966825,
+    "MaxError": 159.1951592685529,
+    "MedianAE": 13.505988788883002
   }
 }

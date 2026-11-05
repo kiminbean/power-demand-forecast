@@ -1,6 +1,6 @@
 {
   "model_name": "weather_full",
-  "timestamp": "2025-12-16T05:04:26.226346",
+  "timestamp": "2026-11-05T22:13:57.782215",
   "features": [
     "power_demand",
     "hour_sin",
@@ -19,7 +19,7 @@
     "demand_std_24h",
     "demand_diff_1h",
     "demand_diff_24h",
-    "\uae30\uc628"
+    "기온"
   ],
   "n_features": 18,
   "model_config": {
@@ -27,7 +27,8 @@
     "hidden_size": 128,
     "num_layers": 2,
     "dropout": 0.2,
-    "bidirectional": false
+    "bidirectional": false,
+    "residual_target": true
   },
   "training_config": {
     "seq_length": 168,
@@ -39,15 +40,15 @@
     "scheduler": "plateau"
   },
   "metrics": {
-    "MAPE": 6.05810210108757,
-    "R2": 0.8649908751249313,
-    "MSE": 1445.1832275390625,
-    "RMSE": 38.01556396484375,
-    "MAE": 27.811365127563477,
-    "sMAPE": 5.894067138433456,
-    "MBE": 0.2749507427215576,
-    "CV_RMSE": 7.658262550830841,
-    "MaxError": 311.55328369140625,
-    "MedianAE": 21.718582153320312
+    "MAPE": 4.135832670798894,
+    "R2": 0.9330583651572071,
+    "MSE": 710.8927549255134,
+    "RMSE": 26.66257217384537,
+    "MAE": 19.532647510273414,
+    "sMAPE": 4.110829904219041,
+    "MBE": 1.679508799570062,
+    "CV_RMSE": 5.435374870737683,
+    "MaxError": 155.58018424786854,
+    "MedianAE": 13.948751365223899
   }
 }
