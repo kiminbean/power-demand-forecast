@@ -116,11 +116,11 @@ jobs:
           python -m pip install --upgrade pip
           # Install CPU-only PyTorch first to save disk space (~2GB savings)
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          # Install core dependencies needed for tests
-          pip install pandas numpy scipy scikit-learn matplotlib seaborn
-          pip install holidays python-dateutil tqdm PyYAML python-dotenv
-          pip install pytest pytest-cov pytest-asyncio httpx selenium requests beautifulsoup4 pillow
-          pip install -r requirements-api.txt
+          # 테스트 수집 체인이 requirements.txt 전반을 import한다 (crawler의
+          # selenium/requests/bs4, gauge의 plotly 등). torch는 위 CPU 휠이
+          # 먼저 설치되어 있어 그대로 유지된다.
+          pip install -r requirements.txt -r requirements-api.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Create necessary directories
         run: |
@@ -185,10 +185,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install pandas numpy scipy scikit-learn matplotlib seaborn
-          pip install holidays python-dateutil tqdm PyYAML python-dotenv
-          pip install pytest pytest-asyncio httpx selenium requests beautifulsoup4 pillow
-          pip install -r requirements-api.txt
+          pip install -r requirements.txt -r requirements-api.txt
+          pip install pytest pytest-asyncio httpx
 
       - name: Create necessary directories
         run: |
