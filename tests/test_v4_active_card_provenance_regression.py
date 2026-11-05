@@ -118,6 +118,16 @@ def test_weather_card_labels_simulated_value_at_display() -> None:
     assert "실측 아님" in html
 
 
+def test_weather_card_names_kma_only_when_api_weather_is_used() -> None:
+    """API 서버 기상청 값을 쓸 때만 실황으로 표시하고, 시뮬레이션 고지는 빠진다."""
+    html = _eval_card_html(
+        "기상 현황", {"weather": {"temperature": 18.0, "wind_speed": 4.7, "source": "kma"}}
+    )
+    assert "기상청 초단기실황" in html
+    assert "시뮬레이션" not in html
+    assert "18" in html and "4.7" in html
+
+
 def test_renewable_ratio_card_marks_estimated_provenance() -> None:
     """The renewable-ratio card must disclose that the ratio is estimated."""
     html = _eval_card_html("재생에너지 비율", {"power_status": {"renewable_ratio": 25.0}})

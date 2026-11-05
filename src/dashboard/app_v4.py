@@ -1293,6 +1293,41 @@ def get_jeju_power_plants() -> pd.DataFrame:
     return df
 
 
+# 다른 공개 앱(v5·v6·v7·모바일)과 같은 값을 보여 주도록 재생에너지 비율·계통 주파수·기상·SMP 예측은
+# FastAPI 서버 값을 쓴다. 서버에 연결하지 못하면 기존 추정·시뮬레이션 값을 쓰고 그렇게 표시한다.
+BACKEND_API_URL = os.getenv("POWERDEMAND_API_URL", "http://127.0.0.1:8001").strip().rstrip("/")
+BACKEND_TIMEOUT_SECONDS = 5
+
+
+@st.cache_data(ttl=60)
+def fetch_backend_json(path: str) -> Optional[Dict]:
+    """API 서버 JSON 조회. 실패하면 None (호출 측이 출처를 시뮬레이션으로 표시)."""
+    try:
+        with urllib.request.urlopen(f"{BACKEND_API_URL}{path}", timeout=BACKEND_TIMEOUT_SECONDS) as response:
+            if response.status != 200:
+                return None
+            return json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+
+
+def _finite_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and np.isfinite(value)
+
+
+def _backend_kpi_overrides() -> Dict:
+    """API 서버의 재생에너지 비율(섬 전체 ML 추정)·계통 주파수(시뮬레이션)를 그대로 쓴다."""
+    kpis = fetch_backend_json("/api/v1/dashboard/kpis")
+    if not isinstance(kpis, dict):
+        return {}
+    overrides = {}
+    if _finite_number(kpis.get("renewable_ratio_pct")):
+        overrides["renewable_ratio"] = round(float(kpis["renewable_ratio_pct"]), 1)
+    if _finite_number(kpis.get("grid_frequency")):
+        overrides["frequency"] = round(float(kpis["grid_frequency"]), 2)
+    return overrides
+
+
 @st.cache_data(ttl=60)
 def get_current_power_status() -> Dict:
     """현재 전력 수급 현황 (KPX 실시간 데이터 우선)"""
@@ -1336,6 +1371,7 @@ def get_current_power_status() -> Dict:
             "renewable_ratio": round(renewable_ratio, 1),
             "data_source": data_source,
             "data_date": data_date,
+            **_backend_kpi_overrides(),
         }
 
     # 2순위: EPSIS 파일 데이터
@@ -1414,6 +1450,7 @@ def get_current_power_status() -> Dict:
         "renewable_ratio": round(renewable_ratio, 1),
         "data_source": data_source,
         "data_date": data_date,
+        **_backend_kpi_overrides(),
     }
 
 
@@ -1475,27 +1512,26 @@ def get_smp_data() -> Dict:
         # 최근 데이터 사용
         recent_df = smp_df.tail(48)  # 최근 48시간
 
-        # 현재 시간대 SMP (가장 최근 동일 시간, 0이 아닌 값)
-        hour_data = smp_df[smp_df['hour'] == (current_hour if current_hour > 0 else 24)]
-        if not hour_data.empty:
-            # 0이 아닌 가장 최근 값 찾기
-            valid_data = hour_data[hour_data['smp_jeju'] > 0]
-            if not valid_data.empty:
-                current_smp = float(valid_data['smp_jeju'].iloc[-1])
-            else:
-                current_smp = float(hour_data['smp_jeju'].iloc[-1])
+        # 거래시간 H는 (H-1)시~H시 구간이다. 지금 적용 중인 구간은 now.hour+1이며,
+        # 파일에는 오늘 남은 시간의 하루전 가격도 이미 들어 있으므로 구간 끝이 지금 구간 끝 이하인 행만 쓴다.
+        # (이전에는 now.hour 행을 써서 이미 끝난 구간 가격을 보여 줬다.)
+        now = datetime.now()
+        current_end = pd.Timestamp(now.date()) + pd.Timedelta(hours=current_hour + 1)
+        interval_end = pd.to_datetime(smp_df['date']).dt.normalize() + pd.to_timedelta(smp_df['hour'], unit='h')
+        published = smp_df.assign(interval_end=interval_end)
+        published = published[(published['interval_end'] <= current_end) & (published['smp_jeju'] > 0)]
+        published = published.sort_values('interval_end')
+        if not published.empty:
+            latest = published.iloc[-1]
+            current_smp = float(latest['smp_jeju'])
+            trade_day = latest['interval_end'] - pd.Timedelta(hours=1)
+            trade_label = f"{trade_day:%Y-%m-%d} {int(latest['hour']):02d}h"
+            # 바로 직전 구간 값이 있을 때만 변화율을 만든다
+            previous = published[published['interval_end'] == latest['interval_end'] - pd.Timedelta(hours=1)]
+            prev_smp = float(previous['smp_jeju'].iloc[-1]) if not previous.empty else None
         else:
             current_smp = float(recent_df[recent_df['smp_jeju'] > 0]['smp_jeju'].mean())
-
-        # 이전 시간 SMP (실측 이전값이 없으면 변화율을 만들지 않는다)
-        prev_hour_data = smp_df[smp_df['hour'] == ((current_hour - 1) if current_hour > 1 else 24)]
-        if not prev_hour_data.empty:
-            valid_prev = prev_hour_data[prev_hour_data['smp_jeju'] > 0]
-            if not valid_prev.empty:
-                prev_smp = float(valid_prev['smp_jeju'].iloc[-1])
-            else:
-                prev_smp = None
-        else:
+            trade_label = None
             prev_smp = None
 
         # 시간대별 평균 SMP (0이 아닌 값만)
@@ -1553,6 +1589,7 @@ def get_smp_data() -> Dict:
 
         current_smp = base_smp[current_hour] * random.uniform(0.9, 1.1)
         prev_smp = base_smp[(current_hour - 1) % 24] * random.uniform(0.9, 1.1)
+        trade_label = None
 
         predictions = []
         for h in range(24):
@@ -1588,6 +1625,7 @@ def get_smp_data() -> Dict:
         "change": round(change, 1) if change is not None else None,
         "change_pct": round(change_pct, 1) if change_pct is not None else None,
         "prev_available": prev_smp is not None and prev_smp > 0,
+        "trade_label": trade_label,
         "predictions": predictions,
         "daily_avg": round(daily_avg, 1),
         "daily_max": round(daily_max, 1),
@@ -1600,10 +1638,10 @@ def get_smp_data() -> Dict:
 
 @st.cache_data(ttl=300)
 def get_weather_data() -> Dict:
-    """기상 데이터"""
+    """기상 데이터 — API 서버(기상청 초단기실황)가 주는 기온·풍속·습도를 우선 쓴다."""
     hour = datetime.now().hour
 
-    return {
+    weather = {
         "temperature": round(10 + 8 * np.sin(np.pi * (hour - 6) / 12) + random.uniform(-2, 2), 1),
         "humidity": round(60 + random.uniform(-15, 15), 0),
         "wind_speed": round(5 + random.uniform(0, 10), 1),
@@ -1611,6 +1649,43 @@ def get_weather_data() -> Dict:
         "cloud_cover": round(random.uniform(0, 80), 0),
         "solar_radiation": round(800 * np.sin(np.pi * max(0, hour - 6) / 12) if 6 <= hour <= 18 else 0, 0),
         "precipitation": round(random.uniform(0, 2), 1) if random.random() > 0.7 else 0,
+        "source": "simulation",
+    }
+    kpis = fetch_backend_json("/api/v1/dashboard/kpis")
+    api_weather = kpis.get("weather") if isinstance(kpis, dict) else None
+    if isinstance(api_weather, dict) and all(
+        _finite_number(api_weather.get(key)) for key in ("temperature", "wind_speed", "humidity")
+    ):
+        weather.update({
+            "temperature": round(float(api_weather["temperature"]), 1),
+            "wind_speed": round(float(api_weather["wind_speed"]), 1),
+            "humidity": round(float(api_weather["humidity"]), 0),
+            "condition": api_weather.get("condition"),
+            "source": "kma",
+        })
+    return weather
+
+
+@st.cache_data(ttl=60)
+def get_backend_smp_predictions() -> Optional[Dict]:
+    """다른 앱과 같은 /smp-forecast 예측(오늘 거래시간 1~24)을 차트 형식으로 변환한다."""
+    forecast = fetch_backend_json("/api/v1/smp-forecast")
+    if not isinstance(forecast, dict):
+        return None
+    series = [forecast.get(key) for key in ("q10", "q50", "q90")]
+    if not all(isinstance(s, list) and len(s) == 24 and all(_finite_number(v) for v in s) for s in series):
+        return None
+    q10, q50, q90 = series
+    # 인덱스 i는 i시~i+1시 구간(거래시간 i+1)이며 다른 앱과 같이 시작 시각으로 표기한다.
+    predictions = [
+        {"hour": i + 1, "time": f"{i:02d}:00", "smp": round(q50[i], 1), "q10": round(q10[i], 1), "q90": round(q90[i], 1)}
+        for i in range(24)
+    ]
+    return {
+        "predictions": predictions,
+        "current_index": datetime.now().hour,
+        "forecast_date": forecast.get("forecast_date"),
+        "forecast_model": forecast.get("model_used"),
     }
 
 
@@ -1815,12 +1890,13 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
         marker=dict(size=6),
     ))
 
-    # 현재 시점 표시 (첫 번째 데이터 포인트에 수직선)
+    # 현재 시점 표시 (API 예측은 오늘 0~23시이므로 현재 시각 위치, 로컬 예측은 첫 지점)
     if predictions:
+        now_point = predictions[min(smp_data.get('current_index', 0), len(predictions) - 1)]['time']
         fig.add_shape(
             type="line",
-            x0=predictions[0]['time'],
-            x1=predictions[0]['time'],
+            x0=now_point,
+            x1=now_point,
             y0=0,
             y1=1,
             yref="paper",
@@ -1828,7 +1904,7 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
         )
         # 현재 시점 주석
         fig.add_annotation(
-            x=predictions[0]['time'],
+            x=now_point,
             y=1,
             yref="paper",
             text="현재",
@@ -2387,6 +2463,10 @@ def main():
     plants_df = get_jeju_power_plants()
     power_status = get_current_power_status()
     smp_data = get_smp_data()
+    # 예측은 다른 앱과 같은 API 서버 모델 예측을 쓴다 (실패 시 기존 로컬 추정 유지)
+    backend_predictions = get_backend_smp_predictions()
+    if backend_predictions:
+        smp_data = {**smp_data, **backend_predictions}
     weather = get_weather_data()
 
     # ========== 사이드바: 테스트 모드 ==========
@@ -2641,9 +2721,10 @@ def main():
             smp_change_html = "이전 시간 데이터 없음"
         st.markdown(f"""
         <div class="info-card">
-            <div class="info-card-title">최근 SMP (제주)</div>
+            <div class="info-card-title">제주 하루전 SMP</div>
             <div class="info-card-value">{smp_data['current']} <span style="font-size: 1rem;">원</span></div>
             <div class="info-card-change {smp_change_class}">{smp_change_html}</div>
+            <div class="info-card-meta" style="font-size: 0.7rem; color: #64748B; margin-top: 4px;">거래시간 {smp_data.get('trade_label') or '확인 불가'}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2671,7 +2752,7 @@ def main():
             <div class="info-card-title">기상 현황</div>
             <div class="info-card-value">{weather['temperature']:.0f} <span style="font-size: 1rem;">°C</span></div>
             <div class="info-card-change">풍속 {weather['wind_speed']:.1f} m/s</div>
-            <div class="info-card-change"><span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span></div>
+            <div class="info-card-change">{'<span class="status-badge status-online">기상청 초단기실황</span>' if weather.get('source') == 'kma' else '<span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span>'}</div>
         </div>
         """, unsafe_allow_html=True)
 

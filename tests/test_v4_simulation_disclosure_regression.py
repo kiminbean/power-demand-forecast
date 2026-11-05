@@ -149,16 +149,28 @@ def test_smp_source_no_longer_fabricates_previous_value() -> None:
     assert "0.98" not in seg
 
 
+def _trade_slot(offset: int) -> Tuple[pd.Timestamp, int]:
+    """현재 적용 중인 거래시간(now.hour+1)에서 offset만큼 떨어진 (거래일, 거래시간)."""
+    now = datetime.now()
+    end = pd.Timestamp(now.date()) + pd.Timedelta(hours=now.hour + 1 + offset)
+    start = end - pd.Timedelta(hours=1)
+    return pd.Timestamp(start.date()), start.hour + 1
+
+
+def _history(points: Dict[int, float]) -> pd.DataFrame:
+    rows = []
+    for offset, value in points.items():
+        day, hour = _trade_slot(offset)
+        rows.append({"date": day, "timestamp": f"{day:%Y-%m-%d} {hour:02d}:00", "hour": hour,
+                     "smp_jeju": value, "smp_mainland": value})
+    return pd.DataFrame(rows)
+
+
 def test_smp_change_hidden_when_previous_hour_missing() -> None:
     """이전 시간 실측값이 없으면 변화율을 계산하지 않는다 (None + 플래그)."""
-    current_hour = datetime.now().hour
-    cur = current_hour if current_hour > 0 else 24
-    prev = current_hour - 1 if current_hour > 1 else 24
-    # 현재/이전 시간이 아닌 임의 시간대에만 데이터 존재
-    extra = next(h for h in range(1, 25) if h not in (cur, prev))
+    result = _run_get_smp_data(_history({0: 150.0, -3: 90.0}))
 
-    result = _run_get_smp_data(_make_smp_history_for_hours({extra: 150.0}))
-
+    assert result["current"] == 150.0
     assert result["prev_available"] is False
     assert result["change"] is None
     assert result["change_pct"] is None
@@ -166,17 +178,24 @@ def test_smp_change_hidden_when_previous_hour_missing() -> None:
 
 def test_smp_change_uses_real_previous_value_when_present() -> None:
     """이전 시간 실측값이 있으면 실제 차이를 사용한다 (가짜 2%가 아님)."""
-    current_hour = datetime.now().hour
-    cur = current_hour if current_hour > 0 else 24
-    prev = current_hour - 1 if current_hour > 1 else 24
-
-    cur_value = 200.0
-    prev_value = 100.0 if cur != prev else cur_value
-    result = _run_get_smp_data(_make_smp_history_for_hours({cur: cur_value, prev: prev_value}))
+    result = _run_get_smp_data(_history({-1: 100.0, 0: 200.0}))
 
     assert result["prev_available"] is True
-    assert result["change"] == pytest.approx(cur_value - prev_value)
-    assert result["change_pct"] == pytest.approx((cur_value - prev_value) / prev_value * 100)
+    assert result["change"] == pytest.approx(100.0)
+    assert result["change_pct"] == pytest.approx(100.0)
+
+
+def test_smp_uses_trade_hour_in_effect_not_ended_or_future_one() -> None:
+    """거래시간 H는 (H-1)시~H시. 지금 구간(now.hour+1)을 쓰고, 이미 공표된 이후 구간은 쓰지 않는다.
+
+    2026-11-05 16:14에 15~16시(16h, 179.89)를 보여 줘 하루전 카드(17h, 124.93)와 달랐던 버그 재현.
+    """
+    result = _run_get_smp_data(_history({-1: 179.89, 0: 124.93, 1: 124.93 + 50}))
+
+    assert result["current"] == pytest.approx(124.93, abs=0.05)  # 카드 표시는 소수 1자리 반올림
+    assert result["change"] == pytest.approx(124.93 - 179.89, abs=0.05)
+    day, hour = _trade_slot(0)
+    assert result["trade_label"] == f"{day:%Y-%m-%d} {hour:02d}h"
 
 
 def test_smp_card_hides_arrow_when_previous_missing() -> None:
@@ -193,10 +212,11 @@ def test_smp_card_hides_arrow_when_previous_missing() -> None:
 
     # 카드 f-string이 조건부 문구 변수를 실제로 렌더에 사용하는지 확인
     html = _eval_card_html(
-        "최근 SMP (제주)",
+        "제주 하루전 SMP",
         {"smp_data": {"current": 200.0}, "smp_change_class": "", "smp_change_html": "이전 시간 데이터 없음"},
     )
     assert "이전 시간 데이터 없음" in html
+    assert "거래시간 확인 불가" in html
 
 
 # ============================================================================
