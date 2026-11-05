@@ -47,7 +47,10 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
-# Initialize SMP Predictor (v3.2 Optuna - MAPE 7.17%, R² 0.77)
+# Initialize SMP Predictor (v3.2 Optuna). 이 체크포인트는 스케일러 누수 상태로 학습돼
+# 기록된 MAPE·R²가 무효이며 재학습·재검증되지 않았다. 지표를 표시하지 않는다.
+SMP_MODEL_LABEL = "BiLSTM+Attention v3.2 Optuna (성능 재검증 전)"
+SMP_MODEL_STATUS = "active (성능 재검증 전)"
 _smp_predictor = None
 
 def get_or_create_smp_predictor():
@@ -57,7 +60,7 @@ def get_or_create_smp_predictor():
         try:
             _smp_predictor = SMPPredictor(use_advanced=True)
             if _smp_predictor.is_ready():
-                logger.info("SMP v3.2 Optuna model loaded (MAPE: 7.17%, R²: 0.77)")
+                logger.info("SMP v3.2 Optuna model loaded (metrics pending re-validation)")
             else:
                 logger.warning("SMP model not ready, will use fallback")
                 _smp_predictor = None
@@ -86,9 +89,10 @@ class SMPForecastResponse(BaseModel):
     q90: List[float] = Field(description="90% 분위수 (상한)")
     hours: List[int] = Field(description="시간 (1-24)")
     model_used: str = Field(description="사용된 모델")
-    confidence: float = Field(description="예측 신뢰도")
+    confidence: Optional[float] = Field(default=None, description="예측 신뢰도; 검증된 지표가 없으면 null")
     created_at: str = Field(description="생성 시각")
     data_source: str = Field(description="데이터 소스")
+    forecast_date: Optional[str] = Field(default=None, description="예측 대상 거래일(YYYY-MM-DD); hours 1~24가 이 날짜의 거래시간")
 
 
 class WeatherData(BaseModel):
@@ -144,8 +148,8 @@ class ModelInfoResponse(BaseModel):
     version: str
     type: str
     device: str
-    mape: float
-    coverage: float
+    mape: Optional[float] = None
+    coverage: Optional[float] = None
     last_trained: Optional[str] = None
     data_source: str
 
@@ -235,29 +239,40 @@ def load_model_metrics() -> Dict[str, Any]:
     return {}
 
 
-# 제주도 발전소 실제 데이터 (20개)
-JEJU_PLANTS = [
-    {"id": "1", "name": "가시리풍력", "type": "wind", "capacity": 15.0, "location": "서귀포시", "lat": 33.3823, "lng": 126.7632},
-    {"id": "2", "name": "김녕풍력", "type": "wind", "capacity": 12.0, "location": "제주시", "lat": 33.5575, "lng": 126.7631},
-    {"id": "3", "name": "한경풍력", "type": "wind", "capacity": 21.0, "location": "제주시", "lat": 33.3343, "lng": 126.1727},
-    {"id": "4", "name": "삼달풍력", "type": "wind", "capacity": 6.1, "location": "서귀포시", "lat": 33.3489, "lng": 126.8347},
-    {"id": "5", "name": "성산풍력", "type": "wind", "capacity": 20.0, "location": "서귀포시", "lat": 33.4586, "lng": 126.9312},
-    {"id": "6", "name": "표선풍력", "type": "wind", "capacity": 10.0, "location": "서귀포시", "lat": 33.3325, "lng": 126.8159},
-    {"id": "7", "name": "월정태양광", "type": "solar", "capacity": 5.0, "location": "제주시", "lat": 33.5556, "lng": 126.7889},
-    {"id": "8", "name": "성산태양광", "type": "solar", "capacity": 8.0, "location": "서귀포시", "lat": 33.4350, "lng": 126.9100},
-    {"id": "9", "name": "대정태양광", "type": "solar", "capacity": 12.0, "location": "서귀포시", "lat": 33.2234, "lng": 126.2567},
-    {"id": "10", "name": "한림태양광", "type": "solar", "capacity": 6.5, "location": "제주시", "lat": 33.4089, "lng": 126.2698},
-    {"id": "11", "name": "애월태양광", "type": "solar", "capacity": 7.0, "location": "제주시", "lat": 33.4731, "lng": 126.3287},
-    {"id": "12", "name": "조천태양광", "type": "solar", "capacity": 4.5, "location": "제주시", "lat": 33.5412, "lng": 126.6398},
-    {"id": "13", "name": "행원풍력", "type": "wind", "capacity": 15.0, "location": "제주시", "lat": 33.5234, "lng": 126.8123},
-    {"id": "14", "name": "신창풍력", "type": "wind", "capacity": 8.3, "location": "제주시", "lat": 33.3567, "lng": 126.1789},
-    {"id": "15", "name": "탐라해상풍력", "type": "wind", "capacity": 30.0, "location": "한경면", "lat": 33.3100, "lng": 126.1500},
-    {"id": "16", "name": "한동풍력", "type": "wind", "capacity": 9.0, "location": "제주시", "lat": 33.5089, "lng": 126.8567},
-    {"id": "17", "name": "남원태양광", "type": "solar", "capacity": 5.5, "location": "서귀포시", "lat": 33.2789, "lng": 126.7234},
-    {"id": "18", "name": "구좌ESS", "type": "ess", "capacity": 20.0, "location": "제주시", "lat": 33.5234, "lng": 126.8012},
-    {"id": "19", "name": "삼양ESS", "type": "ess", "capacity": 15.0, "location": "제주시", "lat": 33.5123, "lng": 126.5567},
-    {"id": "20", "name": "서귀포ESS", "type": "ess", "capacity": 15.0, "location": "서귀포시", "lat": 33.2534, "lng": 126.5123},
-]
+# 제주도 발전소 기준 목록: data/jeju_plants/jeju_power_plants.json(출처 메타데이터 포함)의 운영중
+# 풍력·태양광·ESS. "분산형 태양광"은 1,620개소 합산값이라 개별 발전소에서 제외하고, 건설중 시설도 제외한다.
+# 모든 공개 페이지(v7 지도 포함)가 이 목록과 같은 시설·용량을 보여야 한다.
+PLANTS_FILE = PROJECT_ROOT / "data" / "jeju_plants" / "jeju_power_plants.json"
+PLANT_GROUPS = ("wind_farms", "solar_farms", "ess_facilities")
+
+
+def load_jeju_plants(path: Path = PLANTS_FILE) -> List[Dict[str, Any]]:
+    """기준 발전소 목록을 로드한다. 파일이 없거나 형식이 다르면 즉시 실패한다."""
+    import json
+    data = json.loads(path.read_text(encoding="utf-8"))
+    plants = []
+    for group in PLANT_GROUPS:
+        for p in data[group]:
+            if p["status"] != "운영중" or p.get("subtype") == "distributed":
+                continue
+            capacity = float(p["capacity_mw"])
+            if p["type"] not in ("wind", "solar", "ess") or not np.isfinite(capacity) or capacity <= 0:
+                raise ValueError(f"invalid plant record: {p['id']}")
+            plants.append({
+                "id": p["id"],
+                "name": p["name"],
+                "type": p["type"],
+                "capacity": capacity,
+                "location": p["address"].split()[0],
+                "lat": float(p["latitude"]),
+                "lng": float(p["longitude"]),
+            })
+    if not plants:
+        raise ValueError(f"no operating plants in {path}")
+    return plants
+
+
+JEJU_PLANTS = load_jeju_plants()
 
 
 # ============================================================
@@ -269,7 +284,7 @@ async def get_smp_forecast():
     """
     24시간 SMP 예측
 
-    BiLSTM+Attention v3.2 Optuna 모델 사용 (MAPE 7.17%, R² 0.77)
+    BiLSTM+Attention v3.2 Optuna 모델 사용 (성능 재검증 전 — 지표 미표시)
     모델 미사용 시 EPSIS 실제 데이터 기반 폴백
     """
     try:
@@ -282,25 +297,23 @@ async def get_smp_forecast():
             # Use BiLSTM+Attention v3.2 Optuna model
             result = predictor.predict_24h()
 
-            model_used = result.get('model_used', 'v3.2')
-            mape = result.get('mape', 7.17)
-
             # Model predictions
             q10 = [round(float(v), 2) for v in result['q10']]
             q50 = [round(float(v), 2) for v in result['q50']]
             q90 = [round(float(v), 2) for v in result['q90']]
 
-            logger.info(f"SMP forecast using model {model_used} (MAPE: {mape}%)")
+            logger.info(f"SMP forecast using model {result.get('model_used')} for {result.get('forecast_date')}")
 
             return SMPForecastResponse(
                 q10=q10,
                 q50=q50,
                 q90=q90,
                 hours=hours,
-                model_used=f"BiLSTM+Attention v3.2 Optuna (MAPE: {mape}%)",
-                confidence=0.92,
+                model_used=SMP_MODEL_LABEL,
+                confidence=None,
                 created_at=datetime.now().isoformat(),
-                data_source="Model Prediction + EPSIS Historical"
+                data_source="Model Prediction + EPSIS Historical",
+                forecast_date=result.get('forecast_date'),
             )
 
         # 2. Fallback to EPSIS actual data if model not available
@@ -448,9 +461,7 @@ async def get_dashboard_kpis():
                     weather_condition = "맑음"
                 data_sources.append("KMA Weather (파일)")
 
-        # ===== 재생에너지 출력 및 비율 (ML 예측 기반) =====
-        ess_capacity = sum(p['capacity'] for p in JEJU_PLANTS if p['type'] == 'ess')
-
+        # ===== 재생에너지 비율 (섬 전체, ML 예측 기반) =====
         # ML 예측기 사용 (기상 데이터 기반 GradientBoosting 모델)
         ml_predictor = get_ml_predictor()
         ml_pred = ml_predictor.predict_hour(
@@ -462,12 +473,13 @@ async def get_dashboard_kpis():
 
         solar_output = ml_pred.solar_mw
         wind_output = ml_pred.wind_mw
-        ess_output = ess_capacity * 0.3
 
-        current_output = solar_output + wind_output + ess_output
+        # 포트폴리오 발전량·가동률은 /resources와 같은 발전소별 시뮬레이션 합계를 쓴다.
+        # (섬 전체 ML 예측을 포트폴리오 설비용량으로 나누면 분자·분모 범위가 맞지 않는다.)
+        current_output = sum(r.current_output for r in simulate_resources(now))
         utilization = (current_output / total_capacity) * 100
 
-        # 재생에너지 비율 = (태양광 + 풍력) / 전체 수요
+        # 재생에너지 비율 = 섬 전체 (태양광 + 풍력) 예측 / 전체 수요
         renewable_output = solar_output + wind_output
         renewable_ratio = (renewable_output / current_demand) * 100 if current_demand > 0 else 0
 
@@ -551,7 +563,11 @@ async def get_resources():
 
     실제 발전소 정보 + 시뮬레이션 출력
     """
-    now = datetime.now()
+    return simulate_resources(datetime.now())
+
+
+def simulate_resources(now: datetime) -> List[ResourceResponse]:
+    """발전소별 출력 시뮬레이션. /resources와 /dashboard/kpis가 같은 값을 쓰도록 공유한다."""
     hour = now.hour
 
     # 날짜+시간 기반 시드 (같은 시간대에는 동일한 값 유지)
@@ -592,17 +608,17 @@ async def get_resources():
 @router.get("/model/info", response_model=ModelInfoResponse)
 async def get_model_info():
     """SMP 예측 모델 정보"""
-    metrics = load_model_metrics()
-
+    # 서빙 중인 v3.2 체크포인트의 기록 지표(MAPE 7.17%)는 스케일러 누수로 무효이고, coverage 94.5%는
+    # 어떤 지표 파일에도 근거가 없었다. 재검증 전까지 지표를 null로 내보낸다.
     return ModelInfoResponse(
-        status="active",
+        status=SMP_MODEL_STATUS,
         version="v3.2",
         type="BiLSTM+Attention (Optuna)",
         device="MPS (Apple Silicon)",
-        mape=metrics.get('test_mape', 7.17),
-        coverage=metrics.get('coverage_90', 94.5),
-        last_trained=metrics.get('trained_at', None),
-        data_source="EPSIS Real Data (2024-01 ~ 2024-12)"
+        mape=None,
+        coverage=None,
+        last_trained=None,
+        data_source="EPSIS SMP (data/smp/smp_real_epsis.csv, 예측일 전날 24시까지 입력)"
     )
 
 

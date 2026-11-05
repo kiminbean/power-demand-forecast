@@ -83,7 +83,16 @@ class SMPPredictor:
             # v3.2 Optuna 최적화 모델 (기본) - MAPE 7.17%, R² 0.77
             self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp_v3_optuna/smp_v32_model.pt"
             self.scaler_path = Path(scaler_path) if scaler_path else PROJECT_ROOT / "models/smp_v3_optuna/smp_v32_scaler.pkl"
-            self.data_path = Path(data_path) if data_path else PROJECT_ROOT / "data/smp/smp_5years_epsis.csv"
+            # smp_5years_epsis.csv는 2025-12-18에서 멈춰 있어 예측이 과거 날짜 기준이 된다.
+            # 스케줄러가 매일 갱신하는 smp_real_epsis.csv(같은 스키마)를 우선 사용한다.
+            latest_path = PROJECT_ROOT / "data/smp/smp_real_epsis.csv"
+            if data_path:
+                self.data_path = Path(data_path)
+            elif latest_path.exists():
+                self.data_path = latest_path
+            else:
+                logger.warning("최신 SMP 파일 없음: %s — 2025-12-18까지의 smp_5years_epsis.csv 사용", latest_path)
+                self.data_path = PROJECT_ROOT / "data/smp/smp_5years_epsis.csv"
         elif use_v2:
             # v2.1 레거시 모델
             self.model_path = Path(model_path) if model_path else PROJECT_ROOT / "models/smp_advanced/smp_advanced_model.pt"
@@ -233,11 +242,12 @@ class SMPPredictor:
         """예측기 준비 상태 확인"""
         return self.model is not None and self.scaler_info is not None
 
-    def _load_recent_data(self, hours: int = 24) -> Optional[pd.DataFrame]:
+    def _load_recent_data(self, hours: int = 24, end_at: Optional[datetime] = None) -> Optional[pd.DataFrame]:
         """최근 SMP 데이터 로드 (캐싱 적용)
 
         Args:
             hours: 필요한 시간 수
+            end_at: 이 시각(거래시간 구간 끝)까지의 행만 사용한다. None이면 파일 끝까지.
 
         Returns:
             최근 SMP 데이터 DataFrame
@@ -286,7 +296,10 @@ class SMPPredictor:
                 logger.info(f"SMP 데이터 캐시 완료: {len(df)}행")
 
             # Get recent data from cache
-            recent_df = self._cached_data.tail(hours).copy()
+            source = self._cached_data
+            if end_at is not None:
+                source = source[source['datetime'] <= pd.Timestamp(end_at)]
+            recent_df = source.tail(hours).copy()
 
             if len(recent_df) < hours:
                 logger.warning(f"데이터 부족: {len(recent_df)}/{hours}")
@@ -301,6 +314,11 @@ class SMPPredictor:
             import traceback
             traceback.print_exc()
             return None
+
+    @staticmethod
+    def forecast_start(window: pd.DataFrame) -> datetime:
+        """입력 마지막 행(거래시간 구간 끝)이 곧 다음 24시간 예측 구간의 시작이다."""
+        return pd.Timestamp(window['datetime'].iloc[-1]).to_pydatetime()
 
     def _create_features(self, df: pd.DataFrame) -> np.ndarray:
         """피처 생성
@@ -547,10 +565,13 @@ class SMPPredictor:
             else:
                 input_hours = 24
 
-            # 최근 데이터 로드
-            recent_df = self._load_recent_data(input_hours)
+            # 최신 파일에는 오늘 하루전 가격까지 들어 있으므로, 오늘 1~24시를 예측하도록
+            # 입력을 오늘 0시(어제 24시 구간 끝)에서 끊는다.
+            recent_df = self._load_recent_data(input_hours, end_at=base_time.replace(hour=0))
             if recent_df is None:
                 return self._generate_fallback_predictions(times)
+            forecast_start = self.forecast_start(recent_df)
+            times = [forecast_start + timedelta(hours=i + 1) for i in range(24)]
 
             # 피처 생성 및 정규화
             features = self._create_features(recent_df)
@@ -627,7 +648,8 @@ class SMPPredictor:
                 'q50': q50,
                 'q90': q90,
                 'model_used': model_used,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'forecast_date': forecast_start.date().isoformat(),
             }
 
             # 고도화 모델 추가 정보
