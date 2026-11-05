@@ -18,7 +18,7 @@ from typing import Callable, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
-from src.evaluation.metrics import mae, mape, rmse
+from src.evaluation.metrics import mae, mape, rmse, wmape
 
 # 계절성 주기 (시간별 데이터)
 SEASONALITY_HOURLY = 24
@@ -290,8 +290,13 @@ def segment_metrics(
         holidays: 휴일 datetime.date 집합 (선택). 미제공 시 holiday 구간 미생성
 
     Returns:
-        DataFrame: model, segment_type, segment, n, MAE, RMSE, MAPE.
+        DataFrame: model, segment_type, segment, n, MAE, RMSE, WMAPE.
         각 segment_type은 모델별 전체 타임스탬프를 정확히 한 번씩 커버한다.
+
+    Note:
+        WMAPE는 구간 집계 표준 정의(src.evaluation.metrics.wmape,
+        평균 절대오차 / 실측 절대값 평균 × 100)를 따른다. 점별 MAPE와 수치가
+        다르며, 실측 절대값 합이 0인 구간은 NaN으로 처리한다(0 나눗셈 정책 통일).
     """
     if "timestamp" not in error_frame.columns:
         raise ValueError("error_frame must contain a 'timestamp' column")
@@ -303,6 +308,7 @@ def segment_metrics(
 
     frame["peak_flag"] = (hours >= PEAK_HOURS_START) & (hours < OFF_PEAK_HOURS_END)
     frame["weekend_flag"] = weekdays >= 5
+    frame["abs_true"] = np.abs(frame["y_true"].to_numpy(dtype=float))
     if holidays is not None:
         frame["holiday_flag"] = ts.dt.normalize().dt.date.isin(holidays)
 
@@ -312,18 +318,17 @@ def segment_metrics(
             n=("abs_error", "size"),
             mae_val=("abs_error", "mean"),
             rmse_val=("sq_error", lambda s: float(np.sqrt(s.mean()))),
+            abs_true_sum=("abs_true", "sum"),
         ).reset_index()
-        true_means = grouped["y_true"].mean().reset_index()["y_true"]
-        # MAPE: 구간별 실측 평균 대비 절대 오차 비율 (0 나눗셈 방지)
-        denom = true_means.to_numpy(dtype=float)
-        result["MAPE"] = np.where(
-            denom > 0, result["mae_val"] / denom * 100.0, np.nan
-        )
+        # WMAPE: 구간 집계 표준 정의 — 평균 절대오차 / 실측 절대값 평균 × 100.
+        # 실측 절대값 합이 0인 구간은 NaN(0 나눗셈 정책: metrics.wmape와 동일).
+        denom = (result["abs_true_sum"] / result["n"]).to_numpy(dtype=float)
+        result["WMAPE"] = np.where(denom > 0, result["mae_val"] / denom * 100.0, np.nan)
         result = result.rename(
             columns={result.columns[1]: "segment", "mae_val": "MAE", "rmse_val": "RMSE"}
         )
         result.insert(1, "segment_type", seg_type)
-        return result[["model", "segment_type", "segment", "n", "MAE", "RMSE", "MAPE"]]
+        return result[["model", "segment_type", "segment", "n", "MAE", "RMSE", "WMAPE"]]
 
     parts = [
         _aggregate(frame["peak_flag"].map({True: "peak", False: "off_peak"}), "peak_hour"),

@@ -113,6 +113,42 @@ def mape(y_true: np.ndarray, y_pred: np.ndarray, epsilon: float = 1e-10) -> floa
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
 
 
+def wmape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Weighted MAPE (가중 평균 절대 백분율 오차, 구간 집계용 표준)
+
+    WMAPE = Σ|y_true - y_pred| / Σ|y_true| × 100
+          = mean(|y_true - y_pred|) / mean(|y_true|) × 100
+
+    구간(세그먼트) 집계 지표의 단일 정의다. 점별 MAPE(mape)와 다음이 다르다.
+    - 오차를 실측 절대값 총합으로 가중 → 0에 가까운 실측값 하나가
+      지표를 폭발시키지 않는다(0 나눗셈 폭발 처리 정책 통일).
+    - 분모에 절대값을 취하므로 부호 혼합 구간에서도 정의가 일정하다.
+
+    Args:
+        y_true: 실제값
+        y_pred: 예측값
+
+    Returns:
+        float: WMAPE 값 (%). 실측 절대값 총합이 0이면 NaN
+
+    Note:
+        점별 MAPE가 필요하면 mape()를, 0 근처 실측이 많으면 sMAPE를 사용.
+    """
+    y_true = np.asarray(y_true, dtype=float).flatten()
+    y_pred = np.asarray(y_pred, dtype=float).flatten()
+    if y_true.shape != y_pred.shape:
+        raise ValueError(
+            f"y_true and y_pred must have the same shape, got {y_true.shape} vs {y_pred.shape}"
+        )
+
+    denom = float(np.sum(np.abs(y_true)))
+    if denom <= 0.0 or not np.isfinite(denom):
+        return float("nan")
+
+    return float(np.sum(np.abs(y_true - y_pred)) / denom * 100.0)
+
+
 def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     R² Score (결정계수)
