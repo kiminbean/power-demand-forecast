@@ -57,6 +57,10 @@ def _wrap_if_residual(model: torch.nn.Module, checkpoint: dict) -> torch.nn.Modu
     """
     if not checkpoint['model_config'].get('residual_target', False):
         return model
+    anchor = checkpoint['model_config'].get('residual_anchor', 'power_demand')
+    if anchor != 'power_demand':
+        # AR 앵커 체크포인트는 추론 시 ar_forecast 열을 만들어야 하는데 서빙 경로가 아직 지원하지 않는다
+        raise ValueError(f"Serving does not support residual anchor {anchor!r} yet")
     features = checkpoint['features']
     if features[0] != 'power_demand':
         raise ValueError("Residual checkpoint requires power_demand as the first feature")

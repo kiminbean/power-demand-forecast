@@ -402,22 +402,28 @@ class LastValueResidual(nn.Module):
 
     Args:
         base: 감쌀 기본 모델 (예: LSTMModel)
-        target_idx: 입력 피처 중 타깃 열 인덱스
-        zero_init: True면 마지막 Linear를 0으로 초기화해 학습 시작점을 persistence로 맞춘다.
+        target_idx: 앵커로 쓸 입력 열 인덱스 (기본 0 = 타깃 자체, 즉 persistence)
+        zero_init: True면 마지막 Linear를 0으로 초기화해 학습 시작점을 앵커로 맞춘다.
             학습된 가중치를 불러온 뒤 감쌀 때는 반드시 False.
+        anchor_scale, anchor_shift: 앵커 열이 타깃과 다른 min-max로 스케일된 경우(예: AR 예측 열)
+            타깃 스케일로 옮기는 변환. 앵커 = x * anchor_scale + anchor_shift
     """
 
-    def __init__(self, base: nn.Module, target_idx: int = 0, zero_init: bool = True):
+    def __init__(self, base: nn.Module, target_idx: int = 0, zero_init: bool = True,
+                 anchor_scale: float = 1.0, anchor_shift: float = 0.0):
         super().__init__()
         self.base = base
         self.target_idx = target_idx
+        # 체크포인트에는 base만 저장하므로 buffer가 아닌 일반 속성으로 둔다
+        self.anchor_scale = float(anchor_scale)
+        self.anchor_shift = float(anchor_shift)
         if zero_init:
             last = [m for m in base.modules() if isinstance(m, nn.Linear)][-1]
             nn.init.zeros_(last.weight)
             nn.init.zeros_(last.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        anchor = x[:, -1, self.target_idx:self.target_idx + 1]
+        anchor = x[:, -1, self.target_idx:self.target_idx + 1] * self.anchor_scale + self.anchor_shift
         return anchor + self.base(x)
 
 

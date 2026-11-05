@@ -19,6 +19,8 @@ Author: Hybrid Agent Pipeline (Claude + Gemini)
 Date: 2024-12
 """
 
+import math
+
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Union, Tuple
@@ -327,6 +329,46 @@ def median_absolute_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.asarray(y_true).flatten()
     y_pred = np.asarray(y_pred).flatten()
     return np.median(np.abs(y_true - y_pred))
+
+
+# ============================================================
+# 예측 비교 검정
+# ============================================================
+
+# 1시간 앞 예측 오차는 하루 주기로 자기상관이 남으므로 24시차까지 분산을 보정한다
+DM_DEFAULT_MAX_LAG = 24
+
+
+def diebold_mariano(errors_a: np.ndarray, errors_b: np.ndarray,
+                    max_lag: int = DM_DEFAULT_MAX_LAG) -> Dict[str, float]:
+    """
+    Diebold-Mariano 검정 (절대오차 손실, Newey-West 장기분산)
+
+    손실 차이 d_t = |e_a,t| - |e_b,t|의 평균이 0인지 검정한다. 지표 차이가 아주 작을 때
+    (예: AR을 앵커로 써서 거의 같은 예측) 우연인지 가려내기 위해 쓴다.
+
+    Args:
+        errors_a: 예측 a의 오차 (예측 - 실제)
+        errors_b: 예측 b의 오차 (같은 시각)
+        max_lag: Newey-West 가중치를 적용할 최대 시차
+
+    Returns:
+        Dict: mean_diff(음수면 a가 정확), stat, p_a_better(단측 p값, a가 더 정확하다는 가설)
+    """
+    d = np.abs(np.asarray(errors_a, dtype=float).ravel()) - np.abs(np.asarray(errors_b, dtype=float).ravel())
+    if d.size <= max_lag + 1 or not np.isfinite(d).all():
+        raise ValueError("diebold_mariano needs finite errors longer than max_lag + 1")
+    centered = d - d.mean()
+    long_run_var = centered @ centered / d.size
+    for k in range(1, max_lag + 1):
+        long_run_var += 2 * (1 - k / (max_lag + 1)) * (centered[k:] @ centered[:-k]) / d.size
+    if long_run_var <= 0:
+        # 손실 차이가 상수면 분산이 0이다. 차이도 0이면 두 예측이 같으므로 판단할 근거가 없다
+        stat = 0.0 if d.mean() == 0 else float(np.sign(d.mean()) * np.inf)
+    else:
+        stat = float(d.mean() / np.sqrt(long_run_var / d.size))
+    p_a_better = 0.5 * math.erfc(-stat / math.sqrt(2))  # 표준정규 누적분포 Φ(stat)
+    return {'mean_diff': float(d.mean()), 'stat': stat, 'p_a_better': float(p_a_better)}
 
 
 # ============================================================

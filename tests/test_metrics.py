@@ -29,6 +29,8 @@ from evaluation.metrics import (
     cv_rmse,
     max_error,
     median_absolute_error,
+    # 예측 비교 검정
+    diebold_mariano,
     # 통합
     compute_all_metrics,
     compute_metrics_by_threshold,
@@ -638,6 +640,38 @@ class TestEdgeCases:
 
         # 리스트도 처리 가능
         assert mae(y_true, y_pred) == 10
+
+
+class TestDieboldMariano:
+    """Diebold-Mariano 검정 (절대오차, Newey-West 분산) 테스트"""
+
+    @staticmethod
+    def _errors(n=2000, seed=0):
+        rng = np.random.default_rng(seed)
+        common = rng.normal(0, 10, n)
+        # b는 a와 같은 오차에 잡음을 더한 것 → a가 일관되게 더 정확하다
+        return common, common + rng.normal(0, 8, n)
+
+    def test_detects_more_accurate_forecast(self):
+        a, b = self._errors()
+        result = diebold_mariano(a, b)
+        assert result['mean_diff'] < 0
+        assert result['p_a_better'] < 0.01
+
+    def test_swapping_forecasts_flips_the_statistic(self):
+        a, b = self._errors()
+        assert diebold_mariano(a, b)['stat'] == pytest.approx(-diebold_mariano(b, a)['stat'])
+        assert diebold_mariano(b, a)['p_a_better'] > 0.99
+
+    def test_identical_forecasts_are_not_significant(self):
+        a, _ = self._errors()
+        assert diebold_mariano(a, a)['p_a_better'] == pytest.approx(0.5)
+
+    def test_rejects_non_finite_errors(self):
+        a, b = self._errors()
+        a[3] = np.nan
+        with pytest.raises(ValueError, match="finite"):
+            diebold_mariano(a, b)
 
 
 if __name__ == '__main__':
