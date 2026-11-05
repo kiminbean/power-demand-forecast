@@ -124,9 +124,10 @@ export default function SMPForecastScreen() {
   const [highSMP, setHighSMP] = useState({ price: 102, hour: 18 });
   const [lowSMP, setLowSMP] = useState({ price: 71, hour: 12 });
   const [lastUpdate, setLastUpdate] = useState('오전 10:48');
-  const [confidence, setConfidence] = useState(92);
+  // 검증된 신뢰도·MAPE가 없으면 null로 두고 "재검증 전"을 표시한다(예전 하드코딩 92%·v3.1 MAPE 4.23% 제거).
+  const [confidence, setConfidence] = useState<number | null>(null);
   const [avgPrice, setAvgPrice] = useState(73);
-  const [modelInfo, setModelInfo] = useState('LSTM-Attention v3.1 | MAPE 4.23%');
+  const [modelInfo, setModelInfo] = useState('모델 정보 확인 중');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
@@ -174,12 +175,13 @@ export default function SMPForecastScreen() {
       setLowSMP({ price: Math.round(minPrice), hour: minHour });
 
       // Set confidence and average
-      setConfidence(Math.round(forecast.confidence * 100));
+      setConfidence(typeof forecast.confidence === 'number' && Number.isFinite(forecast.confidence) ? Math.round(forecast.confidence * 100) : null);
       setAvgPrice(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
 
       // Set model info
-      if (model.version && model.mape) {
-        setModelInfo(`${model.type || 'LSTM-Attention'} ${model.version} | MAPE ${model.mape}%`);
+      if (model.version) {
+        const metric = typeof model.mape === 'number' ? `MAPE ${model.mape}%` : 'MAPE 재검증 전';
+        setModelInfo(`${model.type || 'BiLSTM+Attention'} ${model.version} | ${metric}`);
       }
 
       // Update time
@@ -285,7 +287,7 @@ export default function SMPForecastScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>신뢰도</Text>
-            <Text style={[styles.statValue, { color: colors.orange }]}>{confidence}%</Text>
+            <Text style={[styles.statValue, { color: colors.orange }]}>{confidence != null ? `${confidence}%` : '재검증 전'}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>평균</Text>

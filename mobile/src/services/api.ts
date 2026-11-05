@@ -24,8 +24,9 @@ export interface SMPForecast {
   q50: number[];
   q90: number[];
   model_used: string;
-  confidence: number;
+  confidence: number | null;
   created_at: string;
+  forecast_date?: string | null;
 }
 
 export interface MarketStatus {
@@ -157,8 +158,8 @@ export interface ModelInfo {
   version: string;
   type?: string;
   device?: string;
-  mape?: number | string;
-  coverage?: number | string;
+  mape?: number | string | null;
+  coverage?: number | string | null;
   message?: string;
 }
 

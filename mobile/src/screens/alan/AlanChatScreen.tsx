@@ -343,7 +343,7 @@ export default function AlanChatScreen({ onNavigate }: Props) {
             `📍 0시 예측 SMP: ${formatNullableNumber(current, 0)}원/kWh\n\n` +
             `📈 최고가: ${max.toFixed(0)}원 (${maxHour}시)\n` +
             `📉 최저가: ${min.toFixed(0)}원 (${minHour}시)\n\n` +
-            `🎯 예측 신뢰도: ${(forecast.confidence * 100).toFixed(0)}%\n` +
+            `🎯 예측 신뢰도: ${typeof forecast.confidence === 'number' ? `${(forecast.confidence * 100).toFixed(0)}%` : '재검증 전'}\n` +
             `🤖 사용 모델: ${forecast.model_used}`;
           break;
         }

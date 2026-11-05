@@ -81,7 +81,7 @@ export default function SMPPrediction() {
           <h1 className="text-xl font-bold text-text-primary">SMP 예측</h1>
           {modelInfo && (
             <p className="text-xs text-text-muted mt-0.5">
-              {modelInfo.type} {modelInfo.version} · MAPE {modelInfo.mape}%
+              {modelInfo.type} {modelInfo.version} · {typeof modelInfo.mape === 'number' ? `MAPE ${modelInfo.mape}%` : 'MAPE 재검증 전'}
             </p>
           )}
         </div>
@@ -99,7 +99,8 @@ export default function SMPPrediction() {
         <div className="card bg-brand text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-80">현재 SMP ({currentHour}시)</p>
+              {/* q50[i]는 i시~i+1시 구간의 예측값이며 실제 공표 가격이 아니다(모바일과 같은 표기). */}
+              <p className="text-sm opacity-80">예측 SMP ({currentHour}시)</p>
               <p className="text-4xl font-bold mt-1">{stats.current.toFixed(1)}</p>
               <p className="text-sm opacity-80">원/kWh</p>
             </div>
@@ -188,7 +189,7 @@ export default function SMPPrediction() {
           <div className="card text-center">
             <p className="text-xs text-text-muted">신뢰도</p>
             <p className="text-lg font-bold text-primary">
-              {((forecast?.confidence ?? 0.87) * 100).toFixed(0)}%
+              {typeof forecast?.confidence === 'number' ? `${(forecast.confidence * 100).toFixed(0)}%` : '재검증 전'}
             </p>
           </div>
           <div className="card text-center">

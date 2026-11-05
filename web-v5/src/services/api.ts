@@ -118,8 +118,8 @@ export const mockData = {
       q10,
       q50,
       q90,
-      model_used: 'LSTM-Attention v3.1',
-      confidence: 0.87,
+      model_used: 'BiLSTM+Attention v3.2 Optuna (데모)',
+      confidence: null,
       created_at: new Date().toISOString(),
     };
   },
@@ -168,11 +168,12 @@ export const mockData = {
   getModelInfo(): ModelInfo {
     return {
       status: 'active',
-      version: 'v3.1',
-      type: 'LSTM-Attention',
+      // 실제 서빙 모델과 같은 버전을 쓰고, 검증되지 않은 지표는 표시하지 않는다.
+      version: 'v3.2',
+      type: 'BiLSTM+Attention (Optuna)',
       device: 'MPS',
-      mape: 4.23,
-      coverage: 94.5,
+      mape: null,
+      coverage: null,
     };
   },
 };

@@ -230,7 +230,7 @@ export default function DashboardScreen() {
       {/* Model Info Banner */}
       {modelInfo && modelInfo.status === 'ready' && (
         <View style={styles.modelBanner}>
-          <Text style={styles.modelText}>🤖 Model: {modelInfo.version} | MAPE: {modelInfo.mape}%</Text>
+          <Text style={styles.modelText}>🤖 Model: {modelInfo.version} | {typeof modelInfo.mape === 'number' ? `MAPE: ${modelInfo.mape}%` : 'MAPE 재검증 전'}</Text>
         </View>
       )}
 
