@@ -46,6 +46,10 @@ interface SMPHourlyData {
   rangeMax: number;
 }
 
+// 기기 로컬 날짜(YYYY-MM-DD). 네이티브 Hermes에서는 toLocaleDateString 로케일 지원이 보장되지 않는다.
+const localDateString = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 // Transform API data to hourly format
 const transformSMPData = (forecast: SMPForecast): SMPHourlyData[] => {
   const { q10, q50, q90 } = forecast;
@@ -128,6 +132,7 @@ export default function SMPForecastScreen() {
   const [confidence, setConfidence] = useState<number | null>(null);
   const [avgPrice, setAvgPrice] = useState(73);
   const [modelInfo, setModelInfo] = useState('모델 정보 확인 중');
+  const [forecastDate, setForecastDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
@@ -164,6 +169,7 @@ export default function SMPForecastScreen() {
       const hour = now.getHours();
       setCurrentHour(hour);
       setCurrentSMP(Math.round(forecast.q50[hour] * 10) / 10);
+      setForecastDate(typeof forecast.forecast_date === 'string' ? forecast.forecast_date : null);
 
       // Find high/low
       const prices = forecast.q50;
@@ -262,6 +268,11 @@ export default function SMPForecastScreen() {
             <Text style={styles.smpCardLabel}>예측 SMP ({currentHour}시)</Text>
             <Text style={styles.smpCardValue}>{currentSMP}</Text>
             <Text style={styles.smpCardUnit}>원/kWh</Text>
+            {forecastDate && (
+              <Text style={styles.smpCardUnit}>
+                예측일 {forecastDate}{forecastDate !== localDateString(new Date()) ? ' (입력 지연)' : ''}
+              </Text>
+            )}
           </View>
           <View style={styles.smpCardRight}>
             <View style={styles.smpHighLow}>

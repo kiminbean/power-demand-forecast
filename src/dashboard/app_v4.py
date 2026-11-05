@@ -1295,6 +1295,8 @@ def get_jeju_power_plants() -> pd.DataFrame:
 
 # 다른 공개 앱(v5·v6·v7·모바일)과 같은 값을 보여 주도록 재생에너지 비율·계통 주파수·기상·SMP 예측은
 # FastAPI 서버 값을 쓴다. 서버에 연결하지 못하면 기존 추정·시뮬레이션 값을 쓰고 그렇게 표시한다.
+import http.client  # noqa: E402  (fetch_backend_json 예외 처리용)
+
 BACKEND_API_URL = os.getenv("POWERDEMAND_API_URL", "http://127.0.0.1:8001").strip().rstrip("/")
 BACKEND_TIMEOUT_SECONDS = 5
 
@@ -1307,7 +1309,8 @@ def fetch_backend_json(path: str) -> Optional[Dict]:
             if response.status != 200:
                 return None
             return json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError, ValueError):
+        # IncompleteRead·BadStatusLine은 OSError가 아니므로 따로 잡아야 페이지 전체가 깨지지 않는다.
         return None
 
 
@@ -1323,6 +1326,8 @@ def _backend_kpi_overrides() -> Dict:
     overrides = {}
     if _finite_number(kpis.get("renewable_ratio_pct")):
         overrides["renewable_ratio"] = round(float(kpis["renewable_ratio_pct"]), 1)
+        # 같은 화면의 공급 구성(로컬 추정)과 계산 근거가 다르므로 출처를 밝힌다.
+        overrides["renewable_source"] = "섬 전체 태양광+풍력 ML 추정치 (API 서버)"
     if _finite_number(kpis.get("grid_frequency")):
         overrides["frequency"] = round(float(kpis["grid_frequency"]), 2)
     return overrides
@@ -1911,6 +1916,15 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
             showarrow=False,
             font=dict(color="#10b981", size=12),
             yanchor="bottom",
+        )
+    # 다른 앱과 같이 예측 대상일을 표시하고, 오늘이 아니면 입력 지연을 밝힌다.
+    forecast_date = smp_data.get('forecast_date')
+    if forecast_date:
+        stale = forecast_date != datetime.now().strftime("%Y-%m-%d")
+        fig.add_annotation(
+            x=0, y=1.08, xref="paper", yref="paper", xanchor="left", showarrow=False,
+            text=f"예측일 {forecast_date}" + (" (입력 지연)" if stale else ""),
+            font=dict(color="#ef4444" if stale else "#64748B", size=11),
         )
 
     fig.update_layout(
@@ -2733,7 +2747,7 @@ def main():
         <div class="info-card">
             <div class="info-card-title">재생에너지 비율</div>
             <div class="info-card-value">{power_status['renewable_ratio']:.1f} <span style="font-size: 1rem;">%</span></div>
-            <div class="info-card-change">태양광 + 풍력 (추정치)</div>
+            <div class="info-card-change">{power_status.get('renewable_source', '태양광 + 풍력 (추정치)')}</div>
         </div>
         """, unsafe_allow_html=True)
 

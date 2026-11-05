@@ -77,6 +77,21 @@ def test_forecast_reports_target_date_without_invalid_metrics():
     datetime.strptime(forecast["forecast_date"], "%Y-%m-%d")
 
 
+def test_predictor_fallback_is_not_labelled_as_model_forecast(monkeypatch):
+    class FallbackPredictor:
+        def is_ready(self):
+            return True
+
+        def predict_24h(self):
+            return {"q10": [90.0] * 24, "q50": [100.0] * 24, "q90": [110.0] * 24, "model_used": "fallback"}
+
+    monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: FallbackPredictor())
+    with TestClient(app) as client:
+        forecast = client.get("/api/v1/smp-forecast").json()
+    assert "대체값" in forecast["model_used"] and "v3.2" not in forecast["model_used"]
+    assert forecast["forecast_date"] is None
+
+
 def _write_smp_csv(path: Path, end_day: str, days: int) -> None:
     end = datetime.strptime(end_day, "%Y-%m-%d")
     rows = []

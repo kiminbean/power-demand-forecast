@@ -239,7 +239,10 @@ export default function Dashboard() {
                 {forecastError ? '데모 데이터' : smpForecast?.model_used ?? '데이터 없음'}
               </span>
               {smpForecast?.forecast_date && !forecastError && (
-                <span className="text-xs text-text-muted">예측일 {smpForecast.forecast_date}</span>
+                <span className="text-xs text-text-muted">
+                  예측일 {smpForecast.forecast_date}
+                  {smpForecast.forecast_date !== new Date().toLocaleDateString('sv-SE') && ' (입력 지연)'}
+                </span>
               )}
               {smpForecast?.confidence != null && (
                 <span className="text-xs text-text-muted">

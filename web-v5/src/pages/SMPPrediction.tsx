@@ -101,6 +101,12 @@ export default function SMPPrediction() {
             <div>
               {/* q50[i]는 i시~i+1시 구간의 예측값이며 실제 공표 가격이 아니다(모바일과 같은 표기). */}
               <p className="text-sm opacity-80">예측 SMP ({currentHour}시)</p>
+              {forecast?.forecast_date && (
+                <p className="text-xs opacity-80">
+                  예측일 {forecast.forecast_date}
+                  {forecast.forecast_date !== new Date().toLocaleDateString('sv-SE') && ' (입력 지연)'}
+                </p>
+              )}
               <p className="text-4xl font-bold mt-1">{stats.current.toFixed(1)}</p>
               <p className="text-sm opacity-80">원/kWh</p>
             </div>

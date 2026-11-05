@@ -304,16 +304,18 @@ async def get_smp_forecast():
 
             logger.info(f"SMP forecast using model {result.get('model_used')} for {result.get('forecast_date')}")
 
+            # 예측기 내부 실패 시 반환되는 패턴 기반 대체값을 모델 예측으로 표시하지 않는다.
+            is_fallback = result.get('model_used') == 'fallback'
             return SMPForecastResponse(
                 q10=q10,
                 q50=q50,
                 q90=q90,
                 hours=hours,
-                model_used=SMP_MODEL_LABEL,
+                model_used="패턴 기반 대체값 (모델 예측 실패)" if is_fallback else SMP_MODEL_LABEL,
                 confidence=None,
                 created_at=datetime.now().isoformat(),
-                data_source="Model Prediction + EPSIS Historical",
-                forecast_date=result.get('forecast_date'),
+                data_source="EPSIS 평균 패턴" if is_fallback else "Model Prediction + EPSIS Historical",
+                forecast_date=None if is_fallback else result.get('forecast_date'),
             )
 
         # 2. Fallback to EPSIS actual data if model not available

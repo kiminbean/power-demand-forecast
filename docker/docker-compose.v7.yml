@@ -21,6 +21,8 @@ services:
       - "8506:8506"
     volumes:
       - ../data/smp:/app/data/smp:ro
+      # api/v6_routes.py가 시작 시 기준 발전소 목록을 읽는다 (없으면 API가 시작되지 않음)
+      - ../data/jeju_plants:/app/data/jeju_plants:ro
       - ../models/smp:/app/models/smp:ro
       - ../models/smp_v3_optuna:/app/models/smp_v3_optuna:ro
       - ../models/smp_v3_10_catboost:/app/models/smp_v3_10_catboost:ro

@@ -249,12 +249,14 @@ export default function ExecoDashboard() {
       return {
         count: plants.length,
         capacity: round1(plants.reduce((s, r) => s + r.capacity, 0)),
-        output: resources ? round1(plants.reduce((s, r) => s + (r.current_output ?? 0), 0)) : null,
+        output: live ? round1(plants.reduce((s, r) => s + (r.current_output ?? 0), 0)) : null,
       };
     };
-    const items = resources ?? powerPlantsData;
+    // 오류 시 useResources가 돌려주는 데모 목록은 기준 목록과 다르므로 집계에 쓰지 않는다.
+    const live = Boolean(resources) && !resourcesError;
+    const items = live && resources ? resources : powerPlantsData;
     return { solar: summarize(items, 'solar'), wind: summarize(items, 'wind'), ess: summarize(items, 'ess') };
-  }, [resources]);
+  }, [resources, resourcesError]);
 
   // 데이터 소스 표시 (API 연결 상태)
   const fallbackSections = [kpisError && '현재 지표', resourcesError && '발전소 현황', powerSupplyError && '전력수급 차트'].filter(Boolean);
