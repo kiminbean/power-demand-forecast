@@ -77,35 +77,39 @@ const latLngToPixel = (lat: number, lng: number): { x: number; y: number } => {
   return { x, y };
 };
 
-// Power plants data from data/jeju_plants/jeju_power_plants.json
-// Using actual latitude/longitude coordinates
+// 백엔드(api/v6_routes.py JEJU_PLANTS)와 같은 기준 목록: data/jeju_plants/jeju_power_plants.json의
+// 운영중 풍력·태양광·ESS (분산형 태양광 합산값·건설중 제외). JSON에서 생성했으며 손으로 고치지 않는다.
 const powerPlantsData = [
-  // Wind farms (주요 풍력단지)
-  { id: 'wind_001', name: '한경풍력', type: 'wind' as const, capacity: 21.0, lat: 33.339417, lng: 126.169222 },
-  { id: 'wind_002', name: '상명풍력', type: 'wind' as const, capacity: 21.0, lat: 33.339250, lng: 126.289556 },
-  { id: 'wind_003', name: '가시리풍력', type: 'wind' as const, capacity: 30.0, lat: 33.3576, lng: 126.7461 },
-  { id: 'wind_004', name: '김녕풍력', type: 'wind' as const, capacity: 30.0, lat: 33.5560, lng: 126.7480 },
-  { id: 'wind_005', name: '행원풍력', type: 'wind' as const, capacity: 8.4, lat: 33.5490, lng: 126.7990 },
-  { id: 'wind_006', name: '삼달풍력', type: 'wind' as const, capacity: 33.0, lat: 33.3790, lng: 126.8630 },
-  { id: 'wind_007', name: '성산1풍력', type: 'wind' as const, capacity: 12.0, lat: 33.4399, lng: 126.9229 },
-  { id: 'wind_008', name: '성산2풍력', type: 'wind' as const, capacity: 8.0, lat: 33.4350, lng: 126.9180 },
-  { id: 'wind_011', name: '탐라해상풍력', type: 'wind' as const, capacity: 30.0, lat: 33.2942, lng: 126.1631 },
-  { id: 'wind_014', name: '제주음풍력', type: 'wind' as const, capacity: 21.0, lat: 33.4800, lng: 126.5500 },
-  { id: 'wind_015', name: '동복-북촌풍력', type: 'wind' as const, capacity: 30.0, lat: 33.5300, lng: 126.7200 },
-  { id: 'wind_016', name: '대정풍력', type: 'wind' as const, capacity: 45.0, lat: 33.2200, lng: 126.2800 },
+  // Wind farms
+  { id: 'wind_001', name: '한경풍력발전단지', type: 'wind' as const, capacity: 21.0, lat: 33.339417, lng: 126.169222 },
+  { id: 'wind_002', name: '상명풍력발전단지', type: 'wind' as const, capacity: 21.0, lat: 33.33925, lng: 126.289556 },
+  { id: 'wind_003', name: '가시리풍력발전단지', type: 'wind' as const, capacity: 30.0, lat: 33.3576, lng: 126.7461 },
+  { id: 'wind_004', name: '김녕풍력발전단지', type: 'wind' as const, capacity: 30.0, lat: 33.556, lng: 126.748 },
+  { id: 'wind_005', name: '행원풍력발전단지', type: 'wind' as const, capacity: 8.385, lat: 33.549, lng: 126.799 },
+  { id: 'wind_006', name: '삼달풍력발전단지', type: 'wind' as const, capacity: 33.0, lat: 33.379, lng: 126.863 },
+  { id: 'wind_007', name: '성산1풍력발전단지', type: 'wind' as const, capacity: 12.0, lat: 33.4399, lng: 126.9229 },
+  { id: 'wind_008', name: '성산2풍력발전단지', type: 'wind' as const, capacity: 8.0, lat: 33.435, lng: 126.918 },
+  { id: 'wind_009', name: '신창풍력발전단지', type: 'wind' as const, capacity: 1.7, lat: 33.365, lng: 126.174 },
+  { id: 'wind_010', name: '월정풍력발전단지', type: 'wind' as const, capacity: 1.5, lat: 33.5556, lng: 126.7925 },
+  { id: 'wind_011', name: '탐라해상풍력발전단지', type: 'wind' as const, capacity: 30.0, lat: 33.2942, lng: 126.1631 },
+  { id: 'wind_012', name: '가파도풍력발전단지', type: 'wind' as const, capacity: 0.5, lat: 33.1637, lng: 126.2742 },
+  { id: 'wind_013', name: '월령풍력발전단지', type: 'wind' as const, capacity: 2.0, lat: 33.417, lng: 126.233 },
+  { id: 'wind_014', name: '제주음풍력발전단지', type: 'wind' as const, capacity: 21.0, lat: 33.48, lng: 126.55 },
+  { id: 'wind_015', name: '동복-북촌풍력발전단지', type: 'wind' as const, capacity: 30.0, lat: 33.53, lng: 126.72 },
+  { id: 'wind_016', name: '대정풍력발전단지', type: 'wind' as const, capacity: 45.0, lat: 33.22, lng: 126.28 },
 
-  // Solar farms (주요 태양광)
-  { id: 'solar_001', name: '구좌태양광', type: 'solar' as const, capacity: 0.75, lat: 33.5200, lng: 126.8500 },
-  { id: 'solar_002', name: '삼도태양광', type: 'solar' as const, capacity: 1.7, lat: 33.5100, lng: 126.5200 },
-  { id: 'solar_003', name: '용담태양광', type: 'solar' as const, capacity: 0.42, lat: 33.5050, lng: 126.5100 },
-  { id: 'solar_005', name: '한경태양광', type: 'solar' as const, capacity: 0.5, lat: 33.3400, lng: 126.1800 },
-  { id: 'solar_006', name: '표선태양광', type: 'solar' as const, capacity: 1.0, lat: 33.3200, lng: 126.8300 },
+  // Solar farms
+  { id: 'solar_001', name: '구좌태양광발전소', type: 'solar' as const, capacity: 0.75, lat: 33.52, lng: 126.85 },
+  { id: 'solar_002', name: '송당리태양광', type: 'solar' as const, capacity: 1.834, lat: 33.45, lng: 126.78 },
+  { id: 'solar_003', name: '서화리태양광', type: 'solar' as const, capacity: 1.5, lat: 33.42, lng: 126.76 },
+  { id: 'solar_004', name: '가시리태양광', type: 'solar' as const, capacity: 1.2, lat: 33.36, lng: 126.75 },
 
   // ESS facilities
-  { id: 'ess_001', name: '제주 변동성완화 ESS', type: 'ess' as const, capacity: 30, lat: 33.5100, lng: 126.5400 },
-  { id: 'ess_002', name: '제주 피크저감 ESS', type: 'ess' as const, capacity: 20, lat: 33.4500, lng: 126.5600 },
-  { id: 'ess_003', name: '한경풍력 연계 ESS', type: 'ess' as const, capacity: 10, lat: 33.3400, lng: 126.1700 },
-  { id: 'ess_004', name: '가시리풍력 연계 ESS', type: 'ess' as const, capacity: 15, lat: 33.3576, lng: 126.7500 },
+  { id: 'ess_001', name: '제주 변동성완화 ESS 1', type: 'ess' as const, capacity: 30.0, lat: 33.51, lng: 126.54 },
+  { id: 'ess_002', name: '제주 피크저감 ESS', type: 'ess' as const, capacity: 20.0, lat: 33.45, lng: 126.56 },
+  { id: 'ess_003', name: '한경풍력 연계 ESS', type: 'ess' as const, capacity: 10.0, lat: 33.34, lng: 126.17 },
+  { id: 'ess_004', name: '가시리풍력 연계 ESS', type: 'ess' as const, capacity: 15.0, lat: 33.3576, lng: 126.75 },
+
 ];
 
 // Convert to PowerPlant format with calculated pixel positions
@@ -238,15 +242,18 @@ export default function ExecoDashboard() {
 
   // 발전소 통계 (resources에서)
   const plantStats = useMemo(() => {
-    if (!resources) return { solar: { count: 5, capacity: 4.4, output: 142 }, wind: { count: 12, capacity: 290, output: 185 }, ess: { count: 4, capacity: 75, output: 22.5 } };
-    const solarPlants = resources.filter(r => r.type === 'solar');
-    const windPlants = resources.filter(r => r.type === 'wind');
-    const essPlants = resources.filter(r => r.type === 'ess');
-    return {
-      solar: { count: solarPlants.length, capacity: Math.round(solarPlants.reduce((s, r) => s + r.capacity, 0) * 10) / 10, output: Math.round(solarPlants.reduce((s, r) => s + r.current_output, 0) * 10) / 10 },
-      wind: { count: windPlants.length, capacity: Math.round(windPlants.reduce((s, r) => s + r.capacity, 0)), output: Math.round(windPlants.reduce((s, r) => s + r.current_output, 0) * 10) / 10 },
-      ess: { count: essPlants.length, capacity: Math.round(essPlants.reduce((s, r) => s + r.capacity, 0)), output: Math.round(essPlants.reduce((s, r) => s + r.current_output, 0) * 10) / 10 },
+    // 설비용량은 v6와 같이 소수 1자리. 로딩 중에는 기준 목록의 개소·용량만 쓰고 발전량은 표시하지 않는다.
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+    const summarize = (items: { type: string; capacity: number; current_output?: number }[], type: string) => {
+      const plants = items.filter(r => r.type === type);
+      return {
+        count: plants.length,
+        capacity: round1(plants.reduce((s, r) => s + r.capacity, 0)),
+        output: resources ? round1(plants.reduce((s, r) => s + (r.current_output ?? 0), 0)) : null,
+      };
     };
+    const items = resources ?? powerPlantsData;
+    return { solar: summarize(items, 'solar'), wind: summarize(items, 'wind'), ess: summarize(items, 'ess') };
   }, [resources]);
 
   // 데이터 소스 표시 (API 연결 상태)
@@ -670,21 +677,21 @@ export default function ExecoDashboard() {
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">태양광</span>
                     <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.solar.count}개소 | {plantStats.solar.capacity}MW</span>
-                      <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.solar.output}MW)</span>
+                      <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.solar.output ?? '—'}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">풍력</span>
                     <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.wind.count}개소 | {plantStats.wind.capacity}MW</span>
-                      <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.wind.output}MW)</span>
+                      <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.wind.output ?? '—'}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xl text-black w-[70px] tracking-[-0.64px]">ESS</span>
                     <div className="flex flex-wrap items-center gap-2 text-[#232323]">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.ess.count}개소 | {plantStats.ess.capacity}MW</span>
-                      <span className="text-lg tracking-[-0.56px]">(충방전 : {plantStats.ess.output}MW)</span>
+                      <span className="text-lg tracking-[-0.56px]">(충방전 : {plantStats.ess.output ?? '—'}MW)</span>
                     </div>
                   </div>
                 </div>

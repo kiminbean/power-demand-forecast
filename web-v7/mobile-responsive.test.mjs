@@ -59,7 +59,7 @@ for (const width of [320, 390, 768, 1280, 1440]) {
 test('plant details work by touch and keyboard without overflowing the page', async () => {
   const page = await openDashboard(390);
   try {
-    const marker = await page.$('button[aria-label="대정풍력 상세 정보"]');
+    const marker = await page.$('button[aria-label="대정풍력발전단지 상세 정보"]');
     assert.ok(marker, 'plant marker should be an accessible button');
     await marker.tap();
     assert.match(await page.$eval('.plant-details', element => element.textContent), /대정풍력.*45.*MW/s);
