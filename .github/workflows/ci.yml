@@ -119,7 +119,7 @@ jobs:
           # Install core dependencies needed for tests
           pip install pandas numpy scipy scikit-learn matplotlib seaborn
           pip install holidays python-dateutil tqdm PyYAML python-dotenv
-          pip install pytest pytest-cov pytest-asyncio httpx selenium
+          pip install pytest pytest-cov pytest-asyncio httpx selenium requests beautifulsoup4 pillow
           pip install -r requirements-api.txt
 
       - name: Create necessary directories
@@ -187,7 +187,7 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install pandas numpy scipy scikit-learn matplotlib seaborn
           pip install holidays python-dateutil tqdm PyYAML python-dotenv
-          pip install pytest pytest-asyncio httpx selenium
+          pip install pytest pytest-asyncio httpx selenium requests beautifulsoup4 pillow
           pip install -r requirements-api.txt
 
       - name: Create necessary directories
