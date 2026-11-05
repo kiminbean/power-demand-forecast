@@ -486,6 +486,40 @@ class TestPreprocessPowerData:
         )
         assert outlier_step is not None
 
+    @staticmethod
+    def _power_df(values):
+        dates = pd.date_range('2024-07-01', periods=len(values), freq='h')
+        return pd.DataFrame({
+            '거래일자': [d.strftime('%Y-%m-%d') for d in dates],
+            '시간': [(d.hour + 1) for d in dates],
+            '전력거래량(MWh)': values,
+        })
+
+    def test_default_keeps_genuine_peaks(self):
+        """기본 설정은 실제 여름 피크를 자르지 않는다.
+
+        전 기간 IQR로 자르면 test 구간 정보가 상한에 섞이고, 2019~2024년 피크 919시간이
+        694.66 MWh로 잘렸었다 (2026-11-06 경쟁 비교).
+        """
+        hours = np.arange(96)
+        values = 500.0 + 50.0 * np.sin(2 * np.pi * hours / 24)
+        values[40:46] = [780.0, 820.0, 860.0, 880.0, 850.0, 800.0]  # 연속된 피크 = 실제 수요
+        result, _ = preprocess_power_data(self._power_df(values))
+        np.testing.assert_allclose(result['power_demand'].to_numpy(), values)
+
+    def test_default_rejects_implausible_spike(self):
+        """중앙값의 3배를 넘는 값은 실제 피크가 아니라 입력 오류이므로 조용히 고치지 않고 멈춘다"""
+        values = np.full(48, 500.0)
+        values[10] = 2000.0
+        with pytest.raises(ValueError, match="Implausible power_demand"):
+            preprocess_power_data(self._power_df(values))
+
+    def test_default_rejects_non_positive(self):
+        values = np.full(48, 500.0)
+        values[5] = 0.0
+        with pytest.raises(ValueError, match="Implausible power_demand"):
+            preprocess_power_data(self._power_df(values))
+
     def test_missing_value_interpolation(self):
         """결측치 보간"""
         df = pd.DataFrame({
@@ -683,7 +717,9 @@ class TestIntegration:
         # 이상치 추가
         df.loc[75, '전력거래량(MWh)'] = 2000.0
 
-        result, stats = preprocess_power_data(df)
+        # 기본값은 이런 입력 오류에서 멈추므로(test_default_rejects_implausible_spike),
+        # 명시적 이상치 설정으로 처리 경로를 검사한다
+        result, stats = preprocess_power_data(df, outlier_config={'method': 'clip', 'k': 1.5})
 
         # 결측치 처리됨
         assert result['power_demand'].isnull().sum() == 0

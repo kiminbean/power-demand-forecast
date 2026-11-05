@@ -304,6 +304,23 @@ def preprocess_weather_data(
     return df.reset_index(), stats
 
 
+# 제주 전력거래량의 연도별 최대/중앙값은 1.63~1.86이다(전 기간 2.28, 수요 증가 영향).
+# 중앙값의 3배를 넘는 값은 실제 피크가 아니라 입력 오류로 본다.
+MAX_DEMAND_TO_MEDIAN = 3.0
+
+
+def _check_power_range(series: pd.Series) -> None:
+    """목표값을 자르지 않는 대신, 물리적으로 불가능한 값은 조용히 고치지 않고 즉시 실패시킨다."""
+    values = series.dropna()
+    bad = values[(values <= 0) | (values > MAX_DEMAND_TO_MEDIAN * values.median())]
+    if len(bad):
+        sample = ', '.join(f'{ts}={val:g}' for ts, val in bad.head(5).items())
+        raise ValueError(
+            f"Implausible power_demand values ({len(bad)}): {sample}. "
+            "Fix the raw data or pass outlier_config explicitly."
+        )
+
+
 def preprocess_power_data(
     power_df: pd.DataFrame,
     outlier_config: Optional[Dict] = None
@@ -313,7 +330,8 @@ def preprocess_power_data(
 
     Args:
         power_df: 전력 데이터프레임
-        outlier_config: 이상치 처리 설정
+        outlier_config: 이상치 처리 설정. None(기본)이면 목표값을 자르지 않고
+            0 이하·중앙값의 3배 초과 값만 오류로 거부한다.
 
     Returns:
         Tuple[pd.DataFrame, Dict]: 전처리된 데이터프레임, 전처리 통계
@@ -335,14 +353,22 @@ def preprocess_power_data(
     df = df.set_index('datetime').sort_index()
 
     # 이상치 처리
-    config = outlier_config or {'method': 'clip', 'k': 1.5}
-    df, outlier_stats = handle_outliers(df, columns=['power_demand'], **config)
-
-    stats['steps'].append({
-        'step': 'outlier_handling',
-        'config': config,
-        'details': outlier_stats
-    })
+    if outlier_config is None:
+        # 전 기간 IQR 상한으로 자르면 test 구간 정보가 섞이고 실제 여름 피크가 지워진다
+        # (2019~2024년 919시간이 694.66 MWh로 잘렸었다). 목표값은 그대로 두고 범위만 검사한다.
+        _check_power_range(df['power_demand'])
+        stats['steps'].append({
+            'step': 'outlier_handling',
+            'config': None,
+            'details': 'target not clipped; range check passed'
+        })
+    else:
+        df, outlier_stats = handle_outliers(df, columns=['power_demand'], **outlier_config)
+        stats['steps'].append({
+            'step': 'outlier_handling',
+            'config': outlier_config,
+            'details': outlier_stats
+        })
 
     # 결측치 확인 (있다면 보간)
     missing_count = df['power_demand'].isnull().sum()
