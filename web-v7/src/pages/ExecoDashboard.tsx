@@ -356,9 +356,7 @@ export default function ExecoDashboard() {
           </div>
 
           {/* 공표 SMP */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <PublishedSMPCard data={publishedSMP} />
-          </div>
+          <PublishedSMPCard data={publishedSMP} variant="kpi" />
 
           {/* 계통 주파수 - 실시간 데이터 */}
           <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
@@ -405,7 +403,7 @@ export default function ExecoDashboard() {
           </div>
         </div>
 
-        <DayAheadSMPCard data={dayAheadSMP} />
+        <DayAheadSMPCard data={dayAheadSMP} variant="kpi" />
 
         {/* Main Content Grid - 7:3 ratio */}
         <div className="dashboard-grid flex gap-6 flex-1">
