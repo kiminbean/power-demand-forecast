@@ -8,8 +8,10 @@ export interface SMPForecast {
   q50: number[];
   q90: number[];
   model_used: string;
-  confidence: number;
+  // 검증된 지표가 없으면 null (v3.2는 성능 재검증 전)
+  confidence: number | null;
   created_at: string;
+  forecast_date?: string | null;
 }
 
 // Market Status
@@ -167,8 +169,8 @@ export interface ModelInfo {
   version: string;
   type?: string;
   device?: string;
-  mape?: number | string;
-  coverage?: number | string;
+  mape?: number | string | null;
+  coverage?: number | string | null;
   message?: string;
 }
 

@@ -1140,9 +1140,11 @@ def get_jeju_power_plants() -> pd.DataFrame:
                     "source": wf.get('source')
                 })
 
-    # 태양광 발전소
+    # 태양광 발전소 — 다른 앱(API JEJU_PLANTS·v7 지도)과 같은 기준: 운영중, 분산형 합산값(1,620개소 합계) 제외
     if 'solar_farms' in plants_data:
         for sf in plants_data['solar_farms']:
+            if sf.get('status') != '운영중' or sf.get('subtype') == 'distributed':
+                continue
             plants.append({
                 "id": sf.get('id'),
                 "name": sf.get('name'),
@@ -1158,9 +1160,11 @@ def get_jeju_power_plants() -> pd.DataFrame:
                 "source": sf.get('source')
             })
 
-    # ESS 설비
+    # ESS 설비 — 운영중만 (건설중 제외, 다른 앱과 같은 기준)
     if 'ess_facilities' in plants_data:
         for ess in plants_data['ess_facilities']:
+            if ess.get('status') != '운영중':
+                continue
             plants.append({
                 "id": ess.get('id'),
                 "name": ess.get('name'),
@@ -1178,9 +1182,11 @@ def get_jeju_power_plants() -> pd.DataFrame:
                 "source": ess.get('source')
             })
 
-    # 화력 발전소
+    # 화력 발전소 (이 앱에만 표시; 운영중만)
     if 'thermal_plants' in plants_data:
         for tp in plants_data['thermal_plants']:
+            if tp.get('status') != '운영중':
+                continue
             plants.append({
                 "id": tp.get('id'),
                 "name": tp.get('name'),
@@ -1284,6 +1290,18 @@ def get_jeju_power_plants() -> pd.DataFrame:
 
         df['generation'] = df.apply(calculate_generation, axis=1)
         df['data_source'] = '시뮬레이션'
+
+    # 풍력·태양광·ESS 발전량은 v6·v7·모바일과 같은 API 서버 시뮬레이션 값을 ID로 맞춰 쓴다 (화력만 자체 추정).
+    api_resources = fetch_backend_json("/api/v1/resources")
+    if isinstance(api_resources, list):
+        api_output = {
+            r.get("id"): float(r["current_output"])
+            for r in api_resources
+            if isinstance(r, dict) and _finite_number(r.get("current_output"))
+        }
+        matched = df['id'].isin(api_output.keys())
+        df.loc[matched, 'generation'] = df.loc[matched, 'id'].map(api_output)
+        df.loc[matched, 'data_source'] = 'API 서버 시뮬레이션'
 
     df['utilization'] = df.apply(
         lambda row: min(max(abs(row['generation']) / row['capacity'] * 100, 0), 100) if row['capacity'] > 0 else 0,

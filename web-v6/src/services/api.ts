@@ -237,14 +237,8 @@ export const mockData = {
   },
 
   getResources(): Resource[] {
-    return [
-      { id: '1', name: '가시리풍력', type: 'wind', capacity: 15.0, current_output: 12.3, utilization: 82, status: 'active', location: '서귀포시', latitude: 33.3823, longitude: 126.7632 },
-      { id: '2', name: '김녕풍력', type: 'wind', capacity: 12.0, current_output: 9.8, utilization: 81.7, status: 'active', location: '제주시', latitude: 33.5575, longitude: 126.7631 },
-      { id: '3', name: '한경풍력', type: 'wind', capacity: 21.0, current_output: 18.2, utilization: 86.7, status: 'active', location: '제주시', latitude: 33.3343, longitude: 126.1727 },
-      { id: '4', name: '삼달풍력', type: 'wind', capacity: 6.1, current_output: 5.1, utilization: 83.6, status: 'active', location: '서귀포시', latitude: 33.3489, longitude: 126.8347 },
-      { id: '5', name: '월정태양광', type: 'solar', capacity: 5.0, current_output: 3.8, utilization: 76, status: 'active', location: '제주시', latitude: 33.5556, longitude: 126.7889 },
-      { id: '6', name: '성산태양광', type: 'solar', capacity: 8.0, current_output: 6.2, utilization: 77.5, status: 'active', location: '서귀포시', latitude: 33.4586, longitude: 126.9312 },
-    ];
+    // 예전 데모 목록(가시리풍력 15MW 등)은 기준 목록과 달라 실제처럼 보일 수 있으므로 지어내지 않는다.
+    return [];
   },
 
   getModelInfo(): ModelInfo {

@@ -121,7 +121,9 @@ export default function SMPPrediction() {
               <span className="text-sm text-text-muted whitespace-nowrap">
                 {modelInfo.type} {modelInfo.version}
               </span>
-              <span className="text-xs text-success whitespace-nowrap">MAPE: {modelInfo.mape}%</span>
+              <span className="text-xs text-success whitespace-nowrap">
+                {typeof modelInfo.mape === 'number' ? `MAPE: ${modelInfo.mape}%` : 'MAPE 재검증 전'}
+              </span>
             </div>
           )}
           <button
@@ -173,9 +175,9 @@ export default function SMPPrediction() {
           <div className="card">
             <p className="text-sm text-text-muted mb-1">신뢰도</p>
             <div className="text-2xl font-bold text-primary">
-              {((forecast?.confidence ?? 0.87) * 100).toFixed(0)}%
+              {typeof forecast?.confidence === 'number' ? `${(forecast.confidence * 100).toFixed(0)}%` : '재검증 전'}
             </div>
-            <p className="text-xs text-text-muted">AI 모델</p>
+            <p className="text-xs text-text-muted">{forecast?.forecast_date ? `예측일 ${forecast.forecast_date}` : 'AI 모델'}</p>
           </div>
           <div className="card">
             <p className="text-sm text-text-muted mb-1">업데이트</p>

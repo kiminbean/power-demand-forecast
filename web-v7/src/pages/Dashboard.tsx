@@ -188,7 +188,7 @@ export default function Dashboard() {
               <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
                 AI 예측
               </span>
-              {smpForecast && (
+              {typeof smpForecast?.confidence === 'number' && (
                 <span className="text-xs text-text-muted">
                   신뢰도: {(smpForecast.confidence * 100).toFixed(0)}%
                 </span>
