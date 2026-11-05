@@ -143,6 +143,11 @@ export default function SettlementScreen() {
       <View style={styles.titleSection}>
         <View style={styles.titleRow}>
           <Text style={styles.pageTitle}>정산</Text>
+          {(summary?.is_simulated ?? true) && (
+            <View style={styles.mockBadge}>
+              <Text style={styles.mockBadgeText}>모의 결과</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.subtitle}>KPX 제주 시범사업 이중 정산</Text>
       </View>
@@ -291,6 +296,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  mockBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  mockBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#f59e0b',
   },
   periodBadge: {
     flexDirection: 'row',

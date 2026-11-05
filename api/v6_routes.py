@@ -971,9 +971,17 @@ async def get_current_smp(region: str = "jeju"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# KPX 실측 정산 연동 전까지 정산 산출물은 모두 모의(simulated) 값이다.
+# 발전량·RT-SMP·낙찰량은 추정/랜덤 기반이며(api/settlement_calculator.py 참조),
+# 실제 계량·KPX 정산 데이터 연동 시 이 상수를 "real"로 전환한다.
+SETTLEMENT_DATA_SOURCE = "simulated"
+
+
 class SettlementRecord(BaseModel):
     """정산 기록 (KPX 제주 시범사업 이중 정산 규정 - Gemini 검증)"""
     date: str
+    is_simulated: bool = True            # 모의 결과 여부 (실운영 데이터 아님)
+    data_source: str = SETTLEMENT_DATA_SOURCE  # "simulated" | "real"
     # 발전량 (MWh)
     cleared_mwh: float                  # DA 낙찰량
     generation_mwh: float               # 실제 발전량
@@ -1002,6 +1010,8 @@ class SettlementRecord(BaseModel):
 
 class SettlementStats(BaseModel):
     """정산 통계 (KPX 제주 시범사업 이중 정산 규정 - Gemini 검증)"""
+    is_simulated: bool = True            # 모의 결과 여부 (실운영 데이터 아님)
+    data_source: str = SETTLEMENT_DATA_SOURCE  # "simulated" | "real"
     generation_revenue_million: float
     generation_change_pct: float
     imbalance_charges_million: float

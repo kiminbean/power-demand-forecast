@@ -125,6 +125,9 @@ export interface SettlementRecord {
   hours_no_penalty?: number;
   hours_over_generation?: number;
   hours_under_generation?: number;
+  // Simulated until real KPX settlement integration
+  is_simulated: boolean;         // 모의 결과 여부 (실운영 데이터 아님)
+  data_source: string;           // "simulated" | "real"
 }
 
 // Settlement Stats (KPX Jeju Pilot - Gemini Verified)
@@ -153,6 +156,9 @@ export interface SettlementStats {
   total_hours_no_penalty?: number;
   total_hours_over_gen?: number;
   total_hours_under_gen?: number;
+  // Simulated until real KPX settlement integration
+  is_simulated: boolean;         // 모의 결과 여부 (실운영 데이터 아님)
+  data_source: string;           // "simulated" | "real"
 }
 
 // Model Info

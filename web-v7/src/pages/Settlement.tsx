@@ -165,7 +165,17 @@ export default function Settlement() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">정산</h1>
+          <h1 className="text-2xl font-bold text-text-primary">
+            정산
+            {summary?.is_simulated !== false && (
+              <span
+                className="ml-2 align-middle px-2 py-0.5 text-xs font-semibold rounded-full bg-warning/15 text-warning border border-warning/40"
+                title="KPX 실측 연동 전까지 발전량·RT-SMP·낙찰량은 모의 값입니다"
+              >
+                모의 결과
+              </span>
+            )}
+          </h1>
           <p className="text-text-muted mt-1">KPX 제주 시범사업 이중 정산 (Gemini 검증)</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">

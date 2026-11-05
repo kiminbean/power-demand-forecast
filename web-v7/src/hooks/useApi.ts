@@ -195,6 +195,8 @@ export function useSettlementSummary(): UseApiState<SettlementStats> {
       total_hours_tier2: 0,
       total_hours_tier3: 0,
       total_hours_zero_risk: 0,
+      is_simulated: true,
+      data_source: 'simulated',
     })
   );
 }

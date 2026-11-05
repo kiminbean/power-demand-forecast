@@ -104,6 +104,9 @@ export interface SettlementRecord {
   imbalance_million: number;
   net_revenue_million: number;
   accuracy_pct: number;
+  // Simulated until real KPX settlement integration
+  is_simulated?: boolean;        // 모의 결과 여부 (실운영 데이터 아님)
+  data_source?: string;          // "simulated" | "real"
 }
 
 export interface SettlementStats {
@@ -115,6 +118,9 @@ export interface SettlementStats {
   net_change_pct: number;
   forecast_accuracy_pct: number;
   accuracy_change_pct: number;
+  // Simulated until real KPX settlement integration
+  is_simulated?: boolean;        // 모의 결과 여부 (실운영 데이터 아님)
+  data_source?: string;          // "simulated" | "real"
 }
 
 // Dual Settlement for DAM/RTM (Phase 7)
