@@ -47,7 +47,6 @@ WORKDIR /app
 COPY src/ ./src/
 COPY api/ ./api/
 COPY tests/ ./tests/
-COPY configs/ ./configs/
 COPY pytest.ini ./
 
 # Run tests
@@ -68,7 +67,6 @@ RUN useradd --create-home --shell /bin/bash appuser
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser api/ ./api/
 COPY --chown=appuser:appuser tools/ ./tools/
-COPY --chown=appuser:appuser configs/ ./configs/
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/models /app/data && \
