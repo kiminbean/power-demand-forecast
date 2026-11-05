@@ -12,8 +12,10 @@ from sklearn.preprocessing import StandardScaler
 from api import v6_routes
 from api.main import app
 from src.smp.models import smp_v41_features as F
-from src.smp.models.serving import V32_LABEL, V41_LABEL, ServingSMPPredictor
-from src.smp.models.smp_v41_predictor import InsufficientHistoryError, SMPV41Predictor
+from src.smp.models.serving import BASELINE_LABEL, V32_LABEL, V41_LABEL, ServingSMPPredictor
+from src.smp.models.smp_v41_predictor import (
+    InsufficientHistoryError, JejuDAHistoryProvider, SeasonalNaivePredictor, SMPV41Predictor,
+)
 from src.smp.models.train_smp_v41_serving import window_starts
 from src.smp.models.train_smp_v4_smp_only import SMPModelV41
 
@@ -85,10 +87,14 @@ def _history_csv(tmp_path, end: pd.Timestamp, hours: int, skip_days=()):
     return path
 
 
+def _provider(history_path, tmp_path):
+    return JejuDAHistoryProvider(history_path, tmp_path / "missing.csv", api_topup=False)
+
+
 def test_v41_predicts_today_trade_hours_with_ordered_quantiles(tmp_path):
     now = datetime(2026, 11, 5, 16, 14)
     history = _history_csv(tmp_path, pd.Timestamp("2026-11-05"), 24 * 30)
-    p = SMPV41Predictor(_artifact(tmp_path), history, tmp_path / "missing.csv", api_topup=False)
+    p = SMPV41Predictor(_artifact(tmp_path), _provider(history, tmp_path))
     result = p.predict_24h(now=now)
     assert result["forecast_date"] == "2026-11-05"
     assert result["times"][0] == datetime(2026, 11, 5, 0, 0) and len(result["times"]) == 24
@@ -100,14 +106,57 @@ def test_v41_predicts_today_trade_hours_with_ordered_quantiles(tmp_path):
 def test_v41_refuses_when_recent_history_has_a_gap(tmp_path):
     now = datetime(2026, 11, 5, 16, 14)
     history = _history_csv(tmp_path, pd.Timestamp("2026-11-05"), 24 * 30, skip_days=("2026-10-28",))
-    p = SMPV41Predictor(_artifact(tmp_path), history, tmp_path / "missing.csv", api_topup=False)
+    p = SMPV41Predictor(_artifact(tmp_path), _provider(history, tmp_path))
     with pytest.raises(InsufficientHistoryError):
         p.predict_24h(now=now)
 
 
 def test_v41_not_ready_when_gate_failed(tmp_path):
-    p = SMPV41Predictor(_artifact(tmp_path, gate=False), tmp_path / "h.csv", tmp_path / "r.csv", api_topup=False)
+    p = SMPV41Predictor(_artifact(tmp_path, gate=False), _provider(tmp_path / "h.csv", tmp_path))
     assert p.model is not None and not p.is_ready()
+
+
+def test_baseline_forecasts_yesterday_same_trade_hours_and_backtests_mape(tmp_path):
+    now = datetime(2026, 11, 5, 16, 14)
+    path = _history_csv(tmp_path, pd.Timestamp("2026-11-05"), 24 * 10)
+    df = F.prepare_smp_frame(pd.read_csv(path))
+    yesterday = df[df["date"] == "2026-11-04"].sort_values("hour")["smp_jeju"].to_numpy()
+
+    p = SeasonalNaivePredictor(_provider(path, tmp_path))
+    result = p.predict_24h(now=now)
+
+    np.testing.assert_allclose(result["q50"], yesterday)
+    assert result["forecast_date"] == "2026-11-05" and result["coverage"] is None
+    assert np.all(result["q10"] <= result["q50"]) and np.all(result["q50"] <= result["q90"])
+    # 사인 패턴이 정확히 하루 주기라 '전날 값'은 오차가 0이다 (재현 MAPE 0, 9일치 평가).
+    assert result["mape"] == pytest.approx(0.0, abs=1e-9) and p.backtest["days"] == 9
+
+
+def test_baseline_mape_matches_manual_calculation(tmp_path):
+    path = _history_csv(tmp_path, pd.Timestamp("2026-11-05"), 24 * 3)
+    raw = pd.read_csv(path)
+    raw.loc[raw["date"] == "2026-11-04", ["smp_jeju", "smp_mainland"]] *= 1.1  # 11-04만 10% 높게
+    raw.to_csv(path, index=False)
+    p = SeasonalNaivePredictor(_provider(path, tmp_path))
+    p.predict_24h(now=datetime(2026, 11, 5, 9))
+    df = F.prepare_smp_frame(raw).set_index("datetime")["smp_jeju"]
+    d2, d3, d4 = (df.iloc[i:i + 24].to_numpy() for i in (0, 24, 48))  # 11-02, 11-03, 11-04 거래일
+    errors = np.concatenate([d3 - d2, d4 - d3])
+    actuals = np.concatenate([d3, d4])
+    assert p.backtest["days"] == 2
+    assert p.mape == pytest.approx(np.mean(np.abs(errors) / np.abs(actuals)) * 100)  # 0%와 9.09%의 평균
+
+
+def test_serving_prefers_baseline_over_v32_when_v41_gate_failed():
+    serving = ServingSMPPredictor(_Fake(ready=False),
+                                  _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 11.75, "coverage": None},
+                                        mape=11.75, coverage=None),
+                                  _Fake({**FORECAST, "model_used": "v3.2"}))
+    serving.baseline.backtest = {"days": 150}
+    result = serving.predict_24h()
+    assert (result["model_version"], result["model_label"], result["mape"]) == ("baseline-24h", BASELINE_LABEL, 11.75)
+    info = serving.model_info()
+    assert (info["version"], info["mape"], info["coverage"]) == ("baseline-24h", 11.75, None)
 
 
 class _Fake:
@@ -131,6 +180,7 @@ FORECAST = {"q10": [90.0] * 24, "q50": [100.0] * 24, "q90": [110.0] * 24, "forec
 
 def test_serving_falls_back_to_v32_without_metrics_and_reports_it():
     serving = ServingSMPPredictor(_Fake(error=InsufficientHistoryError("gap")),
+                                  _Fake(error=InsufficientHistoryError("no yesterday")),
                                   _Fake({**FORECAST, "model_used": "v3.2", "mape": 7.17, "coverage": 89.4}))
     result = serving.predict_24h()
     assert (result["model_version"], result["model_label"]) == ("v3.2", V32_LABEL)
@@ -139,14 +189,28 @@ def test_serving_falls_back_to_v32_without_metrics_and_reports_it():
 
 
 def test_serving_uses_v41_and_reports_its_walk_forward_metrics():
-    serving = ServingSMPPredictor(_Fake({**FORECAST, "model_used": "v4.1", "mape": 9.5, "coverage": 76.0}), None)
+    serving = ServingSMPPredictor(_Fake({**FORECAST, "model_used": "v4.1", "mape": 9.5, "coverage": 76.0}), None, None)
     assert serving.predict_24h()["model_label"] == V41_LABEL
     info = serving.model_info()
     assert (info["version"], info["mape"], info["coverage"]) == ("v4.1", 9.5, 76.0)
 
 
+def test_api_reports_the_baseline_when_it_serves(monkeypatch):
+    baseline = _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 11.75, "coverage": None},
+                     mape=11.75, coverage=None)
+    baseline.backtest = {"days": 150}
+    serving = ServingSMPPredictor(_Fake(ready=False), baseline, None)
+    monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)
+    with TestClient(app) as client:
+        forecast = client.get("/api/v1/smp-forecast").json()
+        info = client.get("/api/v1/model/info").json()
+    assert forecast["model_used"] == f"{BASELINE_LABEL} · 검증 MAPE 11.75%"
+    assert (info["version"], info["mape"], info["coverage"], info["status"]) == ("baseline-24h", 11.75, None, "active")
+    assert "150일" in info["data_source"]
+
+
 def test_api_reports_the_model_that_actually_served(monkeypatch):
-    serving = ServingSMPPredictor(_Fake({**FORECAST, "model_used": "v4.1", "mape": 9.5, "coverage": 76.0}), None)
+    serving = ServingSMPPredictor(_Fake({**FORECAST, "model_used": "v4.1", "mape": 9.5, "coverage": 76.0}), None, None)
     monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)
     with TestClient(app) as client:
         forecast = client.get("/api/v1/smp-forecast").json()

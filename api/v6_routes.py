@@ -310,7 +310,8 @@ async def get_smp_forecast():
                 confidence=None,
                 created_at=datetime.now().isoformat(),
                 data_source=("EPSIS 평균 패턴" if is_fallback
-                             else "제주 하루전 SMP 이력 (제주시범사업 API·EPSIS)" if result.get('model_version') == 'v4.1'
+                             else "제주 하루전 SMP 이력 (제주시범사업 API·EPSIS)"
+                             if result.get('model_version') in ('v4.1', 'baseline-24h')
                              else "Model Prediction + EPSIS Historical"),
                 forecast_date=None if is_fallback else result.get('forecast_date'),
             )
@@ -620,6 +621,18 @@ async def get_model_info():
             coverage=info["coverage"],
             last_trained=info.get("last_trained"),
             data_source=f"제주 하루전 SMP (제주시범사업 API·EPSIS), 평가 기간 끝 {info.get('eval_end')}",
+        )
+    if info["version"] == "baseline-24h":
+        # 학습 파라미터가 없는 기준선: MAPE는 최근 이력에서 '전날 값으로 다음 날 예측'을 재현한 값이다.
+        return ModelInfoResponse(
+            status="active",
+            version="baseline-24h",
+            type="전날 같은 시간 가격 (기준선)",
+            device="CPU",
+            mape=info["mape"],
+            coverage=None,
+            last_trained=None,
+            data_source=f"제주 하루전 SMP (제주시범사업 API·EPSIS), 최근 {info.get('eval_days')}일 재현 MAPE",
         )
     # v3.2 체크포인트의 기록 지표(MAPE 7.17%)는 스케일러 누수로 무효이고, coverage 94.5%는
     # 어떤 지표 파일에도 근거가 없었다. 재검증 전까지 지표를 null로 내보낸다.

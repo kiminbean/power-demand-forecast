@@ -64,7 +64,7 @@ def test_kpi_output_and_utilization_equal_resources_sum(offline_realtime):
 def serving_v32_only(monkeypatch):
     """v4.1 산출물 유무와 관계없이 v3.2 대체 경로를 검증한다 (메인 체크아웃에는 v4.1 산출물이 있다)."""
     from src.smp.models.serving import ServingSMPPredictor
-    serving = ServingSMPPredictor(primary=None, fallback=SMPPredictor(use_advanced=True))
+    serving = ServingSMPPredictor(primary=None, baseline=None, fallback=SMPPredictor(use_advanced=True))
     monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)
     return serving
 
