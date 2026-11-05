@@ -320,23 +320,29 @@ class RealtimeAPIClient:
                 logger.warning("No Jeju SMP data items found")
                 return None
 
-            # Get latest item (first item is usually most recent)
-            # Items are sorted by date/hour/gugan
-            latest = items[0]
-
-            # Find the latest hour's average SMP (average across 4 gugan)
-            trade_date = latest.get("date", "")
-            trade_hour = latest.get("hour", 0)
+            # 원천은 날짜 내림차순이지만 날짜 안에서는 1시→24시 오름차순이므로
+            # items[0]은 최신 날짜의 1시다. 최신 (날짜, 시간)을 명시적으로 고른다.
+            keyed = [
+                item for item in items
+                if isinstance(item.get("date"), str) and isinstance(item.get("hour"), int)
+                and not isinstance(item.get("hour"), bool)
+            ]
+            if not keyed:
+                logger.warning("No Jeju SMP items with a valid date and hour")
+                return None
+            latest = max(keyed, key=lambda item: (item["date"], item["hour"]))
+            trade_date = latest["date"]
+            trade_hour = latest["hour"]
 
             # Calculate average SMP for the hour (across all gugan)
-            hour_items = [item for item in items if item.get("date") == trade_date and item.get("hour") == trade_hour]
+            hour_items = [item for item in keyed if item["date"] == trade_date and item["hour"] == trade_hour]
             # 실시간 가격이 누락되거나 유효하지 않으면 하루전 가격으로 대체하지 않는다.
+            # 제주 실시간시장은 재생에너지 잉여 시 0원·음수 가격이 정상 공표되므로 유한값은 허용한다.
             rt_prices = [item.get("jsmpRt") for item in hour_items]
             if not rt_prices or any(
                 isinstance(price, bool)
                 or not isinstance(price, (int, float))
                 or not math.isfinite(price)
-                or price <= 0
                 for price in rt_prices
             ):
                 logger.warning("No valid real-time Jeju SMP for the latest hour")
@@ -410,10 +416,6 @@ class RealtimeAPIClient:
         Returns:
             SMPData object or None if failed
         """
-        # 제주 가격은 원천 정렬·시장 구분을 검증하기 전까지 제공하지 않는다.
-        if area_code == "9":
-            return None
-
         cache_key = f"smp_{area_code}"
 
         # Check cache
@@ -429,6 +431,10 @@ class RealtimeAPIClient:
             if smp_data:
                 self._smp_cache[cache_key] = (smp_data, datetime.now())
                 return smp_data
+
+        # 제주 가격은 검증된 제주시범사업 API(jsmpRt)만 사용하고 구 KPX API로 대체하지 않는다.
+        if area_code == "9":
+            return None
 
         # 현재 크롤러는 수요예측 표와 추정치를 가격으로 반환할 수 있어 사용하지 않는다.
 

@@ -943,14 +943,14 @@ async def get_current_smp(region: str = "jeju"):
             _smp_trade_date_status(rt_smp.trade_day, datetime.now(ZoneInfo("Asia/Seoul")))
             if rt_smp is not None else "no_data"
         )
-        # 원천 데이터는 실시간 정산과 하루전 가격을 구분하지 않을 수 있다.
+        # smp_jeju는 제주시범사업 API의 실시간시장 가격(jsmpRt)만 담는다.
         latest_smp = (
             DatedSMPResponse(
                 price=rt_smp.smp_jeju,
                 trade_day=rt_smp.trade_day,
                 trade_hour=rt_smp.trade_hour,
                 data_source=rt_smp.data_source,
-                market="unknown",
+                market="real_time",
                 region="jeju",
             )
             if rt_smp is not None else None

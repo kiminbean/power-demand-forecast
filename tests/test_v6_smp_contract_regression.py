@@ -80,7 +80,7 @@ def test_noncurrent_smp_not_reported_as_current(api_client_dependencies, day_off
     assert current["data_source"] == "test source"
     assert current["latest_smp"] == {
         "price": 123.4, "trade_day": day, "trade_hour": 1,
-        "data_source": "test source", "market": "unknown", "region": "jeju",
+        "data_source": "test source", "market": "real_time", "region": "jeju",
     }
     assert kpi["current_smp"] is None
     assert kpi["smp_change_pct"] is None
@@ -109,7 +109,7 @@ def test_current_date_is_dated_not_live_including_zero(api_client_dependencies, 
     assert current["data_source"] == "test source"
     assert current["latest_smp"] == {
         "price": price, "trade_day": day, "trade_hour": 1,
-        "data_source": "test source", "market": "unknown", "region": "jeju",
+        "data_source": "test source", "market": "real_time", "region": "jeju",
     }
     assert kpi["current_smp"] is None
     assert kpi["smp_change_pct"] is None

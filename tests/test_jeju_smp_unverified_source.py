@@ -1,4 +1,4 @@
-"""Keep unverified Jeju SMP sources out of public real-time consumers."""
+"""Serve Jeju SMP only from the verified Jeju pilot API, never from unverified fallbacks."""
 
 import asyncio
 from datetime import datetime
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 from api import realtime_api
 
 
-def test_jeju_realtime_does_not_return_unverified_api_or_cached_price(monkeypatch):
+def test_jeju_realtime_returns_cached_verified_price_without_refetch(monkeypatch):
     client = realtime_api.RealtimeAPIClient(api_key="test-key")
     price = realtime_api.SMPData(
         trade_day="20261103", trade_hour=4, smp_land=150.0,
@@ -19,7 +19,7 @@ def test_jeju_realtime_does_not_return_unverified_api_or_cached_price(monkeypatc
     old_source = Mock()
     monkeypatch.setattr(realtime_api.httpx, "AsyncClient", old_source)
 
-    assert asyncio.run(client.get_smp_realtime(area_code="9")) is None
+    assert asyncio.run(client.get_smp_realtime(area_code="9")) is price
     source.assert_not_called()
     old_source.assert_not_called()
 
@@ -32,5 +32,6 @@ def test_jeju_realtime_does_not_fallback_to_unverified_old_api(monkeypatch):
     monkeypatch.setattr(realtime_api.httpx, "AsyncClient", old_source)
 
     assert asyncio.run(client.get_smp_realtime(area_code="9")) is None
-    source.assert_not_called()
+    source.assert_awaited_once()
     old_source.assert_not_called()
+    assert "smp_9" not in client._smp_cache

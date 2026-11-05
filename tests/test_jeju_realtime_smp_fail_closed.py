@@ -38,7 +38,7 @@ def _mock_jeju_api(monkeypatch, items):
     return client
 
 
-@pytest.mark.parametrize("value", [None, 0, -1, float("nan"), float("inf")])
+@pytest.mark.parametrize("value", [None, "abc", True, float("nan"), float("inf")])
 def test_invalid_realtime_price_never_substitutes_day_ahead(monkeypatch, value):
     item = _item(jsmpRt=value)
     if value is None:
@@ -49,7 +49,7 @@ def test_invalid_realtime_price_never_substitutes_day_ahead(monkeypatch, value):
     assert asyncio.run(client._get_jeju_smp_via_api()) is None
 
 
-@pytest.mark.parametrize("value", [None, 0, -1, float("nan"), float("inf")])
+@pytest.mark.parametrize("value", [None, "abc", True, float("nan"), float("inf")])
 def test_incomplete_hour_is_not_averaged_as_realtime(monkeypatch, value):
     invalid = _item(jsmpRt=value)
     if value is None:
@@ -74,7 +74,7 @@ def test_valid_realtime_hour_keeps_realtime_average(monkeypatch):
 
 
 def test_rejected_jeju_value_is_not_cached_when_other_source_fails(monkeypatch):
-    upstream = _mock_jeju_api(monkeypatch, [_item(jsmpRt=0)])
+    upstream = _mock_jeju_api(monkeypatch, [_item(jsmpRt=float("nan"))])
     upstream.get.side_effect = [upstream.get.return_value, realtime_api.httpx.ConnectError("offline")]
     client = realtime_api.RealtimeAPIClient(api_key="test-key")
 

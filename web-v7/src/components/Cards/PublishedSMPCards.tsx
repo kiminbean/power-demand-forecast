@@ -18,7 +18,7 @@ export function PublishedSMPCard({ data }: { data: CurrentSMP | null }) {
       <p className="text-sm text-text-muted mb-1">공표 SMP ({region})</p>
       <div className="text-2xl font-bold text-smp">{hasValue ? `${price.toFixed(1)} 원/kWh` : 'SMP 데이터 없음'}</div>
       {data && <p className="text-xs text-text-muted mt-1">{dateStatusLabels[data.data_date_status] ?? '날짜 확인 불가'} · 거래일 {data.latest_smp?.trade_day || data.trade_day || '확인 불가'} · 거래시간 {tradeHour != null ? `${String(tradeHour).padStart(2, '0')}h` : '확인 불가'}</p>}
-      <p className="text-xs text-text-muted mt-1">시장 미확인 · 출처: {data?.latest_smp?.data_source || data?.data_source || '확인 불가'} · 실시간 여부 확인 불가</p>
+      <p className="text-xs text-text-muted mt-1">{data?.latest_smp?.market === 'real_time' ? '실시간시장(RT)' : '시장 미확인'} · 출처: {data?.latest_smp?.data_source || data?.data_source || '확인 불가'} · 실시간 여부 확인 불가</p>
       {hasValue && data?.comparison && <p className="text-xs text-text-muted mt-1">일평균 대비 {data.comparison.daily_change_pct >= 0 ? '+' : ''}{data.comparison.daily_change_pct.toFixed(1)}%</p>}
     </div>
   );
