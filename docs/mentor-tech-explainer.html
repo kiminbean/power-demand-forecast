@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>제주 전력수요 예측 시스템 — 기술 구현 브리핑 (멘토용)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f7f5f2; --panel:#fbfaf8; --ink:#1a1a1a; --muted:#6b6560;
+  --accent:#b3552e; --link:#2563a8; --hair:rgba(26,26,26,.12); --hair-soft:rgba(26,26,26,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:'Noto Sans KR',-apple-system,sans-serif;
+  font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;word-break:keep-all}
+.wrap{max-width:880px;margin:0 auto;padding:64px 24px 96px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:'Noto Serif KR',serif;font-size:40px;line-height:1.25;font-weight:700;margin:14px 0 10px}
+h2{font-family:'Noto Serif KR',serif;font-size:27px;font-weight:600;margin:0 0 6px}
+h3{font-size:17px;font-weight:700;margin:22px 0 8px}
+p{margin:10px 0;color:#33312e}
+a{color:var(--link);text-decoration:underline;text-underline-offset:3px}
+code,.mono{font-family:ui-monospace,'JetBrains Mono',Menlo,monospace;font-size:.88em;
+  background:rgba(26,26,26,.055);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+header{border-bottom:2px solid var(--ink);padding-bottom:26px;margin-bottom:34px}
+header .meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
+section{margin:56px 0}
+.sec-num{font-family:ui-monospace,monospace;font-size:13px;color:var(--muted);letter-spacing:.1em}
+.rule{height:1px;background:var(--hair);margin:10px 0 22px}
+.tldr{background:var(--panel);border:1px solid var(--hair);border-left:3px solid var(--accent);
+  padding:20px 24px;margin-top:26px}
+.tldr p{margin:7px 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px}
+.kpi{border:1px solid var(--hair);background:var(--panel);padding:14px 16px}
+.kpi .v{font-size:24px;font-weight:700;font-family:ui-monospace,monospace}
+.kpi .l{font-size:12.5px;color:var(--muted);margin-top:2px}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+th{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:8px 10px;border-bottom:2px solid var(--ink);vertical-align:bottom}
+td{padding:9px 10px;border-bottom:1px solid var(--hair-soft);vertical-align:top}
+tr:hover td{background:rgba(26,26,26,.025)}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+figure{margin:30px 0}
+figcaption{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.55}
+.diagram{background:var(--panel);border:1px solid var(--hair);padding:18px 10px 8px}
+svg{display:block;width:100%;height:auto}
+.dg-title{font:600 15px 'Noto Sans KR';fill:var(--ink)}
+.dg-sub{font:400 12.5px 'Noto Sans KR';fill:var(--muted)}
+.dg-tag{font:600 10px ui-monospace,monospace;letter-spacing:.12em}
+.dg-chip{font:500 11.5px ui-monospace,monospace;fill:#33312e}
+.dg-eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:.16em;fill:var(--muted)}
+.dg-note{font:400 12px 'Noto Sans KR';fill:var(--muted)}
+.url-card{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;border:1px solid var(--hair);
+  background:var(--panel);padding:18px 22px;margin:8px 0}
+.url-card .u{font-family:ui-monospace,monospace;font-size:13.5px;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.url-card .d{font-size:14px;color:#33312e;min-width:0;overflow-wrap:anywhere}
+.url-card.focus{border-left:3px solid var(--accent)}
+.legend{display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
+.legend .sw{display:inline-block;width:22px;height:0;border-top:2px solid;vertical-align:middle;margin-right:7px}
+.warn{background:#f4ece6;border:1px solid rgba(179,85,46,.35);padding:16px 20px;margin:18px 0;font-size:14.5px}
+.warn b{color:var(--accent)}
+.glossary dt{font-weight:700;margin-top:14px;font-size:15px}
+.glossary dd{margin:3px 0 0 0;color:#33312e;font-size:14.5px}
+footer{border-top:2px solid var(--ink);margin-top:70px;padding-top:20px;font-size:13px;color:var(--muted)}
+.ev{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.small{font-size:13px;color:var(--muted)}
+@media(max-width:640px){h1{font-size:30px}.wrap{padding:40px 16px 72px}
+.url-card{grid-template-columns:1fr}
+.url-card .u:empty{display:none}
+table{display:block;overflow-x:auto}
+table thead,table tbody{display:table;width:max-content;min-width:100%}
+td .ev,td code{white-space:nowrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Jeju Power Demand Forecast — Technical Briefing for Non-Domain Mentors</div>
+  <h1>제주 전력수요 예측 웹 서비스,<br>어떻게 만들어졌나</h1>
+  <p class="small">전력 도메인 지식이 없어도 읽을 수 있도록 쓴 기술 구현 설명입니다. 모든 주장에는 코드와 파일 위치(근거)를 함께 실었습니다.</p>
+  <div class="meta"><span>작성: 2026-11-05</span><span>대상: 멘토 (비도메인 전문가)</span><span>프로젝트: ~/Projects/power-demand-forecast</span></div>
+
+  <div class="tldr">
+    <p><b>한 줄 요약</b> — 전력거래소·기상청·관광공사 등 공개 데이터를 주기적으로 수집(크롤링/API)해서, 제주의 전력 수요와 전력 거래 가격(SMP)을 딥러닝 모델로 예측하고, 이를 웹 대시보드로 서비스하는 개인 프로젝트입니다.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="v">12+ 종</div><div class="l">외부 데이터 소스 (API·크롤링)</div></div>
+      <div class="kpi"><div class="v">43,726행</div><div class="l">5년치 SMP 학습 데이터 (CSV)</div></div>
+      <div class="kpi"><div class="v">MAPE 6.06%</div><div class="l">수요 예측 모델 오차 (평균)</div></div>
+      <div class="kpi"><div class="v">4개</div><div class="l">공개 중인 웹 버전 (v4~v7 + 모바일)</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="map">
+  <span class="sec-num">01</span>
+  <h2>서비스 지도 — 지금 열려 있는 것들</h2>
+  <div class="rule"></div>
+  <p>모든 페이지는 <code>Tailscale Funnel</code>이라는 터널링 서비스로 내 MacBook에서 직접 공개되고 있습니다. 별도의 클라우드 서버 없이, 내 컴퓨터가 그대로 웹 서버 역할을 합니다. 주소는 Tailscale이 발급한 도메인(<code>ib-macbookpro.tail918684.ts.net</code>)이며, HTTPS 암호화 인증서도 자동 발급됩니다.</p>
+
+  <div class="url-card focus">
+    <div class="u">:8443/</div>
+    <div class="d"><b>메인 대시보드 (Streamlit v4)</b> — 실시간 수급, 예측, 지도 시각화. 이 브리핑에서 상세히 설명할 서비스입니다.</div>
+    <div class="u"></div><div class="d small"><span class="ev">https://ib-macbookpro.tail918684.ts.net:8443/</span></div>
+  </div>
+  <div class="url-card">
+    <div class="u">:10000/v7/</div>
+    <div class="d"><b>웹 v7</b> — React + Vite 기반 최신 대시보드.</div>
+    <div class="u"></div><div class="d small"><span class="ev">https://ib-macbookpro.tail918684.ts.net:10000/v7/</span></div>
+  </div>
+  <div class="url-card">
+    <div class="u">:10000/v6/</div>
+    <div class="d"><b>웹 v6</b> — React 기반 대시보드 (v7의 이전 버전).</div>
+    <div class="u"></div><div class="d small"><span class="ev">https://ib-macbookpro.tail918684.ts.net:10000/v6/</span></div>
+  </div>
+  <div class="url-card">
+    <div class="u">:10000/v5/smp</div>
+    <div class="d"><b>웹 v5 — SMP 뷰</b> — 전력 가격(SMP) 전용 페이지.</div>
+    <div class="u"></div><div class="d small"><span class="ev">https://ib-macbookpro.tail918684.ts.net:10000/v5/smp</span></div>
+  </div>
+  <div class="url-card">
+    <div class="u">:10000/mobile/</div>
+    <div class="d"><b>모바일</b> — 정산 시뮬레이터 등 모바일 최적화 페이지.</div>
+    <div class="u"></div><div class="d small"><span class="ev">https://ib-macbookpro.tail918684.ts.net:10000/mobile/</span></div>
+  </div>
+</section>
+
+<section id="topology">
+  <span class="sec-num">02</span>
+  <h2>배포 구조 — 내 맥북이 곧 서버</h2>
+  <div class="rule"></div>
+  <p>인터넷의 요청은 Tailscale Funnel이 받아서 내 맥북 안의 4개 프로세스로 전달합니다. 포트 번호(콜론 뒤 숫자)로 어떤 프로그램이 응답하는지 구분됩니다.</p>
+
+  <figure>
+  <div class="diagram">
+  <svg viewBox="0 0 1100 560" role="img" aria-label="배포 토폴로지 다이어그램">
+    <defs>
+      <marker id="ar-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b6560"/></marker>
+      <marker id="ar-link" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563a8"/></marker>
+      <marker id="ar-acc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b3552e"/></marker>
+    </defs>
+    <!-- Zone A: public -->
+    <rect x="30" y="70" width="1040" height="140" fill="none" stroke="#1a1a1a" stroke-opacity=".28" stroke-dasharray="6 5"/>
+    <text x="50" y="94" class="dg-eyebrow">PUBLIC — 인터넷에서 접근 가능 (Tailscale Funnel · TLS 암호화)</text>
+    <!-- Funnel node -->
+    <rect x="340" y="105" width="420" height="80" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".55"/>
+    <text x="358" y="126" class="dg-tag" fill="#b3552e">FUNNEL</text>
+    <text x="358" y="150" class="dg-title">Tailscale Funnel</text>
+    <text x="358" y="170" class="dg-sub">ib-macbookpro.tail918684.ts.net — HTTPS :8443 / :10000</text>
+    <!-- Zone B: local -->
+    <rect x="30" y="300" width="1040" height="230" fill="none" stroke="#1a1a1a" stroke-opacity=".28" stroke-dasharray="6 5"/>
+    <text x="50" y="324" class="dg-eyebrow">LOCAL — MacBook Pro (M1) 내부 · 127.0.0.1</text>
+    <!-- Node 1: Streamlit (accent) -->
+    <rect x="50" y="345" width="230" height="150" fill="rgba(179,85,46,.06)" stroke="#b3552e" stroke-width="1.5"/>
+    <text x="66" y="366" class="dg-tag" fill="#b3552e">STREAMLIT</text>
+    <text x="66" y="390" class="dg-title">대시보드 v4 (메인)</text>
+    <text x="66" y="410" class="dg-sub">Python 웹 프레임워크</text>
+    <text x="66" y="436" class="dg-chip">src/dashboard/app_v4.py</text>
+    <text x="66" y="460" class="dg-chip">포트 8504</text>
+    <!-- Node 2: multiplex proxy -->
+    <rect x="302" y="345" width="230" height="150" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="318" y="366" class="dg-tag" fill="#6b6560">PROXY</text>
+    <text x="318" y="390" class="dg-title">공개 멀티플렉스 서버</text>
+    <text x="318" y="410" class="dg-sub">버전별 경로 분배</text>
+    <text x="318" y="436" class="dg-chip">public_server.py</text>
+    <text x="318" y="460" class="dg-chip">/v7 · /v6 · /v5/smp · /mobile</text>
+    <text x="318" y="482" class="dg-chip">포트 10005</text>
+    <!-- Node 3: API -->
+    <rect x="554" y="345" width="230" height="150" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="570" y="366" class="dg-tag" fill="#6b6560">API</text>
+    <text x="570" y="390" class="dg-title">FastAPI (uvicorn)</text>
+    <text x="570" y="410" class="dg-sub">예측·시세 JSON API</text>
+    <text x="570" y="436" class="dg-chip">api/main.py</text>
+    <text x="570" y="460" class="dg-chip">포트 8001</text>
+    <!-- Node 4: docs -->
+    <rect x="806" y="345" width="230" height="150" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="822" y="366" class="dg-tag" fill="#6b6560">DOCS</text>
+    <text x="822" y="390" class="dg-title">문서 서버 (http.server)</text>
+    <text x="822" y="410" class="dg-sub">이 페이지·학습 자료 제공</text>
+    <text x="822" y="436" class="dg-chip">docs/ 디렉터리</text>
+    <text x="822" y="460" class="dg-chip">포트 8799</text>
+    <!-- Paths -->
+    <path d="M 380 185 V 245 H 168 V 345" fill="none" stroke="#b3552e" stroke-width="2" marker-end="url(#ar-acc)"/>
+    <text x="392" y="232" class="dg-chip" fill="#b3552e">HTTPS :8443</text>
+    <path d="M 470 185 V 225 H 417 V 345" fill="none" stroke="#2563a8" stroke-width="1.6" marker-end="url(#ar-link)"/>
+    <text x="484" y="215" class="dg-chip" fill="#2563a8">HTTPS :10000 — /v7 · /v6 · /v5/smp · /mobile</text>
+    <path d="M 560 185 V 205 H 921 V 345" fill="none" stroke="#2563a8" stroke-width="1.6" marker-end="url(#ar-link)"/>
+    <text x="760" y="198" class="dg-chip" fill="#2563a8">루트 / → 문서</text>
+    <!-- internal proxy arc below -->
+    <path d="M 417 495 V 515 H 669 V 495" fill="none" stroke="#6b6560" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#ar-ink)"/>
+    <text x="543" y="528" class="dg-note" text-anchor="middle">API 프록시 (/api/* → 8001)</text>
+  </svg>
+  </div>
+  <figcaption>
+    <b>그림 1 — 배포 토폴로지.</b>
+    <span class="legend">
+      <span><span class="sw" style="border-color:#b3552e"></span>이 브리핑의 주제 (:8443 메인 대시보드)</span>
+      <span><span class="sw" style="border-color:#2563a8"></span>인터넷 경계를 통과하는 경로</span>
+      <span><span class="sw" style="border-color:#6b6560;border-top-style:dashed"></span>맥북 내부 프록시</span>
+    </span><br>
+    근거: <span class="ev">tailscale serve status</span> (8443→127.0.0.1:8504, 10000→127.0.0.1:10005, /→127.0.0.1:8799),
+    <span class="ev">~/.local/share/power-demand-public/public_server.py</span> (멀티플렉스 라우팅·API 프록시 화이트리스트)
+  </figcaption>
+  </figure>
+
+  <h3>사용한 기술과 선택 이유</h3>
+  <table>
+    <tr><th style="width:26%">구성 요소</th><th style="width:24%">기술</th><th>왜 이것을 골랐나</th></tr>
+    <tr><td>메인 대시보드</td><td>Streamlit (Python)</td><td>데이터 과학 코드를 최소한의 프론트엔드 지식으로 웹화. 차트·지도·슬라이더가 기본 제공되어 반복 실험에 유리.</td></tr>
+    <tr><td>웹 v6·v7</td><td>React + Vite (TypeScript)</td><td>Streamlit보다 빠른 화면·세밀한 UI가 필요해진 뒤 단계적으로 이전 중. v7이 최신.</td></tr>
+    <tr><td>예측 API</td><td>FastAPI (uvicorn)</td><td>모델 추론을 JSON API로 노출 — 웹 어느 버전에서든 같은 예측값을 재사용.</td></tr>
+    <tr><td>공개 터널</td><td>Tailscale Funnel</td><td>공유기 포트포워딩·도메인 구매 없이 내 기기를 그대로 HTTPS로 공개. 외부 클라우드 비용 0원.</td></tr>
+  </table>
+</section>
+
+<section id="data">
+  <span class="sec-num">03</span>
+  <h2>데이터 — 무엇을, 어디서, 어떻게 가져왔나</h2>
+  <div class="rule"></div>
+  <p>예측의 정확도는 데이터 품질이 결정합니다. 전력 수요는 <b>날씨(더위·추위)</b>와 <b>사람의 이동(관광객 유입)</b>에 크게 좌우되므로, 전력 데이터만이 아니라 기상·관광·교통 데이터를 함께 수집합니다. 아래 표의 <b>근거 열</b>이 "정말 그 소스에서 가져왔는가"에 대한 코드 증거입니다.</p>
+
+  <figure>
+  <div class="diagram">
+  <svg viewBox="0 0 1100 610" role="img" aria-label="데이터 수집 흐름 다이어그램">
+    <!-- sources -->
+    <g>
+      <rect x="30" y="80" width="260" height="68" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+      <text x="44" y="103" class="dg-title">EPSIS · 전력거래소</text>
+      <text x="44" y="122" class="dg-sub">전국 수급 · 과거 SMP · 연료비 단가</text>
+      <rect x="30" y="162" width="260" height="68" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+      <text x="44" y="185" class="dg-title">KPX 제주 실시간 페이지</text>
+      <text x="44" y="204" class="dg-sub">제주 수급(5분) · 제주 SMP(15분)</text>
+      <rect x="30" y="244" width="260" height="68" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+      <text x="44" y="267" class="dg-title">공공데이터포털 (data.go.kr)</text>
+      <text x="44" y="286" class="dg-sub">제주 계통수요 · ASOS 기상 · 항공/해운</text>
+      <rect x="30" y="326" width="260" height="68" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+      <text x="44" y="349" class="dg-title">기상청</text>
+      <text x="44" y="368" class="dg-sub">날씨누리 실시간(1시간) · ASOS 관측</text>
+      <rect x="30" y="408" width="260" height="68" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+      <text x="44" y="431" class="dg-title">visitjeju · thewindpower 등</text>
+      <text x="44" y="450" class="dg-sub">제주 입도객 · 발전소 목록</text>
+    </g>
+    <!-- collector -->
+    <rect x="380" y="80" width="280" height="396" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".55"/>
+    <text x="398" y="103" class="dg-tag" fill="#6b6560">COLLECTOR</text>
+    <text x="398" y="128" class="dg-title">수집 계층 (크롤러)</text>
+    <text x="398" y="148" class="dg-sub">16개 수집 스크립트 · 주기 실행</text>
+    <text x="398" y="186" class="dg-chip">requests (HTTP POST/GET)</text>
+    <text x="398" y="210" class="dg-chip">BeautifulSoup (HTML 파싱)</text>
+    <text x="398" y="234" class="dg-chip">Selenium (브라우저 자동화)</text>
+    <text x="398" y="258" class="dg-chip">EasyOCR (이미지 속 숫자 읽기)</text>
+    <text x="398" y="296" class="dg-chip">tools/crawlers/ — 제주·기상·교통</text>
+    <text x="398" y="318" class="dg-chip">src/smp/crawlers/ — SMP·연료비</text>
+    <text x="398" y="452" class="dg-note">표와 표가 아닌 화면을 모두 코드로 읽어</text>
+    <text x="398" y="470" class="dg-note">CSV라는 표 형태로 저장합니다</text>
+    <!-- store -->
+    <rect x="750" y="110" width="290" height="190" fill="rgba(179,85,46,.06)" stroke="#b3552e" stroke-width="1.5"/>
+    <text x="766" y="132" class="dg-tag" fill="#b3552e">STORE</text>
+    <text x="766" y="156" class="dg-title">data/ (CSV 표 저장소)</text>
+    <text x="766" y="184" class="dg-chip">smp_real_epsis.csv — 12,445행</text>
+    <text x="766" y="206" class="dg-chip">smp_5years_epsis.csv — 43,726행</text>
+    <text x="766" y="228" class="dg-chip">기상 관측 · 입도객 · 체류인구</text>
+    <text x="766" y="250" class="dg-chip">jeju_power_plants.csv — 26기</text>
+    <text x="766" y="276" class="dg-sub">모델 학습과 실시간 예측의 입력</text>
+    <!-- model box -->
+    <rect x="750" y="370" width="290" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="766" y="392" class="dg-tag" fill="#6b6560">DOWNSTREAM</text>
+    <text x="766" y="416" class="dg-title">피처 엔지니어링 → 모델</text>
+    <text x="766" y="436" class="dg-sub">04장 다이어그램 3에서 계속</text>
+    <!-- arrows -->
+    <path d="M 290 114 H 380" fill="none" stroke="#6b6560" stroke-width="1.4" marker-end="url(#ar-ink)"/>
+    <path d="M 290 196 H 380" fill="none" stroke="#6b6560" stroke-width="1.4" marker-end="url(#ar-ink)"/>
+    <path d="M 290 278 H 380" fill="none" stroke="#6b6560" stroke-width="1.4" marker-end="url(#ar-ink)"/>
+    <path d="M 290 360 H 380" fill="none" stroke="#6b6560" stroke-width="1.4" marker-end="url(#ar-ink)"/>
+    <path d="M 290 442 H 380" fill="none" stroke="#6b6560" stroke-width="1.4" marker-end="url(#ar-ink)"/>
+    <path d="M 660 180 H 750" fill="none" stroke="#b3552e" stroke-width="2" marker-end="url(#ar-acc)"/>
+    <path d="M 895 300 V 370" fill="none" stroke="#b3552e" stroke-width="2" marker-end="url(#ar-acc)"/>
+    <text x="980" y="345" class="dg-note" text-anchor="middle">→ 학습 입력</text>
+  </svg>
+  </div>
+  <figcaption><b>그림 2 — 데이터 수집 흐름.</b> 외부 5개 계열 소스 → 수집 스크립트 → CSV 저장 → 모델 입력.</figcaption>
+  </figure>
+
+  <h3>데이터 출처 상세 (근거 포함)</h3>
+  <table>
+    <tr><th style="width:20%">데이터</th><th style="width:30%">출처 (URL)</th><th style="width:22%">수집 방식·주기</th><th>근거 (코드 위치)</th></tr>
+    <tr><td>전국 실시간 수급<br><span class="small">공급능력·수요·예비율</span></td><td><span class="ev">epsis.kpx.or.kr/epsisnew/<br>selectEkgeEpsMepRealChart.do?menuId=030300</span></td><td>HTTP POST 크롤링 · 5분</td><td><span class="ev">tools/crawlers/epsis_crawler.py:237</span></td></tr>
+    <tr><td>제주 실시간 수급</td><td><span class="ev">kpx.or.kr/powerinfoJeju.es?mid=a10404040000</span></td><td>requests + BeautifulSoup · 5분</td><td><span class="ev">tools/crawlers/jeju_realtime_crawler.py:7,69</span></td></tr>
+    <tr><td>제주 계통수요 등<br><span class="small">(시간별 파일)</span></td><td><span class="ev">data.go.kr/data/15125113/fileData.do</span><br>공공데이터포털 파일 데이터</td><td>파일 다운로드·파싱</td><td><span class="ev">tools/crawlers/jeju_power_crawler.py:10</span></td></tr>
+    <tr><td>시간별 제주전력수요<br><span class="small">(일별 1~24시 MWh)</span></td><td><span class="ev">data.go.kr/data/15065239/fileData.do</span></td><td>파일 다운로드·파싱</td><td><span class="ev">tools/crawlers/jeju_power_crawler.py:15</span></td></tr>
+    <tr><td>SMP 실시간 (육지·제주)</td><td><span class="ev">new.kpx.or.kr/bidSmpLfdDataRt.es?mid=a10406010200</span><br><span class="ev">new.kpx.or.kr/bidJejuSmpChart.es?mid=a10406010300</span></td><td>requests + BeautifulSoup · 15분</td><td><span class="ev">src/smp/crawlers/smp_crawler.py:10-11</span></td></tr>
+    <tr><td>과거 SMP (학습용)</td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaSmpShdChart.do?menuId=020100</span></td><td>대량 다운로드 (일별)</td><td><span class="ev">src/smp/crawlers/epsis_crawler.py:661</span></td></tr>
+    <tr><td>연료비 정산단가</td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaUpsBftChart.do?menuId=040701</span></td><td>requests · 월간</td><td><span class="ev">src/smp/crawlers/fuel_cost_crawler.py:7</span></td></tr>
+    <tr><td>ASOS 기상 (일별)<br><span class="small">기상청 종관관측 API</span></td><td><span class="ev">data.go.kr/data/15057210/openapi.do</span></td><td>공식 OpenAPI (인증키)</td><td><span class="ev">tools/crawlers/kma_api.py:3</span></td></tr>
+    <tr><td>ASOS 실시간 CSV<br><span class="small">API 보완용</span></td><td><span class="ev">data.kma.go.kr/data/grnd/selectAsosRltmList.do?pgmNo=36</span></td><td>Selenium 브라우저 다운로드</td><td><span class="ev">tools/crawlers/config.py:164-165</span></td></tr>
+    <tr><td>실시간 기상 (1시간)</td><td><span class="ev">weather.go.kr/w/obs-climate/land/city-obs.do</span></td><td>BeautifulSoup · 정시</td><td><span class="ev">tools/crawlers/kma_weather_crawler.py:7,79</span></td></tr>
+    <tr><td>제주 입도객 수</td><td><span class="ev">visitjeju.or.kr</span> (제주관광협회)</td><td>Selenium + EasyOCR — <b>표가 이미지로 제공되어 화면 속 숫자를 AI로 읽음</b></td><td><span class="ev">tools/crawlers/jeju_visitor_crawler.py:81</span></td></tr>
+    <tr><td>항공·해운 입출도객<br><span class="small">체류인구 계산용</span></td><td><span class="ev">data.go.kr/data/15002610</span> · <span class="ev">15092485</span> · <span class="ev">15056326</span> · <span class="ev">15007317</span> · <span class="ev">airportal.go.kr</span></td><td>공공데이터포털 API</td><td><span class="ev">tools/crawlers/jeju_transport_config.py:104-161</span></td></tr>
+    <tr><td>제주 발전소 목록<br><span class="small">풍력 14 · 태양광 6 · ESS 4 · 화력 2</span></td><td><span class="ev">공공데이터포털 + thewindpower.net</span></td><td>수집 후 정리된 목록 사용</td><td><span class="ev">src/dashboard/app_v4.py:1098</span> · <span class="ev">data/jeju_plants/jeju_power_plants.csv</span></td></tr>
+    <tr><td>보조 기상 (대안)</td><td><span class="ev">api.openweathermap.org/data/2.5</span></td><td>OpenAPI (키 필요)</td><td><span class="ev">src/data/weather_api.py:509</span></td></tr>
+  </table>
+
+  <div class="warn"><b>정직한 메모</b> — EPSIS는 <b>전국</b> 데이터만 줍니다. 제주 수요는 전국의 약 1.3~2.0% 수준이라 별도 제주 전용 소스(KPX 제주 페이지·공공데이터포털 제주 데이터셋)로 보완했습니다. 근거: <span class="ev">tools/crawlers/epsis_crawler.py:11</span>의 주석.</div>
+</section>
+
+<section id="model">
+  <span class="sec-num">04</span>
+  <h2>모델 — 예측은 어떻게 만들어지나</h2>
+  <div class="rule"></div>
+  <p>수집한 CSV를 모델이 읽을 수 있는 형태로 가공(피처 엔지니어링)하고, 시간 순서를 지켜 학습/검증을 나눈 뒤, 딥러닝 모델(LSTM 계열)을 학습시킵니다. 학습은 이 맥북의 <b>Apple MPS</b>(Apple Silicon 전용 GPU 가속)에서 수행했습니다 — CUDA(GPU 서버) 없이 로컬에서 학습 가능했다는 점이 이 프로젝트의 환경적 특징입니다.</p>
+
+  <figure>
+  <div class="diagram">
+  <svg viewBox="0 0 1100 470" role="img" aria-label="모델 학습-서빙 파이프라인">
+    <!-- row 1 -->
+    <rect x="50" y="80" width="300" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="66" y="101" class="dg-tag" fill="#6b6560">INPUT</text>
+    <text x="66" y="125" class="dg-title">원본 데이터 (data/)</text>
+    <text x="66" y="152" class="dg-chip">SMP 5년 43,726행 · 실시간 12,445행</text>
+    <text x="66" y="174" class="dg-chip">기상 · 입도객 · 발전소 26기</text>
+    <rect x="400" y="80" width="300" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="416" y="101" class="dg-tag" fill="#6b6560">FEATURES</text>
+    <text x="416" y="125" class="dg-title">피처 엔지니어링</text>
+    <text x="416" y="152" class="dg-chip">시간·요일 sin/cos · 지연(lag)</text>
+    <text x="416" y="174" class="dg-chip">이동평균 · THI(불쾌지수)</text>
+    <text x="416" y="196" class="dg-chip">체류인구(입도-출도 잔존모형)</text>
+    <rect x="750" y="80" width="300" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="766" y="101" class="dg-tag" fill="#6b6560">SCALING</text>
+    <text x="766" y="125" class="dg-title">스케일링 (정규화)</text>
+    <text x="766" y="152" class="dg-chip">train 분할에만 fit</text>
+    <text x="766" y="174" class="dg-chip">시간 순서 분할 — 누수 방지</text>
+    <!-- row 2 -->
+    <rect x="50" y="290" width="300" height="130" fill="rgba(179,85,46,.06)" stroke="#b3552e" stroke-width="1.5"/>
+    <text x="66" y="311" class="dg-tag" fill="#b3552e">TRAIN</text>
+    <text x="66" y="335" class="dg-title">모델 학습</text>
+    <text x="66" y="362" class="dg-chip">PyTorch LSTM · Apple MPS</text>
+    <text x="66" y="384" class="dg-chip">seed 42 · EarlyStopping</text>
+    <text x="66" y="406" class="dg-chip">과거 168시간 → 다음 수요</text>
+    <rect x="400" y="290" width="300" height="130" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="416" y="311" class="dg-tag" fill="#6b6560">ARTIFACTS</text>
+    <text x="416" y="335" class="dg-title">학습 산출물</text>
+    <text x="416" y="362" class="dg-chip">models/*.pt (가중치)</text>
+    <text x="416" y="384" class="dg-chip">scaler.npz · metrics.json</text>
+    <rect x="750" y="290" width="300" height="130" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
+    <text x="766" y="311" class="dg-tag" fill="#6b6560">SERVE</text>
+    <text x="766" y="335" class="dg-title">추론 서빙</text>
+    <text x="766" y="362" class="dg-chip">FastAPI :8001 → JSON</text>
+    <text x="766" y="384" class="dg-chip">대시보드 :8504 · 웹 v5~v7</text>
+    <!-- arrows -->
+    <path d="M 350 140 H 400" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
+    <path d="M 700 140 H 750" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
+    <path d="M 900 200 V 245 H 200 V 290" fill="none" stroke="#b3552e" stroke-width="2" marker-end="url(#ar-acc)"/>
+    <path d="M 350 355 H 400" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
+    <path d="M 700 355 H 750" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
+    <text x="550" y="240" class="dg-note" text-anchor="middle">준비된 데이터로 학습 실행</text>
+  </svg>
+  </div>
+  <figcaption><b>그림 3 — 학습→서빙 파이프라인.</b> "누수 방지"는 시험 문제의 정답을 미리 보지 않게 검증 데이터를 학습에서 분리하는 것. 시계열에서는 과거→미래 순서로만 나눠야 하며, 스케일링 기준값도 학습 데이터에서만 계산합니다.</figcaption>
+  </figure>
+
+  <h3>모델 성능 (측정치)</h3>
+  <table>
+    <tr><th>모델</th><th>용도</th><th class="num">MAPE (평균 오차%)</th><th class="num">R² (설명력)</th><th>근거</th></tr>
+    <tr><td>수요 LSTM (weather_full)</td><td>제주 전력수요</td><td class="num">6.06</td><td class="num">0.865</td><td><span class="ev">models/production/training_report.json</span></td></tr>
+    <tr><td>수요 LSTM (demand_only)</td><td>수요 전용(17 피처)</td><td class="num">6.47</td><td class="num">0.846</td><td><span class="ev">models/production/training_report.json</span></td></tr>
+    <tr><td>SMP v4.1</td><td>가격 예측 (walk-forward 검증)</td><td class="num">8.76</td><td class="num">0.463</td><td><span class="ev">models/smp_v4/smp_v41_metrics.json</span></td></tr>
+    <tr><td>SMP v4.0</td><td>가격 예측 (재학습본)</td><td class="num">17.17</td><td class="num">0.124</td><td><span class="ev">models/smp_v4/smp_v4_metrics.json</span></td></tr>
+    <tr><td>SMP v3.4</td><td>가격 예측 (구버전)</td><td class="num">21.28</td><td class="num" style="color:var(--accent)">−0.537</td><td><span class="ev">models/smp_v3_4_kpx/metrics.json</span></td></tr>
+  </table>
+  <p class="small">MAPE가 낮을수록 좋습니다 (수요 모델은 평균 6% 안팎의 오차). R²는 1에 가까울수록 좋고 0 이하는 "추측만 못함"을 뜻합니다 — v3.4는 이 기준으로 <b>사용을 보류</b>했습니다. SMP(가격) 예측이 수요 예측보다 어려운 것은 가격이 수급 상황에 즉각 반응하기 때문이며, 이를 인지하고 walk-forward(롤링 기간 재검증) 방식을 도입했습니다.</p>
+
+  <h3>API 엔드포인트 (모델이 웹에 나오는 통로)</h3>
+  <table>
+    <tr><th style="width:38%">엔드포인트</th><th>역할</th></tr>
+    <tr><td><span class="ev">GET /api/v1/health</span></td><td>서버·모델 생존 확인</td></tr>
+    <tr><td><span class="ev">GET /api/v1/smp-forecast</span></td><td>SMP 예측값 (대시보드 차트 원본)</td></tr>
+    <tr><td><span class="ev">GET /api/v1/smp/current · smp/day-ahead</span></td><td>현재·다음날 SMP</td></tr>
+    <tr><td><span class="ev">GET /api/v1/power-supply · realtime-status</span></td><td>실시간 수급 상태</td></tr>
+    <tr><td><span class="ev">GET /api/v1/dashboard/kpis · model/info</span></td><td>대시보드 지표·모델 메타데이터</td></tr>
+    <tr><td><span class="ev">GET /api/v1/smp/rtm/predict · bidding/optimized-segments</span></td><td>실시간 시장 예측·입찰 구간 최적화</td></tr>
+  </table>
+  <p class="small">근거: <span class="ev">~/.local/share/power-demand-public/public_server.py</span>의 API 프록시 화이트리스트 (존재 코드 확인).</p>
+</section>
+
+<section id="honesty">
+  <span class="sec-num">05</span>
+  <h2>검증 상태와 한계 (중요)</h2>
+  <div class="rule"></div>
+  <p>연구·개인 프로젝트로서 "된 것"과 "아직 안 된 것"을 구분해 둡니다. 근거: <span class="ev">docs/2026-11-02-forecast-upgrade-status.md</span></p>
+  <table>
+    <tr><th style="width:34%">상태</th><th>내용</th></tr>
+    <tr><td>구현·재검증 완료</td><td>데이터 수집 파이프라인, 수요 예측 모델(오차 약 6%), SMP 데이터 누수 수정 후 v4.0 재학습, v4.1 walk-forward 검증 도입</td></tr>
+    <tr><td>사용 보류</td><td>SMP v3.4 (R² −0.537) — 기준 미달로 서비스에서 제외</td></tr>
+    <tr><td>한계</td><td>SMP 가격 예측 정확도는 수요 대비 낮음(가격 변동성), 일부 화면은 데이터 수집 실패 시 데모 값으로 대체 표시 — 실측/모의 구분 표기 작업이 후속 과제</td></tr>
+  </table>
+</section>
+
+<section id="glossary">
+  <span class="sec-num">06</span>
+  <h2>용어 사전 (비도메인 독자용)</h2>
+  <div class="rule"></div>
+  <dl class="glossary">
+    <dt>SMP (계통한계가격)</dt><dd>전력 도매시장에서 1kWh당 매시 결정되는 거래 가격. 수요가 공급능력에 근접하면 급등한다.</dd>
+    <dt>공급예비율</dt><dd>(공급능력 − 수요) ÷ 수요. 낮으면 정전 위험이 커지는 안전 여유 지표.</dd>
+    <dt>EPSIS / KPX</dt><dd>한국전력거래소(KPX)와 그 전력 통계 시스템(EPSIS). 전력 시장 데이터의 공식 원천.</dd>
+    <dt>ASOS</dt><dd>기상청 종관기상관측(ASOS) — 기온·습도·풍속 등을 정시 관측하는 공식 기상 관측망.</dd>
+    <dt>THI (불쾌지수)</dt><dd>기온과 습도를 조합한 지수. 여름 에어컨 사용→전력수요와 강한 상관.</dd>
+    <dt>LSTM</dt><dd>시간 흐름이 있는 데이터를 다루는 딥러닝 신경망. "최근 168시간 → 다음 시간" 식의 패턴 학습에 사용.</dd>
+    <dt>MAPE / R²</dt><dd>예측 정확도 지표. MAPE는 평균 오차(%), 낮을수록 좋음. R²는 설명력, 1에 가까울수록 좋음(0 이하는 무의미).</dd>
+    <dt>누수 (data leakage)</dt><dd>검증에 쓸 정보가 학습에 새어 들어가 성능이 실제보다 과대평가되는 결함. 시계열은 반드시 시간 순서로 분할해야 막을 수 있음.</dd>
+    <dt>walk-forward 검증</dt><dd>기간을 한 칸씩 옮겨가며 반복 검증하는 방식. 시계열 모델의 실전 성능을 더 신뢰도 있게 측정.</dd>
+    <dt>MPS</dt><dd>Apple Silicon의 GPU 가속 인터페이스. 이 프로젝트는 CUDA 대신 MPS로 로컬 학습.</dd>
+    <dt>Tailscale Funnel</dt><dd>내 기기를 공인 HTTPS 주소로 그대로 공개해주는 터널링 서비스. 이 모든 웹페이지가 별도 서버 없이 맥북에서 서빙되는 이유.</dd>
+  </dl>
+</section>
+
+<footer>
+  <p><b>근거 자료 일람</b> — 코드: <span class="ev">tools/crawlers/ (12 스크립트) · src/smp/crawlers/ (4) · src/dashboard/app_v4.py · api/main.py</span></p>
+  <p>데이터: <span class="ev">data/smp/*.csv · data/jeju_plants/jeju_power_plants.csv</span> · 모델: <span class="ev">models/production/ · models/smp_v4/</span></p>
+  <p>문서: <span class="ev">docs/2026-11-02-forecast-upgrade-status.md</span> · 런타임 확인: <span class="ev">tailscale serve status · lsof</span> (2026-11-05 기준)</p>
+</footer>
+
+</div>
+</body>
+</html>

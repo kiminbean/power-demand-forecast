@@ -8,8 +8,7 @@
   :root {
     --bg: #0d1117; --bg2: #161b22; --bg3: #1c2333;
     --border: #30363d; --text: #e6edf3; --muted: #8b949e;
-    --green: #3fb950; --yellow: #d29922; --blue: #58a6ff; --red: #f85149;
-    --purple: #bc8cff; --cyan: #39d2c0;
+    --green: #3fb950; --yellow: #d29922; --cyan: #39d2c0;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; line-height: 1.75; word-break: keep-all; overflow-wrap: break-word; }
@@ -19,11 +18,11 @@
   nav a { display: block; padding: 8px 12px; color: var(--muted); text-decoration: none; font-size: 13px; border-radius: 6px; margin-bottom: 2px; }
   nav a:hover { background: var(--bg3); color: var(--text); }
   main { flex: 1; padding: 40px 48px; max-width: 1100px; min-width: 0; }
-  section { margin-bottom: 72px; }
-  h2 { font-size: 26px; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 28px; }
+  section { margin-bottom: 56px; }
+  h2 { font-size: 26px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 28px; }
   h2 .num { color: var(--green); font-family: monospace; margin-right: 10px; }
-  h3 { font-size: 19px; color: var(--blue); margin: 36px 0 14px; }
-  h4 { font-size: 15px; color: var(--purple); margin: 22px 0 8px; }
+  h3 { font-size: 19px; color: var(--text); margin: 28px 0 14px; }
+  h4 { font-size: 15px; color: var(--text); margin: 22px 0 8px; }
   p { margin-bottom: 12px; color: #c9d1d9; }
   ul, ol { margin: 0 0 16px 22px; color: #c9d1d9; }
   li { margin-bottom: 6px; }
@@ -32,25 +31,16 @@
   code { background: var(--bg3); padding: 2px 6px; border-radius: 4px; font-size: 0.88em; color: var(--cyan); font-family: "SF Mono", Menlo, monospace; }
   .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
   .card.green { border-left: 4px solid var(--green); }
-  .card.blue { border-left: 4px solid var(--blue); }
-  .card.yellow { border-left: 4px solid var(--yellow); }
-  .card.red { border-left: 4px solid var(--red); }
-  .card.purple { border-left: 4px solid var(--purple); }
   table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 14px; }
-  th { background: var(--bg3); color: var(--text); text-align: left; padding: 10px 12px; border: 1px solid var(--border); font-weight: 600; }
-  td { padding: 9px 12px; border: 1px solid var(--border); color: #c9d1d9; vertical-align: top; }
+  th { color: var(--text); text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); font-weight: 600; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: #c9d1d9; vertical-align: top; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-right: 6px; }
-  .badge.g { background: rgba(63,185,80,.15); color: var(--green); }
-  .badge.b { background: rgba(88,166,255,.15); color: var(--blue); }
-  .badge.y { background: rgba(210,153,34,.15); color: var(--yellow); }
-  .badge.r { background: rgba(248,81,73,.15); color: var(--red); }
-  .q { background: var(--bg2); border: 1px solid var(--border); border-left: 4px solid var(--cyan); border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; font-size: 14.5px; }
+  .q { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; font-size: 14.5px; }
   .q .why { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
   .q .tag { display: inline-block; font-size: 11px; color: var(--cyan); border: 1px solid var(--cyan); border-radius: 4px; padding: 0 6px; margin-right: 8px; font-family: monospace; }
   .term { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: #c9d1d9; overflow-x: auto; margin: 12px 0 20px; white-space: pre; }
   .term .p { color: var(--green); }
-  .hero { background: linear-gradient(135deg, #161b22 0%, #1a2332 100%); border: 1px solid var(--border); border-radius: 14px; padding: 36px 40px; margin-bottom: 48px; }
+  .hero { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 36px 40px; margin-bottom: 48px; }
   .hero h1 { font-size: 28px; margin-bottom: 10px; }
   .hero .sub { color: var(--muted); font-size: 15px; }
   .hero .meta { margin-top: 18px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -62,7 +52,7 @@
   .warn { background: rgba(210,153,34,.08); border: 1px solid rgba(210,153,34,.4); border-radius: 8px; padding: 12px 18px; margin: 14px 0; font-size: 14px; }
   .flow { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; font-family: Menlo, monospace; font-size: 12.5px; color: var(--cyan); overflow-x: auto; margin: 12px 0 20px; white-space: pre; line-height: 1.9; }
   details { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
-  details summary { cursor: pointer; padding: 12px 18px; font-weight: 600; color: var(--blue); list-style: none; }
+  details summary { cursor: pointer; padding: 12px 18px; font-weight: 600; color: var(--text); list-style: none; }
   details summary::before { content: "▸ "; color: var(--muted); }
   details[open] summary::before { content: "▾ "; }
   details .body { padding: 4px 22px 16px; }
@@ -108,8 +98,8 @@
 <p><strong>무엇을 만들었나:</strong> 기상 데이터와 KPX 실시간 데이터를 결합해 제주도 전력수요(1~24시간)와 SMP(계통한계가격)를 예측하는 딥러닝 시스템. 여기서 한 걸음 더 나아가 재생에너지 발전사업자가 KPX 시장에서 <strong>입찰가·입찰량을 최적화</strong>할 수 있는 RE-BMS(입찰관리 시스템)로 확장했다.</p>
 
 <div class="kpi">
-  <div class="item"><div class="val">7.83%</div><div class="lbl">SMP 예측 MAPE</div></div>
-  <div class="item"><div class="val">0.736</div><div class="lbl">결정계수 R²</div></div>
+  <div class="item"><div class="val">8.76%</div><div class="lbl">SMP 예측 MAPE (v4.1 walk-forward)</div></div>
+  <div class="item"><div class="val">0.463</div><div class="lbl">결정계수 R²</div></div>
   <div class="item"><div class="val">1,564</div><div class="lbl">통과한 테스트 수</div></div>
   <div class="item"><div class="val">q10/50/90</div><div class="lbl">분위수 신뢰구간 출력</div></div>
 </div>
@@ -122,7 +112,7 @@
 <tr><td><strong>운영</strong></td><td>Docker·Nginx 배포, Prometheus 모니터링, 매시간 자동 데이터 수집 크롤러</td></tr>
 </table>
 
-<div class="warn">⚠️ <strong>멘토링에서 가장 많이 받을 질문:</strong> "예측 모델"은 기술이고, "입찰 최적화·수익 개선"이 사업이다. 사업계획서는 반드시 후자 중심으로 쓴다. "AI 정확도 7.83%"가 아니라 "발전사업자의 입찰 수익을 X% 개선"이 고객 가치다.</div>
+<div class="warn">⚠️ <strong>멘토링에서 가장 많이 받을 질문:</strong> "예측 모델"은 기술이고, "입찰 최적화·수익 개선"이 사업이다. 사업계획서는 반드시 후자 중심으로 쓴다. "AI 정확도 8.76%"가 아니라 "발전사업자의 입찰 수익을 X% 개선"이 고객 가치다.</div>
 </section>
 
 <!-- ================= 1. 도메인 ================= -->
@@ -140,12 +130,12 @@
 
 <h3>1-2. 핵심 개념 — 반드시 암기</h3>
 <div class="grid2">
-<div class="card blue"><strong>SMP (계통한계가격)</strong><br>전력시장에서 마지막으로 거래된 발전기의 입찰가격. 전력의 시장가격. 시간별·지역별로 결정되며 제주는 육지와 별도 계통이므로 제주 SMP가 따로 형성된다. 우리 모델의 예측 대상.</div>
-<div class="card blue"><strong>DAM / RTM</strong><br>하루전시장(Day-Ahead Market): 전날 10시까지 다음날 24시간 입찰. 당일시장(Real-Time Market): 당일 1~2시간 전 입찰. 입찰 마감 시간이 정해져 있어 예측 시점이 중요하다.</div>
-<div class="card blue"><strong>덕 커브 (Duck Curve)</strong><br>태양광이 몰리는 낮에 계통수요가 움푹 파이고, 일몰 직후 급등하는 수요 곡선. 제주는 재생에너지 비중이 높아 변동이 극심하다. 우리 핵심 가설의 출발점.</div>
-<div class="card blue"><strong>예비율 (예비력률)</strong><br>(공급능력 − 수요) / 수요. KPX 기준 15% 미만 관심, 10% 미만 주의, 5% 미만 위험 단계. 우리 대시보드의 3단계 경보 기준.</div>
-<div class="card blue"><strong>불균형 정산 (정산 페널티)</strong><br>입찰량과 실제 발전량의 차이에 대한 벌칙 요금. 예측이 틀어지면 수익이 깎인다 → 예측 정확도 = 수익으로 직결. 우리 제품의 핵심 가치 제안.</div>
-<div class="card blue"><strong>10구간 입찰</strong><br>가격 구간을 10개로 나눠 입찰하는 KPX 방식. 어느 구간에 얼마를 걸지 결정하는 것이 입찰 최적화 → RE-BMS의 핵심 기능.</div>
+<div class="card"><strong>SMP (계통한계가격)</strong><br>전력시장에서 마지막으로 거래된 발전기의 입찰가격. 전력의 시장가격. 시간별·지역별로 결정되며 제주는 육지와 별도 계통이므로 제주 SMP가 따로 형성된다. 우리 모델의 예측 대상.</div>
+<div class="card"><strong>DAM / RTM</strong><br>하루전시장(Day-Ahead Market): 전날 10시까지 다음날 24시간 입찰. 당일시장(Real-Time Market): 당일 1~2시간 전 입찰. 입찰 마감 시간이 정해져 있어 예측 시점이 중요하다.</div>
+<div class="card"><strong>덕 커브 (Duck Curve)</strong><br>태양광이 몰리는 낮에 계통수요가 움푹 파이고, 일몰 직후 급등하는 수요 곡선. 제주는 재생에너지 비중이 높아 변동이 극심하다. 우리 핵심 가설의 출발점.</div>
+<div class="card"><strong>예비율 (예비력률)</strong><br>(공급능력 − 수요) / 수요. KPX 기준 15% 미만 관심, 10% 미만 주의, 5% 미만 위험 단계. 우리 대시보드의 3단계 경보 기준.</div>
+<div class="card"><strong>불균형 정산 (정산 페널티)</strong><br>입찰량과 실제 발전량의 차이에 대한 벌칙 요금. 예측이 틀어지면 수익이 깎인다 → 예측 정확도 = 수익으로 직결. 우리 제품의 핵심 가치 제안.</div>
+<div class="card"><strong>10구간 입찰</strong><br>가격 구간을 10개로 나눠 입찰하는 KPX 방식. 어느 구간에 얼마를 걸지 결정하는 것이 입찰 최적화 → RE-BMS의 핵심 기능.</div>
 </div>
 
 <h3>1-3. 제주도라는 특수성</h3>
@@ -159,9 +149,9 @@
 <h3>1-4. 규제·정책 흐름 (2026 시점 체크 필요)</h3>
 <ul>
 <li>전력산업법상 <strong>발전사업 면허</strong> 및 <strong>전력거래중개인 등록제</strong> — 우리가 기술 SaaS만 파는지, 중개 서비스까지 하는지에 따라 규제 범위가 달라짐 → <em>멘토 질문 필수</em></li>
-<li><strong>전력거래규칙 개정</strong>: 재생에너지 예측 의무화·정산 제도 변화 (KPX 규칙 개정 추이跟踪 필요)</li>
+<li><strong>전력거래규칙 개정</strong>: 재생에너지 예측 의무화·정산 제도 변화 (KPX 규칙 개정 추적 필요)</li>
 <li><strong>집단에너지·PPA(직거래) 제도</strong>: 한전 PPA, 산단 PPA 확대 — 고객 구도가 바뀌는 변수</li>
-<li>데이터: EPSIS·공공데이터포털 이용조건 (상업적 재배포 제한 여부 확인 → 법리슨 멘토 질문)</li>
+<li>데이터: EPSIS·공공데이터포털 이용조건 (상업적 재배포 제한 여부 확인 → 법무 리스크 멘토 질문)</li>
 </ul>
 
 <h3>1-5. 시장 규모 파악용 기초 숫자</h3>
@@ -221,7 +211,7 @@ Quantile 출력층 (q10 / q50 / q90)
 
 <h4>학습 안정화 기법 (면접·멘토링에서 설명할 수 있어야 할 것)</h4>
 <ul>
-<li><strong>Quantile Loss</strong>: 점 예측이 아닌 구간 예측 → 불확실성까지 출력 (커버리지 89.4%, 80% 신뢰구간 기준)</li>
+<li><strong>Quantile Loss</strong>: 점 예측이 아닌 구간 예측 → 불확실성까지 출력 (커버리지 68.6%, 80% 신뢰구간 기준)</li>
 <li><strong>Huber Loss</strong>: 이상치에 강건 (SMP 스파이크 대응)</li>
 <li><strong>Early Stopping (patience 25)</strong> + <strong>Gradient Clipping</strong>: 과적합·학습 발산 방지</li>
 <li><strong>Noise Injection</strong>: 데이터 증강 효과</li>
@@ -232,18 +222,18 @@ Quantile 출력층 (q10 / q50 / q90)
 <h4>평가 지표 해설 (숫자를 말로 설명하는 연습)</h4>
 <table>
 <tr><th>지표</th><th>값</th><th>멘토에게 설명하는 법</th></tr>
-<tr><td>MAPE</td><td>7.83%</td><td>"24시간 뒤 가격을 평균 7.8% 오차로 맞춘다"</td></tr>
-<tr><td>MAE</td><td>8.93원</td><td>"평균적으로 kWh당 9원 가량 빗나간다" (SMP 단위: 원/kWh)</td></tr>
-<tr><td>R²</td><td>0.736</td><td>"가격 변동의 74%를 설명한다"</td></tr>
-<tr><td>Coverage</td><td>89.4%</td><td>"실제값이 제시한 구간 안에 90% 가까이 들어온다 — 리스크 관리에 쓸 수 있다"</td></tr>
+<tr><td>MAPE</td><td>8.76%</td><td>"24시간 뒤 가격을 평균 8.8% 오차로 맞춘다"</td></tr>
+<tr><td>MAE</td><td>10.53원</td><td>"평균적으로 kWh당 10원 가량 빗나간다" (SMP 단위: 원/kWh)</td></tr>
+<tr><td>R²</td><td>0.463</td><td>"가격 변동의 46%를 설명한다 — 가격은 수요보다 변동성이 커서 설명력이 낮다"</td></tr>
+<tr><td>Coverage</td><td>68.6%</td><td>"실제값이 제시한 80% 구간 안에 69% 가량 들어온다 — 리스크 관리에 쓸 수 있다"</td></tr>
 </table>
+<p style="font-size:13px;color:#6b6560;margin-top:4px;">출처: <code>models/smp_v4/smp_v41_metrics.json</code> — 2026-11-05 스케일러 누수 수정 후 재학습한 v4.1 모델의 walk-forward(시간외) 평균 지표.</p>
 
-<h3>2-4. 신뢰성 엔지니어링 (이 프로젝트의 숨은 강점)</h3>
 <div class="grid2">
-<div class="card yellow"><strong>테스트 1,564개</strong> (pytest) — CI/CD에서 자동 실행. 상용 수준 품질 관리.</div>
-<div class="card yellow"><strong>이상탐지 5종</strong> — Z-Score, IQR, Isolation Forest, Autoencoder, 앙상블. 입력 데이터 이상을 자동 감시.</div>
-<div class="card yellow"><strong>XAI 5종</strong> — SHAP, Integrated Gradients, Attention 시각화 등. "AI가 왜 그렇게 예측했는지"를 고객에게 설명 가능 → 전력업계 유관 부서 설득 근거.</div>
-<div class="card yellow"><strong>시나리오 분석</strong> — What-if·민감도·탄력성 분석. 정책 시뮬레이션 부가서비스로 확장 가능.</div>
+<div class="card"><strong>테스트 1,564개</strong> (pytest) — CI/CD에서 자동 실행. 상용 수준 품질 관리.</div>
+<div class="card"><strong>이상탐지 5종</strong> — Z-Score, IQR, Isolation Forest, Autoencoder, 앙상블. 입력 데이터 이상을 자동 감시.</div>
+<div class="card"><strong>XAI 5종</strong> — SHAP, Integrated Gradients, Attention 시각화 등. "AI가 왜 그렇게 예측했는지"를 고객에게 설명 가능 → 전력업계 유관 부서 설득 근거.</div>
+<div class="card"><strong>시나리오 분석</strong> — What-if·민감도·탄력성 분석. 정책 시뮬레이션 부가서비스로 확장 가능.</div>
 </div>
 
 <h3>2-5. 기술 스택 한눈에</h3>
@@ -258,7 +248,7 @@ Quantile 출력층 (q10 / q50 / q90)
 <h3>2-6. 멘토에게 설명할 때의 기술 화법</h3>
 <ul>
 <li>❌ "BiLSTM 3층에 Quantile Loss 썼습니다" → ⭕ "가격이 90% 확률로 이 구간에 있음을 알려주므로, 사업자는 <strong>리스크를 관리하며 입찰</strong>할 수 있습니다"</li>
-<li>❌ "MAPE 7.83%입니다" → ⭕ "예측이 빗나갈수록 불균형 정산 페널티가 커지는데, 저희 오차율은 이를 <strong>얼마나 줄여주는지</strong>로 환산하면…" (→ 멘토에게 환산 방법 질문!)</li>
+<li>❌ "MAPE 8.76%입니다" → ⭕ "예측이 빗나갈수록 불균형 정산 페널티가 커지는데, 저희 오차율은 이를 <strong>얼마나 줄여주는지</strong>로 환산하면…" (→ 멘토에게 환산 방법 질문!)</li>
 <li>❌ "테스트 1,564개 통과" → ⭕ "금융권 수준의 검증 프로세스로 <strong>상용화 품질</strong>을 확보했습니다"</li>
 </ul>
 </section>
@@ -316,7 +306,7 @@ Quantile 출력층 (q10 / q50 / q90)
 <h3>1주차 — 우리 프로젝트를 우리 말로 설명하기</h3>
 <ul>
 <li>이 페이지 §0~§3 통독 + README·docs/RE-BMS_v6_기술문서.md 재독</li>
-<li>3분 스피치 연습: 문제(덕커브·불균형정산) → 솔루션(예측+입찰최적화) → 근거(MAPE 7.83%, 테스트 1,564)</li>
+<li>3분 스피치 연습: 문제(덕커브·불균형정산) → 솔루션(예측+입찰최적화) → 근거(MAPE 8.76%, 테스트 1,564)</li>
 <li>용어 카드(§9) 20개 암기 — SMP, DAM, RTM, 예비율, 불균형정산, 10구간 입찰</li>
 <li>직접 대시보드 띄워보기: <code>streamlit run src/dashboard/app_v4.py</code> → 스크린샷 확보</li>
 </ul>
@@ -375,7 +365,7 @@ Quantile 출력층 (q10 / q50 / q90)
 <tr><td>1. 개요</td><td>아이디어 요약, 사업목표</td><td>"AI 전력가격 예측 기반 재생에너지 입찰 최적화 SaaS"</td></tr>
 <tr><td>2. 시장분석</td><td>시장규모(TAM/SAM/SOM), 경쟁사, 트렌드</td><td>재생에너지 확대 정책, 제주 특수성, 덕커브 심화</td></tr>
 <tr><td>3. 사업모델</td><td>고객, 가치제안, 수익모델</td><td>§5의 A~D 중 선택 + 근거</td></tr>
-<tr><td>4. 기술/제품</td><td>차별성, 완성도, 로드맵</td><td>MAPE 7.83%, 신뢰구간, XAI, 테스트 1,564, 3종 클라이언트</td></tr>
+<tr><td>4. 기술/제품</td><td>차별성, 완성도, 로드맵</td><td>MAPE 8.76%, 신뢰구간, XAI, 테스트 1,564, 3종 클라이언트</td></tr>
 <tr><td>5. 경쟁우위</td><td>진입장벽, 경쟁력</td><td>제주 데이터 축적, BTM 태양광 간접모델링 특허 가능성</td></tr>
 <tr><td>6. 마케팅/판매</td><td>고객획득 경로</td><td>KPX 중개인 제휴, 제주도 에너지 협력사, 초기 무료 PoC</td></tr>
 <tr><td>7. 운영계획</td><td>일정, 조직, 역할</td><td>개발 완료 → 파일럿 고객 3곳 → 유료 전환</td></tr>
@@ -425,13 +415,13 @@ Quantile 출력층 (q10 / q50 / q90)
 <div class="q"><span class="tag">D6</span>활동보고서·증빙 자료(마감 12/1) 관리에서 실수하기 쉬운 포인트가 있나요?</div>
 
 <h3>E. 기술 신뢰성 · 로드맵 🟡</h3>
-<div class="q"><span class="tag">E1</span>현재 성능(MAPE 7.83%, R² 0.736)을 상용 서비스의 "판매 가능한 수준"이라고 할 수 있나요? 부족하다면 목표치는?</div>
+<div class="q"><span class="tag">E1</span>현재 성능(MAPE 8.76%, R² 0.463)을 상용 서비스의 "판매 가능한 수준"이라고 할 수 있나요? 부족하다면 목표치는?</div>
 <div class="q"><span class="tag">E2</span>입찰 최적화(10구간) 로직을 상용화하려면 예측 외에 무엇이 더 필요한가요? (리스크 관리·백테스팅 프레임 등)</div>
 <div class="q"><span class="tag">E3</span>제주 1개 계통 데이터로 학습한 모델의 다른 지역 확장성을 어떻게 설명해야 하나요?</div>
 <div class="q"><span class="tag">E4</span>특허·IP 전략: BTM 태양광 간접 모델링 기법으로 출원 가치가 있나요? 있다면 언제부터?</div>
 
 <h3>F. 일정 · 다음 단계 🟡</h3>
-<div class="q"><span class="tag">F1</span>12/1 제출까지 남은 한 달의 우선순위: 사업계획서 완성 vs 고객 인터뷰 vs 데임 개선 — 무엇에 시간을 쓸까요?</div>
+<div class="q"><span class="tag">F1</span>12/1 제출까지 남은 한 달의 우선순위: 사업계획서 완성 vs 고객 인터뷰 vs 데모 개선 — 무엇에 시간을 쓸까요?</div>
 <div class="q"><span class="tag">F2</span>2라운드 진출 대비 지금부터 준비할 것 (매출 발생, 법인 설립, 어워드 등)이 있나요?</div>
 <div class="q"><span class="tag">F3</span>이 사업의 다음 투자/지원 프로그램(시드·액셀러레이팅·TIPS 등) 자연스러운 이동 경로는?</div>
 
@@ -461,7 +451,7 @@ Quantile 출력층 (q10 / q50 / q90)
 <details open><summary>시장 · 제도</summary><div class="body">
 <ul>
 <li><strong>SMP (System Marginal Price)</strong> — 계통한계가격. 전력 시장가격 (원/kWh).</li>
-<li><strong>DAM (Day-Ahead Market)</strong> — 하루전시장. 전날 입찌는 다음날 24시간 거래.</li>
+<li><strong>DAM (Day-Ahead Market)</strong> — 하루전시장. 전날 입찰로 결정하는 다음날 24시간 거래.</li>
 <li><strong>RTM (Real-Time Market)</strong> — 당일시장. 실시간 균형을 맞추는 시장.</li>
 <li><strong>KPX</strong> — 한국전력거래소. 시장 운영자.</li>
 <li><strong>KEPCO</strong> — 한국전력. 단일구매자.</li>
@@ -480,8 +470,8 @@ Quantile 출력층 (q10 / q50 / q90)
 <li><strong>LSTM / BiLSTM</strong> — 시계열 순환신경망 / 양방향 확장.</li>
 <li><strong>Attention</strong> — 입력 시점별 중요도 가중 메커니즘.</li>
 <li><strong>Quantile Loss</strong> — q10/q50/q90 분위수를 출력하는 손실함수 → 신뢰구간.</li>
-<li><strong>MAPE</strong> — 평균절대백분율오차. 우리: 7.83%.</li>
-<li><strong>Coverage</strong> — 신뢰구간이 실제값을 포함한 비율. 우리: 89.4%.</li>
+<li><strong>MAPE</strong> — 평균절대백분율오차. 우리: 8.76%.</li>
+<li><strong>Coverage</strong> — 신뢰구간이 실제값을 포함한 비율. 우리: 68.6%.</li>
 <li><strong>XAI</strong> — 설명가능 AI (SHAP, Integrated Gradients 등).</li>
 <li><strong>MPS</strong> — Apple Silicon GPU 학습 백엔드.</li>
 <li><strong>데이터 누수 (leakage)</strong> — 미래 정보가 학습에 새는 것. 스케일러 학습셋 fit으로 방지.</li>
