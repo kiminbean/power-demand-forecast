@@ -41,7 +41,7 @@ export default function Header() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
           <img
-            src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+            src={`${import.meta.env.BASE_URL}${isDark ? 'logo-light.png' : 'logo-dark.png'}`}
             alt="eXeco"
             className="h-8 w-auto"
           />

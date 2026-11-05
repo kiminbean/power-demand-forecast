@@ -31,7 +31,7 @@ export default function MobileLayout() {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <img
-              src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+              src={`${import.meta.env.BASE_URL}${isDark ? 'logo-light.png' : 'logo-dark.png'}`}
               alt="eXeco"
               className="h-6 w-auto"
             />
