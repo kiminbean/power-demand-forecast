@@ -41,7 +41,7 @@ from .schemas import (
     DailyPredictionRequest,
     DailyPredictionResponse,
 )
-from .service import get_prediction_service, initialize_service, PredictionService
+from .service import get_prediction_service, initialize_service, ModelNotLoadedError, PredictionService
 from .daily_predictor import get_daily_predictor, initialize_daily_predictor, DailyPredictor
 from .day_ahead_routes import router as day_ahead_router
 
@@ -331,7 +331,8 @@ async def predict(
     단일 예측 엔드포인트
 
     - **data**: 시계열 데이터 (최소 168개 = 7일)
-    - **model_type**: 사용할 모델 (demand_only, weather_full, conditional)
+    - **model_type**: 사용할 모델 (demand_only, weather_full, conditional, ar_gbm)
+      - ar_gbm은 최소 337시간 이력이 필요하다
     """
     try:
         result = service.predict(
@@ -339,6 +340,8 @@ async def predict(
             model_type=request.model_type
         )
         return result
+    except ModelNotLoadedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -402,7 +405,7 @@ async def predict_batch(
     슬라이딩 윈도우 방식으로 여러 시점의 예측을 한 번에 수행합니다.
 
     - **data**: 시계열 데이터
-    - **model_type**: 사용할 모델
+    - **model_type**: 사용할 모델 (ar_gbm은 최소 337시간 이력이 필요하다)
     - **step**: 슬라이딩 윈도우 스텝 (1-24)
     """
     try:
@@ -412,6 +415,8 @@ async def predict_batch(
             step=request.step
         )
         return result
+    except ModelNotLoadedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

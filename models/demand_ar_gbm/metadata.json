@@ -1,0 +1,101 @@
+{
+  "format_version": 1,
+  "created": "2026-11-06T12:41:47.269864",
+  "model": "hourly_ar + hist_gradient_boosting residual",
+  "target": "power_demand",
+  "features": [
+    "power_demand",
+    "hour_sin",
+    "hour_cos",
+    "dayofweek_sin",
+    "dayofweek_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_holiday",
+    "demand_lag_1",
+    "demand_lag_24",
+    "demand_lag_168",
+    "demand_ma_6h",
+    "demand_ma_24h",
+    "demand_std_24h",
+    "demand_diff_1h",
+    "demand_diff_24h"
+  ],
+  "calendar": [
+    "hour_sin",
+    "hour_cos",
+    "dayofweek_sin",
+    "dayofweek_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_holiday"
+  ],
+  "design_columns": [
+    "power_demand_prev",
+    "demand_lag_1_prev",
+    "demand_lag_24_prev",
+    "demand_lag_168_prev",
+    "demand_ma_6h_prev",
+    "demand_ma_24h_prev",
+    "demand_std_24h_prev",
+    "demand_diff_1h_prev",
+    "demand_diff_24h_prev",
+    "hour_sin",
+    "hour_cos",
+    "dayofweek_sin",
+    "dayofweek_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_holiday",
+    "ar_forecast",
+    "resid_lag_1",
+    "resid_lag_2",
+    "resid_lag_3",
+    "resid_lag_24",
+    "resid_lag_168",
+    "is_holiday_lag_24",
+    "is_holiday_lag_168"
+  ],
+  "resid_lags": [
+    1,
+    2,
+    3,
+    24,
+    168
+  ],
+  "holiday_lags": [
+    24,
+    168
+  ],
+  "gbm_params": {
+    "learning_rate": 0.05,
+    "max_leaf_nodes": 31,
+    "min_samples_leaf": 200
+  },
+  "tree_step": 25,
+  "max_trees": 2000,
+  "patience_steps": 8,
+  "min_history_hours": 337,
+  "sklearn_version": "1.7.2",
+  "numpy_version": "2.3.5",
+  "train_end": "2024-06-30 23:00:00",
+  "val_end": "2024-12-31 23:00:00",
+  "seed": 42,
+  "n_train": 100271,
+  "n_val": 4416,
+  "best_iter": 375,
+  "val_mae": 18.599608852683897,
+  "ar_val_mae": 19.504233697009717,
+  "gate": {
+    "passed": true,
+    "evaluated": true
+  },
+  "data_end": "2024-12-31 23:00:00",
+  "files_sha256": {
+    "ar_coefficients.json": "5171aea037f31cbc28b11a1566a3766e29b2f2076c5edea1abfcd6f24eb0f552",
+    "gbm.joblib": "ef4407afd913ba264575ba5d528f099d2da39b0b8da594e214aac29378dab30f"
+  }
+}

@@ -24,6 +24,7 @@ from inference.predict import (
     ProductionPredictor, PredictionResult, BatchPredictionResult,
     _scaled_tensor, _validated_prediction,
 )
+from features.time_features import LUNAR_HOLIDAY_LAST_YEAR
 from data.dataset import get_device
 
 from .config import settings
@@ -39,6 +40,10 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
+class ModelNotLoadedError(RuntimeError):
+    """요청한 선택형 모델의 산출물이 로드되지 않았다 (API는 503으로 응답)."""
+
+
 class PredictionService:
     """
     예측 서비스 클래스
@@ -48,6 +53,9 @@ class PredictionService:
 
     def __init__(self):
         self.predictor: Optional[ProductionPredictor] = None
+        # 선택형 AR + GBM (inference.ar_gbm_predictor.ArGbmPredictor, scikit-learn 필요)
+        self.ar_gbm = None
+        self._ar_gbm_error: Optional[str] = None
         self.start_time: datetime = datetime.now()
         self._is_initialized: bool = False
 
@@ -65,11 +73,35 @@ class PredictionService:
                 model_dir=str(settings.model_path)
             )
             self.predictor.load_models()
+            self._load_ar_gbm()
             self._is_initialized = True
             logger.info("Prediction service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize prediction service: {e}")
             raise
+
+    def _load_ar_gbm(self) -> None:
+        """선택형 AR + GBM 모델을 불러온다. 실패해도 기본(LSTM) 서비스는 그대로 연다."""
+        try:
+            # scikit-learn이 없거나 깨져도 LSTM 서비스는 떠야 하므로 여기서 불러온다
+            from inference.ar_gbm_predictor import ArGbmPredictor
+
+            predictor = ArGbmPredictor(settings.ar_gbm_model_path)
+            predictor.load()
+        except Exception as e:  # noqa: BLE001
+            # 산출물 없음·게이트 미통과·형식/버전 불일치·pickle 오류 등 무엇이든 선택형 모델만 끈다.
+            # 이유는 로그에 남기고, 응답에는 DEBUG일 때만 붙인다 (경로·버전 노출 방지).
+            self._ar_gbm_error = f"{type(e).__name__}: {e}"
+            logger.warning(f"AR+GBM model unavailable: {self._ar_gbm_error}")
+            return
+        self.ar_gbm = predictor
+        logger.info(f"AR+GBM model loaded from {settings.ar_gbm_model_path}")
+
+    def _require_ar_gbm(self):
+        if self.ar_gbm is None:
+            reason = f": {self._ar_gbm_error}" if settings.DEBUG and self._ar_gbm_error else ""
+            raise ModelNotLoadedError(f"Model 'ar_gbm' is not available{reason}")
+        return self.ar_gbm
 
     def is_ready(self) -> bool:
         """서비스 준비 상태 확인"""
@@ -115,6 +147,22 @@ class PredictionService:
                 "seq_length": config.get('training_config', {}).get('seq_length', 168),
                 "hidden_size": config.get('model_config', {}).get('hidden_size', 0),
                 "num_layers": config.get('model_config', {}).get('num_layers', 0),
+                "status": "loaded"
+            })
+
+        # 선택형 AR + GBM (model_type="ar_gbm")
+        if self.ar_gbm is not None and self.ar_gbm.model is not None:
+            info = self.ar_gbm.model.info
+            models.append({
+                "name": "ar_gbm",
+                "type": "HourlyAR+HistGBM",
+                "n_features": len(self.ar_gbm.model.design_columns),
+                "seq_length": info.get('min_history_hours'),
+                "min_history_hours": info.get('min_history_hours'),
+                # 계수는 train_end까지로 적합했고, val_end까지는 트리 수 선택에만 썼다
+                "train_end": info.get('train_end'),
+                "val_end": info.get('val_end'),
+                "holiday_table_through": LUNAR_HOLIDAY_LAST_YEAR,
                 "status": "loaded"
             })
 
@@ -260,6 +308,9 @@ class PredictionService:
         elif model_type == ModelType.WEATHER_FULL:
             prediction = self._run_prediction(df, "weather_full")
             model_used = "weather_full"
+        elif model_type == ModelType.AR_GBM:
+            prediction = self._require_ar_gbm().forecast_next(df)
+            model_used = "ar_gbm"
         else:
             # conditional - blend predictions based on season
             pred_demand = self._run_prediction(df, "demand_only")
@@ -409,6 +460,14 @@ class PredictionService:
         # Convert to DataFrame
         df = self._convert_to_dataframe(data)
 
+        if model_type == ModelType.AR_GBM:
+            forecasts = self._require_ar_gbm().forecast(df)
+            if not np.isfinite(forecasts.to_numpy()).all():
+                raise ValueError("AR+GBM predictions must be finite")
+            # LSTM 배치와 같은 계약: 각 예측에는 입력 창의 마지막 시각(예측 대상 1시간 전)을 붙인다
+            labels = (forecasts.index - pd.Timedelta(hours=1))[::step]
+            return self._batch_response(list(labels), forecasts.to_numpy()[::step], "ar_gbm", start_time)
+
         # Map model type
         model_name = model_type.value if model_type != ModelType.CONDITIONAL else "demand_only"
 
@@ -458,7 +517,16 @@ class PredictionService:
             timestamps_list.append(df_prep.index[i + seq_length - 1])
 
         predictions_array = np.array(predictions_list)
+        return self._batch_response(timestamps_list, predictions_array, model_name, start_time)
 
+    def _batch_response(
+        self,
+        timestamps_list: List,
+        predictions_array: np.ndarray,
+        model_name: str,
+        start_time: float
+    ) -> BatchPredictionResponse:
+        """배치 예측 결과를 응답 형식으로 만든다."""
         # Format predictions
         predictions = [
             {

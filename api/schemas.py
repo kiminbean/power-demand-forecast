@@ -21,6 +21,8 @@ class ModelType(str, Enum):
     DEMAND_ONLY = "demand_only"
     WEATHER_FULL = "weather_full"
     CONDITIONAL = "conditional"
+    # 시간대별 AR + GBM 잔차 보정 (선택형, 최소 337시간 이력 필요)
+    AR_GBM = "ar_gbm"
 
 
 class ConditionalMode(str, Enum):

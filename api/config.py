@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     # 모델 설정
     MODEL_DIR: Optional[str] = None
+    AR_GBM_MODEL_DIR: Optional[str] = None
     DEFAULT_MODEL: str = "conditional"
     SEQ_LENGTH: int = 168
 
@@ -67,6 +68,14 @@ class Settings(BaseSettings):
         # 기본 경로: 프로젝트 루트의 models/production
         project_root = Path(__file__).parent.parent
         return project_root / "models" / "production"
+
+    @property
+    def ar_gbm_model_path(self) -> Path:
+        """선택형 AR + GBM 모델 디렉토리 경로 (운영 기본 모델과 따로 둔다)"""
+        # 환경변수 끝의 줄바꿈·공백이 경로에 섞이지 않게 한다
+        if self.AR_GBM_MODEL_DIR and self.AR_GBM_MODEL_DIR.strip():
+            return Path(self.AR_GBM_MODEL_DIR.strip())
+        return Path(__file__).parent.parent / "models" / "demand_ar_gbm"
 
     @property
     def cors_origins_list(self) -> list:

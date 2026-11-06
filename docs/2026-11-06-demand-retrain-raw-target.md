@@ -274,6 +274,7 @@
 
 - 서빙 중인 모델 대비 MAE 비율: GBM 17.32 / 19.96 = 0.87, AR 18.05 / 19.96 = 0.90
 - scikit-learn은 API 이미지가 설치하는 `requirements.txt`에 이미 있다.
+- 사용자는 선택지 1을 골랐고, 그 결과는 11절에 있다.
 
 ## 9. 한계와 남은 일
 
@@ -309,3 +310,71 @@
 .venv/bin/python docs/benchmark-2026-11-06/probe_ar_anchor_collapse.py 2
 .venv/bin/python docs/benchmark-2026-11-06/probe_ar_anchor_collapse.py 3 leaky
 ```
+
+## 11. 정식화: 학습 파이프라인·서빙 경로·API (선택지 1)
+
+**사용자 결정**
+
+- 서빙 산출물 학습 기간: walk-forward와 같은 절차를 최신 데이터에 적용한다. 학습 ~2024-06-30, 검증 2024-07~12로 트리 수를 고른다.
+- API 연결: 선택형 모델로 추가한다(`model_type="ar_gbm"`). 기본값은 LSTM 그대로다.
+- 운영 기본 모델 교체는 다시 확인을 받은 뒤 한다.
+
+**구성**
+
+| 파일 | 역할 |
+|---|---|
+| `src/models/ar_gbm.py` | `residual_features`(학습·추론 공용 입력), `ArGbmModel`(적합·예측·저장·로드, scikit-learn 버전 검사) |
+| `src/training/train_demand_ar_gbm.py` | 고정 test와 walk-forward 4개 분할 게이트 재평가, 서빙 산출물 학습 |
+| `src/inference/ar_gbm_predictor.py` | 공유 전처리 위에서 1시간 앞 예측(`forecast`, `forecast_next`), 최소 337시간 이력 |
+| `api/service.py`, `api/main.py`, `api/schemas.py`, `api/config.py` | `model_type="ar_gbm"`(`/predict`, `/predict/batch`), `/models`에 표시. 산출물이 없거나 깨졌거나 버전이 다르면 그 요청만 503을 받고, 기본 서비스는 그대로 뜬다 |
+| `models/demand_ar_gbm/` | 서빙 산출물(AR 계수 7 KB, GBM 1.4 MB, 메타데이터, 학습 리포트) |
+| `requirements.txt`, `requirements-docker.txt` | `scikit-learn==1.7.2`로 고정 |
+| `src/features/time_features.py` | 음력 공휴일 표를 모듈 상수 `LUNAR_HOLIDAYS`로 옮겼다. 2000~2040년 공휴일 목록은 이전과 같다. `LUNAR_HOLIDAY_LAST_YEAR`를 표에서 계산한다 |
+
+**안전장치** (독립 코드 리뷰 반영)
+
+- 게이트를 통과한 산출물만 서빙한다.
+  - 학습 스크립트는 게이트에 떨어지면 산출물을 쓰지 않는다. `--skip-eval`은 `--allow-ungated`가 있어야 돈다.
+  - 서빙 로더는 `gate.passed`가 참이 아닌 산출물을 거부한다.
+- 파일은 임시 파일에 쓴 뒤 교체하고, 마지막에 쓰는 `metadata.json`에 sha256을 남긴다. AR과 GBM의 짝이 어긋난 산출물은 불러오지 않는다.
+- 불러올 때 scikit-learn 버전, numpy 주 버전, 잔차·휴일 시차, 최소 이력 시간이 코드와 같은지 확인한다.
+- 503 응답에는 서버 경로나 예외 원문을 싣지 않는다. 원인은 로그와, DEBUG일 때만 응답에 남긴다.
+- API 모듈은 scikit-learn을 늦게 불러온다. scikit-learn이 없어도 LSTM API는 뜬다.
+- 학습 데이터가 음력 공휴일 표의 마지막 해를 넘으면 학습을 거부한다.
+
+**검증**
+
+- 재현: 정식 파이프라인의 예측이 진단 스크립트 B의 예측과 5개 분할(고정 + walk-forward 4개) 모두에서 같다. 최대 차이 0.0이다. 게이트 결과도 같다(고정 3.627%, walk-forward 평균 3.355%, 합격).
+- 학습·서빙 일치: 실데이터 5개 시각(2023-09-29 추석, 2024-02-10 설, 2024-08-15 광복절 포함)에서 확인했다. 원본 수요 337시간만 넣은 서빙 경로의 예측이 학습 경로의 예측과 차이 0.0으로 같다. 336시간을 넣으면 "Insufficient data" 오류를 낸다.
+- 서비스: 실제 `PredictionService`가 운영 LSTM 두 개와 AR+GBM을 함께 불러온다. AR+GBM 응답은 학습 경로 예측과 같다. 응답 시각은 LSTM과 같은 계약(마지막 입력 시각)을 따른다.
+- 독립 코드 리뷰: 따로 다시 계산해 확인했다.
+  - 학습·서빙 일치: 실데이터 158시간(무작위 150시간과 설·추석·연말·마지막 시각)을 입력 형태 4가지(시간대 없음, UTC, 서울 시간대, UTC `datetime` 열)로 시험했고, 모두 차이 0.0이었다.
+  - 기존 LSTM 경로: HEAD와 변경본의 A/B 비교 42건이 모두 같았다(predict, batch, conditional).
+- 테스트: `tests/test_ar_gbm.py` 12건, `tests/test_api_ar_gbm.py` 8건을 추가했다. `tests/` 전체는 2248 passed, 3 skipped다.
+  - 학습·서빙 일치는 실제 학습 경로(`load_frame`)와 비교한다.
+  - 적합 단계 누수(검증 구간 뒤 값 변경), UTC 입력, 게이트 미통과·해시 불일치 산출물 거부, 실제 `initialize()` 흐름도 시험한다.
+
+**서빙 산출물** (`models/demand_ar_gbm/metadata.json`)
+
+| 항목 | 값 |
+|---|---|
+| 학습 / 검증 | ~2024-06-30 / 2024-07-01~12-31 |
+| 트리 수 | 375 |
+| 검증 MAE (트리 수 선택에 쓴 구간) | 18.60 MWh, 같은 구간 AR 19.50 MWh (−4.6%) |
+
+검증 MAE는 트리 수를 고른 구간의 값이라 낙관적이다. 이 산출물 자체의 시간외 성능은 위 walk-forward 결과(같은 절차, 4/4 연도 합격)로 갈음한다.
+
+**남은 한계**
+
+- 음력 공휴일(설·부처님오신날·추석) 표가 2025년까지만 있다(`src/features/time_features.py`). 2026년 이후에는 그날들이 평일로 들어간다. 대체공휴일은 모든 해에서 빠져 있다.
+  - 운영 LSTM도 같은 피처를 쓰므로 함께 영향을 받는다.
+  - 추론기는 표가 없는 해를 예측하면 해마다 한 번 경고를 남긴다.
+  - 다음으로 영향을 받는 날은 2027년 설이다.
+- Docker 이미지는 다시 빌드하지 않았다. `scikit-learn==1.7.2` 고정이 python:3.11-slim에서 설치되는지는 확인하지 않았다. `docker-compose.v7.yml`은 SMP 모델 폴더만 마운트한다. `models/demand_ar_gbm`은 물론 운영 LSTM의 `models/production`도 마운트하지 않는다.
+  - `.dockerignore`가 `*.json`을 빼므로 산출물을 이미지에 복사하는 방식은 쓸 수 없다. 볼륨 마운트만 가능하다.
+- 실행 중인 API 프로세스(launchd)는 다시 시작하지 않았다. 재시작 전까지 운영 API에서는 `ar_gbm`을 쓸 수 없다.
+- 최신성: 산출물은 2024-06까지로 학습했고, 데이터는 2024-12에서 끝난다. 2025~2026년 성능은 확인하지 않았다. 기본값으로 바꾸기 전에 최근 데이터로 그림자 평가를 하는 것이 좋다.
+- 응답 시각: 스키마는 `PredictionResponse.timestamp`를 "예측 대상 시간"이라고 설명한다. 실제로는 LSTM과 AR+GBM 모두 마지막 입력 시각을 돌려준다. 이 계약은 기존 그대로이며, 기본값을 바꾸기 전에 문서로 정리해야 한다.
+- 남겨 둔 개선 거리:
+  - 단일 예측도 전체 이력을 계산한다(337시간 137 ms, 8,760시간 204 ms).
+  - 게이트 조립 코드가 세 곳(재학습 스크립트, 정식 파이프라인, 진단 스크립트)에 중복돼 있다.

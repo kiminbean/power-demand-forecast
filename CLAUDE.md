@@ -47,7 +47,10 @@
 
 **Model Performance (2026-11-06 경쟁 비교 기준 · 상세 `docs/2026-11-06-competitor-benchmark.md`)**:
 - 전력수요 LSTM(1h, 전력거래량): MAPE 4.16% / R² 0.939 (원본 목표, 서빙 경로 재현, 고정 test). 시간대별 선형 AR보다 나쁨(2019~2022 적합 3.75% / 0.951, 2013~ 적합한 게이트 AR 3.78% / 0.950). 처음 보고한 4.31% / 0.926은 잘린 입력으로 만든 예측을 채점한 착오
-- 전력수요 후보(2026-11-06 원본 목표 재학습): AR + GBM 잔차 보정만 배포 게이트 통과(고정 test 3.63% / 0.954, walk-forward 평균 3.35%). 진단 스크립트 결과라 서빙 경로 없음, 운영 교체 미결정 → `docs/2026-11-06-demand-retrain-raw-target.md`
+- 전력수요 후보(2026-11-06 원본 목표 재학습): AR + GBM 잔차 보정만 배포 게이트 통과(고정 test 3.63% / 0.954, walk-forward 평균 3.35%) → `docs/2026-11-06-demand-retrain-raw-target.md`
+  - 정식화 완료: `src/models/ar_gbm.py`, `src/training/train_demand_ar_gbm.py`, `src/inference/ar_gbm_predictor.py`, 산출물 `models/demand_ar_gbm/`(학습 ~2024-06, 검증 2024년 하반기)
+  - API는 선택형(`model_type="ar_gbm"`, 최소 337시간 이력)이고 기본값은 LSTM이다. 운영 기본값 교체와 API 재시작은 미결정
+  - GBM은 pickle이라 `scikit-learn==1.7.2`에서만 불러온다(requirements 고정, 로더가 버전 검사)
 - SMP: 서빙 = 어제 같은 시각 naive (MAE 11.97원/kWh, MAPE 11.75%, R² 0.20; walk-forward 2025-07-22~12-18)
 - 태양광(RE-BMS): KPX 오차율 17.0% (월×시간 기후값 12.5%보다 나쁨). 화면의 "R²=0.95"는 누수 평가
 - v3.2 Optuna(7.42% / 0.760)는 스케일러 누수로 무효

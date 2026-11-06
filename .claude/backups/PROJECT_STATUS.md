@@ -24,8 +24,18 @@
 - AR 앵커 붕괴: 원래 체크포인트는 마지막 은닉 ReLU가 모든 test 입력에서 0 → 보정량 = 출력 편향(상수). 잔차 표준화·LeakyReLU(2~3에폭, 시드 1개)로도 학습 손실 불변. GBM은 비슷한 정보로 잔차를 학습했지만 LSTM 실패 원인은 미확정
 - 산출물(git 미추적): 예측 CSV(models/demand_retrain_2026-11-06_raw_{last,ar}/, models/demand_ar_gbm_2026-11-06/). 두 실행의 oot_report.json은 커밋
 
+### Task: AR + GBM formalization (training pipeline, serving path, opt-in API) ✅ COMPLETE · default unchanged
+
+- 사용자 결정: 서빙 산출물은 최신 분할 절차(학습 ~2024-06, 검증 2024H2로 트리 수 선택), API는 선택형 `model_type="ar_gbm"`
+- 코드: src/models/ar_gbm.py, src/training/train_demand_ar_gbm.py, src/inference/ar_gbm_predictor.py, api/{service,main,schemas,config}.py, requirements(scikit-learn==1.7.2)
+- 산출물: models/demand_ar_gbm/ (375그루, 검증 MAE 18.60 vs AR 19.50)
+- 검증: 파이프라인 = 진단 스크립트(5개 분할 예측 차이 0), 서빙 경로 = 학습 경로(실데이터 5개 시각 차이 0, 최소 337시간), tests/ 2248 passed
+- 독립 리뷰 반영: 게이트 통과 산출물만 서빙, sha256·원자적 쓰기, 버전·상수 검사, 503 응답에서 경로 숨김, sklearn 지연 import, 휴일 표 범위 밖 학습 거부
+- 한계: 음력 공휴일 표 2025년까지(2026년 설·추석 누락, LSTM도 동일), Docker 미빌드·compose 마운트 없음, 운영 API(launchd) 미재시작
+
 ### Next Steps (demand)
-- 사용자 결정 대기: AR + GBM 정식화(학습 파이프라인 + 서빙 경로, 최소 337시간 이력) / AR 단독 교체 / LSTM 연구 계속 / 유지
+- 사용자 결정 대기: 운영 기본값을 ar_gbm으로 바꿀지, 운영 API 재시작 시점
+- 음력 공휴일 표 2026년 이후 추가(공식 자료로 날짜 확인 필요)
 - 운영 교체는 반드시 사용자 확인 후
 
 ### Task: Competitor benchmark (MAPE/R² vs operators, companies, papers) ✅ COMPLETE
