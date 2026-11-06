@@ -31,6 +31,7 @@ from features.time_features import (
     get_time_feature_names,
     get_korean_holidays,
     get_all_korean_holidays,
+    LUNAR_HOLIDAY_LAST_YEAR,
 )
 
 
@@ -305,6 +306,24 @@ class TestKoreanHolidays:
         assert date(2024, 9, 16) in holidays
         assert date(2024, 9, 17) in holidays
         assert date(2024, 9, 18) in holidays
+
+    @pytest.mark.parametrize("year, lunar_days, substitute", [
+        # 우주항공청 월력요항: 2026 설 2/16~18·석가탄신일 5/24·추석 9/24~26, 2027 설 2/6~8·5/13·추석 9/14~16
+        (2026, [(2, 16), (2, 17), (2, 18), (5, 24), (9, 24), (9, 25), (9, 26)], (5, 25)),
+        (2027, [(2, 6), (2, 7), (2, 8), (5, 13), (9, 14), (9, 15), (9, 16)], (2, 9)),
+    ])
+    def test_lunar_holidays_after_2025(self, year, lunar_days, substitute):
+        """2025년 이후 음력 공휴일 (표가 끝나면 설·추석이 평일로 처리된다)"""
+        holidays = get_korean_holidays(year)
+        for month, day in lunar_days:
+            assert date(year, month, day) in holidays
+        # 학습 데이터 기준과 같게 대체공휴일은 넣지 않는다
+        assert date(year, *substitute) not in holidays
+        hours = pd.date_range(f"{year}-{lunar_days[1][0]:02d}-{lunar_days[1][1]:02d}", periods=24, freq="h")
+        assert is_holiday(hours).tolist() == [1] * 24
+
+    def test_lunar_table_last_year(self):
+        assert LUNAR_HOLIDAY_LAST_YEAR == 2027
 
     def test_all_holidays_range(self):
         """여러 연도 공휴일"""
