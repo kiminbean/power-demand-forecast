@@ -16,7 +16,10 @@
 - docs/mentor-tech-explainer.html (공개 페이지): 낡은 수치 51곳 정정(6.06% → ar_gbm 2025년 4.67%, 옛 LSTM 재채점 9.78%), 최종 검토 14건 반영(수요 모델은 공개 웹 화면에 미연결, v4 '예측 수요'는 모의 곡선, SMP CatBoost v3.19 행 추가), 본문 폭 880→1560px, 600~1728px 넘침 없음
 - 근거: docs/benchmark-2026-11-06/rescore_old_lstm.py(+_out.json), compare_default_2025_out.json
 - docs/2026-11-06-competitor-benchmark.md: 수요 부분에 ar_gbm 갱신 상자(고정 test 3.63% / 0.954, 2025년 4.67%), 경쟁자 판정은 그대로 '판정 불가'
-- 커밋: 892f45d3, 526d57b4(푸시함), 보고서 갱신 커밋은 아래 git log 참고
+- 같은 보고서 1.1절(사용자 요청 "경쟁 업체 이름과 실제 데이터도 같이 표시"): 경쟁사 이름·실제 수치와 같은 기간 ar_gbm 수치를 수요·SMP·태양광 표로 나란히 정리. 결론 요약 표에도 이름·수치 추가
+  - ar_gbm 맞춘 수치: 2024년 하반기 3.79% / R² 0.963(KPX jlfd 4.67%·jlfdRt 3.21%와 같은 기간), 2022년 3.11% / 0.957, 2023년 R² 0.943, AR 대비 배율 0.96~0.98
+  - 재현: docs/benchmark-2026-11-06/competitor_same_basis.py → competitor_same_basis_out.json (로컬 예측 models/demand_ar_gbm_2026-11-06/ 필요)
+- 커밋: 892f45d3, 526d57b4, fa1bc2d8(모두 푸시함), 1.1절 커밋은 git log 참고
 
 ### Task: Default switch to ar_gbm + holiday table 2026-2027 + Docker API + root test fix ✅ COMPLETE
 
