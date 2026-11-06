@@ -5,6 +5,9 @@
 
 Built from data/raw (not the agents' merged CSV) with numpy lstsq, so it shares no code with them.
 Usage (repo root): .venv/bin/python docs/benchmark-2026-11-06/verify_ar.py [out.json]
+
+Note (2026-11-06): the "LSTM" scores here re-score the stored 2026-11-05 predictions, which were made
+from clipped inputs. The model as served (raw inputs) is scored by compare_demand_retrain.py.
 """
 import json
 import sys

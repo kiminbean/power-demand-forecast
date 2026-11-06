@@ -1,0 +1,10 @@
+# 첫 실행(ReLU 두 변형)은 val MAE 줄을 추가하기 전 버전으로 돌렸다. 지금 스크립트는 변형마다 그 줄도 출력한다.
+$ .venv/bin/python docs/benchmark-2026-11-06/probe_ar_anchor_collapse.py 2
+residual std (scaled) train 0.02237  AR-only val MSE 0.000868
+s=1.00000 train_loss [0.000504, 0.000502] val_loss [0.000864, 0.000864] dead_units 1.00 corr_std_MWh 0.000
+s=0.02237 train_loss [0.000501, 0.000501] val_loss [0.000864, 0.000864] dead_units 0.83 corr_std_MWh 0.000
+
+$ .venv/bin/python docs/benchmark-2026-11-06/probe_ar_anchor_collapse.py 3 leaky
+residual std (scaled) train 0.02237  AR-only val MSE 0.000868
+[leaky0.01] val MAE AR-only 15.749 MWh, model 15.751 MWh, corr(correction, AR residual) -0.030
+s=0.02237 train_loss [0.000501, 0.000501, 0.000501] val_loss [0.000864, 0.000864, 0.000864] dead_units 0.95 corr_std_MWh 0.000

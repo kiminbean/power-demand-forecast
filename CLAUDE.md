@@ -46,7 +46,8 @@
 ```
 
 **Model Performance (2026-11-06 경쟁 비교 기준 · 상세 `docs/2026-11-06-competitor-benchmark.md`)**:
-- 전력수요 LSTM(1h, 전력거래량): MAPE 4.31% / R² 0.926 (원본 목표, 고정 test). 시간대별 선형 AR(3.75% / 0.951)보다 나쁨
+- 전력수요 LSTM(1h, 전력거래량): MAPE 4.16% / R² 0.939 (원본 목표, 서빙 경로 재현, 고정 test). 시간대별 선형 AR보다 나쁨(2019~2022 적합 3.75% / 0.951, 2013~ 적합한 게이트 AR 3.78% / 0.950). 처음 보고한 4.31% / 0.926은 잘린 입력으로 만든 예측을 채점한 착오
+- 전력수요 후보(2026-11-06 원본 목표 재학습): AR + GBM 잔차 보정만 배포 게이트 통과(고정 test 3.63% / 0.954, walk-forward 평균 3.35%). 진단 스크립트 결과라 서빙 경로 없음, 운영 교체 미결정 → `docs/2026-11-06-demand-retrain-raw-target.md`
 - SMP: 서빙 = 어제 같은 시각 naive (MAE 11.97원/kWh, MAPE 11.75%, R² 0.20; walk-forward 2025-07-22~12-18)
 - 태양광(RE-BMS): KPX 오차율 17.0% (월×시간 기후값 12.5%보다 나쁨). 화면의 "R²=0.95"는 누수 평가
 - v3.2 Optuna(7.42% / 0.760)는 스케일러 누수로 무효
@@ -303,8 +304,14 @@ src/crawlers/
 | **demand_only** (17 피처) | **4.03% / 0.937** | **3.61% / 0.935** | 5.12% / 4.49% |
 | **weather_full** (18 피처, 기상은 기온 하나) | 4.14% / 0.933 | 3.60% / 0.935 | 5.12% / 4.49% |
 
-- **주의 (2026-11-06 경쟁 비교):** 위 수치는 694.658 MWh에서 잘린 목표 기준이다. 상한이 test를 포함한 전체 기간으로 계산돼 누수가 있다. 원본 목표 기준 고정 test는 demand_only 4.31% / R² 0.926, weather_full 4.41% / 0.924, persistence 5.28%다. 시간대별 선형 AR이 3.75% / 0.951로 LSTM보다 우수하고, walk-forward 4/4 연도 모두 우위다 → `docs/2026-11-06-competitor-benchmark.md`
-- 합격 기준: 고정 test와 walk-forward 평균 모두 MAPE·RMSE가 persistence보다 낮을 것 → 두 모델 합격, walk-forward 4/4 fold 모두 우위
+- **주의 (2026-11-06 경쟁 비교):** 위 수치는 694.658 MWh에서 잘린 목표 기준이다. 상한이 test를 포함한 전체 기간으로 계산돼 누수가 있다. 원본 목표·서빙 경로(원본 입력) 기준 고정 test는 demand_only 4.16% / R² 0.939, weather_full 4.26% / 0.936, persistence 5.28%다(처음 보고한 4.31%·4.41%는 잘린 입력 착오). 시간대별 선형 AR이 3.75% / 0.951로 LSTM보다 우수하고, walk-forward 4/4 연도 모두 우위다 → `docs/2026-11-06-competitor-benchmark.md`
+- **원본 목표 재학습 (2026-11-06 · `docs/2026-11-06-demand-retrain-raw-target.md`):**
+  - 클리핑을 없앤 데이터(5665fac0)로 다시 학습했다. 게이트는 persistence·ramp7·시간대별 AR 세 기준선 모두 대비 MAPE·RMSE 우위, DM p<0.05, MAE 1% 이상 개선이다(e120d68e).
+  - 직전값 앵커 LSTM: 4.17% / 0.938로 불합격(AR·ramp7보다 나쁨). 서빙 중인 모델(4.16%)과 같은 수준이다.
+  - AR 앵커 LSTM: 10개 모델(피처 2종 × 분할 5개) 모두 학습이 붕괴해 "AR + 상수"가 돼 불합격. 원인은 미확정.
+  - 합격은 AR + GBM 잔차 보정(`docs/benchmark-2026-11-06/diagnose_ar_residual.py`)뿐이다: 고정 3.63%, walk-forward 평균 3.35%.
+  - 운영 모델은 그대로다.
+- 합격 기준(2026-11-05 당시): 고정 test와 walk-forward 평균 모두 MAPE·RMSE가 persistence보다 낮을 것 → 두 모델 합격, walk-forward 4/4 fold 모두 우위
 - 체크포인트 `model_config.residual_target: true` → `src/inference/predict.py`가 자동으로 래핑. 이 플래그 없이 기본 모델만 쓰면 보정량(≈0)을 수요로 내보내므로 주의
 - 재현: `python src/training/retrain_demand_oot.py --residual` · 리포트 `models/production/training_report.json`, `models/demand_retrain_2026-11-05_residual_v2/*/oot_report.json` · 이전 버전 백업 `models/_pre_retrain_backup_2026-11-05/demand_lstm/`
 

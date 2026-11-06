@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-06 (Competitor benchmark of demand/SMP/solar forecasts)
+> Last Updated: 2026-11-06 (Demand retrain on raw target + AR combination experiments)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -12,10 +12,26 @@
 
 ## Current Session (2026-11-06)
 
+### Task: Demand model improvement (raw target, AR/ramp7 gate, AR + correction) ✅ EXPERIMENTS COMPLETE · production unchanged
+
+- 보고서: `docs/2026-11-06-demand-retrain-raw-target.md` · 스크립트: `docs/benchmark-2026-11-06/{compare_demand_retrain,diagnose_ar_residual,report_tables,probe_ar_anchor_collapse}.py`
+- 커밋: 5665fac0(클리핑 제거·CSV 919시간 복원), e120d68e(게이트: persistence·ramp7·시간대별 AR, DM p<0.05, MAE 1% 개선, `--anchor ar`)
+- 결과(demand_only, 원본 목표, 고정 test 2023-07~2024-12 / walk-forward 2021~2024 평균 MAPE):
+  - 운영 LSTM(서빙 경로 재현, 원본 입력) 4.16% · 직전값 앵커 원본 재학습 4.17% / 3.66% 불합격 · AR 앵커 LSTM 3.78% / 3.45% 불합격(학습 붕괴, AR + 상수)
+  - AR + GBM 잔차 보정(B) 3.63% / 3.35% **합격**(기준선 3종, 4/4 연도, AR 대비 MAE −4.0% / −2.7%, 서빙 모델 대비 −13%)
+  - 시간대별 AR 3.78% / 3.45%
+- 정정: 경쟁 비교 보고서의 운영 LSTM 4.31%·"최대 수요 53 MWh 과소예측"은 2026-11-05에 저장된(잘린 입력) 예측을 채점한 착오 → 서빙 경로 4.16% / R² 0.939, 상한 위 631시간 bias −5.9 MWh. 같은 날 보고서 정정
+- AR 앵커 붕괴: 원래 체크포인트는 마지막 은닉 ReLU가 모든 test 입력에서 0 → 보정량 = 출력 편향(상수). 잔차 표준화·LeakyReLU(2~3에폭, 시드 1개)로도 학습 손실 불변. GBM은 비슷한 정보로 잔차를 학습했지만 LSTM 실패 원인은 미확정
+- 산출물(git 미추적): 예측 CSV(models/demand_retrain_2026-11-06_raw_{last,ar}/, models/demand_ar_gbm_2026-11-06/). 두 실행의 oot_report.json은 커밋
+
+### Next Steps (demand)
+- 사용자 결정 대기: AR + GBM 정식화(학습 파이프라인 + 서빙 경로, 최소 337시간 이력) / AR 단독 교체 / LSTM 연구 계속 / 유지
+- 운영 교체는 반드시 사용자 확인 후
+
 ### Task: Competitor benchmark (MAPE/R² vs operators, companies, papers) ✅ COMPLETE
 
 - 보고서: `docs/2026-11-06-competitor-benchmark.md` · 재현 스크립트: `docs/benchmark-2026-11-06/verify_{ar,smp,solar}.py`
-- 수요 LSTM: 같은 목표(KPX 제주 전력거래량) 경쟁자 없음 → 판정 불가. 단 원본 목표 기준 4.31%/R² 0.926으로 시간대별 선형 AR(3.75%/0.951)에 고정 test·walk-forward 4/4 연도 모두 짐 (DM +10.65)
+- 수요 LSTM: 같은 목표(KPX 제주 전력거래량) 경쟁자 없음 → 판정 불가. 단 원본 목표 기준 4.31%/R² 0.926으로 시간대별 선형 AR(3.75%/0.951)에 고정 test·walk-forward 4/4 연도 모두 짐 (DM +10.65) — 2026-11-06 정정: 서빙 경로 4.16%/0.939, AR 대비 DM +14.21 (위 Demand model improvement 참고)
 - 수요 목표가 694.658 MWh에서 잘려 있음(test 포함 전체 기간 Q3+1.5·IQR, `src/data/preprocessing.py` handle_outliers) → 기존 4.03%/0.937은 외부 보고 금지
 - SMP: 서빙 naive(MAE 11.97, 2025H2 walk-forward)는 vpp-capstone LightGBM(naive 대비 −17%, 2025)·VOLTA(−10~27%, 2024)보다 나쁨. 0.5×어제 + 0.5×7일 중앙값 혼합이 MAE −8.8~9.6%
 - 태양광(RE-BMS): KPX 오차율 17.0%로 월×시간 기후값 12.5%보다 나쁨. "R²=0.95"는 무작위 분할·전체 fit 스케일러·측정 일사량 평가 수치
