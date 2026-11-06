@@ -5,7 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-11-05
+## [Unreleased] - 2026-11-07
+
+### Added (2026-11-06~07)
+- **AR + GBM 수요 모델(`ar_gbm`)**: 시간대별 선형 AR에 HistGradientBoosting 잔차 보정을 더한 모델이다. 학습(`src/training/train_demand_ar_gbm.py`), 추론(`src/inference/ar_gbm_predictor.py`), 산출물(`models/demand_ar_gbm/`, 학습 ~2024-06)을 갖췄다. 고정 test(2023-07~2024-12)에서 MAPE 3.63%·R² 0.954로 시간대별 AR(3.78%)과 LSTM(4.16%)을 이겼다. walk-forward 평균은 3.35%다.
+- **수요 배포 게이트 기준선**: ramp7·시간대별 AR 기준선, Diebold-Mariano 검정, MAE 1% 개선 조건을 추가했다(e120d68e).
+- **2025년 실측 수집과 시간외 비교**: `tools/fetch_kpx_jeju_trade.py`(data.go.kr 15133498)로 실측을 받고 `docs/benchmark-2026-11-06/compare_default_2025.py`로 비교한다.
+- **경쟁 비교 보고서** `docs/2026-11-06-competitor-benchmark.md`: 공개 수치 128건을 원문과 대조했다. 1.1절에는 경쟁사 이름과 실제 수치를, 기간을 맞춘 ar_gbm 수치(`competitor_same_basis.py`)와 나란히 둔다.
+- **설명 페이지 05장 "경쟁 비교"**(`docs/mentor-tech-explainer.html`)를 추가하고, 용어 사전에 계통수요/전력거래량과 MAE를 넣었다.
+
+### Changed (2026-11-05~07)
+- **API 기본 수요 모델을 ar_gbm으로 교체**(2026-11-06, 사용자 승인): 2025년 실측에서 MAPE 4.67%·R² 0.929로 LSTM(5.22%·0.910)보다 정확했고, 12개월 모두 앞섰다.
+  - `model_type`을 생략하면 ar_gbm을 쓴다. 이력이 337시간 미만이거나 산출물이 없으면 demand_only로 대체하고 `model_used`에 표시한다.
+  - 되돌리기: `DEFAULT_MODEL=demand_only`
+- **수요 LSTM 잔차 타깃 재학습**(2026-11-05~06): 2025-12 체크포인트를 교체했다. 이 체크포인트는 6.06%로 보고됐지만 같은 경로로 다시 채점하면 9.78%였다. 새 모델의 고정 test는 4.16%·R² 0.939다(원본 목표, 서빙 경로).
+- **SMP 서빙을 어제 같은 시각 가격(naive)으로 교체**(2026-11-05): 제주 재학습 v4.1(16.82%)이 naive(11.75%)보다 나빠 게이트를 통과하지 못했다. 성능을 다시 검증하지 않은 v3.2는 어제 가격이 없을 때만 대체로 쓴다(3ccbf736, 417f5b41). 제주 SMP는 시범사업 API가 실패하면 마지막 검증 가격을 쓰고, 재시작해도 그 값을 유지한다(fb61e8e7, 19570fbb).
+- **음력 공휴일 표 2026·2027년 추가**: 우주항공청 월력요항 기준이다. 학습 기준과 같게 설·추석 3일과 부처님오신날만 넣었다.
+- **Docker API**: `requirements-docker.txt`를 설치한다(CPU torch, 호스트 검증 버전 고정, pandas<3). 수요 모델을 읽기 전용으로 마운트하고 메모리 상한 1GB를 걸었다. API 컨테이너만 :8506에서 운영한다.
+- **앱 간 수치 일치**(2026-11-05): 발전소 목록, SMP 시각, KPI, 모델 메타데이터가 웹 v5~v7·Streamlit·모바일에서 같은 출처를 쓰게 했다(70b199cf 외).
+- **문서 정정**:
+  - 설명 페이지의 낡은 수치 51곳을 정정하고, 폭을 880px에서 1560px로 넓히고, 검토 지적 14건을 반영했다(2026-11-06).
+  - RE-BMS v5/v6 기술문서와 `docs/TECHNICAL_DOCUMENTATION.md`의 옛 수요 LSTM 수치(6.06%)를 현재 수치로 바꿨다. README에는 현재 운영 모델 성능 표를 추가했다(2026-11-07).
+
+### Fixed (2026-11-06)
+- **수요 목표 누수**: test를 포함한 전 기간으로 IQR 클리핑(694.658 MWh 상한)을 하던 것을 없앴다. 처리된 CSV의 919시간을 원본 값으로 복원했다(5665fac0).
+- **수요 수치 착오**: 경쟁 비교 초판의 LSTM 4.31%는 잘린 입력으로 만든 예측을 채점한 값이었다. 서빙 경로로 다시 재서 4.16%로 고쳤다.
+- **실패 테스트**: 삭제된 크롤러를 부르던 수동 점검 스크립트 `tools/crawlers/test_jeju_crawlers.py`를 제거했다(a39e9bb3). 루트 pytest는 2,271개 통과, 3개 건너뜀이다.
 
 ### Fixed
 - **SMP 스케일러 데이터 누수**: 시간 분할 이전에 스케일러를 fit하던 누수 수정 — SMP 학습 스크립트 3종이 공통 헬퍼(`src/smp/models/time_split_scaling.py`)로 분할 이후 train 슬라이스에만 fit. `np.save`(dict) 예외는 `np.savez`로 수정.

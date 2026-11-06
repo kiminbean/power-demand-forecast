@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-06 (Default model switched to ar_gbm, holiday table to 2027, Docker API deployed)
+> Last Updated: 2026-11-07 (Docs refreshed to current numbers, session memory saved; 2026-11-06: default model ar_gbm, competitor comparison)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -10,7 +10,16 @@
 
 ---
 
-## Current Session (2026-11-06)
+## Current Session (2026-11-06 ~ 11-07)
+
+### Task: Session memory + doc refresh (2026-11-07) ✅ COMPLETE
+- 사용자 요청: "지금까지 대화내용과 작업내용 메모리에 기억", "업데이트된 내용 관련 모든 문서 최신 업데이트", "커밋, 푸시"
+- 메모리(~/.claude/projects/-Users-ibkim-Projects-power-demand-forecast/memory/): 사용자 선호·승인 방식·보안 규칙·ar_gbm 전환 경위·공개 페이지·경쟁 비교·미해결 과제·참조 주소·작업 요약, 12개 파일과 MEMORY.md 색인
+- 문서 갱신:
+  - README(현재 운영 모델 성능 표, 멘토 자료 목록, Docker 현재 운영), CHANGELOG(2026-11-05~07), CLAUDE.md(테스트 수, 경쟁 비교 위치, LSTM은 선택형)
+  - PROGRESS_REPORT, docs/2026-11-02-forecast-upgrade-status.md(갱신 절), RE-BMS v5/v6 기술문서·TECHNICAL_DOCUMENTATION(옛 6.06% → 현재 수치, 현재 API 예시)
+  - docker/README(v7 API 운영), DEPLOYMENT_GUIDE, 재학습 보고서 머리말
+- 그대로 둔 것: 당시 기록인 문서(CONVERSATION_PROMPTS, SESSION_SUMMARY_2025-01-10, CLAUDE.md의 2025-12 실험 표), `.claude/worktrees/`의 별도 작업 사본
 
 ### Task: Mentor explainer correction + competitor report update ✅ COMPLETE
 - docs/mentor-tech-explainer.html (공개 페이지): 낡은 수치 51곳 정정(6.06% → ar_gbm 2025년 4.67%, 옛 LSTM 재채점 9.78%), 최종 검토 14건 반영(수요 모델은 공개 웹 화면에 미연결, v4 '예측 수요'는 모의 곡선, SMP CatBoost v3.19 행 추가), 본문 폭 880→1560px, 600~1728px 넘침 없음
@@ -19,7 +28,7 @@
 - 같은 보고서 1.1절(사용자 요청 "경쟁 업체 이름과 실제 데이터도 같이 표시"): 경쟁사 이름·실제 수치와 같은 기간 ar_gbm 수치를 수요·SMP·태양광 표로 나란히 정리. 결론 요약 표에도 이름·수치 추가
   - ar_gbm 맞춘 수치: 2024년 하반기 3.79% / R² 0.963(KPX jlfd 4.67%·jlfdRt 3.21%와 같은 기간), 2022년 3.11% / 0.957, 2023년 R² 0.943, AR 대비 배율 0.96~0.98
   - 재현: docs/benchmark-2026-11-06/competitor_same_basis.py → competitor_same_basis_out.json (로컬 예측 models/demand_ar_gbm_2026-11-06/ 필요)
-- 커밋: 892f45d3, 526d57b4, fa1bc2d8, 00c26ab0(1.1절, 모두 푸시함)
+- 커밋: 892f45d3, 526d57b4, fa1bc2d8, 00c26ab0(1.1절), 27d90c16(설명 페이지 05장), 모두 푸시함
 - 설명 페이지 05장 "경쟁 비교" 신설(사용자 승인): 경쟁사 10행 표(수요 5·SMP 3·태양광 2)와 주의 상자(수요는 거래량 대 계통수요라 순위 없음), 기존 05·06장은 06·07로, 용어 사전에 계통수요/전력거래량·MAE 추가. 600~1728px 14개 폭 넘침 없음(scratchpad width_check/compare_check.py)
 
 ### Task: Default switch to ar_gbm + holiday table 2026-2027 + Docker API + root test fix ✅ COMPLETE

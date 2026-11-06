@@ -1,5 +1,7 @@
 # RE-BMS 외부 배포 가이드
 
+> **2026-11-07 갱신:** 지금 운영하는 Docker는 `docker/docker-compose.v7.yml`의 API 컨테이너 하나다(rebms-api :8506). 실행 방법과 주의점은 `docker/README.md`의 첫 절을 따른다. API 기본 수요 모델은 `ar_gbm`이다(되돌리기: `DEFAULT_MODEL=demand_only`). 아래 내용은 외부 기기에서 접속하던 이전 배포 방식이다.
+
 ## 아키텍처
 
 ```

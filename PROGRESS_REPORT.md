@@ -4,7 +4,7 @@
 - **프로젝트**: 제주도 전력 수요 예측 (Power Demand Forecasting)
 - **위치**: `/Users/ibkim/Ormi_1/power-demand-forecast`
 - **파이프라인**: Anthropic State Persistence + DeepMind IMO 2025 Verification Loop
-- **최종 업데이트**: 2026-11-05
+- **최종 업데이트**: 2026-11-07
 
 ---
 
@@ -28,6 +28,18 @@
   - v3.4: test MAPE 17.58%→21.28%, R² -0.105→-0.537 — 재학습 후에도 일반화 실패, 추가 데이터 결합 전까지 사용 보류
 - 재학습 후 발견·수정: `train_smp_v4_smp_only.py`가 v41 스케일러를 `np.save`(dict) npy로 저장(a2dcaf75 수정 누락) → `np.savez`로 전환, 아티팩트 `smp_v41_scaler.npz` 복원, 누수 버전 스케일러 npy 2건 삭제
 - 재검증: `pytest tests/test_smp_time_split_scaling.py` 16/16 통과
+
+### 2026-11-06~07: 수요 모델 교체, 경쟁 비교, 문서 정리
+
+- **경쟁 비교**(`docs/2026-11-06-competitor-benchmark.md`): 수요는 판정 불가다. 우리는 거래량, 경쟁사는 대부분 계통수요를 예측한다. SMP와 태양광은 같은 시장의 비교 대상보다 나쁘다. 1.1절에 경쟁사 이름과 실제 수치를 정리했다.
+- **수요 재학습**(`docs/2026-11-06-demand-retrain-raw-target.md`):
+  - 전 기간 IQR 클리핑(누수)을 없앴다.
+  - 게이트에 ramp7·시간대별 AR 기준선과 DM 검정을 추가했다.
+  - AR + GBM 잔차 보정만 게이트를 통과했다(고정 test 3.63%, walk-forward 평균 3.35%).
+- **API 기본값 ar_gbm**(사용자 승인): 2025년 실측에서 4.67%·R² 0.929로 LSTM 5.22%보다 정확했다. launchd :8001과 Docker :8506 모두 반영했다.
+- **음력 공휴일 표**를 2027년까지 늘렸다. **Docker API**는 CPU 전용 고정 의존성으로 바꾸고 수요 모델을 마운트했다.
+- **실패 테스트 해결**: 루트 pytest 2,271 통과·3 건너뜀
+- **문서**: 공개 설명 페이지를 정정하고 05장 "경쟁 비교"를 추가했다. 2026-11-07에는 README·CHANGELOG·RE-BMS v5/v6·기술문서·Docker 문서를 현재 수치로 맞췄다.
 
 ---
 

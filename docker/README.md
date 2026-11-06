@@ -1,5 +1,23 @@
 # RE-BMS v6.0 Docker Deployment
 
+## Current operation: v7 API container only (since 2026-11-06)
+
+The running deployment uses `docker-compose.v7.yml` and starts only the `api` service.
+
+```bash
+# from the repo root
+docker compose -f docker/docker-compose.v7.yml up -d --build --wait api
+curl http://localhost:8506/health   # check models_loaded; /api/v1/health is healthy even without models
+```
+
+- Container `rebms-api` on :8506, `mem_limit: 1g`, Colima VM with 2 vCPU / 2 GB.
+- The image installs `requirements-docker.txt`: CPU-only torch and versions pinned to the ones verified on the host. pandas stays below 3, because pandas 3 makes every `ar_gbm` prediction return 400.
+- Demand models are mounted read-only: `models/production` (LSTM) and `models/demand_ar_gbm` (default `ar_gbm`). After retraining, restart the container; no rebuild is needed.
+- The default demand model comes from `DEFAULT_MODEL` in the root `.env`. To roll back, set `DEFAULT_MODEL=demand_only` and run `up -d --force-recreate --wait api`. `docker restart` does not re-read `env_file`.
+- Do not run `docker compose config` without `--quiet`: it prints the API key from the env file.
+
+The v6 instructions below describe the older private deployment with Basic Auth.
+
 ## Private Deployment with Authentication
 
 This setup deploys RE-BMS v6.0 with Basic Authentication for private access.
@@ -188,6 +206,8 @@ curl http://localhost:8506/api/v1/health
 |--------|----------------|-------------|
 | `data/smp` | `/app/data/smp` | SMP historical data |
 | `models` | `/app/models` | ML models |
+| `models/production` (v7, read-only) | `/app/models/production` | Demand LSTM (`demand_only`, `weather_full`) |
+| `models/demand_ar_gbm` (v7, read-only) | `/app/models/demand_ar_gbm` | Default demand model `ar_gbm` |
 
 ---
 

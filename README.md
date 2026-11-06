@@ -35,6 +35,7 @@
 | 문서 | 내용 |
 |------|------|
 | [docs/mentoring_study_hub.html](docs/mentoring_study_hub.html) | 전력시장 도메인 지식, BiLSTM-Attention 기술 정리, 4주 학습 로드맵, 사업화 모델 4안, 사업계획서 구조, 멘토 질문 리스트(25문항), 용어 사전 |
+| [docs/mentor-tech-explainer.html](docs/mentor-tech-explainer.html) | 멘토(비도메인)용 기술 구현 브리핑: 서비스 지도, 배포 구조, 데이터 출처, 모델 성능, 경쟁 비교(05장), 검증 상태와 한계, 용어 사전 (2026-11-06 수치 정정) |
 
 ```bash
 # 로컬에서 열기 (서버 실행 시)
@@ -379,6 +380,20 @@ best_model, results = automl.run(
 
 ---
 
+## 현재 운영 모델 성능 (2026-11-07 기준)
+
+| 대상 | 서비스 방식 | 평가 기간 | 오차 | R² | 근거 |
+|------|------------|----------|------|-----|------|
+| 전력수요 1시간 앞 (KPX 제주 전력거래량) | API 기본 `ar_gbm` (시간대별 AR + GBM 잔차 보정) | 2025년 실측 8,760시간 (학습에 안 씀) | MAPE 4.67% | 0.929 | `docs/benchmark-2026-11-06/compare_default_2025_out.json` |
+| 〃 | 선택형 LSTM `demand_only` | 같은 2025년 | MAPE 5.22% | 0.910 | 〃 |
+| 〃 | 기준선: 직전 1시간 값 | 같은 2025년 | MAPE 6.16% | 0.876 | 〃 |
+| 제주 하루전 SMP | 어제 같은 시각 가격 (naive) | walk-forward 2025-07-22~12-18 | MAPE 11.75% | 0.203 | `models/smp_v41_serving/smp_v41_serving.json` |
+| 태양광 발전량 (웹 v6·v7 수급 화면) | GradientBoosting (응답의 "R²=0.95"는 서비스 성능이 아님) | holdout 2022-12~2024-05 | KPX 오차율 17.0% | 0.41 | `docs/benchmark-2026-11-06/verify_solar_out.json` |
+
+- 2025-12 학습 리포트의 수요 LSTM MAPE 6.06%는 같은 기간을 API와 같은 경로로 다시 채점하면 9.78%라 재현되지 않았다(`docs/benchmark-2026-11-06/rescore_old_lstm_out.json`). 2026-11-05에 다시 학습한 모델로 교체했다.
+- 경쟁사 이름과 실제 수치: `docs/2026-11-06-competitor-benchmark.md` 1.1절. 수요는 경쟁사가 다른 시리즈(대부분 계통수요)를 예측해 순위를 매길 수 없다. SMP와 태양광은 같은 시장의 비교 대상보다 나쁘다.
+- 상세: `docs/2026-11-06-demand-retrain-raw-target.md` 12절, `CLAUDE.md`의 Model Performance
+
 ## 목표 성능
 
 | 지표 | 1순위 목표 | 2순위 목표 |
@@ -633,6 +648,8 @@ alerts = manager.check_all(current_metrics)
 ---
 
 ## Docker 배포
+
+> **현재 운영 방식 (2026-11-06~):** API 컨테이너만 띄운다. `docker compose -f docker/docker-compose.v7.yml up -d --build --wait api`로 실행하면 rebms-api가 :8506에서 뜬다(Colima VM 2 vCPU / 2GB, 메모리 상한 1GB). 수요 모델 `models/production`·`models/demand_ar_gbm`은 읽기 전용으로 마운트한다. 이미지는 `requirements-docker.txt`(CPU torch, 호스트 검증 버전 고정, pandas<3)를 설치한다. 컨테이너 상태 검사는 모델 로드와 무관하므로 `/health`의 `models_loaded`로 확인한다. 자세한 내용은 `docker/README.md`.
 
 ### 기본 API 서버
 
