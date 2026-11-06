@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-07 (Docs refreshed to current numbers, session memory saved; 2026-11-06: default model ar_gbm, competitor comparison)
+> Last Updated: 2026-11-07 (CI/CD ran green during a 9-minute public window; docs refreshed; session memory saved; 2026-11-06: default model ar_gbm, competitor comparison)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -11,6 +11,17 @@
 ---
 
 ## Current Session (2026-11-06 ~ 11-07)
+
+### Task: CI/CD run via temporary public visibility (2026-11-07) ✅ COMPLETE
+- 사용자 방식: GitHub Actions 결제 한도 문제를 피해, 저장소를 잠시 공개로 바꿔 CI/CD를 돌린 뒤 다시 비공개로 돌린다. 키 노출을 알리자 사용자는 "지금 바로 진행"을 골랐다.
+- 공개 시간: 07:02:34 ~ 07:11:25(약 9분), 그동안 fork 0개, 지금은 PRIVATE
+- 1838cf8f 재실행 결과:
+  - CI: 8개 작업 모두 성공(Python 3.10·3.11·3.12, Web v7, Lint, Security Scan, API Tests, Build Verification)
+  - CD: 성공(GHCR 이미지 빌드·푸시, Staging은 자리표시자, Production은 건너뜀)
+- 남은 일:
+  - data.go.kr API 키 재발급. 9분 공개된 위치는 CLAUDE.md, docs/CONVERSATION_PROMPTS.md, git 이력이다. 재발급 뒤 두 파일의 키를 자리표시자로 바꾸고 키를 쓰는 서비스를 재시작한다.
+  - GHCR 패키지 공개 여부 확인. gh 토큰에 read:packages가 필요하다. 이미지에는 .dockerignore로 docs/·*.md·.env가 빠져 키가 없다.
+- 참고: CI/CD의 paths-ignore는 루트 *.md와 docs/**만 제외한다. .claude/·docker/ 아래가 바뀌면 워크플로가 실행되고, 지금은 결제 문제로 작업이 시작되지 않는다.
 
 ### Task: Session memory + doc refresh (2026-11-07) ✅ COMPLETE
 - 사용자 요청: "지금까지 대화내용과 작업내용 메모리에 기억", "업데이트된 내용 관련 모든 문서 최신 업데이트", "커밋, 푸시"
