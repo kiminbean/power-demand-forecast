@@ -26,6 +26,19 @@ services:
       - ../models/smp:/app/models/smp:ro
       - ../models/smp_v3_optuna:/app/models/smp_v3_optuna:ro
       - ../models/smp_v3_10_catboost:/app/models/smp_v3_10_catboost:ro
+      # 시간별 수요 모델: LSTM이 먼저 로드돼야 ar_gbm도 열린다 (api/service.py initialize)
+      - ../models/production:/app/models/production:ro
+      - ../models/demand_ar_gbm:/app/models/demand_ar_gbm:ro
+      # /predict/daily 모델 (api/daily_predictor.py가 작업 디렉터리 기준 상대 경로로 연다).
+      # git이 추적하지 않는 파일이라, 없을 때 Docker가 같은 이름의 빈 폴더를 만들지 않게 막는다
+      - type: bind
+        source: ../models/v18_bilstm_btm.pt
+        target: /app/models/v18_bilstm_btm.pt
+        read_only: true
+        bind:
+          create_host_path: false
+    # Colima VM 메모리가 2GB라 다른 컨테이너를 지키려고 상한을 둔다 (측정 RSS 약 0.45GB)
+    mem_limit: 1g
     env_file:
       - ../.env
     environment:

@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements.txt .
+# CPU 전용·버전 고정 목록을 쓴다. requirements.txt는 CUDA torch와 개발 도구까지 받아 약 3.5GB가 된다
+COPY requirements-docker.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Copy application code
 COPY src/ ./src/
