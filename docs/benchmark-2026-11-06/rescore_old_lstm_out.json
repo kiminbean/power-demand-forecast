@@ -1,0 +1,57 @@
+{
+ "reported_2025_12": {
+  "demand_only": {
+   "MAPE": 6.4672,
+   "R2": 0.8458
+  },
+  "weather_full": {
+   "MAPE": 6.0581,
+   "R2": 0.865
+  }
+ },
+ "fixed_test_2023-07_2024-12": {
+  "old_weather_full": {
+   "n": 13200,
+   "MAPE": 9.7778,
+   "R2": 0.6888
+  },
+  "old_demand_only": {
+   "n": 13200,
+   "MAPE": 12.4367,
+   "R2": 0.4654
+  },
+  "old_weather_full_clipped_target": {
+   "n": 13200,
+   "MAPE": 9.6314,
+   "R2": 0.6932
+  },
+  "current_demand_only": {
+   "n": 13200,
+   "MAPE": 4.1555,
+   "R2": 0.9388
+  },
+  "persistence": {
+   "n": 13200,
+   "MAPE": 5.2782,
+   "R2": 0.9016
+  }
+ },
+ "year_2025": {
+  "old_demand_only": {
+   "n": 8760,
+   "MAPE": 13.4953,
+   "R2": 0.4891
+  },
+  "current_demand_only": {
+   "n": 8760,
+   "MAPE": 5.2171,
+   "R2": 0.9102
+  },
+  "persistence": {
+   "n": 8760,
+   "MAPE": 6.1605,
+   "R2": 0.8758
+  }
+ },
+ "note": "old weather_full needs 기온, which the repo does not have for 2025"
+}
