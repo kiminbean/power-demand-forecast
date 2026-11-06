@@ -8,9 +8,10 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from api.config import settings
-from api.schemas import ModelType, TimeSeriesData
+from api.config import Settings, settings
+from api.schemas import BatchPredictionRequest, ModelType, PredictionRequest, TimeSeriesData
 from api.service import ModelNotLoadedError, PredictionService
 from src.models.ar_gbm import MIN_HISTORY_HOURS, ArGbmModel
 from src.training.train_production import TIME_FEATURES
@@ -29,6 +30,8 @@ def artifact(tmp_path_factory):
 
 def _service(monkeypatch, model_dir) -> PredictionService:
     monkeypatch.setattr(settings, "AR_GBM_MODEL_DIR", str(model_dir))
+    # 개발자 .env의 DEFAULT_MODEL(예: 되돌리기 값 demand_only)과 상관없이 코드 기본값을 시험한다
+    monkeypatch.setattr(settings, "DEFAULT_MODEL", ModelType.AR_GBM.value)
     service = PredictionService()
     service.predictor = Mock()  # LSTM 경로는 이 테스트에서 쓰지 않는다
     service._is_initialized = True
@@ -115,6 +118,69 @@ def test_missing_or_broken_artifact_disables_only_ar_gbm(monkeypatch, tmp_path, 
         service.predict_batch(history, ModelType.AR_GBM)
 
 
+def test_omitted_model_type_uses_ar_gbm_default(monkeypatch, artifact):
+    raw, path, _ = artifact
+    service = _service(monkeypatch, path)
+    history = _data(raw[raw.index < raw.index[2500]].tail(MIN_HISTORY_HOURS))
+    # 생략하면 서버 기본값(ar_gbm)을 쓰고, ar_gbm을 명시했을 때와 같은 값을 낸다
+    omitted = service.predict(history)
+    assert omitted.model_used == "ar_gbm"
+    assert omitted.prediction == service.predict(history, ModelType.AR_GBM).prediction
+    batch = service.predict_batch(_data(raw.iloc[1000:1400]), step=4)
+    assert batch.model_used == "ar_gbm"
+    assert batch.predictions == service.predict_batch(_data(raw.iloc[1000:1400]), ModelType.AR_GBM, step=4).predictions
+    assert service.default_model_name() == "ar_gbm"
+
+
+def test_omitted_model_type_falls_back_to_lstm_only_when_ar_gbm_cannot_serve(monkeypatch, tmp_path, artifact):
+    raw, path, _ = artifact
+    service = _service(monkeypatch, path)
+    calls = []
+    monkeypatch.setattr(service, "_run_prediction", lambda df, name: calls.append(name) or 500.0)
+    short = _data(raw.iloc[:MIN_HISTORY_HOURS - 1])
+    # 이력이 짧으면 교체 전 생략 요청이 받던 demand_only로 예측하고, 대체한 이유를 응답에 남긴다
+    result = service.predict(short)
+    assert result.model_used == f"demand_only (fallback: history < {MIN_HISTORY_HOURS}h)"
+    assert calls == ["demand_only"]
+    # ar_gbm을 명시한 요청은 대체하지 않고 그대로 실패한다
+    with pytest.raises(ValueError, match="Insufficient data"):
+        service.predict(short, ModelType.AR_GBM)
+
+    missing = _service(monkeypatch, tmp_path / "missing")
+    monkeypatch.setattr(missing, "_run_prediction", lambda df, name: 500.0)
+    enough = _data(raw.iloc[:MIN_HISTORY_HOURS])
+    assert missing.predict(enough).model_used == "demand_only (fallback: ar_gbm unavailable)"
+    assert missing.default_model_name() == "demand_only"
+    with pytest.raises(ModelNotLoadedError):
+        missing.predict(enough, ModelType.AR_GBM)
+
+
+def test_default_model_setting_is_validated_and_overridable(monkeypatch, artifact):
+    _, path, _ = artifact
+    monkeypatch.delenv("DEFAULT_MODEL", raising=False)
+    # 환경변수 끝의 공백·줄바꿈은 지우고, 없는 모델 이름이면 시작할 때 실패한다
+    assert Settings(_env_file=None, DEFAULT_MODEL=" demand_only\n").DEFAULT_MODEL == "demand_only"
+    assert Settings(_env_file=None, DEFAULT_MODEL=ModelType.DEMAND_ONLY).DEFAULT_MODEL == "demand_only"
+    with pytest.raises(ValidationError, match="DEFAULT_MODEL"):
+        Settings(_env_file=None, DEFAULT_MODEL="lstm")
+    assert Settings(_env_file=None).DEFAULT_MODEL == "ar_gbm"
+    service = _service(monkeypatch, path)
+    monkeypatch.setattr(settings, "DEFAULT_MODEL", "demand_only")
+    # 기본값을 되돌리면 생략 요청은 대체 표시 없이 그 모델을 쓴다
+    assert service.resolve_model_type(None, 10_000) == (ModelType.DEMAND_ONLY, None)
+    assert service.resolve_model_type(ModelType.AR_GBM, 10) == (ModelType.AR_GBM, None)
+    assert service.default_model_name() == "demand_only"
+
+
+def test_request_model_type_is_optional():
+    data = [{"datetime": ts.isoformat(), "power_demand": 600.0}
+            for ts in pd.date_range("2024-01-08", periods=168, freq="h")]
+    assert PredictionRequest(data=data).model_type is None
+    assert BatchPredictionRequest(data=data, model_type=None).model_type is None
+    with pytest.raises(ValidationError):
+        PredictionRequest(data=data, model_type="lstm")
+
+
 @pytest.fixture
 def mock_service():
     with patch('api.main.get_prediction_service') as get_service:
@@ -153,3 +219,14 @@ def test_predict_endpoint_passes_ar_gbm_model_type(client, mock_service):
     response = client.post("/predict", json=_payload("ar_gbm"))
     assert response.status_code == 200
     assert mock_service.predict.call_args.kwargs["model_type"] == ModelType.AR_GBM
+    # 생략하면 None을 넘겨 서비스가 서버 기본값을 정한다
+    omitted = _payload("ar_gbm")
+    del omitted["model_type"]
+    assert client.post("/predict", json=omitted).status_code == 200
+    assert mock_service.predict.call_args.kwargs["model_type"] is None
+
+
+def test_models_endpoint_reports_effective_default(client, mock_service):
+    mock_service.get_model_info.return_value = []
+    mock_service.default_model_name.return_value = "demand_only"
+    assert client.get("/models").json()["default_model"] == "demand_only"

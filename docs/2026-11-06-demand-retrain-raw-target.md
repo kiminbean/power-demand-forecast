@@ -7,6 +7,7 @@
   - 선형 AR + LSTM 보정 조합을 시험한다.
   - 운영 모델은 기준선을 넘을 때만, 다시 확인을 받은 뒤 교체한다.
 - **운영 모델(`models/production/`)은 바꾸지 않았다.**
+- 같은 날 추가: 사용자 승인으로 API 기본 모델을 ar_gbm으로 바꿨다. 2025년 실측 시간외 비교에서 서빙 LSTM보다 정확했기 때문이다(12절).
 
 ## 1. 결론 요약
 
@@ -381,3 +382,153 @@
 - 남겨 둔 개선 거리:
   - 단일 예측도 전체 이력을 계산한다(337시간 137 ms, 8,760시간 204 ms).
   - 게이트 조립 코드가 세 곳(재학습 스크립트, 정식 파이프라인, 진단 스크립트)에 중복돼 있다.
+
+## 12. 기본 모델 교체·음력 공휴일 표 연장·Docker 배포 (2026-11-06 오후)
+
+**사용자 결정**
+
+- 기본값 교체를 승인했다. 단, 2025년 이후 실측 비교에서 ar_gbm이 이길 때만 바꾼다.
+- 음력 공휴일 표를 공식 날짜로 늘린다.
+- Docker로 배포한다. API 컨테이너만 띄운다.
+- 루트 `pytest` 실패를 해결한다. 실패 파일은 지운다.
+
+**2025년 실측 확보**
+
+- 출처: 공공데이터포털 15133498 「한국전력거래소_지역별 시간대별 전력거래량」 2025년판(`_20251231.csv`, 2026-06-30 등록, 원본 sha256 `18c2e07f…`). 다음 갱신은 2027-07-16 예정이다.
+- 학습 원본(`data/raw/jeju_hourly_power_2013_2024.csv`)과 같은 계열이다.
+  - 2013~2016년 값은 KPX 「제주발전기 연료원 시간대별 전력거래량」(15161308)의 연료 합계와 정확히 같다.
+  - 2017~2024년은 반올림과 정산 수정 차이만 있다(최대 1.6%).
+  - 2025년판 세 파일(15133498, 15161044, 15161308)은 서로 정확히 같다.
+- `tools/fetch_kpx_jeju_trade.py`로 받아 `data/raw/jeju_hourly_power_2025.csv`에 저장했다. 8,760시간이고 빠진 시각이 없다. `data/raw`는 git이 추적하지 않는다.
+- 2026년 전력거래량은 아직 공개되지 않았다.
+- `data/raw/kpx_jeju_pilot_raw_*.csv`의 jlfd·jlfdRt는 쓸 수 없다. 이 열들은 계통수요 예측값이고, 전력거래량의 약 1.45배이며 상관이 0.55뿐이다.
+
+**2025년 시간외 비교** (`docs/benchmark-2026-11-06/compare_default_2025.py`, 8,760시간)
+
+두 산출물 모두 2025년을 학습에 쓰지 않았다. 각자 서빙 경로로 돌렸다(LSTM은 CPU).
+
+| 모델 | MAPE | MAE | RMSE | R² |
+|---|---|---|---|---|
+| **ar_gbm** (`models/demand_ar_gbm`, 학습 ~2024-06) | **4.67%** | **21.85** | **29.14** | **0.929** |
+| 시간대별 AR (2024-12까지 적합) | 4.78% | 22.40 | 29.79 | 0.925 |
+| ar_gbm 안의 AR (2024-06까지) | 4.79% | 22.44 | 29.84 | 0.925 |
+| ramp7 | 5.16% | 24.13 | 32.02 | 0.914 |
+| demand_only LSTM (`models/production`, 학습 ~2022-12) | 5.22% | 24.41 | 32.66 | 0.910 |
+| persistence (t-1) | 6.16% | 28.72 | 38.42 | 0.876 |
+
+- ar_gbm은 LSTM보다 MAE가 10.5% 낮다(DM −15.39, p < 1e-10). 12개월 모두 ar_gbm의 MAPE가 낮다.
+- 2025년에도 게이트 조건을 모두 통과한다. 세 기준선보다 MAPE·RMSE가 낮고 DM p < 0.05이며, MAE가 AR보다 2.4%, ramp7보다 9.5% 낮다. 12개월 모두 AR보다 낫다.
+- LSTM은 ramp7보다 나빴고(DM +1.34, 유의하지 않음) AR보다는 유의하게 나빴다(DM +11.72).
+- 공휴일 336시간: ar_gbm 4.45%, LSTM 4.58%, AR 4.50%.
+- 주의: 2025년은 2024년보다 예측이 어렵다(persistence 6.16% 대 5.40%). 또 두 산출물은 학습 기간이 다르다. ar_gbm이 18개월 더 최근까지 배웠으므로, 이 표는 운영 중인 산출물끼리 비교한 결과다.
+
+**기본값 교체 (API)**
+
+- `DEFAULT_MODEL`을 `conditional`에서 `ar_gbm`으로 바꿨다(`api/config.py`).
+  - 환경변수 값의 공백은 지운다.
+  - 모델 타입이 아닌 값이면 API가 시작하지 않는다.
+- 요청의 `model_type`은 선택 항목이 됐다. 생략하면 서버 기본값을 쓴다.
+  - 전에는 생략 요청이 `demand_only`를 쓰면서 `/models`는 `conditional`을 표시해, 둘이 서로 달랐다.
+- 대체 규칙: 생략 요청인데 ar_gbm을 불러오지 못했거나 이력이 337시간보다 짧으면 `demand_only`로 예측한다.
+  - `model_used`에 `demand_only (fallback: history < 337h)` 또는 `(fallback: ar_gbm unavailable)`을 붙인다.
+  - demand_only도 336시간(시차 warm-up 168시간 + 입력 창 168시간)이 필요하다. 그래서 이력 부족 대체는 정확히 336시간인 요청만 살리고, 336시간 미만은 모델과 관계없이 400이다.
+  - ar_gbm을 명시한 요청은 대체하지 않는다(503, 400 그대로).
+- `/models`의 `default_model`은 실제로 쓰는 모델을 보인다.
+- 응답 `timestamp` 설명은 "마지막 입력 시각(예측 대상은 1시간 뒤)"으로 고쳤다. 11절에서 남긴 문서화 과제다.
+- 저장소 안의 클라이언트(대시보드, 예제)는 모두 `model_type`을 명시하므로 이 변경의 영향을 받지 않는다.
+- 되돌리기: 저장소 루트 `.env`에 `DEFAULT_MODEL=demand_only`를 넣는다. 그다음 배포별로 반영한다.
+  - launchd(:8001): `launchctl kickstart -k gui/$(id -u)/com.powerdemand.api`
+  - Docker(:8506): `docker compose -f docker/docker-compose.v7.yml up -d --force-recreate --wait api`. `docker restart`는 `env_file`을 다시 읽지 않는다.
+  - 두 곳 모두 `GET /models`의 `default_model`이 `demand_only`인지 확인한다.
+
+**음력 공휴일 표 2026·2027 추가** (`src/features/time_features.py`)
+
+- 2026년: 설 2/16~18, 부처님오신날 5/24, 추석 9/24~26
+- 2027년: 설 2/6~8, 부처님오신날 5/13, 추석 9/14~16
+- 근거는 우주항공청 월력요항이다(2026년판은 2025-06-30, 2027년판은 2026-06-29 발표). 다른 조사자가 KASI 음양력 변환과 천문 계산으로 다시 확인했다.
+- 학습 데이터와 같은 기준을 지키려고 대체공휴일·선거일·임시공휴일은 넣지 않았다.
+- 2028년은 아직 월력요항이 나오지 않아(2027년 6월 예정) 넣지 않았다.
+- 표에 없어 지금도 평일로 들어가는 2026년 공휴일:
+  - 대체공휴일 3/2, 5/25, 8/17, 10/5
+  - 지방선거 6/3
+  - 2026년부터 공휴일이 된 노동절 5/1과 제헌절 7/17
+  - 이 날들을 넣으려면 과거 연도까지 기준을 바꾸고 두 모델을 다시 학습·평가해야 한다.
+
+**Docker 배포 (API 컨테이너만)**
+
+- `docker/Dockerfile.api`는 이제 `requirements.txt` 대신 `requirements-docker.txt`를 설치한다. `requirements.txt`는 CUDA torch까지 받아 약 3.5 GB가 된다.
+- `requirements-docker.txt`는 서빙을 검증한 호스트 버전으로 고정했다.
+  - pandas 2.3.3: pandas 3에서는 시간대별 AR의 1시간 간격 검사가 실패해 ar_gbm 예측이 모두 400이 된다.
+  - numpy 2.3.5, scipy 1.16.3, joblib 1.5.2, torch 2.9.1(CPU)
+  - fastapi 0.124.4, uvicorn 0.38.0, pydantic 2.12.5, pydantic-settings 2.12.0, pyarrow 22.0.0
+  - 크롤러용으로 selenium과 Pillow를 추가했다.
+- `requirements.txt`에도 `pandas<3`을 넣었다. 개발·CI 환경에서 같은 오류를 막는다.
+- `docker/docker-compose.v7.yml`의 api 서비스:
+  - 수요 모델 세 개를 읽기 전용으로 마운트한다: `models/production`, `models/demand_ar_gbm`, 일일 모델 `v18_bilstm_btm.pt`.
+  - 메모리 상한은 1 GB다. Colima VM이 2 GB이고 다른 컨테이너 5개가 돌고 있기 때문이다.
+- 배포: `docker compose -f docker/docker-compose.v7.yml up -d --build --wait api`. 컨테이너 `rebms-api`가 포트 8506에서 2026-11-06 16:14에 처음 시작했고, 독립 검토를 반영한 뒤 16:51에 다시 만들었다. 웹 컨테이너는 띄우지 않았다.
+- 검증:
+  - 컨테이너 버전: Python 3.11.18, numpy 2.3.5, pandas 2.3.3, scikit-learn 1.7.2, torch 2.9.1+cpu
+  - `/health`: models_loaded true, device cpu
+  - `/models`: 기본값 ar_gbm, 공휴일 표 2027년까지
+  - 같은 입력(2025-12-31 23시까지 400시간)에 대해 컨테이너와 운영 API의 값이 같다: ar_gbm 539.88, demand_only 569.59, 336시간 생략 요청은 demand_only로 대체
+  - 메모리 482 MiB
+  - 일일 모델도 불러왔다.
+
+**운영 API 재시작** (launchd, 127.0.0.1:8001, 2026-11-06 16:13, 검토 반영 후 16:51에 다시)
+
+- `/models`: 기본값 ar_gbm, 공휴일 표 2027년까지
+- `model_type`을 생략한 400시간 요청은 ar_gbm 539.88이다. 같은 이력으로 로컬 예측기를 돌린 값과 같다. 2026-01-01 0시가 대상이다.
+- 336시간 생략 요청은 `demand_only (fallback: history < 337h)` 569.59다.
+- ar_gbm을 명시한 336시간 요청은 400이다.
+- 생략 배치 요청은 ar_gbm이 처리한다.
+
+**테스트**
+
+- `tools/crawlers/test_jeju_crawlers.py`를 지웠다(사용자 승인).
+  - 실패는 1건이 아니라 3건이었다: `test_air_crawler`, `test_ferry_crawler`, `test_data_collection_single`.
+  - 의도적으로 지운 크롤러를 부르는 수동 점검 스크립트였고, 2025-12-15 기록에 이미 삭제로 결정돼 있었다.
+- 테스트 9건을 추가했다.
+  - 기본값 해석, 대체 규칙, 설정 검사, 요청 스키마, `/models`, 대체된 배치 응답 표시
+  - 2026·2027 공휴일과 표의 마지막 해
+- 기존 LSTM 회귀 테스트는 `model_type="demand_only"`를 명시해 계속 LSTM 경로를 검사한다.
+- 저장소 루트 `pytest`: 2271 passed, 3 skipped, 실패 0. 전에는 3건이 실패했다.
+
+**독립 검토** (검토자 4명, 지적마다 반박 검증 1명)
+
+지적 9건이 모두 재현됐고 모두 고쳤다.
+
+- `.env.example`이 `DEFAULT_MODEL=conditional`이었다. README대로 복사하면 생략 요청이 ar_gbm이 아닌 conditional로 갔다 → `ar_gbm`으로 바꿨다.
+- 문서의 2025년 MAPE를 두 번 반올림했다 → ar_gbm 4.68% → 4.67%, 시간대별 AR 4.79% → 4.78%.
+- 설정 검사가 ModelType 멤버를 거부했다(`str()`이 `'ModelType.AR_GBM'`) → 값을 꺼내 검사하고 시험을 더했다.
+- 일일 모델 파일은 git이 추적하지 않는다. 파일이 없으면 Docker가 같은 이름의 빈 폴더를 만들 수 있었다 → `create_host_path: false`로 막았다.
+- 문서 표현 세 가지를 고쳤다.
+  - 대체는 336시간 요청에만 해당한다. 336시간 미만은 400이다.
+  - Docker에서 되돌리려면 `--force-recreate`가 필요하다.
+  - 세션 복구 안내의 Docker 명령과 포트를 고쳤다.
+- 고친 뒤 루트 `pytest`는 2271 passed, 3 skipped다. 두 API를 다시 띄워 같은 값을 확인했다: ar_gbm 539.88, demand_only 569.59, 336시간 대체, 335시간 400.
+
+**11절의 남은 한계 처리**
+
+| 11절 항목 | 처리 |
+|---|---|
+| 음력 공휴일 표가 2025년까지 | 2027년까지 늘렸다. 대체공휴일 등은 여전히 빠져 있다 |
+| Docker 이미지·마운트 | 다시 빌드하고 마운트를 추가해 배포했다 |
+| 2025~2026년 성능 미확인 | 2025년은 확인했다(위 표). 2026년 실측은 2027-07에 공개될 예정이다 |
+| 응답 시각 계약 문서화 | 스키마와 API 문서에 반영했다 |
+
+**새로 확인한 한계** (이번에 고치지 않음)
+
+- Streamlit 대시보드(`src/dashboard/app.py`, `app_v1.py`)는 이번 변경 전부터 예측이 되지 않는다.
+  - 168·200시간만 보내 LSTM에 필요한 336시간에 못 미치므로 모든 요청이 400이다.
+  - 주소는 다른 프로젝트가 쓰는 `localhost:8000`으로 고정돼 있다. ar_gbm 선택지도 없다.
+- `scripts/test_air_crawler.py`는 루트 `pytest`가 수집한다. 실제 API 키로 외부 호출을 하고 키 일부를 출력한다. 실패하지는 않는다.
+- 컨테이너 상태 검사(`/api/v1/health`)는 모델을 불러오지 못해도 healthy다. 모델 상태는 `/health`의 `models_loaded`로 확인해야 한다.
+
+**재현**
+
+```bash
+.venv/bin/python tools/fetch_kpx_jeju_trade.py                       # 2025년 실측 내려받기
+.venv/bin/python docs/benchmark-2026-11-06/compare_default_2025.py    # 2025년 비교 (CPU, 약 1분)
+docker compose -f docker/docker-compose.v7.yml up -d --build --wait api
+```

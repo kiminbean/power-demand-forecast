@@ -66,11 +66,12 @@ class PredictionRequest(BaseModel):
     data: List[TimeSeriesData] = Field(
         ...,
         min_length=168,
-        description="시계열 데이터 (최소 168시간 = 7일)"
+        description="시계열 데이터 (예측에는 ar_gbm 337시간, LSTM 336시간 이상이 필요하다)"
     )
-    model_type: ModelType = Field(
-        default=ModelType.DEMAND_ONLY,
-        description="사용할 모델 타입"
+    model_type: Optional[ModelType] = Field(
+        default=None,
+        description="사용할 모델 타입. 생략하면 서버 기본값(DEFAULT_MODEL, 현재 ar_gbm)을 쓰고, "
+                    "ar_gbm을 쓸 수 없으면 demand_only로 대체한다"
     )
 
     @field_validator('data')
@@ -111,11 +112,12 @@ class BatchPredictionRequest(BaseModel):
     data: List[TimeSeriesData] = Field(
         ...,
         min_length=168,
-        description="시계열 데이터"
+        description="시계열 데이터 (예측에는 ar_gbm 337시간, LSTM 336시간 이상이 필요하다)"
     )
-    model_type: ModelType = Field(
-        default=ModelType.DEMAND_ONLY,
-        description="사용할 모델 타입"
+    model_type: Optional[ModelType] = Field(
+        default=None,
+        description="사용할 모델 타입. 생략하면 서버 기본값(DEFAULT_MODEL, 현재 ar_gbm)을 쓰고, "
+                    "ar_gbm을 쓸 수 없으면 demand_only로 대체한다"
     )
     step: int = Field(
         default=1,
@@ -136,7 +138,7 @@ class PredictionResponse(BaseModel):
     success: bool = Field(..., description="요청 성공 여부")
     prediction: float = Field(..., description="예측 전력 수요 (MW)")
     model_used: str = Field(..., description="사용된 모델")
-    timestamp: datetime = Field(..., description="예측 대상 시간")
+    timestamp: datetime = Field(..., description="마지막 입력 시각 (예측 대상은 그 1시간 뒤)")
     processing_time_ms: float = Field(..., description="처리 시간 (밀리초)")
 
 
@@ -147,7 +149,7 @@ class ConditionalPredictionResponse(BaseModel):
     success: bool = Field(..., description="요청 성공 여부")
     prediction: float = Field(..., description="예측 전력 수요 (MW)")
     model_used: str = Field(..., description="사용된 모델/모드")
-    timestamp: datetime = Field(..., description="예측 대상 시간")
+    timestamp: datetime = Field(..., description="마지막 입력 시각 (예측 대상은 그 1시간 뒤)")
     context: Dict = Field(..., description="예측 컨텍스트 정보")
     processing_time_ms: float = Field(..., description="처리 시간 (밀리초)")
 
@@ -208,7 +210,7 @@ class ModelInfoResponse(BaseModel):
                         "status": "loaded"
                     }
                 ],
-                "default_model": "conditional"
+                "default_model": "ar_gbm"
             }
         }
 

@@ -1,0 +1,284 @@
+{
+ "test": [
+  "2025-01-01 00:00:00",
+  "2025-12-31 23:00:00",
+  8760
+ ],
+ "data": {
+  "files": [
+   "data/raw/jeju_hourly_power_2013_2024.csv",
+   "data/raw/jeju_hourly_power_2025.csv"
+  ],
+  "sha256_2025": "df13e7b781463fb45c021f72d49547aa0982ad89a3e1e4bf7517e46586be4e0e",
+  "source": "data.go.kr 15133498 한국전력거래소_지역별 시간대별 전력거래량_20251231 (제주도)"
+ },
+ "metrics": {
+  "ar_gbm": {
+   "n": 8760,
+   "MAPE": 4.6748,
+   "MAE": 21.851,
+   "RMSE": 29.138,
+   "R2": 0.9286,
+   "bias": -0.074
+  },
+  "demand_only": {
+   "n": 8760,
+   "MAPE": 5.2171,
+   "MAE": 24.414,
+   "RMSE": 32.662,
+   "R2": 0.9102,
+   "bias": 0.4
+  },
+  "persistence": {
+   "n": 8760,
+   "MAPE": 6.1605,
+   "MAE": 28.724,
+   "RMSE": 38.423,
+   "R2": 0.8758,
+   "bias": -0.007
+  },
+  "ramp7": {
+   "n": 8760,
+   "MAPE": 5.156,
+   "MAE": 24.132,
+   "RMSE": 32.024,
+   "R2": 0.9137,
+   "bias": -0.009
+  },
+  "hourly_ar": {
+   "n": 8760,
+   "MAPE": 4.7846,
+   "MAE": 22.396,
+   "RMSE": 29.794,
+   "R2": 0.9253,
+   "bias": -0.164
+  },
+  "artifact_ar": {
+   "n": 8760,
+   "MAPE": 4.7923,
+   "MAE": 22.436,
+   "RMSE": 29.842,
+   "R2": 0.9251,
+   "bias": -0.232
+  }
+ },
+ "dm": {
+  "ar_gbm_vs_demand_only": {
+   "mean_diff": -2.562834,
+   "stat": -15.388162,
+   "p_a_better": 0.0
+  },
+  "ar_gbm_vs_persistence": {
+   "mean_diff": -6.872907,
+   "stat": -25.264599,
+   "p_a_better": 0.0
+  },
+  "ar_gbm_vs_ramp7": {
+   "mean_diff": -2.280976,
+   "stat": -15.222577,
+   "p_a_better": 0.0
+  },
+  "ar_gbm_vs_hourly_ar": {
+   "mean_diff": -0.544549,
+   "stat": -8.4828,
+   "p_a_better": 0.0
+  },
+  "ar_gbm_vs_artifact_ar": {
+   "mean_diff": -0.585017,
+   "stat": -9.105386,
+   "p_a_better": 0.0
+  },
+  "demand_only_vs_persistence": {
+   "mean_diff": -4.310073,
+   "stat": -30.849645,
+   "p_a_better": 0.0
+  },
+  "demand_only_vs_ramp7": {
+   "mean_diff": 0.281858,
+   "stat": 1.338833,
+   "p_a_better": 0.909687
+  },
+  "demand_only_vs_hourly_ar": {
+   "mean_diff": 2.018285,
+   "stat": 11.717614,
+   "p_a_better": 1.0
+  },
+  "demand_only_vs_artifact_ar": {
+   "mean_diff": 1.977817,
+   "stat": 11.703898,
+   "p_a_better": 1.0
+  }
+ },
+ "holiday_hours": {
+  "n": 336,
+  "ar_gbm": {
+   "n": 336,
+   "MAPE": 4.4528,
+   "MAE": 19.316,
+   "RMSE": 25.674,
+   "R2": 0.9108,
+   "bias": -0.317
+  },
+  "demand_only": {
+   "n": 336,
+   "MAPE": 4.5843,
+   "MAE": 19.815,
+   "RMSE": 26.258,
+   "R2": 0.9066,
+   "bias": 0.41
+  },
+  "persistence": {
+   "n": 336,
+   "MAPE": 5.213,
+   "MAE": 22.476,
+   "RMSE": 30.402,
+   "R2": 0.8748,
+   "bias": 0.383
+  },
+  "ramp7": {
+   "n": 336,
+   "MAPE": 4.7957,
+   "MAE": 20.89,
+   "RMSE": 27.826,
+   "R2": 0.8952,
+   "bias": 0.492
+  },
+  "hourly_ar": {
+   "n": 336,
+   "MAPE": 4.5025,
+   "MAE": 19.542,
+   "RMSE": 26.069,
+   "R2": 0.908,
+   "bias": 0.643
+  },
+  "artifact_ar": {
+   "n": 336,
+   "MAPE": 4.5033,
+   "MAE": 19.526,
+   "RMSE": 26.047,
+   "R2": 0.9081,
+   "bias": 0.546
+  }
+ },
+ "monthly_mape": {
+  "01": {
+   "ar_gbm": 3.6278,
+   "demand_only": 3.8917,
+   "persistence": 4.5812,
+   "ramp7": 3.9674,
+   "hourly_ar": 3.7161,
+   "artifact_ar": 3.7106
+  },
+  "02": {
+   "ar_gbm": 3.6263,
+   "demand_only": 3.8078,
+   "persistence": 4.4201,
+   "ramp7": 3.9572,
+   "hourly_ar": 3.7135,
+   "artifact_ar": 3.7131
+  },
+  "03": {
+   "ar_gbm": 4.8502,
+   "demand_only": 5.2205,
+   "persistence": 5.8243,
+   "ramp7": 5.5825,
+   "hourly_ar": 5.0408,
+   "artifact_ar": 5.0357
+  },
+  "04": {
+   "ar_gbm": 5.2012,
+   "demand_only": 5.4128,
+   "persistence": 5.8497,
+   "ramp7": 5.6439,
+   "hourly_ar": 5.2273,
+   "artifact_ar": 5.2239
+  },
+  "05": {
+   "ar_gbm": 5.704,
+   "demand_only": 6.0189,
+   "persistence": 6.7118,
+   "ramp7": 6.325,
+   "hourly_ar": 5.8327,
+   "artifact_ar": 5.8376
+  },
+  "06": {
+   "ar_gbm": 4.5565,
+   "demand_only": 5.1551,
+   "persistence": 6.0946,
+   "ramp7": 5.1181,
+   "hourly_ar": 4.7019,
+   "artifact_ar": 4.7244
+  },
+  "07": {
+   "ar_gbm": 4.4111,
+   "demand_only": 5.5651,
+   "persistence": 6.8436,
+   "ramp7": 4.9999,
+   "hourly_ar": 4.6054,
+   "artifact_ar": 4.6321
+  },
+  "08": {
+   "ar_gbm": 4.2877,
+   "demand_only": 5.4943,
+   "persistence": 7.2869,
+   "ramp7": 4.7846,
+   "hourly_ar": 4.4138,
+   "artifact_ar": 4.4573
+  },
+  "09": {
+   "ar_gbm": 4.9884,
+   "demand_only": 5.6465,
+   "persistence": 7.0525,
+   "ramp7": 5.3896,
+   "hourly_ar": 5.0414,
+   "artifact_ar": 5.0569
+  },
+  "10": {
+   "ar_gbm": 5.4058,
+   "demand_only": 6.0459,
+   "persistence": 7.1724,
+   "ramp7": 5.7828,
+   "hourly_ar": 5.5079,
+   "artifact_ar": 5.5117
+  },
+  "11": {
+   "ar_gbm": 4.7828,
+   "demand_only": 5.2741,
+   "persistence": 6.2355,
+   "ramp7": 5.2892,
+   "hourly_ar": 4.7945,
+   "artifact_ar": 4.7843
+  },
+  "12": {
+   "ar_gbm": 4.581,
+   "demand_only": 4.9554,
+   "persistence": 5.7039,
+   "ramp7": 4.9423,
+   "hourly_ar": 4.737,
+   "artifact_ar": 4.736
+  }
+ },
+ "ar_gbm_vs_baselines": {
+  "persistence": {
+   "beats_mape_rmse": true,
+   "dm_p": 0.0,
+   "mae_gain": 0.2393
+  },
+  "ramp7": {
+   "beats_mape_rmse": true,
+   "dm_p": 0.0,
+   "mae_gain": 0.0945
+  },
+  "hourly_ar": {
+   "beats_mape_rmse": true,
+   "dm_p": 0.0,
+   "mae_gain": 0.0243
+  }
+ },
+ "decision": {
+  "switch_default_to_ar_gbm": true,
+  "mae_gain_vs_demand_only": 0.105,
+  "material": true,
+  "rule": "ar_gbm MAPE and RMSE below demand_only, DM one-sided p < 0.05"
+ }
+}

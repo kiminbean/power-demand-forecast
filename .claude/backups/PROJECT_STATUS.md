@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-06 (Demand retrain on raw target + AR combination experiments)
+> Last Updated: 2026-11-06 (Default model switched to ar_gbm, holiday table to 2027, Docker API deployed)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -11,6 +11,23 @@
 ---
 
 ## Current Session (2026-11-06)
+
+### Task: Default switch to ar_gbm + holiday table 2026-2027 + Docker API + root test fix ✅ COMPLETE
+
+- 사용자 결정: 기본값 교체 승인(2025 실측에서 이길 때만), 공휴일 표 공식 날짜로 연장, Docker는 API 컨테이너만, 실패 테스트 파일 삭제
+- 2025 실측: tools/fetch_kpx_jeju_trade.py → data/raw/jeju_hourly_power_2025.csv (data.go.kr 15133498, 8,760시간, 학습 원본과 같은 계열 확인)
+- 2025 시간외 비교(docs/benchmark-2026-11-06/compare_default_2025.py): ar_gbm 4.67% / R² 0.929, LSTM demand_only 5.22% / 0.910, AR 4.78%, ramp7 5.16%, persistence 6.16%. ar_gbm vs LSTM MAE −10.5%, DM −15.39, 12/12개월 우위
+- API: DEFAULT_MODEL=ar_gbm(검증·strip), model_type Optional(생략=기본값), ar_gbm 불가·337h 미만이면 demand_only 대체 + model_used 표시(demand_only도 336h가 필요해 336h 미만은 400), /models는 실제 기본값
+- 공휴일: LUNAR_HOLIDAYS 2026·2027 추가(월력요항, 독립 검증). 대체공휴일·선거일·노동절·제헌절은 학습 기준대로 제외
+- Docker: Dockerfile.api → requirements-docker.txt, 버전 고정(pandas 2.3.3 등), compose v7 api에 수요 모델 마운트·mem_limit 1g. rebms-api :8506 운영 중(482 MiB), 운영 API와 값 동일
+- 테스트: tools/crawlers/test_jeju_crawlers.py 삭제(실패 3건), 새 테스트 9건, 루트 pytest 2271 passed / 3 skipped / 실패 0
+- 운영 API(launchd :8001) 16:13 재시작: 생략 요청 ar_gbm 539.88 = 로컬, 336h 요청은 demand_only 대체
+- 보고서: docs/2026-11-06-demand-retrain-raw-target.md 12절
+
+### Next Steps (after default switch)
+- 2026년 실측 공개(2027-07-16 예정) 뒤 같은 비교 재실행, 필요하면 ar_gbm을 2025년까지 포함해 재학습
+- 대체공휴일·선거일·노동절·제헌절 반영은 과거 연도 기준 변경 + 재학습·게이트가 필요(별도 결정)
+- Streamlit 대시보드는 168·200시간만 보내 이미 모든 예측이 400(별도 수정 필요), scripts/test_air_crawler.py는 실제 키로 외부 호출
 
 ### Task: Demand model improvement (raw target, AR/ramp7 gate, AR + correction) ✅ EXPERIMENTS COMPLETE · production unchanged
 
@@ -34,10 +51,9 @@
 - 한계: 음력 공휴일 표 2025년까지(2026년 설·추석 누락, LSTM도 동일), Docker 미빌드·compose 마운트 없음
 - 운영 API(launchd com.powerdemand.api, :8001) 2026-11-06 12:45 재시작 → /models에 ar_gbm, 실제 /predict ar_gbm 520.74 = 학습 경로, demand_only 525.65, 기본값 LSTM 유지
 
-### Next Steps (demand)
-- 사용자 결정 대기: 운영 기본값을 ar_gbm으로 바꿀지 (그 전에 2025~2026 데이터로 그림자 평가 권장)
-- 음력 공휴일 표 2026년 이후 추가(공식 자료로 날짜 확인 필요)
-- 운영 교체는 반드시 사용자 확인 후
+### Next Steps (demand) — 2026-11-06 오후 처리됨 (위 "Default switch" 참고)
+- ~~운영 기본값을 ar_gbm으로 바꿀지~~ → 2025 실측 비교 후 교체 완료
+- ~~음력 공휴일 표 2026년 이후 추가~~ → 2027년까지 추가
 
 ### Task: Competitor benchmark (MAPE/R² vs operators, companies, papers) ✅ COMPLETE
 
@@ -377,11 +393,11 @@ web-v7/src/hooks/useApi.ts          - API hooks
 For next session:
 1. Read `.claude/backups/PROJECT_STATUS.md`
 2. Run `git log --oneline -10`
-3. **DOCKER**: `docker compose -f docker/docker-compose.v7.yml up -d --build`
-4. **DASHBOARDS**:
+3. **DOCKER**: `docker compose -f docker/docker-compose.v7.yml up -d --build --wait api` (API only: rebms-api on localhost:8506; the launchd API runs on 127.0.0.1:8001)
+4. **DASHBOARDS** (not deployed as of 2026-11-06; start with `up -d --build web-v7 web-v6 mobile` only if needed):
    - ExecO Dashboard: http://localhost:8700
    - Bidding Dashboard: http://localhost:8600
-   - Mobile App: http://localhost:3001
+   - Mobile App: http://localhost:8601
 5. **API KEY**: `DATA_GO_KR_API_KEY=7d42f7c08...` (set in .env or Docker environment)
 6. **BEST MODEL**: v3.12 CatBoost CV (R² 0.834, MAPE 5.25%)
 7. **ALL APIS CONNECTED**: SMP (제주시범사업), Weather (KMA), Power (Crawler)

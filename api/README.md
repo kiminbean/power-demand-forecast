@@ -74,8 +74,7 @@ curl http://localhost:8000/health
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "data": [...],  // 168개 이상의 시계열 데이터
-    "model_type": "demand_only"
+    "data": [...]  // 337개 이상의 시계열 데이터 (LSTM 모델은 336개 이상)
   }'
 ```
 
@@ -83,11 +82,15 @@ curl -X POST http://localhost:8000/predict \
 {
     "success": true,
     "prediction": 875.32,
-    "model_used": "demand_only",
+    "model_used": "ar_gbm",
     "timestamp": "2024-01-15T15:00:00",
     "processing_time_ms": 45.2
 }
 ```
+
+- `model_type`을 생략하면 서버 기본값(`DEFAULT_MODEL`, 기본 `ar_gbm`)을 쓴다. 기본값 ar_gbm을 불러오지 못했거나 이력이 337시간보다 짧으면 `demand_only`로 대체하고 `model_used`를 `"demand_only (fallback: history < 337h)"`처럼 표시한다. demand_only도 336시간이 필요하므로 336시간 미만은 400이다.
+- `model_type`을 명시하면 대체하지 않는다. ar_gbm 산출물이 없으면 503, 이력이 짧으면 400이다.
+- `timestamp`는 마지막 입력 시각이고, 예측 대상은 그 1시간 뒤다.
 
 ### 조건부 예측
 
@@ -168,9 +171,10 @@ curl -X POST http://localhost:8000/predict/batch \
 
 | Type | Description |
 |------|-------------|
-| `demand_only` | 전력 수요 데이터만 사용 |
-| `weather_full` | 기상 데이터 포함 |
-| `conditional` | 겨울철 자동 최적화 (권장) |
+| `ar_gbm` | 시간대별 선형 AR + GBM 잔차 보정, 337시간 이력 필요 (기본값. 2025년 시간외 MAPE 4.67%, LSTM 5.22%) |
+| `demand_only` | LSTM, 전력 수요 데이터만 사용 (336시간 이력 필요) |
+| `weather_full` | LSTM, 기상 데이터 포함 |
+| `conditional` | LSTM, 겨울철에 weather_full을 섞는다 |
 
 ## 환경 설정
 
@@ -189,6 +193,8 @@ cp .env.example .env
 | `DEBUG` | false | 디버그 모드 |
 | `LOG_LEVEL` | INFO | 로그 레벨 |
 | `MODEL_DIR` | ./models/production | 모델 디렉토리 |
+| `AR_GBM_MODEL_DIR` | ./models/demand_ar_gbm | AR + GBM 산출물 디렉토리 |
+| `DEFAULT_MODEL` | ar_gbm | `model_type`을 생략한 요청의 모델. 모델 타입이 아니면 시작하지 않는다 (되돌리기: `demand_only`) |
 | `CORS_ORIGINS` | * | CORS 허용 오리진 |
 
 ## 테스트

@@ -83,6 +83,7 @@ def mock_service(mock_predictor):
                 "status": "loaded"
             }
         ]
+        service.default_model_name.return_value = "ar_gbm"
 
         mock_get_service.return_value = service
         yield service
@@ -172,7 +173,7 @@ class TestModelsEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "models" in data
-        assert "default_model" in data
+        assert data["default_model"] == "ar_gbm"
         assert len(data["models"]) > 0
 
     def test_get_models_service_unavailable(self, client, mock_service):

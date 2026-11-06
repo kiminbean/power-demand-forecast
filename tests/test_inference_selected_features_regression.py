@@ -132,7 +132,7 @@ def test_direct_and_api_single_and_batch_ignore_unused_missing_columns(configure
                for i, (ts, value) in enumerate(frame["power_demand"].items())]
     assert configured_predictor.predict_demand_only(frame) == service._run_prediction(frame, "demand_only")
     direct = configured_predictor.predict_batch(frame, step=24)
-    api = service.predict_batch(records, step=24)
+    api = service.predict_batch(records, model_type=ModelType.DEMAND_ONLY, step=24)
     assert direct.predictions.tolist() == [item["prediction"] for item in api.predictions]
 
 

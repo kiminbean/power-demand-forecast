@@ -305,7 +305,8 @@ async def get_models(service: PredictionService = Depends(get_service)):
     """모델 정보 조회"""
     return ModelInfoResponse(
         models=service.get_model_info(),
-        default_model=settings.DEFAULT_MODEL
+        # 기본값 ar_gbm을 불러오지 못했으면 실제로 쓰는 대체 모델을 알린다
+        default_model=service.default_model_name()
     )
 
 
@@ -330,9 +331,12 @@ async def predict(
     """
     단일 예측 엔드포인트
 
-    - **data**: 시계열 데이터 (최소 168개 = 7일)
-    - **model_type**: 사용할 모델 (demand_only, weather_full, conditional, ar_gbm)
-      - ar_gbm은 최소 337시간 이력이 필요하다
+    - **data**: 시계열 데이터 (ar_gbm은 337시간, LSTM은 336시간 이상 필요)
+    - **model_type**: 사용할 모델 (ar_gbm, demand_only, weather_full, conditional)
+      - 생략하면 서버 기본값(DEFAULT_MODEL, 현재 ar_gbm)을 쓴다. ar_gbm을 쓸 수 없거나
+        이력이 337시간보다 짧으면 demand_only로 대체하고 model_used에 이유를 붙인다
+        (demand_only도 336시간이 필요하므로 336시간 미만은 400)
+    - 응답 timestamp는 마지막 입력 시각이고, 예측 대상은 그 1시간 뒤다
     """
     try:
         result = service.predict(
@@ -405,7 +409,8 @@ async def predict_batch(
     슬라이딩 윈도우 방식으로 여러 시점의 예측을 한 번에 수행합니다.
 
     - **data**: 시계열 데이터
-    - **model_type**: 사용할 모델 (ar_gbm은 최소 337시간 이력이 필요하다)
+    - **model_type**: 사용할 모델. 생략하면 서버 기본값(현재 ar_gbm, 최소 337시간)을 쓰고,
+      쓸 수 없으면 demand_only로 대체한다
     - **step**: 슬라이딩 윈도우 스텝 (1-24)
     """
     try:

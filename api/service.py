@@ -39,6 +39,9 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# 서버 기본값(ar_gbm)을 쓸 수 없는 생략 요청은 교체 전 생략 요청이 받던 LSTM으로 예측한다
+DEFAULT_FALLBACK_MODEL = ModelType.DEMAND_ONLY
+
 
 class ModelNotLoadedError(RuntimeError):
     """요청한 선택형 모델의 산출물이 로드되지 않았다 (API는 503으로 응답)."""
@@ -102,6 +105,33 @@ class PredictionService:
             reason = f": {self._ar_gbm_error}" if settings.DEBUG and self._ar_gbm_error else ""
             raise ModelNotLoadedError(f"Model 'ar_gbm' is not available{reason}")
         return self.ar_gbm
+
+    def resolve_model_type(self, model_type: Optional[ModelType],
+                           n_rows: int) -> Tuple[ModelType, Optional[str]]:
+        """실제로 쓸 모델과, 서버 기본값을 대체했다면 그 이유를 돌려준다.
+
+        명시한 model_type은 그대로 쓴다 (ar_gbm을 명시했는데 못 쓰면 503·400도 그대로).
+        생략하면 settings.DEFAULT_MODEL을 쓰되, 그것이 ar_gbm인데 산출물이 없거나 이력이
+        최소 시간보다 짧으면 DEFAULT_FALLBACK_MODEL로 바꾼다.
+        """
+        if model_type is not None:
+            return model_type, None
+        default = ModelType(settings.DEFAULT_MODEL)
+        if default != ModelType.AR_GBM:
+            return default, None
+        if self.ar_gbm is None:
+            return DEFAULT_FALLBACK_MODEL, "ar_gbm unavailable"
+        # scikit-learn을 늦게 불러오는 설계를 지키려고 models.ar_gbm 상수 대신 불러온 산출물의 값을 쓴다
+        min_hours = int(self.ar_gbm.model.info['min_history_hours'])
+        if n_rows < min_hours:
+            return DEFAULT_FALLBACK_MODEL, f"history < {min_hours}h"
+        return default, None
+
+    def default_model_name(self) -> str:
+        """/models에 보일 기본 모델. 기본값 ar_gbm을 불러오지 못했으면 실제로 쓰는 대체 모델이다."""
+        if settings.DEFAULT_MODEL == ModelType.AR_GBM.value and self.ar_gbm is None:
+            return DEFAULT_FALLBACK_MODEL.value
+        return settings.DEFAULT_MODEL
 
     def is_ready(self) -> bool:
         """서비스 준비 상태 확인"""
@@ -272,7 +302,7 @@ class PredictionService:
     def predict(
         self,
         data: List[TimeSeriesData],
-        model_type: ModelType = ModelType.DEMAND_ONLY
+        model_type: Optional[ModelType] = None
     ) -> PredictionResponse:
         """
         단일 예측 수행
@@ -280,9 +310,9 @@ class PredictionService:
         Parameters
         ----------
         data : List[TimeSeriesData]
-            시계열 데이터 (최소 168개)
-        model_type : ModelType
-            사용할 모델
+            시계열 데이터 (ar_gbm 337개, LSTM 336개 이상)
+        model_type : ModelType, optional
+            사용할 모델. None이면 서버 기본값 (resolve_model_type)
 
         Returns
         -------
@@ -297,6 +327,7 @@ class PredictionService:
         # Convert to DataFrame
         df = self._convert_to_dataframe(data)
         logger.debug(f"Input data shape: {df.shape}")
+        model_type, fallback = self.resolve_model_type(model_type, len(df))
 
         # Get timestamp
         timestamp = df.index[-1]
@@ -311,7 +342,7 @@ class PredictionService:
         elif model_type == ModelType.AR_GBM:
             prediction = self._require_ar_gbm().forecast_next(df)
             model_used = "ar_gbm"
-        else:
+        elif model_type == ModelType.CONDITIONAL:
             # conditional - blend predictions based on season
             pred_demand = self._run_prediction(df, "demand_only")
             month = timestamp.month
@@ -334,6 +365,11 @@ class PredictionService:
             else:
                 prediction = pred_demand
                 model_used = "demand_only"
+        else:
+            raise ValueError(f"Unknown model_type: {model_type}")
+
+        if fallback:
+            model_used = f"{model_used} (fallback: {fallback})"
 
         processing_time = (time.perf_counter() - start_time) * 1000
 
@@ -426,7 +462,7 @@ class PredictionService:
     def predict_batch(
         self,
         data: List[TimeSeriesData],
-        model_type: ModelType = ModelType.DEMAND_ONLY,
+        model_type: Optional[ModelType] = None,
         step: int = 1
     ) -> BatchPredictionResponse:
         """
@@ -436,8 +472,8 @@ class PredictionService:
         ----------
         data : List[TimeSeriesData]
             시계열 데이터
-        model_type : ModelType
-            사용할 모델
+        model_type : ModelType, optional
+            사용할 모델. None이면 서버 기본값 (resolve_model_type)
         step : int
             슬라이딩 윈도우 스텝
 
@@ -459,6 +495,7 @@ class PredictionService:
 
         # Convert to DataFrame
         df = self._convert_to_dataframe(data)
+        model_type, fallback = self.resolve_model_type(model_type, len(df))
 
         if model_type == ModelType.AR_GBM:
             forecasts = self._require_ar_gbm().forecast(df)
@@ -517,7 +554,8 @@ class PredictionService:
             timestamps_list.append(df_prep.index[i + seq_length - 1])
 
         predictions_array = np.array(predictions_list)
-        return self._batch_response(timestamps_list, predictions_array, model_name, start_time)
+        model_used = f"{model_name} (fallback: {fallback})" if fallback else model_name
+        return self._batch_response(timestamps_list, predictions_array, model_used, start_time)
 
     def _batch_response(
         self,

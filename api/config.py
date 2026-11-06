@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Optional
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .schemas import ModelType
 
 
 class Settings(BaseSettings):
@@ -39,7 +42,9 @@ class Settings(BaseSettings):
     # 모델 설정
     MODEL_DIR: Optional[str] = None
     AR_GBM_MODEL_DIR: Optional[str] = None
-    DEFAULT_MODEL: str = "conditional"
+    # model_type을 생략한 /predict·/predict/batch 요청이 쓰는 모델 (ModelType 값).
+    # 2025년 시간외 비교에서 ar_gbm이 서빙 LSTM보다 정확했다 (docs/2026-11-06-demand-retrain-raw-target.md 12절)
+    DEFAULT_MODEL: str = ModelType.AR_GBM.value
     SEQ_LENGTH: int = 168
 
     # CORS 설정
@@ -59,6 +64,17 @@ class Settings(BaseSettings):
     # 타임아웃 설정
     REQUEST_TIMEOUT: int = 30  # seconds
     PREDICTION_TIMEOUT: int = 60  # seconds
+
+    @field_validator("DEFAULT_MODEL", mode="before")
+    @classmethod
+    def _validate_default_model(cls, value):
+        # 환경변수 끝의 줄바꿈·공백을 지우고, 없는 모델 이름이면 시작할 때 바로 실패한다.
+        # (str, Enum) 멤버의 str()은 'ModelType.AR_GBM'이라 값을 직접 꺼낸다
+        text = (value.value if isinstance(value, ModelType) else str(value)).strip()
+        allowed = sorted(m.value for m in ModelType)
+        if text not in allowed:
+            raise ValueError(f"DEFAULT_MODEL must be one of {allowed}, got {text!r}")
+        return text
 
     @property
     def model_path(self) -> Path:

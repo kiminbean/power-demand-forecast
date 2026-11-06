@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from api.schemas import TimeSeriesData
+from api.schemas import ModelType, TimeSeriesData
 from api.service import PredictionService
 from tests.test_batch_insufficient_history_regression import configured_predictor, frame_for
 
@@ -46,7 +46,7 @@ def run_path(predictor, frame, path: str) -> None:
     elif path == "api_single":
         service._run_prediction(frame, "demand_only")
     else:
-        service.predict_batch(records, step=24)
+        service.predict_batch(records, model_type=ModelType.DEMAND_ONLY, step=24)
 
 
 @pytest.mark.parametrize("path", ["direct_single", "direct_batch", "api_single", "api_batch"])
@@ -90,7 +90,7 @@ def test_nonpositive_batch_step_is_rejected(configured_predictor, path: str, ste
         records = [TimeSeriesData(datetime=ts.to_pydatetime(), power_demand=value)
                    for ts, value in frame["power_demand"].items()]
         with pytest.raises(ValueError, match="(?i)step.*positive"):
-            service.predict_batch(records, step=step)
+            service.predict_batch(records, model_type=ModelType.DEMAND_ONLY, step=step)
 
 
 @pytest.mark.parametrize("path", ["direct_batch", "api_batch"])
@@ -105,7 +105,8 @@ def test_numpy_integer_step_is_accepted(configured_predictor, path: str) -> None
         service._is_initialized = True
         records = [TimeSeriesData(datetime=ts.to_pydatetime(), power_demand=value)
                    for ts, value in frame["power_demand"].items()]
-        assert service.predict_batch(records, step=np.int64(24)).total_predictions > 0
+        assert service.predict_batch(records, model_type=ModelType.DEMAND_ONLY,
+                                     step=np.int64(24)).total_predictions > 0
 
 
 def test_batch_statistics_never_return_nonfinite_values(configured_predictor) -> None:
@@ -117,4 +118,4 @@ def test_batch_statistics_never_return_nonfinite_values(configured_predictor) ->
     records = [TimeSeriesData(datetime=ts.to_pydatetime(), power_demand=value)
                for ts, value in frame["power_demand"].items()]
     with pytest.raises(ValueError, match="(?i)statistics.*finite"):
-        service.predict_batch(records, step=24)
+        service.predict_batch(records, model_type=ModelType.DEMAND_ONLY, step=24)
