@@ -67,6 +67,8 @@ svg{display:block;width:100%;height:auto}
 footer{border-top:2px solid var(--ink);margin-top:70px;padding-top:20px;font-size:13px;color:var(--muted)}
 .ev{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .small{font-size:13px;color:var(--muted)}
+/* 수치·날짜·이름이 줄 끝에서 둘로 갈라지지 않게 묶는다 (짧은 덩어리에만 쓴다: 길면 표가 화면을 넘친다) */
+.nw{white-space:nowrap}
 /* 넓은 화면에서는 근거 경로를 글자 단위로 쪼개지 않는다: 경로 하나가 한 줄이 되고, 여러 개면 · 에서 줄을 바꾼다 */
 /* 출처 표는 설명이 긴 열이 폭을 독차지하지 않게 열 폭을 고정해 나눈다 */
 @media(min-width:861px){.sources{table-layout:fixed}.sources td{overflow-wrap:anywhere}
@@ -394,15 +396,41 @@ td .ev,td code{white-space:nowrap}}
     <tr><td><span class="ev">GET /api/v1/health</span></td><td>서버 생존 확인 (모델 로드 여부는 <span class="ev">GET /health</span>의 models_loaded)</td></tr>
     <tr><td><span class="ev">GET /api/v1/smp-forecast</span></td><td>SMP 예측값 (대시보드 차트 원본)</td></tr>
     <tr><td><span class="ev">GET /api/v1/smp/current · smp/day-ahead</span></td><td>가장 최근에 받은 실시간 시장 SMP(원천이 이틀가량 늦게 공표돼 지금 시각 값은 비어 있음) · 지금 시간의 하루전 시장 SMP</td></tr>
-    <tr><td><span class="ev">GET /api/v1/power-supply · realtime-status</span></td><td>실시간 수급 현황 · 외부 데이터 API 연결 상태</td></tr>
+    <tr><td><span class="ev">GET /api/v1/power-supply · realtime-status</span></td><td>실시간 수급 현황과 24시간 재생에너지 발전량 예측 · 외부 데이터 API 연결 상태</td></tr>
     <tr><td><span class="ev">GET /api/v1/dashboard/kpis · model/info</span></td><td>대시보드 지표·모델 메타데이터</td></tr>
     <tr><td><span class="ev">GET /smp/rtm/predict · /api/v1/bidding/optimized-segments</span></td><td>실시간 시장 1시간 앞 예측(육지 SMP)·입찰 구간 최적화</td></tr>
   </table>
   <p class="small">근거: <span class="ev">~/.local/share/power-demand-public/public_server.py</span>의 API 프록시 화이트리스트 (존재 코드 확인).</p>
 </section>
 
-<section id="honesty">
+<section id="compare">
   <span class="sec-num">05</span>
+  <h2>경쟁 비교 — 다른 곳과 비교하면 어느 수준인가</h2>
+  <div class="rule"></div>
+  <p>운영기관·연구기관·기업·논문이 공개한 예측 정확도 관련 수치·주장 128건을 조사해 원문과 대조했고(검증 107건, 부분 검증 19건, 미검증 2건), 그중 주요 경쟁사를 기간·조건을 가장 가깝게 맞춘 우리 수치와 나란히 놓았습니다. "그들의 수치"는 원문에 적힌 값입니다. 다만 KPX는 제주 예측 정확도를 공개하지 않아서, KPX가 공개한 예측값과 실측값으로 직접 계산했습니다. 태양광은 웹 v6·v7 수급 화면이 부르는 <span class="ev">GET /api/v1/power-supply</span>가 내는 24시간 재생에너지 발전량 예측을 평가했습니다.</p>
+  <div class="warn"><b>수요는 순위를 매길 수 없습니다.</b> 우리 수요 모델은 KPX 제주 <b>전력거래량</b>(전력시장에서 거래된 양)을 1시간 앞 예측합니다. 이 값을 예측한 경쟁사는 찾지 못했고, 경쟁사는 대부분 <b>계통수요</b>(제주 전력망 전체 수요, 거래량의 약 1.5배)를, 나머지도 다른 부하 시리즈를 예측합니다. 같은 단순 선형식(AR)으로 재도 계통수요는 오차 1.05%, 거래량은 3.75%가 나올 만큼 난이도가 다릅니다. 그래서 수요 행은 우리 숫자가 더 낮든 높든 어느 쪽이 낫다는 뜻이 아닙니다. R²(설명력)도 시리즈마다 값의 퍼짐이 달라 서로 비교할 수 없습니다. 반대로 <b>SMP와 태양광</b>에는 같은 시장에서 같은 종류의 값을 예측하는 비교 대상(vpp-capstone·VOLTA, KPX 예측제도 참여자 평균)이 있고, 이들과 비교하면 둘 다 우리가 뒤처집니다.</div>
+  <table>
+    <tr><th>대상</th><th>경쟁사</th><th>무엇을 · 언제</th><th>그들의 수치</th><th>우리 수치 (가장 가깝게 맞춘 기준)</th><th>판정</th></tr>
+    <tr><td>수요</td><td><b>한국전력거래소(KPX)</b> 하루전 예측<br><span class="small">운영기관</span></td><td>제주 계통수요&nbsp;· 하루 앞<br><span class="small">2024년 하반기</span></td><td>MAPE&nbsp;4.67%&nbsp;· R²&nbsp;0.904<br><span class="small">04장의 우리 2025년 4.67%와 우연히 같은 별개 값</span></td><td>ar_gbm&nbsp;3.79%&nbsp;· R²&nbsp;0.963<br><span class="small">같은 기간</span></td><td>판정 불가<br><span class="small">대상·시점 다름</span></td></tr>
+    <tr><td>수요</td><td><b>KPX</b> 실시간 예측<br><span class="small">운영기관</span></td><td>제주 계통수요&nbsp;· 약 15분 앞<br><span class="small">2024년 하반기</span></td><td>MAPE&nbsp;3.21%</td><td>ar_gbm&nbsp;3.79%<br><span class="small">같은 기간</span></td><td>판정 불가<br><span class="small">대상·시점 다름</span></td></tr>
+    <tr><td>수요</td><td><b>한국에너지기술연구원(KIER)</b> GAM(일반화 가법 모형)<br><span class="small">연구기관&nbsp;· 학술지 「신재생에너지」 2025</span></td><td>제주 계통수요&nbsp;· 하루 앞<br><span class="small">실제 관측 기상 사용</span></td><td>MAPE&nbsp;4.4%</td><td>ar_gbm&nbsp;3.63%<br><span class="small nw">2023-07~2024-12</span></td><td>판정 불가<br><span class="small">대상·시점 다름</span></td></tr>
+    <tr><td>수요</td><td><b>박해수</b> 석사논문<br><span class="small">2025&nbsp;· 부분 검증</span></td><td>제주 계통수요&nbsp;· 1시간 앞<br><span class="small">2022년</span></td><td>MAPE&nbsp;1.458%&nbsp;· R²&nbsp;0.968</td><td>ar_gbm&nbsp;3.11%&nbsp;· R²&nbsp;0.957<br><span class="small">같은 해</span></td><td>판정 불가<br><span class="small">대상 다름</span></td></tr>
+    <tr><td>수요</td><td>그 밖의 논문<br><span class="small"><span class="nw">황·황 2025</span>&nbsp;· <span class="nw">Phyo &amp; Byun 2021</span>&nbsp;· <span class="nw">Khan 외 2020~2021</span>&nbsp;· <span class="nw">Moon·Ahn·Lee 2023</span>&nbsp;· <span class="nw">정·길 2025</span></span></td><td>계통수요&nbsp;· 연구진이 재구성한 총부하&nbsp;· 제주시 AMI(스마트 계량기) 소비량<br><span class="small">적합도 평가, test로 설정을 고른 연구 포함</span></td><td>MAPE&nbsp;2.82~4.29%&nbsp;· R²&nbsp;0.941~0.989</td><td>ar_gbm&nbsp;3.63%&nbsp;· R²&nbsp;0.954<br><span class="small"><span class="nw">2023-07~2024-12</span>&nbsp;· 황·황과 같은 2023년은 R²&nbsp;0.943</span></td><td>판정 불가<br><span class="small">대상·조건 다름</span></td></tr>
+    <tr><td>SMP</td><td><b>vpp-capstone</b> LightGBM(GBM 계열)<br><span class="small">공개 GitHub 프로젝트&nbsp;· 자체 보고</span></td><td>제주 하루전 SMP<br><span class="small">2025년&nbsp;· 전날 11시(입찰 마감) 발행</span></td><td>MAE&nbsp;12.44원/kWh</td><td>15.01원/kWh <span class="nw">(같은 해)</span><br><span class="small">지금 서비스 = 전날 같은 시간 가격</span></td><td><b>더 나쁨</b><br><span class="small">그들의 오차가 <span class="nw">17% 작음</span></span></td></tr>
+    <tr><td>SMP</td><td><b>VOLTA</b> (KENTECH 한국에너지공과대학교)<br><span class="small">IEEE PES GM 2026&nbsp;· 부분 검증</span></td><td>제주 하루전 SMP<br><span class="small">2024년</span></td><td>MAE&nbsp;16.02원/kWh</td><td>17.79~22.02원/kWh<br><span class="small">같은 규칙의 기준선 <span class="nw">(두 구간)</span></span></td><td><b>더 나쁨</b><br><span class="small">그들의 오차가 <span class="nw">10~27% 작음</span></span></td></tr>
+    <tr><td>SMP</td><td><b>현대자동차</b> WaveNet(딥러닝)<br><span class="small">부분 검증</span></td><td>SMP&nbsp;· 1~24시간 앞<br><span class="small">2021~2023 (제주 전력시장 시범사업 이전)</span></td><td>MAPE&nbsp;8.7%</td><td>–</td><td>비교 불가<br><span class="small">기간 다름&nbsp;· 기준선 미보고</span></td></tr>
+    <tr><td>태양광</td><td><b>KPX 재생에너지 예측제도</b> 참여자 평균<br><span class="small">발전량 예측을 제출하고 정확도에 따라 정산금을 받는 제도&nbsp;· 전기신문 보도</span></td><td>설비용량(최대 출력) 대비 오차<br><span class="small">2025년 초</span></td><td>5.7%</td><td>17.0%<br><span class="small">지금 서비스 방식&nbsp;· <span class="nw">2022-12~2024-05</span></span></td><td><b>더 나쁨</b><br><span class="small">2025년 초 평균의 <span class="nw">약 3배</span></span></td></tr>
+    <tr><td>태양광</td><td><b>에이치에너지</b>&nbsp;· <b>한국동서발전</b><br><span class="small">기업 자체 보고</span></td><td>예측 오차<br><span class="small">정의 미확인(설비용량 대비로 추정)</span></td><td>3~4%&nbsp;· 2.8%(전국)</td><td>17.0%</td><td>참고만<br><span class="small">자체 보고라 <span class="nw">순위 없음</span></span></td></tr>
+  </table>
+  <p class="small">수요의 ar_gbm 수치는 경쟁사와 기간을 맞추려고 2022년까지 학습한 평가용 모델(2022년·2023년 값은 각각 전년 6월까지 학습한 모델)로 잰 값이라, 04장의 서비스 모델 2025년 값(4.67%)과는 다른 측정입니다. 기간이 같은 값은 KPX 두 행, 박해수 행, 황·황의 2023년 R²뿐이고 나머지는 2023-07~2024-12 값입니다.</p>
+  <p class="small">SMP는 0원 근처 가격 때문에 MAPE(%)가 불안정해서 MAE(원/kWh)로 비교합니다. 그래서 04장 표의 SMP 11.75%(MAPE, 2025-07-22~12-18)와 단위·기간이 다릅니다. VOLTA와 비교할 기준선은 시험 구간을 어떻게 보느냐에 따라 두 가지(17.79·22.02원/kWh)로 계산했습니다.</p>
+  <p class="small">태양광은 월·시간별 평균값만으로 예측해도 12.5%라서, 지금 방식(17.0%)은 이 단순 기준보다도 나쁩니다. 경쟁사 오차가 같은 시간 범위로 계산됐는지는 확인하지 못했습니다. 우리 17.0%에는 평가 구간의 약 80%가 학습에 쓰여 유리한 면과, KPX가 빼는 출력제한 시간을 포함해 불리한 면이 함께 있습니다. 응답에 적힌 "R²=0.95"는 코드에 고정된 문구로, 예측 시점에는 없는 실측 일사량을 입력으로 쓴 평가에서 나온 값으로 보입니다(같은 조건을 시간순 분할로 재면 0.90). 서비스 중인 모델 파일은 학습·평가 데이터를 무작위로 섞어 나눈 옛 방식으로 학습된 채이고, 서비스 방식 그대로 재면 R² 0.41입니다.</p>
+  <p class="small">참고로 미국 전력망 운영기관(NYISO·ERCOT·PJM·ISO-NE·CAISO)과 업체(Enverus·Amperon)는 수요 예측 오차 약 1~4%를 공개하지만, 계통 규모와 대상이 달라 순위를 매기지 않았습니다. Iqbal 외 2025(MAPE 1.45%)는 시험 데이터의 정답이 학습에 섞이는 방식(K-fold)으로 평가해 제외했습니다. 국내 VPP·중개사 중 SMP 예측 정확도를 공개한 곳은 조사 범위에서 찾지 못했습니다.</p>
+  <p class="small">근거: <span class="ev">docs/2026-11-06-competitor-benchmark.md</span> 1.1절(경쟁사 전체 목록) · 2절 · 3.3절 · 4.2절 · 5.1~5.3절, 경쟁사 원문 주소는 10절. 우리 수치는 <span class="ev">docs/benchmark-2026-11-06/competitor_same_basis_out.json</span>(ar_gbm) · <span class="ev">docs/benchmark-2026-11-06/verify_smp_out.json</span>(SMP 기준선) · <span class="ev">docs/benchmark-2026-11-06/verify_solar_out.json</span>(태양광)으로 다시 만들 수 있습니다. KPX 정확도와 계통수요 AR 1.05%는 조사 때 두 번 독립 계산했지만 스크립트가 남아 있지 않고, VOLTA 비교 기준선은 한 번만 계산했습니다(보고서 8·9절). 태양광 예측이 쓰이는 곳: <span class="ev">api/v6_routes.py:774-783</span> · <span class="ev">web-v6/src/services/api.ts:80</span> · <span class="ev">web-v7/src/services/api.ts:107</span> · <span class="ev">~/.local/share/power-demand-public/public_server.py:25</span></p>
+</section>
+
+<section id="honesty">
+  <span class="sec-num">06</span>
   <h2>검증 상태와 한계 (중요)</h2>
   <div class="rule"></div>
   <p>연구·개인 프로젝트로서 "된 것"과 "아직 안 된 것"을 구분해 둡니다. 근거: <span class="ev">docs/2026-11-02-forecast-upgrade-status.md</span> · <span class="ev">docs/2026-11-06-demand-retrain-raw-target.md</span> · <span class="ev">docs/2026-11-06-competitor-benchmark.md</span></p>
@@ -410,24 +438,25 @@ td .ev,td code{white-space:nowrap}}
     <tr><th style="width:34%">상태</th><th>내용</th></tr>
     <tr><td>구현·재검증 완료</td><td>데이터 수집 파이프라인, 수요 예측 모델 재학습과 시간외 검증 — API 기본 AR+GBM은 2025년 오차 4.67%(직전 1시간 기준선 6.16%), SMP 데이터 누수 수정 후 재학습과 walk-forward 검증 도입(결과는 아래 "사용 보류")</td></tr>
     <tr><td>사용 보류</td><td>SMP v3.4 (R² −0.537), v4.0·v4.1 (육지 SMP로 학습), v4.1 제주 재학습 (MAPE 16.82% — 전날 같은 시간 가격 11.75%보다 나쁨) — 기준 미달로 서비스에서 제외. 지금 SMP 예측은 "전날 같은 시간 가격" 기준선이고, 어제 가격이 없을 때만 성능 재검증 전인 v3.2를 씁니다. 수요 LSTM 구버전(보고 6.06%, 재현 9.78%)은 2026-11-05 재학습본으로 교체</td></tr>
-    <tr><td>한계</td><td>SMP 가격 예측 정확도는 수요 대비 낮음(가격 변동성), 일부 화면은 데이터 수집 실패 시 데모 값으로 대체 표시 — 실측/모의 구분 표기 작업이 후속 과제. 수요 예측 모델(API 기본 ar_gbm)은 공개 프록시 허용 목록에 없고 웹 v6·v7·모바일 코드도 호출하지 않습니다. 메인 대시보드(v4)의 '예측 수요' 곡선은 모델이 아니라 현재 수요에 하루 패턴을 곱한 모의 곡선입니다. 근거: <span class="ev">~/.local/share/power-demand-public/public_server.py:21-27</span> · <span class="ev">src/dashboard/app_v4.py:1981-2090</span></td></tr>
+    <tr><td>한계</td><td>SMP 가격 예측 정확도는 수요 대비 낮음(가격 변동성), 일부 화면은 데이터 수집 실패 시 데모 값으로 대체 표시 — 실측/모의 구분 표기 작업이 후속 과제. 수요 예측 모델(API 기본 ar_gbm)은 공개 프록시 허용 목록에 없고 웹 v6·v7·모바일 코드도 호출하지 않습니다. 메인 대시보드(v4)의 '예측 수요' 곡선은 모델이 아니라 현재 수요에 하루 패턴을 곱한 모의 곡선입니다. 웹 v6·v7 수급 화면의 태양광 발전량 예측은 월·시간별 평균값보다도 부정확하고(오차 17.0% 대 12.5%), 응답의 "R²=0.95" 표기는 서비스 성능이 아닙니다(05장). 근거: <span class="ev">~/.local/share/power-demand-public/public_server.py:21-27</span> · <span class="ev">src/dashboard/app_v4.py:1981-2090</span></td></tr>
   </table>
 </section>
 
 <section id="glossary">
-  <span class="sec-num">06</span>
+  <span class="sec-num">07</span>
   <h2>용어 사전 (비도메인 독자용)</h2>
   <div class="rule"></div>
   <dl class="glossary">
     <dt>SMP (계통한계가격)</dt><dd>전력 도매시장에서 1kWh당 매시 결정되는 거래 가격. 수요가 공급능력에 근접하면 급등한다.</dd>
     <dt>공급예비율</dt><dd>(공급능력 − 수요) ÷ 수요. 낮으면 정전 위험이 커지는 안전 여유 지표.</dd>
     <dt>EPSIS / KPX</dt><dd>한국전력거래소(KPX)와 그 전력 통계 시스템(EPSIS). 전력 시장 데이터의 공식 원천.</dd>
+    <dt>계통수요 / 전력거래량</dt><dd>계통수요는 제주 전력망 전체의 수요이고, 전력거래량은 그중 전력시장에서 거래된 양이다. 거래량은 대략 계통수요에서 육지로부터 해저 케이블(HVDC)로 들여온 전력을 뺀 값이라 더 작고(2024년 하반기에 계통수요가 거래량의 약 1.5배), 예측하기 더 어렵다. 이 프로젝트의 수요 모델은 거래량을 예측한다. 근거: <span class="ev">docs/2026-11-06-competitor-benchmark.md</span> 2절</dd>
     <dt>ASOS</dt><dd>기상청 종관기상관측(ASOS) — 기온·습도·풍속 등을 정시 관측하는 공식 기상 관측망.</dd>
     <dt>THI (불쾌지수)</dt><dd>기온과 습도를 조합한 지수. 여름 에어컨 사용→전력수요와 강한 상관.</dd>
     <dt>LSTM</dt><dd>시간 흐름이 있는 데이터를 다루는 딥러닝 신경망. "최근 168시간 → 다음 시간" 식의 패턴 학습에 사용.</dd>
     <dt>시간대별 선형 AR (자기회귀)</dt><dd>수요의 과거 값으로 다음 1시간 수요를 계산하는 단순 선형식. 하루 24개 시간대마다 따로 맞추고, 1·2·24·25·48·168·169시간 전 수요와 요일만 쓴다. 근거: <span class="ev">src/models/hourly_ar.py:5-6</span></dd>
     <dt>GBM (그래디언트 부스팅)</dt><dd>작은 결정 트리를 차례로 쌓아 앞 트리가 틀린 만큼을 다음 트리가 고치는 기계학습 모델. 여기서는 scikit-learn HistGradientBoostingRegressor가 시간대별 AR이 틀린 양(잔차)을 예측해 더하며, 이 AR + GBM 조합이 지금 서비스의 기본 수요 모델. 근거: <span class="ev">src/models/ar_gbm.py:5 · api/config.py:47</span></dd>
-    <dt>MAPE / R²</dt><dd>예측 정확도 지표. MAPE는 평균 오차(%), 낮을수록 좋음. R²는 설명력, 1에 가까울수록 좋음(0이면 평가 기간의 평균값만 찍은 것과 같고, 음수면 그보다 못함).</dd>
+    <dt>MAPE / MAE / R²</dt><dd>예측 정확도 지표. MAPE는 평균 오차(%), MAE는 평균 오차를 원래 단위(원/kWh, MWh)로 잰 값으로, 둘 다 낮을수록 좋음. R²는 설명력, 1에 가까울수록 좋음(0이면 평가 기간의 평균값만 찍은 것과 같고, 음수면 그보다 못함). R²는 시리즈마다 값의 퍼짐이 달라 서로 다른 시리즈끼리는 비교할 수 없음.</dd>
     <dt>누수 (data leakage)</dt><dd>검증에 쓸 정보가 학습에 새어 들어가 성능이 실제보다 과대평가되는 결함. 시계열은 시간 순서로 나누고, 스케일링 기준값·이상값 상한도 학습 구간에서만 구해야 막을 수 있음.</dd>
     <dt>walk-forward 검증</dt><dd>기간을 한 칸씩 옮겨가며 반복 검증하는 방식. 시계열 모델의 실전 성능을 더 신뢰도 있게 측정.</dd>
     <dt>MPS</dt><dd>Apple Silicon의 GPU 가속 인터페이스. 이 프로젝트의 LSTM은 CUDA 대신 MPS로 로컬 학습. 지금 서비스가 기본으로 쓰는 수요 모델(AR+GBM)은 GPU 없이 CPU로 학습. 근거: <span class="ev">models/production/training_report.json:3 · src/models/ar_gbm.py:27</span></dd>

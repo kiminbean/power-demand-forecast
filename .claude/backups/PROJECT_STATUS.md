@@ -19,7 +19,8 @@
 - 같은 보고서 1.1절(사용자 요청 "경쟁 업체 이름과 실제 데이터도 같이 표시"): 경쟁사 이름·실제 수치와 같은 기간 ar_gbm 수치를 수요·SMP·태양광 표로 나란히 정리. 결론 요약 표에도 이름·수치 추가
   - ar_gbm 맞춘 수치: 2024년 하반기 3.79% / R² 0.963(KPX jlfd 4.67%·jlfdRt 3.21%와 같은 기간), 2022년 3.11% / 0.957, 2023년 R² 0.943, AR 대비 배율 0.96~0.98
   - 재현: docs/benchmark-2026-11-06/competitor_same_basis.py → competitor_same_basis_out.json (로컬 예측 models/demand_ar_gbm_2026-11-06/ 필요)
-- 커밋: 892f45d3, 526d57b4, fa1bc2d8(모두 푸시함), 1.1절 커밋은 git log 참고
+- 커밋: 892f45d3, 526d57b4, fa1bc2d8, 00c26ab0(1.1절, 모두 푸시함)
+- 설명 페이지 05장 "경쟁 비교" 신설(사용자 승인): 경쟁사 10행 표(수요 5·SMP 3·태양광 2)와 주의 상자(수요는 거래량 대 계통수요라 순위 없음), 기존 05·06장은 06·07로, 용어 사전에 계통수요/전력거래량·MAE 추가. 600~1728px 14개 폭 넘침 없음(scratchpad width_check/compare_check.py)
 
 ### Task: Default switch to ar_gbm + holiday table 2026-2027 + Docker API + root test fix ✅ COMPLETE
 
