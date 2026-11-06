@@ -68,12 +68,13 @@ footer{border-top:2px solid var(--ink);margin-top:70px;padding-top:20px;font-siz
 .ev{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .small{font-size:13px;color:var(--muted)}
 /* 넓은 화면에서는 근거 경로를 글자 단위로 쪼개지 않는다: 경로 하나가 한 줄이 되고, 여러 개면 · 에서 줄을 바꾼다 */
-@media(min-width:1100px){td:last-child .ev{white-space:nowrap;overflow-wrap:normal}
-}
-/* 출처 표는 설명이 긴 열이 폭을 독차지하지 않게 열 폭을 고정해 나눈다 (근거 경로가 한 줄에 들어가는 폭에서만) */
-@media(min-width:1440px){.sources{table-layout:fixed}.sources td{overflow-wrap:anywhere}
+/* 출처 표는 설명이 긴 열이 폭을 독차지하지 않게 열 폭을 고정해 나눈다 */
+@media(min-width:861px){.sources{table-layout:fixed}.sources td{overflow-wrap:anywhere}
 .sources th:nth-child(1){width:12%}.sources th:nth-child(2){width:21%}.sources th:nth-child(3){width:18%}
 .sources th:nth-child(4){width:17%}.sources th:nth-child(5){width:32%}}
+/* 경로 하나가 한 줄에 들어가는 폭에서만 근거 경로를 글자 단위로 자르지 않는다 */
+@media(min-width:1440px){td:last-child .ev{white-space:nowrap;overflow-wrap:normal}}
+@media(max-width:860px){table{display:block;overflow-x:auto}table thead,table tbody{display:table;width:max-content;min-width:100%}td .ev,td code{white-space:nowrap}}
 @media(max-width:640px){h1{font-size:30px}.wrap{padding:40px 16px 72px}
 .url-card{grid-template-columns:1fr}
 .url-card .u:empty{display:none}
@@ -92,14 +93,14 @@ td .ev,td code{white-space:nowrap}}
   <div class="meta"><span>작성: 2026-11-05 · 수정: 2026-11-06</span><span>대상: 멘토 (비도메인 전문가)</span><span>프로젝트: ~/Projects/power-demand-forecast</span></div>
 
   <div class="tldr">
-    <p><b>한 줄 요약</b> — 전력거래소·기상청·관광공사 등 공개 데이터를 주기적으로 수집(크롤링/API)해서, 제주의 전력 수요와 전력 거래 가격(SMP)을 예측하고(2026-11-06 기준 수요는 회귀+부스팅 모델 <code>ar_gbm</code>이 기본이고 LSTM 딥러닝은 선택형, SMP는 '전날 같은 시간 가격' 기준선), 이를 웹 대시보드로 서비스하는 개인 프로젝트입니다.</p>
+    <p><b>한 줄 요약</b> — 전력거래소·기상청·제주관광협회 등 공개 데이터를 수집(크롤링/API)해서, 제주의 전력 수요와 전력 거래 가격(SMP)을 예측하는 개인 프로젝트입니다(2026-11-06 기준 수요는 회귀+부스팅 모델 <code>ar_gbm</code>이 API 기본이고 LSTM 딥러닝은 선택형, SMP는 '전날 같은 시간 가격' 기준선). SMP 예측은 웹 대시보드에 나오지만, 수요 예측 모델은 맥북 안의 API(:8001)에서만 호출할 수 있고 공개 웹 화면에는 연결돼 있지 않습니다.</p>
     <div class="kpis">
-      <div class="kpi"><div class="v">12+ 종</div><div class="l">외부 데이터 소스 (API·크롤링)</div></div>
+      <div class="kpi"><div class="v">16종</div><div class="l">외부 데이터 소스 (API·크롤링)</div></div>
       <div class="kpi"><div class="v">43,725행</div><div class="l">5년치 SMP 학습 데이터 (CSV)</div></div>
       <div class="kpi"><div class="v">MAPE 4.67%</div><div class="l">1시간 앞 수요 예측의 평균 오차 (기본 모델 ar_gbm · 학습에 안 쓴 2025년 실측)</div></div>
       <div class="kpi"><div class="v">5개</div><div class="l">공개 중인 웹 버전 (v4~v7 + 모바일)</div></div>
     </div>
-    <p class="small">근거: 소스 수 = 03장 데이터 출처 표 · SMP 행 수 = <span class="ev">data/smp/smp_5years_epsis.csv</span> (헤더 제외) · MAPE = <span class="ev">docs/benchmark-2026-11-06/compare_default_2025_out.json</span> (2025-01-01~12-31, 8,760시간) · 웹 버전 = <span class="ev">tailscale serve status</span>, <span class="ev">~/.local/share/power-demand-public/public_server.py:15-20</span>. 이전 판의 MAPE 6.06%는 2025-12에 학습한 옛 LSTM(weather_full)의 리포트 값인데, 같은 모델을 같은 기간에 다시 채점하면 약 10%(9.78~10.05%)라 재현되지 않았습니다 (<span class="ev">docs/benchmark-2026-11-06/rescore_old_lstm_out.json</span>).</p>
+    <p class="small">근거: 소스 수 = 03장 데이터 출처 표 · SMP 행 수 = <span class="ev">data/smp/smp_5years_epsis.csv</span> (헤더 제외) · MAPE = <span class="ev">docs/benchmark-2026-11-06/compare_default_2025_out.json</span> (2025-01-01~12-31, 8,760시간) · 웹 버전 = <span class="ev">tailscale serve status</span>, <span class="ev">~/.local/share/power-demand-public/public_server.py:15-20</span>. 이전 판의 MAPE 6.06%는 2025-12에 학습한 옛 LSTM(weather_full)의 리포트 값인데, 같은 모델을 같은 기간에 다시 채점하면 약 10%(9.78%)라 재현되지 않았습니다 (<span class="ev">docs/benchmark-2026-11-06/rescore_old_lstm_out.json</span>).</p>
   </div>
 </header>
 
@@ -140,7 +141,7 @@ td .ev,td code{white-space:nowrap}}
   <span class="sec-num">02</span>
   <h2>배포 구조 — 내 맥북이 곧 서버</h2>
   <div class="rule"></div>
-  <p>인터넷의 요청은 Tailscale Funnel이 받아서 내 맥북 안의 4개 프로세스로 전달합니다. 포트 번호(콜론 뒤 숫자)로 어떤 프로그램이 응답하는지 구분됩니다.</p>
+  <p>인터넷의 요청은 Tailscale Funnel이 받아서 내 맥북 안의 3개 프로세스(:8504 · :10005 · :8799)로 전달하고, 예측 API(:8001)는 그 안쪽에서 호출됩니다. 포트 번호(콜론 뒤 숫자)로 어떤 프로그램이 응답하는지 구분됩니다.</p>
 
   <figure>
   <div class="diagram">
@@ -192,9 +193,9 @@ td .ev,td code{white-space:nowrap}}
     <text x="822" y="460" class="dg-chip">포트 8799</text>
     <!-- Paths -->
     <path d="M 380 185 V 245 H 168 V 345" fill="none" stroke="#b3552e" stroke-width="2" marker-end="url(#ar-acc)"/>
-    <text x="392" y="232" class="dg-chip" fill="#b3552e">HTTPS :8443</text>
+    <text x="180" y="268" class="dg-chip" fill="#b3552e">HTTPS :8443</text>
     <path d="M 470 185 V 225 H 417 V 345" fill="none" stroke="#2563a8" stroke-width="1.6" marker-end="url(#ar-link)"/>
-    <text x="484" y="215" class="dg-chip" fill="#2563a8">HTTPS :10000 — /v7 · /v6 · /v5/smp · /mobile</text>
+    <text x="484" y="224" class="dg-chip" fill="#2563a8">HTTPS :10000 — /v7 · /v6 · /v5/smp · /mobile</text>
     <path d="M 560 185 V 205 H 921 V 345" fill="none" stroke="#2563a8" stroke-width="1.6" marker-end="url(#ar-link)"/>
     <text x="760" y="198" class="dg-chip" fill="#2563a8">루트 / → 문서</text>
     <!-- internal proxy arc below -->
@@ -300,7 +301,7 @@ td .ev,td code{white-space:nowrap}}
     <tr><td>제주 계통수요 등<br><span class="small">(시간별 파일)</span></td><td><span class="ev">data.go.kr/data/15125113/fileData.do</span><br>공공데이터포털 파일 데이터</td><td>파일 다운로드·파싱</td><td class="period">2023-09 ~ 2025-04<br><span class="small">data/jeju_extract/ · 608일</span></td><td><span class="ev">tools/crawlers/jeju_power_crawler.py:10</span></td></tr>
     <tr><td>시간별 제주 전력거래량<br><span class="small">(수요 모델이 맞히는 값 · 1~24시 MWh)</span></td><td><span class="ev">data.go.kr/data/15133498/fileData.do</span><br>KPX 지역별 시간대별 전력거래량 (제주도)</td><td>파일 다운로드·파싱 · 1년에 한 번 공개</td><td class="period">2013-01 ~ 2025-12<br><span class="small">113,952행 (2013~2024 105,192 + 2025 8,760, 시간별)</span></td><td><span class="ev">tools/fetch_kpx_jeju_trade.py:4-8</span> · <span class="ev">feature_list.json:25-28</span></td></tr>
     <tr><td>제주 SMP 실시간<br><span class="small">15분 가격의 1시간 평균</span></td><td><span class="ev">apis.data.go.kr/B552115/JejuSmpLfd2</span><br>공공데이터포털 제주시범사업 API<br><span class="small">KPX 웹 크롤링(new.kpx.or.kr)은 2026-11-03부터 가격에 쓰지 않음</span></td><td>공식 OpenAPI (인증키) · 요청 때 조회 (5분 캐시)</td><td class="period">장기 보관 없음<br><span class="small">마지막 값 1건만 저장 · 원천이 이틀가량 늦게 공표</span></td><td><span class="ev">api/realtime_api.py:74,81,470-488</span></td></tr>
-    <tr><td>SMP 시간별 (육지·제주)<br><span class="small">매시 갱신 · SMP 예측의 입력</span></td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaSmpShdChart.do?menuId=020100</span></td><td>requests · 매시 15분 + 매일 06시 7일치 재수집 (맥에서 늘 도는 스케줄러)</td><td class="period">2024-01-01 ~ 2026-11-06 (빈 기간 있음)<br><span class="small">data/smp/smp_real_epsis.csv · 12,468행 · 520일치 (2026-11-06 기준). 큰 공백 2024-12-19~2025-12-13, 2026-07-12~10-25</span></td><td><span class="ev">src/smp/crawlers/scheduler.py:51,54-66</span> · <span class="ev">api/v6_routes.py:649</span></td></tr>
+    <tr><td>SMP 시간별 (육지·제주)<br><span class="small">매시 갱신 · SMP 예측의 입력</span></td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaSmpShdChart.do?menuId=020100</span></td><td>requests · 매시 15분 + 매일 06시 7일치 재수집 (맥에서 늘 도는 스케줄러)</td><td class="period">2024-01-01 ~ 2026-11-06 (빈 기간 있음)<br><span class="small">data/smp/smp_real_epsis.csv · 12,468행 · 520일치 (2026-11-06 기준). 큰 공백 2024-12-19~2025-12-13, 2026-07-12~10-25</span></td><td><span class="ev">src/smp/crawlers/scheduler.py:51,54-66</span> · <span class="ev">src/smp/models/smp_v41_predictor.py:5,36</span></td></tr>
     <tr><td>과거 SMP (학습용)</td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaSmpShdChart.do?menuId=020100</span></td><td>requests · 월 단위 일괄 수집 (1회)</td><td class="period">2020-12-19 ~ 2025-12-18<br><span class="small">43,725행 (시간별)</span></td><td><span class="ev">src/smp/crawlers/epsis_crawler.py:661</span></td></tr>
     <tr><td>연료비 정산단가</td><td><span class="ev">epsis.kpx.or.kr/…selectEkmaUpsBftChart.do?menuId=040701</span></td><td>requests · 월간</td><td class="period">저장본 없음<br><span class="small">수집 코드만 있음</span></td><td><span class="ev">src/smp/crawlers/fuel_cost_crawler.py:7</span></td></tr>
     <tr><td>국제 연료 가격<br><span class="small">WTI·브렌트·천연가스·난방유 선물</span></td><td><span class="ev">Yahoo Finance (yfinance)</span></td><td>yfinance · 거래일별</td><td class="period">2022-01-03 ~ 2024-12-30<br><span class="small">data/external/fuel/fuel_prices.csv · 753행</span></td><td><span class="ev">src/crawlers/fuel_crawler.py:49-53,107</span></td></tr>
@@ -320,7 +321,7 @@ td .ev,td code{white-space:nowrap}}
   <span class="sec-num">04</span>
   <h2>모델 — 예측은 어떻게 만들어지나</h2>
   <div class="rule"></div>
-  <p>수집한 CSV를 모델이 읽을 수 있는 형태로 가공(피처 엔지니어링)하고, 시간 순서를 지켜 학습/검증을 나눈 뒤, 딥러닝 모델(LSTM 계열)을 학습시킵니다. 학습은 이 맥북의 <b>Apple MPS</b>(Apple Silicon 전용 GPU 가속)에서 수행했습니다 — CUDA(GPU 서버) 없이 로컬에서 학습 가능했다는 점이 이 프로젝트의 환경적 특징입니다. 다만 2026-11-06부터 API 기본 수요 모델은 LSTM이 아니라 <b>AR+GBM</b>입니다 — 시간대별 선형 자기회귀(AR) 예측의 오차를 그래디언트 부스팅(GBM)으로 보정하는 모델로, CPU에서 학습하며 2025년 실측 비교에서 LSTM보다 정확했습니다. 근거: <span class="ev">models/demand_ar_gbm/metadata.json</span> · <span class="ev">docs/2026-11-06-demand-retrain-raw-target.md</span> 12절.</p>
+  <p>수집한 CSV를 모델이 읽을 수 있는 형태로 가공(피처 엔지니어링)하고, 시간 순서를 지켜 학습/검증을 나눈 뒤, 딥러닝 모델(LSTM 계열)을 학습시킵니다. 학습은 이 맥북의 <b>Apple MPS</b>(Apple Silicon 전용 GPU 가속)에서 수행했습니다 — CUDA(GPU 서버) 없이 로컬에서 학습 가능했다는 점이 이 프로젝트의 환경적 특징입니다. 다만 2026-11-06부터 API 기본 수요 모델은 LSTM이 아니라 <b>AR+GBM</b>입니다 — 시간대별 선형 자기회귀(AR) 예측의 오차를 그래디언트 부스팅(GBM)으로 보정하는 모델로, CPU에서 학습하며 2025년 실측 비교에서 LSTM보다 정확했습니다(두 산출물의 학습 기간이 달라, 운영 중인 모델끼리 비교한 결과). 근거: <span class="ev">models/demand_ar_gbm/metadata.json</span> · <span class="ev">docs/2026-11-06-demand-retrain-raw-target.md</span> 12절.</p>
 
   <figure>
   <div class="diagram">
@@ -330,13 +331,13 @@ td .ev,td code{white-space:nowrap}}
     <text x="66" y="101" class="dg-tag" fill="#6b6560">INPUT</text>
     <text x="66" y="125" class="dg-title">원본 데이터 (data/)</text>
     <text x="66" y="152" class="dg-chip">SMP 5년 43,725행 · 실시간 12,468행</text>
-    <text x="66" y="174" class="dg-chip">기상 · 입도객 · 발전소 운영중 27기</text>
+    <text x="66" y="174" class="dg-chip">시간별 전력거래량 · 기상 · 입도객 · 발전소</text>
     <rect x="400" y="80" width="300" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
     <text x="416" y="101" class="dg-tag" fill="#6b6560">FEATURES</text>
     <text x="416" y="125" class="dg-title">피처 엔지니어링</text>
     <text x="416" y="152" class="dg-chip">시간·요일 sin/cos · 지연(lag)</text>
-    <text x="416" y="174" class="dg-chip">이동평균 · THI(불쾌지수)</text>
-    <text x="416" y="196" class="dg-chip">체류인구(입도-출도 잔존모형)</text>
+    <text x="416" y="174" class="dg-chip">시차 · 이동평균 · 표준편차 · 변화량</text>
+    <text x="416" y="196" class="dg-chip">달력 주기 · 공휴일 · 기온(weather_full만)</text>
     <rect x="750" y="80" width="300" height="120" fill="#fbfaf8" stroke="#1a1a1a" stroke-opacity=".45"/>
     <text x="766" y="101" class="dg-tag" fill="#6b6560">SCALING</text>
     <text x="766" y="125" class="dg-title">스케일링 (정규화)</text>
@@ -358,7 +359,7 @@ td .ev,td code{white-space:nowrap}}
     <text x="766" y="311" class="dg-tag" fill="#6b6560">SERVE</text>
     <text x="766" y="335" class="dg-title">추론 서빙</text>
     <text x="766" y="362" class="dg-chip">FastAPI :8001 → JSON</text>
-    <text x="766" y="384" class="dg-chip">대시보드 :8504 · 웹 v5~v7</text>
+    <text x="766" y="384" class="dg-chip">SMP 화면 :8504 · 웹 v5~v7</text>
     <!-- arrows -->
     <path d="M 350 140 H 400" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
     <path d="M 700 140 H 750" fill="none" stroke="#6b6560" stroke-width="1.6" marker-end="url(#ar-ink)"/>
@@ -382,16 +383,17 @@ td .ev,td code{white-space:nowrap}}
     <tr><td>SMP v4.1 (제주 재학습)</td><td>제주 하루전 가격 · 기준 미달</td><td class="period" style="white-space:nowrap">2025-07-22~12-18</td><td class="num">16.82</td><td class="num">0.136</td><td><span class="ev">models/smp_v41_serving/smp_v41_serving.json</span></td></tr>
     <tr><td>SMP v4.1 · v4.0</td><td>육지 SMP 대상 (제주 아님)</td><td class="period" style="white-space:nowrap">2024-08~2024-12<br>2024-09~2024-12</td><td class="num">8.76<br>17.17</td><td class="num">0.463<br>0.124</td><td><span class="ev">models/smp_v4/smp_v41_metrics.json</span><br><span class="ev">models/smp_v4/smp_v4_metrics.json</span></td></tr>
     <tr><td>SMP v3.4</td><td>제주 가격 (구버전)</td><td class="period" style="white-space:nowrap">2021년 말<br><span class="small">자료 2020-12~2021-12의 끝 구간</span></td><td class="num">21.28</td><td class="num" style="color:var(--accent)">−0.537</td><td><span class="ev">models/smp_v3_4_kpx/metrics.json</span></td></tr>
+    <tr><td>SMP CatBoost v3.19<br><span class="small">웹 v6·v7 실시간 시장용</span></td><td>육지 SMP 1시간 앞 · 재검증 전</td><td class="period" style="white-space:nowrap">2025-12 학습 때 보고값</td><td class="num">5.28</td><td class="num">0.827</td><td><span class="ev">models/smp_v3_19_recent/metrics.json</span><br><span class="ev">api/smp_routes.py:350,486</span></td></tr>
   </table>
   <p class="small">MAPE가 낮을수록 좋습니다. 지금 API 기본 수요 모델(AR+GBM)은 2025년 평균 오차 4.67%로, 직전 1시간 값을 그대로 쓰는 기준선(6.16%)보다 정확합니다. 같은 모델도 평가 기간이 다르면 수치가 달라지므로 같은 기간끼리만 비교해야 합니다 — 같은 LSTM이 2023-07~2024-12에는 4.16%, 예측이 더 어려웠던 2025년에는 5.22%입니다. 예전 이 표의 <b>6.06%</b>는 2025-12 학습 리포트의 값(시험 구간 2023-07~2024-12)인데, 그 체크포인트를 같은 기간에 API와 같은 경로로 다시 채점하면 9.78%로 <b>재현되지 않았고</b> 기준선(5.28%)보다도 나빠, 2026-11-05에 다시 학습한 모델로 교체했습니다. 근거: <span class="ev">docs/benchmark-2026-11-06/rescore_old_lstm_out.json</span></p>
-  <p class="small">R²는 1에 가까울수록 좋고 0 이하는 "추측만 못함"을 뜻합니다 — v3.4는 이 기준으로 <b>사용을 보류</b>했습니다. SMP(가격) 예측이 수요 예측보다 어려운 것은 가격이 수급 상황에 즉각 반응하기 때문이며, 이를 인지하고 walk-forward(롤링 기간 재검증) 방식을 도입했습니다. 그 검증에서 제주 가격으로 다시 학습한 v4.1이 "전날 같은 시간 가격"보다 나빠, 지금 SMP 예측 화면은 이 기준선 값을 보여 줍니다. 화면에 나오는 "검증 MAPE"(2026-11-06 12.45%)는 같은 기준선을 최근 날들로 다시 잰 값이라 표의 11.75%와 조금 다릅니다.</p>
+  <p class="small">R²는 1에 가까울수록 좋고 0 이하는 "평균값만 찍는 것과 같거나 그보다 못함"을 뜻합니다 — v3.4는 이 기준으로 <b>사용을 보류</b>했습니다. SMP(가격) 예측이 수요 예측보다 어려운 것은 가격이 수급 상황에 즉각 반응하기 때문이며, 이를 인지하고 walk-forward(롤링 기간 재검증) 방식을 도입했습니다. 그 검증에서 제주 가격으로 다시 학습한 v4.1이 "전날 같은 시간 가격"보다 나빠, 지금 SMP 예측 화면은 이 기준선 값을 보여 줍니다. 화면에 나오는 "검증 MAPE"(2026-11-06 12.45%)는 같은 기준선을 최근 날들로 다시 잰 값이라 표의 11.75%와 조금 다릅니다.</p>
 
   <h3>API 엔드포인트 (모델이 웹에 나오는 통로)</h3>
   <table>
     <tr><th style="width:38%">엔드포인트</th><th>역할</th></tr>
     <tr><td><span class="ev">GET /api/v1/health</span></td><td>서버 생존 확인 (모델 로드 여부는 <span class="ev">GET /health</span>의 models_loaded)</td></tr>
     <tr><td><span class="ev">GET /api/v1/smp-forecast</span></td><td>SMP 예측값 (대시보드 차트 원본)</td></tr>
-    <tr><td><span class="ev">GET /api/v1/smp/current · smp/day-ahead</span></td><td>지금 시간의 SMP — 실시간 시장 가격 · 하루전 시장 가격</td></tr>
+    <tr><td><span class="ev">GET /api/v1/smp/current · smp/day-ahead</span></td><td>가장 최근에 받은 실시간 시장 SMP(원천이 이틀가량 늦게 공표돼 지금 시각 값은 비어 있음) · 지금 시간의 하루전 시장 SMP</td></tr>
     <tr><td><span class="ev">GET /api/v1/power-supply · realtime-status</span></td><td>실시간 수급 현황 · 외부 데이터 API 연결 상태</td></tr>
     <tr><td><span class="ev">GET /api/v1/dashboard/kpis · model/info</span></td><td>대시보드 지표·모델 메타데이터</td></tr>
     <tr><td><span class="ev">GET /smp/rtm/predict · /api/v1/bidding/optimized-segments</span></td><td>실시간 시장 1시간 앞 예측(육지 SMP)·입찰 구간 최적화</td></tr>
@@ -408,7 +410,7 @@ td .ev,td code{white-space:nowrap}}
     <tr><th style="width:34%">상태</th><th>내용</th></tr>
     <tr><td>구현·재검증 완료</td><td>데이터 수집 파이프라인, 수요 예측 모델 재학습과 시간외 검증 — API 기본 AR+GBM은 2025년 오차 4.67%(직전 1시간 기준선 6.16%), SMP 데이터 누수 수정 후 재학습과 walk-forward 검증 도입(결과는 아래 "사용 보류")</td></tr>
     <tr><td>사용 보류</td><td>SMP v3.4 (R² −0.537), v4.0·v4.1 (육지 SMP로 학습), v4.1 제주 재학습 (MAPE 16.82% — 전날 같은 시간 가격 11.75%보다 나쁨) — 기준 미달로 서비스에서 제외. 지금 SMP 예측은 "전날 같은 시간 가격" 기준선이고, 어제 가격이 없을 때만 성능 재검증 전인 v3.2를 씁니다. 수요 LSTM 구버전(보고 6.06%, 재현 9.78%)은 2026-11-05 재학습본으로 교체</td></tr>
-    <tr><td>한계</td><td>SMP 가격 예측 정확도는 수요 대비 낮음(가격 변동성), 일부 화면은 데이터 수집 실패 시 데모 값으로 대체 표시 — 실측/모의 구분 표기 작업이 후속 과제</td></tr>
+    <tr><td>한계</td><td>SMP 가격 예측 정확도는 수요 대비 낮음(가격 변동성), 일부 화면은 데이터 수집 실패 시 데모 값으로 대체 표시 — 실측/모의 구분 표기 작업이 후속 과제. 수요 예측 모델(API 기본 ar_gbm)은 공개 프록시 허용 목록에 없고 웹 v6·v7·모바일 코드도 호출하지 않습니다. 메인 대시보드(v4)의 '예측 수요' 곡선은 모델이 아니라 현재 수요에 하루 패턴을 곱한 모의 곡선입니다. 근거: <span class="ev">~/.local/share/power-demand-public/public_server.py:21-27</span> · <span class="ev">src/dashboard/app_v4.py:1981-2090</span></td></tr>
   </table>
 </section>
 
@@ -434,8 +436,8 @@ td .ev,td code{white-space:nowrap}}
 </section>
 
 <footer>
-  <p><b>근거 자료 일람</b> — 코드: <span class="ev">tools/crawlers/ (12 스크립트) · src/smp/crawlers/ (6) · src/dashboard/app_v4.py · api/main.py</span></p>
-  <p>데이터: <span class="ev">data/smp/*.csv · data/jeju_plants/jeju_power_plants.csv</span> · 모델: <span class="ev">models/demand_ar_gbm/ · models/production/ · models/smp_v4/</span></p>
+  <p><b>근거 자료 일람</b> — 코드: <span class="ev">tools/crawlers/ (10 스크립트, 설정·테스트 제외) · src/smp/crawlers/ (6) · src/dashboard/app_v4.py · api/main.py</span></p>
+  <p>데이터: <span class="ev">data/smp/*.csv · data/jeju_plants/jeju_power_plants.json</span> · 모델: <span class="ev">models/demand_ar_gbm/ · models/production/ · models/smp_v4/</span></p>
   <p>문서: <span class="ev">docs/2026-11-02-forecast-upgrade-status.md · docs/2026-11-06-competitor-benchmark.md · docs/2026-11-06-demand-retrain-raw-target.md</span> · 런타임 확인: <span class="ev">tailscale serve status · lsof</span> (2026-11-06 기준)</p>
 </footer>
 
