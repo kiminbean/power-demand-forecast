@@ -192,6 +192,14 @@ class SolarMLPredictor:
                 else:
                     logger.info("Solar %s R²: %.3f", label, self.model.score(features, targets))
 
+            # 학습 시 생성된 난수 상태는 예측에 사용되지 않지만 pickle에
+            # 포함되면 numpy 1.x와 2.x 환경 간 로드가 실패한다(MT19937 호환성).
+            # 앙상블과 개별 트리 모두 난수 상태를 가지므로 저장 전에 제거해
+            # 어떤 numpy 환경에서도 모델 파일을 재사용한다.
+            self.model._rng = None  # type: ignore[attr-defined]
+            for tree in getattr(self.model, "estimators_", []) or []:
+                tree.random_state = None
+
             # 모델 저장
             with open(SOLAR_MODEL_PATH, 'wb') as f:
                 pickle.dump(self.model, f)
