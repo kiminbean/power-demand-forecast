@@ -2976,23 +2976,37 @@ def main():
             <div class="info-card">
                 <div class="info-card-title">📊 모델 성능</div>
                 <div style="margin-top: 15px;">
-                    <p style="color: #cbd5e1;">고정 참고값 (평가 조건 미확인, 현재 예측 성능 아님)</p>
-                    <div style="display: flex; justify-content: space-between; margin: 10px 0; color: white;">
-                        <span style="color: #94a3b8;">MAPE</span>
-                        <span style="color: #10b981; font-weight: bold;">10.68%</span>
+                    <p style="color: #cbd5e1;">README 운영 모델 성능 표 기준 (2026-11-06 벤치마크 검증값)</p>
+                    <p style="color: #94a3b8; font-weight: bold; margin: 8px 0 2px;">🔌 수요 예측 — 1시간 앞 전력수요 (KPX 제주 전력거래량)</p>
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
+                        <span style="color: #94a3b8;">AR + GBM 잔차 보정 · MAPE</span>
+                        <span style="color: #10b981; font-weight: bold;">4.67%</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin: 10px 0; color: white;">
-                        <span style="color: #94a3b8;">MAE</span>
-                        <span>11.27 원/kWh</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin: 10px 0; color: white;">
-                        <span style="color: #94a3b8;">80% Coverage</span>
-                        <span style="color: #10b981;">82.5%</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin: 10px 0; color: white;">
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
                         <span style="color: #94a3b8;">R² Score</span>
-                        <span>0.59</span>
+                        <span>0.929</span>
                     </div>
+                    <p style="color: #64748b; font-size: 0.75rem; margin: 2px 0;">2025년 실측 8,760시간 (학습에 안 쓴 기간)</p>
+                    <p style="color: #94a3b8; font-weight: bold; margin: 10px 0 2px;">⚡ 공급 추정 — 태양광 발전량 (GradientBoosting)</p>
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
+                        <span style="color: #94a3b8;">KPX 오차율</span>
+                        <span style="color: #10b981; font-weight: bold;">17.0%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
+                        <span style="color: #94a3b8;">R² Score</span>
+                        <span>0.41</span>
+                    </div>
+                    <p style="color: #64748b; font-size: 0.75rem; margin: 2px 0;">holdout 2022-12~2024-05 · API 응답의 "신뢰도 93%"는 모델 성능이 아님</p>
+                    <p style="color: #94a3b8; font-weight: bold; margin: 10px 0 2px;">💰 SMP 예측 — 하루전 시장가격 (어제 같은 시각 가격)</p>
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
+                        <span style="color: #94a3b8;">MAPE</span>
+                        <span style="color: #10b981; font-weight: bold;">11.75%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white;">
+                        <span style="color: #94a3b8;">R² Score</span>
+                        <span>0.203</span>
+                    </div>
+                    <p style="color: #64748b; font-size: 0.75rem; margin: 2px 0;">walk-forward 2025-07-22~12-18</p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -3060,7 +3074,7 @@ def main():
     <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.85rem;">
         <p>제주 전력 지도 v4.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
         <p style="font-size: 0.75rem;">
-            데이터 출처: EPSIS, KPX | 모델: LSTM + Quantile Regression<br>
+            데이터 출처: EPSIS, KPX | 모델: 수요 예측 AR+GBM · 태양광 공급 추정 GradientBoosting · SMP 어제 가격 naive<br>
             (기상·발전량 비율 등 일부 지표는 추정치 포함)
         </p>
     </div>
