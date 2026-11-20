@@ -43,6 +43,8 @@ API_TOPUP_PAGES = 2  # 1000행/페이지 ≈ 10일씩
 BASELINE_EVAL_DAYS = 150  # 기준선 성능을 재현하는 최근 평가 일수 (연속 이틀이 있는 날만)
 BASELINE_COVERAGE_HOLDOUT_DAYS = 30  # 80% 구간 적중률을 마지막 30일 보류(holdout) 검증으로 계산
 BASELINE_COVERAGE_MIN_FIT_DAYS = 60  # 분위수 적합에 최소한으로 쓸 일수 (이보다 부족하면 적중률 미계산)
+BASELINE_VOL_WINDOW_DAYS = 14  # 구간 폭 조정에 참고하는 최근 변동성 창(일)
+BASELINE_VOL_SCALE_MAX = 2.0  # 변동성 스케일 상한 (일시적 폭등이 구간을 무한히 넓히지 않게 한다)
 MAPE_MIN_ABS = 10.0  # v4.1 평가와 같은 기준 (|실측| <= 10원은 MAPE에서 제외)
 
 
@@ -204,13 +206,27 @@ class SeasonalNaivePredictor:
             "q10_offset": np.percentile(errors, 10, axis=0),
             "q90_offset": np.percentile(errors, 90, axis=0),
         }
+        # 최근 변동성이 적합기간보다 크면(체제 변화) 구간 폭을 그 비율만큼 넓힌다.
+        # 고정 분위수만 쓰면 변동성이 커진 시기에 적중률이 명목 80%보다 크게 떨어진다.
+        fit_sd = float(np.std(errors))
+        recent_sd = float(np.std(errors[-BASELINE_VOL_WINDOW_DAYS:]))
+        result["vol_scale"] = min(recent_sd / fit_sd, BASELINE_VOL_SCALE_MAX) if fit_sd > 0 else 1.0
         # 적중률은 같은 데이터로 재면하면 ~80%가 나오기 때문에, 마지막 30일을 떼어 놓고
         # 그 30일이 (적합에 쓰지 않은) 나머지 일수의 분위수 구간에 들어가는 비율로 계산한다.
+        # 보류의 각 날도 서빙과 똑같이 '그날 직전 창'의 변동성으로 폭을 조정해 검증한다(인과적, 미래 정보 없음).
         if len(errors) >= BASELINE_COVERAGE_HOLDOUT_DAYS + BASELINE_COVERAGE_MIN_FIT_DAYS:
             fit, held = errors[:-BASELINE_COVERAGE_HOLDOUT_DAYS], errors[-BASELINE_COVERAGE_HOLDOUT_DAYS:]
             fit_q10 = np.percentile(fit, 10, axis=0)
             fit_q90 = np.percentile(fit, 90, axis=0)
-            result["coverage_80"] = float(np.mean((held >= fit_q10) & (held <= fit_q90)) * 100)
+            fit_sd = float(np.std(fit))
+            hits = []
+            for k in range(BASELINE_COVERAGE_HOLDOUT_DAYS):
+                i = len(errors) - BASELINE_COVERAGE_HOLDOUT_DAYS + k
+                scale = 1.0
+                if fit_sd > 0 and i >= BASELINE_VOL_WINDOW_DAYS:
+                    scale = min(float(np.std(errors[i - BASELINE_VOL_WINDOW_DAYS:i])) / fit_sd, BASELINE_VOL_SCALE_MAX)
+                hits.append((held[k] >= fit_q10 * scale) & (held[k] <= fit_q90 * scale))
+            result["coverage_80"] = float(np.mean(np.vstack(hits)) * 100)
         return result
 
     def predict_24h(self, now: Optional[datetime] = None) -> Dict[str, Any]:
@@ -219,8 +235,10 @@ class SeasonalNaivePredictor:
         if not self.backtest or self.backtest.get("end_at") != end_at:
             self.backtest = {**self._backtest(df), "end_at": end_at}
         point = df["smp_jeju"].to_numpy()[-OUTPUT_HOURS:].astype(np.float64)
-        q10 = point + self.backtest.get("q10_offset", np.zeros(OUTPUT_HOURS))
-        q90 = point + self.backtest.get("q90_offset", np.zeros(OUTPUT_HOURS))
+        # 변동성 스케일을 구간 오프셋에 곱해 최근 체제 변화를 반영한다.
+        scale = self.backtest.get("vol_scale", 1.0)
+        q10 = point + scale * self.backtest.get("q10_offset", np.zeros(OUTPUT_HOURS))
+        q90 = point + scale * self.backtest.get("q90_offset", np.zeros(OUTPUT_HOURS))
         q10, q90 = np.minimum(q10, point), np.maximum(q90, point)
         return _result(end_at, q10, point, q90, self.version, self.mape, self.coverage)
 
