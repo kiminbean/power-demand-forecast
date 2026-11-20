@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   smpCardValue: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: themeColors.text.primary,
+    color: '#FFFFFF',
     lineHeight: 56,
   },
   smpCardUnit: {
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     flex: 1,
-    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+    backgroundColor: '#FCD34D',
     marginHorizontal: 0.5,
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,

@@ -1,92 +1,92 @@
 /**
- * eXeco DS v1 — shared design tokens (mobile)
- * Brand navy #04265E on dark command-center surfaces.
- * Dark surfaces: bg #0B1220, card #121B31, border rgba(148,163,184,0.16)
- * Accents: emerald #10B981, success #22C55E, warning #F59E0B, danger #EF4444, info #3B82F6
+ * eXeco Light DS — shared design tokens (mobile)
+ * Brand navy #1E3A8A on light surfaces.
+ * Light surfaces: bg #F1F5F9, card #FFFFFF, border #E2E8F0
+ * Accents: brand blue #2563EB, amber #F59E0B, success #16A34A, danger #EF4444
  */
 
 export const colors = {
   // Brand
-  navy: '#04265E',
+  navy: '#1E3A8A',
 
-  // Background / surfaces (dark)
-  bg: '#0B1220',
-  surface: '#121B31',
-  surfaceAlt: '#1B2540',
+  // Background / surfaces (light)
+  bg: '#F1F5F9',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F8FAFC',
   background: {
-    primary: '#0B1220',
-    secondary: '#121B31',
-    tertiary: '#1B2540',
-    card: '#121B31',
+    primary: '#F1F5F9',
+    secondary: '#FFFFFF',
+    tertiary: '#F8FAFC',
+    card: '#FFFFFF',
   },
 
   // Text
   text: {
-    primary: '#F1F5F9',
-    secondary: '#94A3B8',
-    muted: '#64748B',
-    inverse: '#0B1220',
+    primary: '#1E293B',
+    secondary: '#64748B',
+    muted: '#94A3B8',
+    inverse: '#F8FAFC',
   },
 
   // Brand / interactive accents
   brand: {
-    primary: '#10B981', // emerald — interactive accent on dark surfaces
-    secondary: '#3B82F6', // info blue
-    accent: '#10B981',
-    navy: '#04265E',
+    primary: '#2563EB', // brand blue — interactive accent on light surfaces
+    secondary: '#1D4ED8', // deep blue
+    accent: '#2563EB',
+    navy: '#1E3A8A',
   },
 
   // Status
   status: {
-    success: '#22C55E',
+    success: '#16A34A',
     warning: '#F59E0B',
     danger: '#EF4444',
-    info: '#3B82F6',
+    info: '#2563EB',
   },
 
   // Semantic accents (flat, for direct reference)
-  accent: '#10B981',
-  success: '#22C55E',
+  accent: '#16A34A', // used as success-green across screens ("green" mappings)
+  success: '#16A34A',
   warning: '#F59E0B',
   danger: '#EF4444',
-  info: '#3B82F6',
+  info: '#2563EB',
 
   // Chart Colors
   chart: {
-    smp: '#10B981',
-    smpBand: 'rgba(16, 185, 129, 0.2)',
-    generation: '#22C55E',
+    smp: '#FCD34D',
+    smpBand: 'rgba(252, 211, 77, 0.35)',
+    generation: '#16A34A',
     bid: '#F59E0B',
     solar: '#F59E0B',
-    wind: '#3B82F6',
+    wind: '#2563EB',
   },
 
   // Segment Colors (10 segments price gradient)
   segments: [
-    '#10B981', // 1 - Green (lowest price)
+    '#059669', // 1 - Green (lowest price)
+    '#10B981',
     '#34D399',
     '#6EE7B7',
-    '#A7F3D0',
-    '#FEF3C7', // 5 - Yellow-ish (mid)
-    '#FDE68A',
+    '#FDE68A', // 5 - Yellow-ish (mid)
     '#FCD34D',
     '#FBBF24',
     '#F59E0B',
+    '#F97316',
     '#EF4444', // 10 - Red (highest price)
   ],
 
   // Border
   border: {
-    primary: 'rgba(148, 163, 184, 0.16)',
-    secondary: 'rgba(148, 163, 184, 0.28)',
-    focus: '#10B981',
+    primary: '#E2E8F0',
+    secondary: '#CBD5E1',
+    focus: '#2563EB',
   },
 
   // Gradient
   gradient: {
-    card: ['#121B31', '#1B2540'],
-    header: ['#0B1220', '#121B31'],
-    accent: ['#10B981', '#3B82F6'],
+    card: ['#FFFFFF', '#F8FAFC'],
+    header: ['#FFFFFF', '#F8FAFC'],
+    accent: ['#1D4ED8', '#2563EB'],
   },
 };
 

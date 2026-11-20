@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   smpCardValue: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: themeColors.text.primary,
+    color: '#FFFFFF',
     lineHeight: 56,
   },
   smpCardUnit: {

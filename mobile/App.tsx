@@ -43,7 +43,7 @@ const TabIcon = ({ name, focused }: { name: string; focused: boolean }) => {
     <Ionicons
       name={focused ? ionName : `${ionName}-outline` as keyof typeof Ionicons.glyphMap}
       size={22}
-      color={focused ? '#10B981' : '#94A3B8'}
+      color={focused ? '#2563EB' : '#94A3B8'}
     />
   );
 };
@@ -205,7 +205,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <Header title="DAM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <KPXSimulationScreen />
@@ -219,7 +219,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <Header title="RTM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <RTMSimulationScreen />
@@ -257,7 +257,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <Header />
         <View style={styles.content}>{renderScreen()}</View>
         <BottomTabBar
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logoText: {
-    color: colors.brand.primary,
+    color: colors.brand.navy,
     fontSize: 24,
     fontWeight: 'bold',
     fontStyle: 'italic',
@@ -324,14 +324,14 @@ const styles = StyleSheet.create({
 
   versionText: {
     fontSize: 12,
-    color: colors.text.secondary,
+    color: colors.text.muted,
   },
 
   // Tab Bar
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border.primary,
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,

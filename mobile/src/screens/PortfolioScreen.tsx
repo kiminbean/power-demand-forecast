@@ -138,7 +138,7 @@ function PortfolioSummary({ resources }: { resources: DisplayResource[] }) {
             width={screenWidth - spacing.lg * 2 - spacing.md * 2}
             height={160}
             chartConfig={{
-              color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+              color: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
             }}
             accessor="capacity"
             backgroundColor="transparent"

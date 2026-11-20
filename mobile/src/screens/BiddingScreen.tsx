@@ -2280,9 +2280,9 @@ const styles = StyleSheet.create({
   statusAlert: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(22, 163, 74, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(22, 163, 74, 0.35)',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
@@ -2302,7 +2302,7 @@ const styles = StyleSheet.create({
   },
   statusAlertDesc: {
     fontSize: 12,
-    color: 'rgba(16, 185, 129, 0.8)',
+    color: '#16A34A',
     marginTop: 2,
   },
 
@@ -2557,7 +2557,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   segmentRowHighlight: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(22, 163, 74, 0.08)',
   },
   segmentIdCell: {
     width: 32,
@@ -3257,7 +3257,7 @@ const styles = StyleSheet.create({
   },
   rtmSlotInputPositive: {
     borderColor: colors.green,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(22, 163, 74, 0.1)',
     color: colors.green,
   },
   rtmSlotInputNegative: {

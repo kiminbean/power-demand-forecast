@@ -54,9 +54,9 @@ export type BiddingStackParamList = {
 };
 
 // Theme
-const DarkTheme = {
+const LightTheme = {
   ...DefaultTheme,
-  dark: true,
+  dark: false,
   colors: {
     ...DefaultTheme.colors,
     primary: colors.brand.primary,
@@ -113,7 +113,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean; color: str
       <Ionicons
         name={focused ? tabIconMap[name] : `${tabIconMap[name]}-outline` as keyof typeof Ionicons.glyphMap}
         size={22}
-        color={focused ? '#10B981' : '#94A3B8'}
+        color={focused ? '#2563EB' : '#94A3B8'}
       />
     </View>
   );
@@ -122,7 +122,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean; color: str
 // Main App Navigator
 export default function AppNavigator() {
   return (
-    <NavigationContainer theme={DarkTheme}>
+    <NavigationContainer theme={LightTheme}>
       <Tab.Navigator
         screenOptions={{
           tabBarStyle: {
