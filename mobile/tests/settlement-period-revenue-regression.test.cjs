@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTheme } = require('./theme-loader.cjs');
+const themeExports = loadTheme();
 
 async function renderSettlement(records) {
   let state = [], cursor = 0, effect, initialized = false, requestedDays;
@@ -20,7 +22,7 @@ async function renderSettlement(records) {
   const source = fs.readFileSync(path.join(__dirname, '../src/screens/SettlementScreen.tsx'), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => name === 'react' ? React : name === 'react-native' ? native : { apiService } });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => name === 'react' ? React : name === 'react-native' ? native : name.endsWith('theme/colors') ? themeExports : { apiService } });
   function expand(node) {
     if (Array.isArray(node)) return node.map(expand);
     if (!node || typeof node !== 'object') return node;

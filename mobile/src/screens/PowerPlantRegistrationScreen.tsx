@@ -17,6 +17,8 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+
+import { colors as themeColors } from '../theme/colors';
 import { WebView } from 'react-native-webview';
 import {
   PowerPlant,
@@ -40,17 +42,17 @@ import apiService from '../services/api';
 
 // Colors matching app theme
 const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#f8fafc',
-  card: '#ffffff',
-  text: '#1e293b',
-  textMuted: '#64748b',
-  border: '#e2e8f0',
-  green: '#22c55e',
-  orange: '#f97316',
-  red: '#ef4444',
-  blue: '#3b82f6',
+  primary: themeColors.navy,
+  secondary: themeColors.info,
+  background: themeColors.bg,
+  card: themeColors.surface,
+  text: themeColors.text.primary,
+  textMuted: themeColors.text.secondary,
+  border: themeColors.border.primary,
+  green: themeColors.accent,
+  orange: themeColors.warning,
+  red: themeColors.danger,
+  blue: themeColors.info
 };
 
 interface PowerPlantRegistrationScreenProps {
@@ -582,11 +584,11 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   backButtonText: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 16,
   },
   headerTitle: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -664,7 +666,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   segmentButtonTextActive: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontWeight: '600',
   },
   dateRow: {
@@ -799,11 +801,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   directionButtonTextActive: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontWeight: '600',
   },
   estimatesCard: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -871,7 +873,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ffffff',
+    color: themeColors.text.primary,
   },
   // Address search styles
   addressRow: {
@@ -890,7 +892,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addressSearchButtonText: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -914,7 +916,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   modalTitle: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -922,7 +924,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   modalCloseText: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 20,
     fontWeight: '600',
   },

@@ -15,6 +15,12 @@ function loadHeader() {
     View: 'View', Text: 'Text', TouchableOpacity: 'TouchableOpacity',
     SafeAreaView: 'SafeAreaView', Platform: {}, StyleSheet: { create: styles => styles },
   };
+  const themeTs = fs.readFileSync(path.join(__dirname, '../src/theme/colors.ts'), 'utf8');
+  const themeCode = ts.transpileModule(themeTs, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const themeModule = { exports: {} };
+  vm.runInNewContext(themeCode, { module: themeModule, exports: themeModule.exports });
   const source = fs.readFileSync(path.join(__dirname, '../App.tsx'), 'utf8');
   const code = ts.transpileModule(source + '\nexport { Header };', {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
@@ -22,7 +28,7 @@ function loadHeader() {
   const module = { exports: {} };
   vm.runInNewContext(code, {
     module, exports: module.exports,
-    require: name => name === 'react' ? React : name === 'react-native' ? native : {},
+    require: name => name === 'react' ? React : name === 'react-native' ? native : name.endsWith('src/theme/colors') ? themeModule.exports : {},
   });
   return module.exports.Header;
 }

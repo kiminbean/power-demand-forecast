@@ -22,6 +22,8 @@ import {
   Modal,
   Switch,
 } from 'react-native';
+
+import { colors as themeColors } from '../theme/colors';
 import { apiService, SMPForecast, MarketStatus, OptimizedBids, PowerPlant, DualSettlement } from '../services/api';
 import PowerPlantRegistrationScreen from './PowerPlantRegistrationScreen';
 import {
@@ -49,18 +51,18 @@ function validBidCapacity(text: string): boolean {
 
 // Design colors from Figma
 const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#ffffff',
-  cardBg: '#f8f9fa',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  orange: '#f59e0b',
-  blue: '#2563eb',
-  red: '#ef4444',
-  green: '#10b981',
-  border: '#e5e7eb',
+  primary: themeColors.navy,
+  secondary: themeColors.info,
+  background: themeColors.bg,
+  cardBg: themeColors.surface,
+  text: themeColors.text.primary,
+  textSecondary: themeColors.text.secondary,
+  textMuted: themeColors.text.secondary,
+  orange: themeColors.warning,
+  blue: themeColors.info,
+  red: themeColors.danger,
+  green: themeColors.accent,
+  border: themeColors.border.primary
 };
 
 // Segment data type with optional AI optimization results
@@ -184,13 +186,13 @@ interface RTMSlot {
 
 // Bid Status Configuration (Phase 5)
 const BID_STATUS_CONFIG: Record<BidStatus, { label: string; color: string; icon: string }> = {
-  draft: { label: '작성 중', color: '#9ca3af', icon: '📝' },
-  validating: { label: '검증 중', color: '#f59e0b', icon: '⏳' },
-  submitted: { label: '제출됨', color: '#3b82f6', icon: '📤' },
-  accepted: { label: '접수 완료', color: '#10b981', icon: '✓' },
-  closed: { label: '마감', color: '#6b7280', icon: '🔒' },
-  cleared: { label: '낙찰', color: '#22c55e', icon: '🎉' },
-  rejected: { label: '유찰', color: '#ef4444', icon: '✗' },
+  draft: { label: '작성 중', color: themeColors.text.secondary, icon: '📝' },
+  validating: { label: '검증 중', color: themeColors.warning, icon: '⏳' },
+  submitted: { label: '제출됨', color: themeColors.info, icon: '📤' },
+  accepted: { label: '접수 완료', color: themeColors.accent, icon: '✓' },
+  closed: { label: '마감', color: themeColors.text.secondary, icon: '🔒' },
+  cleared: { label: '낙찰', color: themeColors.success, icon: '🎉' },
+  rejected: { label: '유찰', color: themeColors.danger, icon: '✗' },
 };
 
 export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
@@ -1023,7 +1025,7 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
                             >
                               <Text style={[
                                 styles.statusBtnText,
-                                isSelected && { color: '#ffffff', fontWeight: '700' }
+                                isSelected && { color: themeColors.text.primary, fontWeight: '700' }
                               ]}>
                                 {sInfo.icon}
                               </Text>
@@ -1764,9 +1766,9 @@ export default function BiddingScreen({ webNavigation }: BiddingScreenProps) {
               <Switch
                 value={vppBiddingEnabled}
                 onValueChange={setVppBiddingEnabled}
-                trackColor={{ false: '#e2e8f0', true: '#22c55e' }}
-                thumbColor={vppBiddingEnabled ? '#ffffff' : '#f4f3f4'}
-                ios_backgroundColor="#e2e8f0"
+                trackColor={{ false: 'rgba(148, 163, 184, 0.3)', true: themeColors.success }}
+                thumbColor={vppBiddingEnabled ? '#F1F5F9' : '#94A3B8'}
+                ios_backgroundColor="rgba(148, 163, 184, 0.3)"
               />
             </View>
 
@@ -2003,12 +2005,12 @@ const styles = StyleSheet.create({
   damBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fef2f2',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   damDot: {
     width: 8,
@@ -2023,8 +2025,8 @@ const styles = StyleSheet.create({
     color: colors.red,
   },
   damBadgeOpen: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderColor: 'rgba(34, 197, 94, 0.35)',
   },
   damDotOpen: {
     backgroundColor: colors.green,
@@ -2140,7 +2142,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   riskBtnTextActive: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
   },
 
   // Auto Bidding Info (for small capacity < 1MW)
@@ -2634,10 +2636,10 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   simulationBtnDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: themeColors.surfaceAlt,
   },
   simulationBtnTextDisabled: {
-    color: '#9ca3af',
+    color: themeColors.text.secondary,
   },
 
   // Modal Styles
@@ -2852,7 +2854,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   vppToggleBtnTextActive: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
   },
   registerBtn: {
     backgroundColor: colors.secondary,
@@ -2863,7 +2865,7 @@ const styles = StyleSheet.create({
   registerBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#ffffff',
+    color: themeColors.text.primary,
   },
   plantCard: {
     backgroundColor: colors.cardBg,
@@ -2875,7 +2877,7 @@ const styles = StyleSheet.create({
   },
   plantCardInactive: {
     opacity: 0.6,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: themeColors.bg,
   },
   plantCardHeader: {
     flexDirection: 'row',
@@ -3099,7 +3101,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   optimizationBadgeText: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -3130,7 +3132,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   marketTabTitleActive: {
-    color: '#ffffff',
+    color: themeColors.text.primary,
   },
   marketTabSubtext: {
     fontSize: 11,
@@ -3141,21 +3143,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
   marketTabDisabled: {
-    backgroundColor: '#f3f4f6',
-    borderColor: '#d1d5db',
+    backgroundColor: themeColors.bg,
+    borderColor: themeColors.border.primary,
     opacity: 0.6,
   },
   marketTabTitleDisabled: {
-    color: '#9ca3af',
+    color: themeColors.text.secondary,
   },
   marketTabSubtextDisabled: {
-    color: '#9ca3af',
+    color: themeColors.text.secondary,
   },
 
   // Phase 6: RTM Badge Styles
   rtmBadge: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderColor: 'rgba(34, 197, 94, 0.35)',
   },
   rtmDot: {
     backgroundColor: colors.green,

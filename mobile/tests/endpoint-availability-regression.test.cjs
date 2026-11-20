@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTheme } = require('./theme-loader.cjs');
+const themeExports = loadTheme();
 
 function screen(name, api, stored = null) {
   const state = [];
@@ -28,7 +30,7 @@ function screen(name, api, stored = null) {
   const source = fs.readFileSync(path.join(__dirname, '../src/screens', `${name}.tsx`), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, exports: module.exports, console, Error, localStorage: { getItem: () => stored, setItem() {} }, require: dep => dep === 'react' ? React : dep === 'react-native' ? native : dep === '../services/api' ? { apiService: api } : dep === '../utils/powerPlantUtils' ? utils : dep === '../types/powerPlant' ? types : dep === './PowerPlantRegistrationScreen' ? { default: 'PowerPlantRegistrationScreen' } : {} });
+  vm.runInNewContext(code, { module, exports: module.exports, console, Error, localStorage: { getItem: () => stored, setItem() {} }, require: dep => dep === 'react' ? React : dep === 'react-native' ? native : dep === '../services/api' ? { apiService: api } : dep === '../utils/powerPlantUtils' ? utils : dep === '../types/powerPlant' ? types : dep === './PowerPlantRegistrationScreen' ? { default: 'PowerPlantRegistrationScreen' } : dep.endsWith('theme/colors') ? themeExports : {} });
   function expand(node) {
     if (Array.isArray(node)) return node.map(expand);
     if (!node || typeof node !== 'object') return node;

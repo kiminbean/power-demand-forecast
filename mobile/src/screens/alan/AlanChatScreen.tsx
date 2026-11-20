@@ -17,6 +17,8 @@ import {
   Dimensions,
   Animated,
 } from 'react-native';
+
+import { colors as themeColors } from '../../theme/colors';
 import { alanApi, AlanMessage, AlanResponse } from '../../services/alan/alanApi';
 import { apiService } from '../../services/api';
 import { describeCurrentSmp, formatNullableNumber, publishedSmpPrice } from '../../utils/smpPresentation';
@@ -25,19 +27,19 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Design colors from Figma (Page 2: Alan Chat)
 const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#d7dff0',      // Light lavender from Figma
-  gradientStart: '#c5d0e8',
-  gradientEnd: '#e0e6f2',
-  white: '#ffffff',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  border: '#d0d5dd',
-  inputBg: '#f5f7fa',
-  buttonBlue: '#2563eb',
-  robotFace: '#2d3a4f',       // Dark navy face
+  primary: themeColors.navy,
+  secondary: themeColors.info,
+  background: themeColors.bg,
+  gradientStart: themeColors.surface,
+  gradientEnd: themeColors.surfaceAlt,
+  white: themeColors.text.primary,
+  text: themeColors.text.primary,
+  textSecondary: themeColors.text.secondary,
+  textMuted: themeColors.text.secondary,
+  border: themeColors.border.primary,
+  inputBg: themeColors.surface,
+  buttonBlue: themeColors.info,
+  robotFace: themeColors.navy,
   robotEyes: '#00d4ff',       // Cyan eyes
 };
 
@@ -764,7 +766,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 16,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: themeColors.border.primary,
   },
   catEarRight: {
     width: 0,
@@ -789,7 +791,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 16,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: themeColors.border.primary,
   },
   robotBody: {
     width: 130,
@@ -832,7 +834,7 @@ const styles = StyleSheet.create({
   robotPupil: {
     width: 6,
     height: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: themeColors.surface,
     borderRadius: 3,
     marginTop: -3,
     marginLeft: 3,

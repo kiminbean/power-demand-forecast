@@ -11,6 +11,7 @@
 
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from './src/components/Ionicon';
 import {
   View,
   Text,
@@ -20,11 +21,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-// Use emoji icons for cross-platform compatibility
-// Ionicons has compatibility issues with Expo 50 on iOS
-const USE_EMOJI_ICONS = true;
-
-// Screens (3-tab: SMP, Bidding, Settlement)
+// eXeco DS v1 tokens (dark command-center surfaces, emerald accent)
+import { colors } from './src/theme/colors';
 import SMPForecastScreen from './src/screens/SMPForecastScreen';
 import BiddingScreen from './src/screens/BiddingScreen';
 import SettlementScreen from './src/screens/SettlementScreen';
@@ -32,35 +30,21 @@ import KPXSimulationScreen from './src/screens/KPXSimulationScreen';
 import RTMSimulationScreen from './src/screens/RTMSimulationScreen';
 import AlanChatScreen from './src/screens/alan/AlanChatScreen';
 
-// Design colors (matching web-v6.1.0)
-const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#ffffff',
-  cardBg: '#f8f8f8',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  border: '#e0e0e0',
-  tabActive: '#0048ff',
-  tabInactive: '#999999',
-};
-
-// Tab Icon using emojis for cross-platform compatibility
+// Tab Icon using vector icons (Ionicons, eXeco DS v1: focused emerald / unfocused mute)
 const TabIcon = ({ name, focused }: { name: string; focused: boolean }) => {
   const iconMap: { [key: string]: string } = {
-    'bar-chart': '📊',
-    'hammer': '⚖️',
-    'wallet': '💰',
+    'bar-chart': 'trending-up',
+    'hammer': 'hammer',
+    'wallet': 'wallet',
   };
 
+  const ionName = (iconMap[name] || 'ellipse') as keyof typeof Ionicons.glyphMap;
   return (
-    <Text style={{
-      fontSize: 22,
-      opacity: focused ? 1 : 0.6
-    }}>
-      {iconMap[name] || '•'}
-    </Text>
+    <Ionicons
+      name={focused ? ionName : `${ionName}-outline` as keyof typeof Ionicons.glyphMap}
+      size={22}
+      color={focused ? '#10B981' : '#94A3B8'}
+    />
   );
 };
 
@@ -86,7 +70,7 @@ function Header({ title, showBack, onBack }: { title?: string; showBack?: boolea
       <View style={styles.headerLeft}>
         {showBack ? (
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={{ fontSize: 20 }}>←</Text>
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
           </TouchableOpacity>
         ) : (
           <Text style={styles.logoText}>eXeco</Text>
@@ -143,7 +127,7 @@ function BottomTabBar({
           activeOpacity={0.8}
         >
           <View style={styles.alanAvatar}>
-            <Text style={styles.alanEmoji}>🤖</Text>
+            <Ionicons name="sparkles" size={24} color={colors.brand.primary} />
           </View>
         </TouchableOpacity>
       )}
@@ -221,7 +205,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style="light" />
           <Header title="DAM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <KPXSimulationScreen />
@@ -235,7 +219,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <SafeAreaView style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style="light" />
           <Header title="RTM 시뮬레이션" showBack onBack={handleBack} />
           <View style={styles.content}>
             <RTMSimulationScreen />
@@ -273,7 +257,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <Header />
         <View style={styles.content}>{renderScreen()}</View>
         <BottomTabBar
@@ -292,7 +276,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   content: {
     flex: 1,
@@ -300,14 +284,14 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border.primary,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -319,34 +303,37 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logoText: {
-    color: colors.primary,
+    color: colors.brand.primary,
     fontSize: 24,
     fontWeight: 'bold',
     fontStyle: 'italic',
   },
   headerTitle: {
-    color: colors.text,
+    color: colors.text.primary,
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 12,
   },
   backButton: {
-    padding: 4,
-    marginRight: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 8,
   },
 
   versionText: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.text.secondary,
   },
 
   // Tab Bar
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.border.primary,
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,
     paddingTop: 8,
   },
@@ -361,16 +348,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    minHeight: 44,
+    paddingVertical: 6,
   },
   tabLabel: {
     fontSize: 10,
-    color: colors.tabInactive,
+    color: colors.text.secondary,
     marginTop: 4,
     fontWeight: '500',
   },
   tabLabelActive: {
-    color: colors.tabActive,
+    color: colors.brand.primary,
     fontWeight: '600',
   },
 
@@ -379,29 +367,29 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     padding: 24,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.info,
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
   },
   retryText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontWeight: '600',
   },
 
@@ -410,13 +398,10 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f0f4f8',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.secondary,
-  },
-  alanEmoji: {
-    fontSize: 28,
+    borderColor: colors.brand.primary,
   },
 });

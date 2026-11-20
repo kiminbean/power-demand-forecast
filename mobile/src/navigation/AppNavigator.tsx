@@ -4,19 +4,20 @@
  */
 
 import React from 'react';
-import { Text } from 'react-native';
+import { View } from 'react-native';
+import { Ionicons } from '../components/Ionicon';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { colors } from '../theme/colors';
 
-// Icon map for cross-platform compatibility (emoji icons)
-const tabIconMap: { [key: string]: string } = {
-  'grid': '🏠',
-  'trending-up': '📈',
-  'layers': '📚',
-  'wallet': '💰',
+// eXeco DS v1 icon map (Ionicons): focused emerald #10B981 / unfocused mute #94A3B8
+const tabIconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
+  'grid': 'grid',
+  'trending-up': 'trending-up',
+  'layers': 'layers',
+  'wallet': 'wallet',
 };
 
 // Screens
@@ -105,12 +106,16 @@ function BiddingStackNavigator() {
   );
 }
 
-// Tab Icon Component - using emoji for cross-platform compatibility
-function TabIcon({ name, focused, color }: { name: string; focused: boolean; color: string }) {
+// Tab Icon Component - vector icons (eXeco DS v1)
+function TabIcon({ name, focused }: { name: string; focused: boolean; color: string }) {
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>
-      {tabIconMap[name] || '•'}
-    </Text>
+    <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons
+        name={focused ? tabIconMap[name] : `${tabIconMap[name]}-outline` as keyof typeof Ionicons.glyphMap}
+        size={22}
+        color={focused ? '#10B981' : '#94A3B8'}
+      />
+    </View>
   );
 }
 

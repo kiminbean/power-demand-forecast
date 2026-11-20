@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTheme } = require('./theme-loader.cjs');
+const themeExports = loadTheme();
 
 function harness(api) {
   const state = [];
@@ -27,7 +29,7 @@ function harness(api) {
   const source = fs.readFileSync(path.join(__dirname, '../src/screens/BiddingScreen.tsx'), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, exports: module.exports, console, require: name => name === 'react' ? React : name === 'react-native' ? native : name === '../services/api' ? { apiService: api } : name === '../utils/powerPlantUtils' ? utils : name === '../types/powerPlant' ? types : {} });
+  vm.runInNewContext(code, { module, exports: module.exports, console, require: name => name === 'react' ? React : name === 'react-native' ? native : name === '../services/api' ? { apiService: api } : name === '../utils/powerPlantUtils' ? utils : name === '../types/powerPlant' ? types : name.endsWith('theme/colors') ? themeExports : {} });
   function expand(node) {
     if (Array.isArray(node)) return node.map(expand);
     if (!node || typeof node !== 'object') return node;

@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTheme } = require('./theme-loader.cjs');
+const themeExports = loadTheme();
 
 function harness(api) {
   let state = [], cursor = 0, effect, initialized = false;
@@ -19,7 +21,7 @@ function harness(api) {
   const filename = path.join(__dirname, '../src/screens/SettlementScreen.tsx');
   const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(code, { module, exports: module.exports, console, require: name => name === 'react' ? React : name === 'react-native' ? native : { apiService: api } });
+  vm.runInNewContext(code, { module, exports: module.exports, console, require: name => name === 'react' ? React : name === 'react-native' ? native : name.endsWith('theme/colors') ? themeExports : { apiService: api } });
   const component = module.exports.default;
   function render() {
     cursor = 0;

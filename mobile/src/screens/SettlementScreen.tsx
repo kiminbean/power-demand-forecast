@@ -17,25 +17,27 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+
+import { colors as themeColors } from '../theme/colors';
 import { apiService, SettlementRecord, SettlementStats } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Design colors from Figma
 const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#ffffff',
-  cardBg: '#f8f9fa',
-  smpCardBg: '#2563eb',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  orange: '#f59e0b',
-  blue: '#2563eb',
-  green: '#10b981',
-  border: '#e5e7eb',
-  chartBg: '#f1f5f9',
+  primary: themeColors.navy,
+  secondary: themeColors.info,
+  background: themeColors.bg,
+  cardBg: themeColors.surface,
+  smpCardBg: themeColors.info,
+  text: themeColors.text.primary,
+  textSecondary: themeColors.text.secondary,
+  textMuted: themeColors.text.secondary,
+  orange: themeColors.warning,
+  blue: themeColors.info,
+  green: themeColors.accent,
+  border: themeColors.border.primary,
+  chartBg: themeColors.surfaceAlt
 };
 
 // Daily revenue data type
@@ -193,7 +195,7 @@ export default function SettlementScreen() {
       <View style={styles.smpInfoRow}>
         <View style={styles.smpInfoCard}>
           <Text style={styles.smpInfoLabel}>평균 DA-SMP</Text>
-          <Text style={[styles.smpInfoValue, { color: '#3b82f6' }]}>
+          <Text style={[styles.smpInfoValue, { color: themeColors.info }]}>
             {validNumber(avgDaSmp) ? avgDaSmp.toFixed(1) : '—'}
             <Text style={styles.smpInfoUnit}> 원/kWh</Text>
           </Text>
@@ -308,7 +310,7 @@ const styles = StyleSheet.create({
   mockBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#f59e0b',
+    color: themeColors.warning,
   },
   periodBadge: {
     flexDirection: 'row',
@@ -360,7 +362,7 @@ const styles = StyleSheet.create({
   smpCardValue: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: themeColors.text.primary,
     lineHeight: 56,
   },
   smpCardUnit: {

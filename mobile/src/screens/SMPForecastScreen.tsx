@@ -18,6 +18,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+
+import { colors as themeColors } from '../theme/colors';
 import { apiService, DayAheadSMP, SMPForecast, ModelInfo } from '../services/api';
 import { describeDayAhead, formatNullableNumber, isAvailableDayAhead } from '../utils/smpPresentation';
 
@@ -25,17 +27,17 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Design colors from Figma
 const colors = {
-  primary: '#04265e',
-  secondary: '#0048ff',
-  background: '#ffffff',
-  cardBg: '#f8f9fa',
-  smpCardBg: '#2563eb',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  orange: '#f59e0b',
-  green: '#10b981',
-  border: '#e5e7eb',
+  primary: themeColors.navy,
+  secondary: themeColors.info,
+  background: themeColors.bg,
+  cardBg: themeColors.surface,
+  smpCardBg: themeColors.info,
+  text: themeColors.text.primary,
+  textSecondary: themeColors.text.secondary,
+  textMuted: themeColors.text.secondary,
+  orange: themeColors.warning,
+  green: themeColors.accent,
+  border: themeColors.border.primary
 };
 
 // SMP hourly data type
@@ -411,7 +413,7 @@ const styles = StyleSheet.create({
   smpCardValue: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: themeColors.text.primary,
     lineHeight: 56,
   },
   smpCardUnit: {
@@ -504,7 +506,7 @@ const styles = StyleSheet.create({
   },
   currentTimeLine: {
     flex: 1,
-    backgroundColor: '#ef4444',
+    backgroundColor: themeColors.danger,
     width: 2,
   },
   chartXAxisRow: {
