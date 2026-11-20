@@ -305,7 +305,7 @@ class EmailNotifier:
         <html>
         <head>
             <style>
-                body {{ font-family: Arial, sans-serif; }}
+                body {{ font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif; }}
                 .alert-box {{
                     background-color: #ff4444;
                     color: white;
@@ -662,22 +662,32 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* eXeco DS v1 타이포: Pretendard Variable (CDN 로드 후 전역 스택 적용) */
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+
+    /* eXeco DS v1 표면 토큰: bg #0B1220 / card #121B31 / border rgba(148,163,184,0.16) */
+    .stApp, .main, [data-testid="stSidebar"] {
+        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+            'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif;
+        color: #F1F5F9;
+    }
+
     /* 전체 배경 */
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(135deg, #0B1220 0%, #0E1730 100%);
     }
 
-    /* 사이드바 숨기기 (옵션) */
+    /* 사이드바 */
     [data-testid="stSidebar"] {
-        background: rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(255,255,255,0.1);
+        background: #121B31;
+        border-right: 1px solid rgba(148,163,184,0.16);
     }
 
-    /* 메인 헤더 */
+    /* 메인 헤더 (브랜드 네이비 그라데이션) */
     .main-header {
-        background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+        background: linear-gradient(90deg, #04265E 0%, #0A3A7D 100%);
         padding: 1rem 2rem;
-        border-radius: 1rem;
+        border-radius: 14px;
         margin-bottom: 1rem;
         display: flex;
         justify-content: space-between;
@@ -685,7 +695,7 @@ st.markdown("""
     }
 
     .main-title {
-        color: white;
+        color: #F1F5F9;
         font-size: 1.8rem;
         font-weight: 700;
         margin: 0;
@@ -696,28 +706,38 @@ st.markdown("""
         font-size: 0.9rem;
     }
 
-    /* 정보 카드 */
+    /* 정보 카드 (eXeco DS v1 카드 토큰) */
     .info-card {
-        background: rgba(30, 41, 59, 0.8);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 1rem;
+        background: #121B31;
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 14px;
         padding: 1.5rem;
         margin-bottom: 1rem;
         backdrop-filter: blur(10px);
+        box-shadow: 0 2px 8px rgba(2, 6, 23, 0.35);
     }
 
     .info-card-title {
-        color: #94a3b8;
+        color: #94A3B8;
         font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .info-card-title svg {
+        flex-shrink: 0;
+        opacity: 0.85;
     }
 
     .info-card-value {
-        color: white;
+        color: #F1F5F9;
         font-size: 2rem;
         font-weight: 700;
+        font-variant-numeric: tabular-nums;
     }
 
     .info-card-change {
@@ -810,9 +830,9 @@ st.markdown("""
 
     /* 지도 컨테이너 */
     .map-container {
-        background: rgba(30, 41, 59, 0.6);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 1rem;
+        background: #121B31;
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 14px;
         padding: 0.5rem;
         overflow: hidden;
     }
@@ -823,7 +843,7 @@ st.markdown("""
         align-items: center;
         gap: 0.5rem;
         padding: 0.25rem 0;
-        color: white;
+        color: #F1F5F9;
         font-size: 0.85rem;
     }
 
@@ -833,11 +853,17 @@ st.markdown("""
         border-radius: 50%;
     }
 
+    .main-title svg {
+        vertical-align: -0.12em;
+        margin-right: 0.45rem;
+    }
+
     /* 탭 스타일 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0;
-        background: rgba(30, 41, 59, 0.8);
-        border-radius: 0.75rem;
+        background: #121B31;
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 14px;
         padding: 0.25rem;
     }
 
@@ -848,8 +874,8 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
-        color: white;
+        background: linear-gradient(90deg, #04265E 0%, #0A3A7D 100%);
+        color: #F1F5F9;
     }
 
     /* 메트릭 카드 그리드 */
@@ -862,26 +888,28 @@ st.markdown("""
 
     /* 차트 컨테이너 */
     .chart-container {
-        background: rgba(30, 41, 59, 0.6);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 1rem;
+        background: #121B31;
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 14px;
         padding: 1rem;
     }
 
     /* 숨기기 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    [data-testid="stHeader"] { background: #0f172a; color: #e2e8f0; }
-    [data-testid="stHeader"] button { color: #e2e8f0; }
+    [data-testid="stHeader"] { background: #0B1220; color: #F1F5F9; }
+    [data-testid="stHeader"] button { color: #F1F5F9; }
 
     /* Metric 스타일 오버라이드 */
     [data-testid="stMetricValue"] {
-        color: white;
+        color: #F1F5F9;
         font-size: 1.8rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
     }
 
     [data-testid="stMetricLabel"] {
-        color: #94a3b8;
+        color: #94A3B8;
     }
 
     [data-testid="stMetricDelta"] svg {
@@ -896,45 +924,46 @@ st.markdown("""
     }
     .main-header {
         gap: 1.5rem;
-        background: linear-gradient(120deg, #123761, #274475 58%, #493f80);
-        border: 1px solid rgba(148, 193, 255, 0.22);
+        background: linear-gradient(120deg, #04265E, #0A3A7D 58%, #0E4494);
+        border: 1px solid rgba(148, 163, 184, 0.16);
         padding: 1.5rem 1.75rem;
+        box-shadow: 0 2px 10px rgba(2, 6, 23, 0.4);
     }
     .main-header h1.main-title {
-        color: #fff;
+        color: #F1F5F9;
         font-size: clamp(1.5rem, 2.3vw, 2rem);
         line-height: 1.2;
         padding: 0;
     }
     .main-subtitle { margin: 0.45rem 0; }
-    .header-meta { text-align: right; color: #fff; flex-shrink: 0; }
-    .header-meta-label { font-size: 0.8rem; color: #dbeafe; }
+    .header-meta { text-align: right; color: #F1F5F9; flex-shrink: 0; }
+    .header-meta-label { font-size: 0.8rem; color: #BFDBFE; }
     .header-meta-time { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .header-meta-source { font-size: 0.75rem; color: #dbeafe; margin-top: 0.3rem; }
+    .header-meta-source { font-size: 0.75rem; color: #BFDBFE; margin-top: 0.3rem; }
     .info-card {
         min-height: 138px;
         padding: 1.15rem;
         margin-bottom: 0;
-        background: #1b2a40;
-        border-color: #34465f;
+        background: #121B31;
+        border-color: rgba(148,163,184,0.16);
     }
-    .info-card-title { color: #c0cee0; letter-spacing: 0; }
+    .info-card-title { color: #94A3B8; letter-spacing: 0; }
     .info-card-value { font-size: clamp(1.45rem, 2vw, 1.9rem); font-variant-numeric: tabular-nums; }
-    .info-card-change { color: #cbd5e1; font-size: 0.8rem; }
-    .positive { color: #6ee7b7; }
-    .negative { color: #fca5a5; }
-    .status-online { color: #a7f3d0; }
+    .info-card-change { color: #CBD5E1; font-size: 0.8rem; }
+    .positive { color: #10B981; }
+    .negative { color: #EF4444; }
+    .status-online { color: #22C55E; }
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] label,
-    [data-testid="stCheckbox"] label p { color: #e2e8f0; }
-    [data-testid="stSidebar"] [data-testid="stAlert"] p { color: #bfdbfe; }
+    [data-testid="stCheckbox"] label p { color: #F1F5F9; }
+    [data-testid="stSidebar"] [data-testid="stAlert"] p { color: #BFDBFE; }
     .stTabs [data-baseweb="tab-list"] { gap: 0.25rem; overflow-x: auto; }
-    .stTabs [data-baseweb="tab"] { min-height: 44px; white-space: nowrap; color: #cbd5e1; }
+    .stTabs [data-baseweb="tab"] { min-height: 44px; white-space: nowrap; color: #CBD5E1; }
     .stTabs [data-baseweb="tab"]:focus-visible,
-    button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    button:focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; }
     @media (max-width: 640px) {
         .main .block-container { padding: 4rem 1rem 1.5rem; }
         .main-header { flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.2rem; }
@@ -1777,7 +1806,7 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
 
         # 팝업 내용 (실제 데이터 정보 포함)
         popup_html = f"""
-        <div style="font-family: 'Malgun Gothic', sans-serif; width: 240px;">
+        <div style="font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif; width: 240px;">
             <h4 style="margin: 0 0 10px 0; color: {config['color']};">
                 {plant['name']}
             </h4>
@@ -2513,7 +2542,7 @@ def main():
 
     # ========== 사이드바: 테스트 모드 ==========
     with st.sidebar:
-        st.markdown("### ⚙️ 설정")
+        st.markdown("### 설정")
 
         # 알림 테스트 모드
         test_alert = st.checkbox("🧪 알림 테스트 모드", value=False)
@@ -2534,13 +2563,13 @@ def main():
             st.warning(f"⚠️ 테스트 모드: 예비율 {test_reserve:.1f}%")
 
         st.markdown("---")
-        st.markdown("### 📊 데이터 출처")
+        st.markdown("### 데이터 출처")
         st.info(f"전력: {power_status.get('data_source', 'N/A')}")
         st.info(f"SMP: {smp_data.get('data_source', 'N/A')}")
 
         # ========== 경보 이력 ==========
         st.markdown("---")
-        st.markdown("### 📜 경보 이력")
+        st.markdown("### 경보 이력")
 
         alert_history = get_alert_history()
         recent_alerts = alert_history.get_recent(10)
@@ -2612,7 +2641,7 @@ def main():
     st.markdown(f"""
     <div class="main-header">
         <div>
-            <h1 class="main-title">🗺️ 제주 전력 지도</h1>
+            <h1 class="main-title"><svg width="0.95em" height="0.95em" viewBox="0 0 24 24" fill="none" stroke="#7DD3FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>제주 전력 지도</h1>
             <p class="main-subtitle">실시간 재생에너지 모니터링 및 SMP 예측</p>
             <div style="margin-top: 5px;">
                 <span class="status-badge {data_status_class}">
@@ -2802,7 +2831,7 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 탭 생성
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 실시간 현황", "💰 SMP 예측", "⚡ 발전 현황", "🔍 분석"])
+    tab1, tab2, tab3, tab4 = st.tabs(["실시간 현황", "SMP 예측", "발전 현황", "분석"])
 
     with tab1:
         # 메인 대시보드 탭 (GE Inertia 스타일)
@@ -2855,7 +2884,7 @@ def main():
 
         with col_chart:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.markdown("### 📈 24시간 SMP 예측")
+            st.markdown("### 24시간 SMP 예측")
             fig = create_smp_chart(smp_data)
             st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -2888,8 +2917,8 @@ def main():
             # 입찰 추천
             optimal_bid = smp_data['current'] * 0.95
             st.markdown(f"""
-            <div class="info-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.3));">
-                <div class="info-card-title">💡 입찰 추천</div>
+            <div class="info-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(4, 38, 94, 0.55));">
+                <div class="info-card-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>입찰 추천</div>
                 <div style="margin-top: 15px; color: white;">
                     <div style="font-size: 1.5rem; font-weight: bold; color: #10b981;">
                         {optimal_bid:.1f} 원/kWh
@@ -2911,20 +2940,20 @@ def main():
 
         with col_donut:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.markdown("### ⚡ 전력 공급 구성 (시뮬레이션 추정)")
+            st.markdown("### 전력 공급 구성 (시뮬레이션 추정)")
             fig = create_supply_donut(power_status)
             st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_timeline:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.markdown("### 📊 시간대별 발전량 (시뮬레이션)")
+            st.markdown("### 시간대별 발전량 (시뮬레이션)")
             fig = create_generation_timeline(plants_df)
             st.plotly_chart(fig, width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
 
         # 발전소 상세 테이블
-        st.markdown("### 📋 발전소 상세 현황")
+        st.markdown("### 발전소 상세 현황")
 
         # 필터
         col_filter1, col_filter2, _ = st.columns([1, 1, 2])
@@ -2952,14 +2981,14 @@ def main():
 
     with tab4:
         # 분석 탭
-        st.markdown("### 🔍 AI 분석 및 인사이트")
+        st.markdown("### AI 분석 및 인사이트")
 
         col_a1, col_a2 = st.columns(2)
 
         with col_a1:
             st.markdown("""
             <div class="info-card">
-                <div class="info-card-title">🧠 XAI 분석 요약</div>
+                <div class="info-card-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>XAI 분석 요약</div>
                 <div style="margin-top: 15px; color: white;">
                     <p><strong>예시 (실제 모델 분석 결과 아님)</strong></p>
                     <ul style="color: #94a3b8; margin: 10px 0;">
@@ -2974,7 +3003,7 @@ def main():
 
             st.markdown(f"""
             <div class="info-card">
-                <div class="info-card-title">📊 모델 성능</div>
+                <div class="info-card-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>모델 성능</div>
                 <div style="margin-top: 15px;">
                     <p style="color: #cbd5e1;">README 운영 모델 성능 표 기준 (2026-11-06 벤치마크 검증값)</p>
                     <p style="color: #94a3b8; font-weight: bold; margin: 8px 0 2px;">🔌 수요 예측 — 1시간 앞 전력수요 (KPX 제주 전력거래량)</p>
@@ -3014,7 +3043,7 @@ def main():
         with col_a2:
             st.markdown("""
             <div class="info-card">
-                <div class="info-card-title">⚠️ 리스크 알림</div>
+                <div class="info-card-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><path d="M12 17.5h.01"/></svg>리스크 알림</div>
                 <div style="margin-top: 15px;">
                     <p style="color: #cbd5e1;">예시 (실제 운영 경보 또는 입찰 권고 아님)</p>
                     <div style="background: rgba(245, 158, 11, 0.2); border-left: 3px solid #f59e0b;
@@ -3044,7 +3073,7 @@ def main():
 
             st.markdown("""
             <div class="info-card">
-                <div class="info-card-title">📈 일간 요약</div>
+                <div class="info-card-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>일간 요약</div>
                 <div style="margin-top: 15px; color: white;">
                     <p style="color: #cbd5e1;">고정 예시 (실제 일간 집계 아님)</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
