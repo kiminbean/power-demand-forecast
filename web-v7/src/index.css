@@ -189,16 +189,22 @@ body {
 }
 
 /* Responsive dashboard layout */
-.dashboard-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.dashboard-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .dashboard-kpis > div { min-width: 0; padding: 1.25rem 0.75rem; }
 .dashboard-kpis > div > div { flex-wrap: wrap; justify-content: center; padding: 0; }
 .dashboard-chart, .dashboard-side { min-width: 0; }
 .plant-map { width: 100%; }
 .plant-details { width: 100%; min-height: 2.5rem; text-align: center; color: #374151; }
 .demo-notice { background: #fff3cd; border: 1px solid #b78600; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #563b00; }
+/* recharts 범례가 고정 폭으로 렌더링되어 모바일에서 레이아웃 폭을 밀어내는 것 방지 */
+.recharts-legend-wrapper { width: 100% !important; }
+.recharts-default-legend { display: flex; flex-wrap: wrap; justify-content: center; width: 100%; }
+/* 1150px 이하에서만 세로 스택 - 일반 노트북(1280~1440)에서도 7:3 동반 배치 유지 */
+@media (max-width: 1150px) {
+  .dashboard-grid { flex-direction: column; }
+}
 @media (max-width: 1500px) {
   .dashboard-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .dashboard-grid { flex-direction: column; }
 }
 @media (max-width: 800px) {
   .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }

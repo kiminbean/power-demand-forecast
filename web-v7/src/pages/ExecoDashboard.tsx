@@ -410,9 +410,10 @@ export default function ExecoDashboard() {
               </div>
             </div>
           </div>
-        </div>
 
-        <DayAheadSMPCard data={dayAheadSMP} variant="kpi" />
+          {/* 하루전시장 SMP - KPI 여섯 번째 타일 (6타일이므로 모든 브레이크포인트에서 빈 칸 없이 채워짐) */}
+          <DayAheadSMPCard data={dayAheadSMP} variant="kpi" />
+        </div>
 
         {/* Main Content Grid - 7:3 ratio */}
         <div className="dashboard-grid flex gap-6 flex-1">

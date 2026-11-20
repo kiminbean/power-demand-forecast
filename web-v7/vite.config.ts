@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  // /v7/ 경로로 서빙되므로 에셋 참조를 /v7/assets/...로 고정
+  // (multiplex 서버가 /v7 프리픽스를 벗겨 파일을 찾으므로 루트 절대경로면 404)
+  base: '/v7/',
   plugins: [react()],
   // 테스트가 src/pages/Dashboard.tsx, SMPPrediction.tsx를 템플릿 리터럴로
   // 동적 import하므로 시작 시 스캐너가 이들 의존성을 찾지 못한다. 미리
