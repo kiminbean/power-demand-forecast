@@ -146,7 +146,7 @@ const PlantMarker: React.FC<{
       data-plant-id={plant.id}
       aria-label={`${plant.name} 상세 정보`}
       aria-pressed={isSelected}
-      className="plant-marker absolute rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+      className="plant-marker absolute rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-ring)]"
       style={{
         left: `${plant.x / MAP_WIDTH * 100}%`,
         top: `${plant.y / MAP_HEIGHT * 100}%`,
@@ -266,9 +266,9 @@ export default function ExecoDashboard() {
   // API 연결 상태 아이콘 색상
   const getStatusColor = (status: string | undefined) => {
     switch (status) {
-      case 'connected': return '#00c515';  // 녹색
-      case 'error': return '#ff1d1d';       // 빨간색
-      default: return '#fbbf24';            // 노란색 (unknown)
+      case 'connected': return 'var(--color-success-text)';  // 녹색
+      case 'error': return 'var(--color-danger-text)';       // 빨간색
+      default: return 'var(--color-warning-text)';            // 노란색 (unknown)
     }
   };
 
@@ -283,11 +283,11 @@ export default function ExecoDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       {/* Header - #04265e */}
       <header
         className="dashboard-header min-h-[80px] px-6 flex items-center justify-between"
-        style={{ backgroundColor: '#04265e', borderBottom: '0.4px solid #d8d8d8' }}
+        style={{ background: 'linear-gradient(90deg, #04265E 0%, #0A3A7D 100%)', borderBottom: '0.4px solid rgba(148, 163, 184, 0.24)' }}
       >
         <div className="h-[40px]">
           <img src={LOGO} alt="RE-BMS" className="h-full object-contain" />
@@ -344,22 +344,22 @@ export default function ExecoDashboard() {
           </div>
         )}
         {kpis && !kpisError && (
-          <div className="text-sm text-gray-700">
+          <div className="text-sm text-text-secondary">
             KPI 출처: {kpis.data_source || '출처 정보 없음'} · 출처가 명시되지 않은 항목은 기본값일 수 있음 · 주파수는 시뮬레이션 · 재생에너지 비율은 예측 기반
           </div>
         )}
         {/* KPI Cards Row - 실시간 데이터 */}
         <div className="dashboard-kpis flex gap-6">
           {/* 현재 수요 */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">현재 수요</span>
+          <div className="flex-1 bg-card border border-border rounded-[14px] px-6 py-8 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-2xl font-medium text-text-primary tracking-[-0.8px]">현재 수요</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">{currentDemand.toFixed(1)}</span>
-                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">MW</span>
+                <span className="text-[38px] font-bold text-text-primary tabular-nums leading-[60px] tracking-[-1.28px]">{currentDemand.toFixed(1)}</span>
+                <span className="text-2xl font-bold text-text-primary tabular-nums leading-9 tracking-[-0.8px]">MW</span>
               </div>
-              <div className="bg-white rounded-lg px-3.5 py-1">
-                <span className="text-xl text-[#272727] tracking-[-0.72px]">예비율 {supplyReserveRate.toFixed(1)}%</span>
+              <div className="bg-elevated border border-border rounded-lg px-3.5 py-1">
+                <span className="text-xl text-text-secondary tracking-[-0.72px]">예비율 {supplyReserveRate.toFixed(1)}%</span>
               </div>
             </div>
           </div>
@@ -368,15 +368,15 @@ export default function ExecoDashboard() {
           <PublishedSMPCard data={publishedSMP} variant="kpi" />
 
           {/* 계통 주파수 - 실시간 데이터 */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">계통 주파수</span>
+          <div className="flex-1 bg-card border border-border rounded-[14px] px-6 py-8 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-2xl font-medium text-text-primary tracking-[-0.8px]">계통 주파수</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">{gridFrequency.toFixed(2)}</span>
-                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">Hz</span>
+                <span className="text-[38px] font-bold text-text-primary tabular-nums leading-[60px] tracking-[-1.28px]">{gridFrequency.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-text-primary tabular-nums leading-9 tracking-[-0.8px]">Hz</span>
               </div>
-              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: gridFrequency >= 59.8 && gridFrequency <= 60.2 ? 'rgba(0,197,21,0.1)' : 'rgba(255,29,29,0.1)' }}>
-                <span className="text-xl tracking-[-0.72px]" style={{ color: gridFrequency >= 59.8 && gridFrequency <= 60.2 ? '#00c515' : '#ff1d1d' }}>
+              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: gridFrequency >= 59.8 && gridFrequency <= 60.2 ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)' }}>
+                <span className="text-xl tracking-[-0.72px]" style={{ color: gridFrequency >= 59.8 && gridFrequency <= 60.2 ? 'var(--color-success-text)' : 'var(--color-danger-text)' }}>
                   {gridFrequency >= 59.8 && gridFrequency <= 60.2 ? '정상' : '주의'}
                 </span>
               </div>
@@ -384,29 +384,29 @@ export default function ExecoDashboard() {
           </div>
 
           {/* 재생에너지 비율 - 실시간 데이터 */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">재생에너지 비율</span>
+          <div className="flex-1 bg-card border border-border rounded-[14px] px-6 py-8 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-2xl font-medium text-text-primary tracking-[-0.8px]">재생에너지 비율</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: '#ff1d1d' }}>{renewableRatio.toFixed(1)}</span>
-                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: '#ff1d1d' }}>%</span>
+                <span className="text-[38px] font-bold leading-[60px] tracking-[-1.28px]" style={{ color: 'var(--color-danger-text)' }}>{renewableRatio.toFixed(1)}</span>
+                <span className="text-2xl font-bold leading-9 tracking-[-0.8px]" style={{ color: 'var(--color-danger-text)' }}>%</span>
               </div>
-              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: '#ffeaea' }}>
-                <span className="text-xl tracking-[-0.72px]" style={{ color: '#ff1d1d' }}>태양광+풍력</span>
+              <div className="rounded-lg px-3.5 py-1" style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}>
+                <span className="text-xl tracking-[-0.72px]" style={{ color: 'var(--color-danger-text)' }}>태양광+풍력</span>
               </div>
             </div>
           </div>
 
           {/* 기상 현황 - 실시간 KMA 데이터 */}
-          <div className="flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5">
-            <span className="text-2xl font-medium text-black tracking-[-0.8px]">기상 현황</span>
+          <div className="flex-1 bg-card border border-border rounded-[14px] px-6 py-8 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-2xl font-medium text-text-primary tracking-[-0.8px]">기상 현황</span>
             <div className="flex items-center gap-3.5 px-3.5">
               <div className="flex items-end gap-1">
-                <span className="text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]">{weather.temperature.toFixed(0)}</span>
-                <span className="text-2xl font-bold text-black leading-9 tracking-[-0.8px]">°C</span>
+                <span className="text-[38px] font-bold text-text-primary tabular-nums leading-[60px] tracking-[-1.28px]">{weather.temperature.toFixed(0)}</span>
+                <span className="text-2xl font-bold text-text-primary tabular-nums leading-9 tracking-[-0.8px]">°C</span>
               </div>
-              <div className="bg-white rounded-lg px-3.5 py-1">
-                <span className="text-xl text-[#272727] tracking-[-0.72px]">풍속 {weather.wind_speed.toFixed(1)} m/s</span>
+              <div className="bg-elevated border border-border rounded-lg px-3.5 py-1">
+                <span className="text-xl text-text-secondary tracking-[-0.72px]">풍속 {weather.wind_speed.toFixed(1)} m/s</span>
               </div>
             </div>
           </div>
@@ -419,15 +419,15 @@ export default function ExecoDashboard() {
         <div className="dashboard-grid flex gap-6 flex-1">
           {/* Left - Chart Section (70%) */}
           <div className="dashboard-chart flex-[7] flex flex-col gap-2.5">
-            <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex-1 flex flex-col gap-6">
+            <div className="bg-card border border-border rounded-[14px] p-6 flex-1 flex flex-col gap-6">
               <div className="flex flex-wrap items-center gap-2.5">
-                <span className="text-3xl font-bold text-black tracking-[-0.96px]">제주 전력수급 현황</span>
-                <span className="text-lg text-black tracking-[-0.64px]">시간별 패턴 및 예측(MW)</span>
+                <span className="text-3xl font-bold text-text-primary tracking-[-0.96px]">제주 전력수급 현황</span>
+                <span className="text-lg text-text-secondary tracking-[-0.64px]">시간별 패턴 및 예측(MW)</span>
               </div>
-              <span className="text-sm text-gray-700">전력수급 출처: {powerSupplyError ? '데모 데이터' : powerSupply?.data_source || '데이터 확인 중'} · 과거 시간도 패턴 기반이며 태양광·풍력은 예측값</span>
+              <span className="text-sm text-text-secondary">전력수급 출처: {powerSupplyError ? '데모 데이터' : powerSupply?.data_source || '데이터 확인 중'} · 과거 시간도 패턴 기반이며 태양광·풍력은 예측값</span>
 
               {/* v6 스타일 간단한 차트 - 실측/예측 구분 */}
-              <div className="bg-white rounded-[14px] p-6" style={{ height: '640px' }}>
+              <div className="chart-panel bg-elevated border border-border rounded-[14px] p-6" style={{ height: '640px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData} margin={{ top: 25, right: 30, left: 0, bottom: 10 }}>
                     <defs>
@@ -471,8 +471,9 @@ export default function ExecoDashboard() {
 
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #e5e7eb',
+                        backgroundColor: 'var(--color-elevated)',
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text-primary)',
                         borderRadius: '8px',
                         fontSize: '14px'
                       }}
@@ -600,14 +601,14 @@ export default function ExecoDashboard() {
           {/* Right Panel - Map and Stats (30%) */}
           <div className="dashboard-side flex-[3] flex flex-col gap-6">
             {/* Jeju Map */}
-            <div className="bg-[#f8f8f8] rounded-[14px] p-6 flex flex-col gap-6">
+            <div className="bg-card border border-border rounded-[14px] p-6 flex flex-col gap-6">
               <div className="flex items-center">
-                <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전소 위치 및 설비용량</span>
+                <span className="text-3xl font-bold text-text-primary tracking-[-0.96px]">발전소 위치 및 설비용량</span>
               </div>
 
               {/* Map Container - Centered */}
               <div className="flex flex-col items-center gap-4">
-                <span className="text-sm text-gray-600">원 크기: 설비용량 기준 · 실시간 발전량 정보 없음</span>
+                <span className="text-sm text-text-muted">원 크기: 설비용량 기준 · 실시간 발전량 정보 없음</span>
                 {/* Jeju Map with markers - Centered, exact fit */}
                 <div ref={mapRef} className="plant-map relative" style={{ maxWidth: MAP_WIDTH, aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}` }}>
                   <img
@@ -629,11 +630,11 @@ export default function ExecoDashboard() {
 
                 {overlappingPlants.length > 1 && (
                   <div role="group" aria-label="겹친 발전소 선택" className="flex flex-wrap justify-center gap-2">
-                    <span className="w-full text-center text-sm text-gray-600">겹친 발전소 선택</span>
+                    <span className="w-full text-center text-sm text-text-muted">겹친 발전소 선택</span>
                     {overlappingPlants.map(plant => (
                       <button key={plant.id} type="button" aria-label={`${plant.name} 선택`}
                         aria-pressed={hoveredPlant?.id === plant.id}
-                        className="min-h-[44px] rounded-md border border-gray-500 bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                        className="min-h-[44px] rounded-md border border-gray-500 bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-ring)]"
                         onClick={() => setHoveredPlant(plant)}>{plant.name}</button>
                     ))}
                   </div>
@@ -650,8 +651,8 @@ export default function ExecoDashboard() {
                 </div>
 
                 {/* Legend - Below map (1.2배 크기) */}
-                <div className="bg-white rounded-lg p-4 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex flex-wrap gap-4">
-                  <span className="text-lg font-bold text-black tracking-[-0.64px]">발전소 유형</span>
+                <div className="bg-elevated border border-border rounded-lg p-4 shadow-[2px_2px_8px_0px_rgba(0,0,0,0.14)] flex flex-wrap gap-4">
+                  <span className="text-lg font-bold text-text-primary tracking-[-0.64px]">발전소 유형</span>
                   <div className="flex gap-5 text-lg tracking-[-0.64px]">
                     <div className="flex items-center gap-1.5">
                       <div className="w-4 h-4 rounded-full" style={{ backgroundColor: '#ff4a4a' }}></div>
@@ -671,28 +672,28 @@ export default function ExecoDashboard() {
             </div>
 
             {/* Plant Statistics - 발전량 히트맵과 동일 크기 - 실시간 데이터 */}
-            <div className="bg-[#f8f8f8] rounded-lg p-6 flex-1 flex flex-col justify-between">
+            <div className="bg-card border border-border rounded-lg p-6 flex-1 flex flex-col justify-between">
               <div className="flex flex-col gap-4">
-                <span className="text-3xl font-bold text-black tracking-[-0.96px]">발전소 현황</span>
-                <span className="text-sm text-gray-700">발전소 출력 및 충방전은 시뮬레이션 값</span>
+                <span className="text-3xl font-bold text-text-primary tracking-[-0.96px]">발전소 현황</span>
+                <span className="text-sm text-text-secondary">발전소 출력 및 충방전은 시뮬레이션 값</span>
                 <div className="bg-white rounded-[14px] px-5 py-3 flex flex-col gap-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-xl text-black w-[70px] tracking-[-0.64px]">태양광</span>
-                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
+                    <span className="text-xl text-text-primary w-[70px] tracking-[-0.64px]">태양광</span>
+                    <div className="flex flex-wrap items-center gap-2 text-text-secondary">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.solar.count}개소 | {plantStats.solar.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.solar.output ?? '—'}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xl text-black w-[70px] tracking-[-0.64px]">풍력</span>
-                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
+                    <span className="text-xl text-text-primary w-[70px] tracking-[-0.64px]">풍력</span>
+                    <div className="flex flex-wrap items-center gap-2 text-text-secondary">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.wind.count}개소 | {plantStats.wind.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(발전량 : {plantStats.wind.output ?? '—'}MW)</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xl text-black w-[70px] tracking-[-0.64px]">ESS</span>
-                    <div className="flex flex-wrap items-center gap-2 text-[#232323]">
+                    <span className="text-xl text-text-primary w-[70px] tracking-[-0.64px]">ESS</span>
+                    <div className="flex flex-wrap items-center gap-2 text-text-secondary">
                       <span className="text-xl font-bold tracking-[-0.64px]">{plantStats.ess.count}개소 | {plantStats.ess.capacity}MW</span>
                       <span className="text-lg tracking-[-0.56px]">(충방전 : {plantStats.ess.output ?? '—'}MW)</span>
                     </div>
@@ -702,8 +703,8 @@ export default function ExecoDashboard() {
 
               {/* Weather Info - 실시간 KMA 데이터 */}
               <div className="flex flex-col gap-1">
-                <span className="text-base text-black tracking-[-0.56px]">기상 정보</span>
-                <div className="flex flex-wrap gap-3.5 text-base font-medium text-[#232323] tracking-[-0.56px]">
+                <span className="text-base text-text-primary tracking-[-0.56px]">기상 정보</span>
+                <div className="flex flex-wrap gap-3.5 text-base font-medium text-text-secondary tracking-[-0.56px]">
                   <span>기온 {weather.temperature.toFixed(1)}°C</span>
                   <span>|</span>
                   <span>풍속 {weather.wind_speed.toFixed(1)}m/s</span>
@@ -718,7 +719,7 @@ export default function ExecoDashboard() {
         </div>
 
         {/* Footer */}
-        <div className="text-center text-sm text-[#232323] tracking-[-0.48px] leading-4">
+        <div className="text-center text-sm text-text-secondary tracking-[-0.48px] leading-4">
           <p>제주 전력 지도 v7.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
           <p className="mt-2">데이터 출처와 예측·시뮬레이션 여부는 각 항목의 안내를 확인하세요.</p>
         </div>

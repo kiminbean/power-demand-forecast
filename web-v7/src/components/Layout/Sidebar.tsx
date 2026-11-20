@@ -51,7 +51,7 @@ export default function Sidebar() {
             {item.icon}
             <span className="flex-1">{item.label}</span>
             {item.badge && (
-              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-primary/20 text-primary rounded">
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-primary/15 text-[color:var(--color-info-text)] rounded">
                 {item.badge}
               </span>
             )}
@@ -87,13 +87,13 @@ export default function Sidebar() {
               <div className="text-xs text-text-muted">문서 및 지원</div>
             </div>
           </div>
-          <button className="w-full py-2 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors">
+          <button className="w-full py-2 text-sm font-medium text-[color:var(--color-info-text)] hover:bg-primary/10 rounded-lg transition-colors">
             가이드 보기
           </button>
         </div>
 
         <div className="mt-4 text-center">
-          <p className="text-xs text-text-muted">RE-BMS v6.1.0</p>
+          <p className="text-xs text-text-muted">eXeco v7.0.0</p>
           <p className="text-xs text-text-muted">© 2025 eXeco</p>
         </div>
       </div>

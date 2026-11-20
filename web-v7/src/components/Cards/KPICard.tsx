@@ -1,5 +1,5 @@
 /**
- * KPI Card Component - RE-BMS v6.0
+ * KPI Card Component - eXeco DS v1
  */
 
 import { LucideIcon } from 'lucide-react';
@@ -16,24 +16,25 @@ interface KPICardProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
+// 아이콘 칩 배경 + 값 텍스트는 다크/라이트 양쪽에서 4.5:1 이상 되도록 테마 변수 사용
 const colorClasses = {
-  primary: 'text-primary bg-primary/10',
-  success: 'text-success bg-success/10',
-  warning: 'text-warning bg-warning/10',
-  danger: 'text-danger bg-danger/10',
-  smp: 'text-smp bg-smp/10',
-  solar: 'text-solar bg-solar/10',
-  wind: 'text-wind bg-wind/10',
+  primary: 'text-[color:var(--color-info-text)] bg-primary/10',
+  success: 'text-[color:var(--color-success-text)] bg-success/10',
+  warning: 'text-[color:var(--color-warning-text)] bg-warning/10',
+  danger: 'text-[color:var(--color-danger-text)] bg-danger/10',
+  smp: 'text-[color:var(--color-warning-text)] bg-smp/10',
+  solar: 'text-[color:var(--color-warning-text)] bg-solar/10',
+  wind: 'text-[color:var(--color-wind-text)] bg-wind/10',
 };
 
 const valueColorClasses = {
-  primary: 'text-primary',
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-  smp: 'text-smp',
-  solar: 'text-solar',
-  wind: 'text-wind',
+  primary: 'text-[color:var(--color-info-text)]',
+  success: 'text-[color:var(--color-success-text)]',
+  warning: 'text-[color:var(--color-warning-text)]',
+  danger: 'text-[color:var(--color-danger-text)]',
+  smp: 'text-[color:var(--color-warning-text)]',
+  solar: 'text-[color:var(--color-warning-text)]',
+  wind: 'text-[color:var(--color-wind-text)]',
 };
 
 export default function KPICard({
@@ -59,8 +60,8 @@ export default function KPICard({
           <div
             className={clsx(
               'flex items-center gap-1 text-sm font-medium',
-              isPositive && 'text-success',
-              isNegative && 'text-danger',
+              isPositive && 'text-[color:var(--color-success-text)]',
+              isNegative && 'text-[color:var(--color-danger-text)]',
               !isPositive && !isNegative && 'text-text-muted'
             )}
           >

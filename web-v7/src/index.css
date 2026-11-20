@@ -3,43 +3,73 @@
 @tailwind utilities;
 
 /* ============================================
-   Theme CSS Variables
+   eXeco DS v1 — Theme CSS Variables
    Default: Light Mode
    ============================================ */
 
 :root,
 :root.light {
-  /* Light Theme Colors (Default) */
+  /* Light Theme Colors (eXeco DS v1) */
   color-scheme: light;
-  --color-background: #f8fafc;
-  --color-secondary: #e2e8f0;
-  --color-card: #ffffff;
-  --color-border: #cbd5e1;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94a3b8;
+  --color-background: #F6F8FB;
+  --color-secondary: #EEF2F7;
+  --color-card: #FFFFFF;
+  --color-elevated: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748B;
+
+  /* Accent text colors (WCAG AA 4.5:1+ on light surfaces) */
+  --color-success-text: #15803D;
+  --color-warning-text: #B45309;
+  --color-danger-text: #DC2626;
+  --color-info-text: #1D4ED8;
+  --color-wind-text: #0E7490;
+
+  /* Focus ring */
+  --color-ring: #3B82F6;
+
+  /* Chart chrome */
+  --chart-grid: #E2E8F0;
+  --chart-tick: #475569;
 
   /* Scrollbar Light */
-  --scrollbar-track: #e2e8f0;
-  --scrollbar-thumb: #94a3b8;
-  --scrollbar-thumb-hover: #64748b;
+  --scrollbar-track: #E2E8F0;
+  --scrollbar-thumb: #94A3B8;
+  --scrollbar-thumb-hover: #64748B;
 }
 
 :root.dark {
-  /* Dark Theme Colors */
+  /* Dark Theme Colors (eXeco DS v1) */
   color-scheme: dark;
-  --color-background: #0e1117;
-  --color-secondary: #1a1f2c;
-  --color-card: #1e2530;
-  --color-border: #374151;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #d1d5db;
-  --color-text-muted: #9ca3af;
+  --color-background: #0B1220;
+  --color-secondary: #101A2E;
+  --color-card: #121B31;
+  --color-elevated: #1A2439;
+  --color-border: rgba(148, 163, 184, 0.16);
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #94A3B8;
+
+  /* Accent text colors (WCAG AA 4.5:1+ on dark surfaces) */
+  --color-success-text: #4ADE80;
+  --color-warning-text: #FBBF24;
+  --color-danger-text: #F87171;
+  --color-info-text: #60A5FA;
+  --color-wind-text: #22D3EE;
+
+  /* Focus ring */
+  --color-ring: #60A5FA;
+
+  /* Chart chrome */
+  --chart-grid: rgba(148, 163, 184, 0.18);
+  --chart-tick: #94A3B8;
 
   /* Scrollbar Dark */
-  --scrollbar-track: #1a1f2c;
-  --scrollbar-thumb: #374151;
-  --scrollbar-thumb-hover: #4b5563;
+  --scrollbar-track: #101A2E;
+  --scrollbar-thumb: #33415C;
+  --scrollbar-thumb-hover: #475982;
 }
 
 /* ============================================
@@ -69,7 +99,8 @@
    ============================================ */
 
 body {
-  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  /* eXeco DS v1 typography: Pretendard Variable */
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
   background-color: var(--color-background);
   color: var(--color-text-primary);
   margin: 0;
@@ -77,14 +108,27 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Global focus ring (components may override with higher-specificity classes) */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* Card Styles */
 @layer components {
+  /* eXeco DS v1 card: radius 14px, 1px border, subtle shadow, 200ms hover border shift */
   .card {
-    @apply bg-card rounded-xl border border-border p-4 transition-colors duration-200;
+    @apply bg-card rounded-[14px] border border-border p-4 shadow-sm;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
   }
 
   .card-hover {
-    @apply transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5;
+    @apply transition-all duration-200;
+  }
+
+  .card-hover:hover {
+    border-color: var(--color-ring);
   }
 
   .metric-value {
@@ -100,7 +144,11 @@ body {
   }
 
   .nav-link.active {
-    @apply text-primary bg-primary/10 border-l-2 border-primary;
+    @apply border-l-2;
+    color: var(--color-info-text);
+    background: rgba(59, 130, 246, 0.10);
+    border-left-color: var(--color-info, #3B82F6);
+    font-weight: 600;
   }
 
   .btn-primary {
@@ -109,6 +157,42 @@ body {
 
   .btn-secondary {
     @apply px-4 py-2 bg-secondary hover:opacity-80 text-text-primary rounded-lg font-medium transition-all border border-border;
+  }
+
+  /* Status pill: dot + label (eXeco DS v1 상태필) */
+  .status-pill {
+    @apply inline-flex items-center;
+    gap: 0.4rem;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .status-pill-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+    background: currentColor;
+    flex: none;
+  }
+
+  .status-pill-success {
+    background: rgba(34, 197, 94, 0.12);
+    color: var(--color-success-text);
+  }
+
+  .status-pill-warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--color-warning-text);
+  }
+
+  .status-pill-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--color-danger-text);
+  }
+
+  .status-pill-info {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--color-info-text);
   }
 
   .status-dot {
@@ -147,10 +231,29 @@ body {
 }
 
 .recharts-default-tooltip {
-  background-color: var(--color-card) !important;
+  background-color: var(--color-elevated) !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   color: var(--color-text-primary) !important;
+  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.12) !important;
+}
+
+/* Chart chrome - theme aware */
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid);
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--chart-grid);
+}
+
+.recharts-cartesian-axis-tick-value {
+  fill: var(--chart-tick);
+}
+
+.recharts-legend-item-text {
+  color: var(--color-text-secondary);
 }
 
 /* Map styles - Theme aware */
@@ -188,14 +291,38 @@ body {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
+/* prefers-reduced-motion 존중 (eXeco DS v1) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 액센트 텍스트 유틸리티를 테마 대응 AA(4.5:1) 토큰으로 리매핑 — 라이트 배경에서 원색 액센트(#F59E0B 등)는 대비 부족 */
+.text-smp { color: var(--color-warning-text); }
+.text-demand { color: var(--color-info-text); }
+.text-supply { color: var(--color-success-text); }
+.text-wind { color: var(--color-wind-text); }
+.text-primary { color: var(--color-info-text); }
+.text-accent { color: var(--color-success-text); }
+.text-success { color: var(--color-success-text); }
+.text-warning { color: var(--color-warning-text); }
+.text-danger { color: var(--color-danger-text); }
+
 /* Responsive dashboard layout */
 .dashboard-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .dashboard-kpis > div { min-width: 0; padding: 1.25rem 0.75rem; }
 .dashboard-kpis > div > div { flex-wrap: wrap; justify-content: center; padding: 0; }
 .dashboard-chart, .dashboard-side { min-width: 0; }
 .plant-map { width: 100%; }
-.plant-details { width: 100%; min-height: 2.5rem; text-align: center; color: #374151; }
-.demo-notice { background: #fff3cd; border: 1px solid #b78600; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #563b00; }
+.plant-details { width: 100%; min-height: 2.5rem; text-align: center; color: var(--color-text-secondary); }
+.demo-notice { background: #FFFBEB; border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 0.5rem; padding: 0.75rem 1rem; color: #92400E; }
+:root.dark .demo-notice { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); color: #FCD34D; }
 /* recharts 범례가 고정 폭으로 렌더링되어 모바일에서 레이아웃 폭을 밀어내는 것 방지 */
 .recharts-legend-wrapper { width: 100% !important; }
 .recharts-default-legend { display: flex; flex-wrap: wrap; justify-content: center; width: 100%; }
@@ -216,9 +343,9 @@ body {
   .dashboard-kpis { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   .dashboard-grid { gap: 1rem; }
   .dashboard-chart > div, .dashboard-side > div { padding: 1rem; }
-  .dashboard-chart .bg-white { padding: 0.5rem; }
+  .chart-panel { padding: 1rem !important; }
   .dashboard-chart .text-3xl, .dashboard-side .text-3xl { font-size: 1.5rem; line-height: 2rem; }
 }
 
 .plant-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; width: 100%; }
-.plant-picker select { flex: 1; min-width: 0; min-height: 44px; border: 1px solid #6b7280; border-radius: .375rem; padding: .5rem; background: white; }
+.plant-picker select { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--color-border); border-radius: .375rem; padding: .5rem; background: var(--color-elevated); color: var(--color-text-primary); }

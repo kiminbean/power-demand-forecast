@@ -11,13 +11,13 @@ const dateStatusLabels: Record<CurrentSMP['data_date_status'], string> = {
 // 'kpi'는 eXeco 대시보드 KPI 행(현재 수요·계통 주파수 등)과 같은 레이아웃을 쓴다.
 type CardVariant = 'card' | 'kpi';
 
-const KPI_BOX = 'flex-1 bg-[#f8f8f8] rounded-lg px-6 py-8 flex flex-col items-center justify-center gap-3.5 min-w-0';
-const KPI_TITLE = 'text-2xl font-medium text-black tracking-[-0.8px] text-center';
-const KPI_VALUE = 'text-[38px] font-bold text-black leading-[60px] tracking-[-1.28px]';
-const KPI_UNIT = 'text-2xl font-bold text-black leading-9 tracking-[-0.8px]';
-const KPI_EMPTY = 'text-2xl font-bold text-[#9a9a9a] leading-[60px] tracking-[-0.8px]';
-const KPI_BADGE = 'bg-white rounded-lg px-3.5 py-1';
-const KPI_BADGE_TEXT = 'text-xl text-[#272727] tracking-[-0.72px]';
+const KPI_BOX = 'flex-1 bg-card border border-border rounded-[14px] px-6 py-8 flex flex-col items-center justify-center gap-3.5 min-w-0';
+const KPI_TITLE = 'text-2xl font-medium text-text-primary tracking-[-0.8px] text-center';
+const KPI_VALUE = 'text-[38px] font-bold text-text-primary tabular-nums leading-[60px] tracking-[-1.28px]';
+const KPI_UNIT = 'text-2xl font-bold text-text-primary leading-9 tracking-[-0.8px]';
+const KPI_EMPTY = 'text-2xl font-bold text-text-muted leading-[60px] tracking-[-0.8px]';
+const KPI_BADGE = 'bg-elevated border border-border rounded-lg px-3.5 py-1';
+const KPI_BADGE_TEXT = 'text-xl text-text-secondary tracking-[-0.72px]';
 
 function formatHour(hour: number | null | undefined) {
   return hour != null ? `${String(hour).padStart(2, '0')}h` : '확인 불가';
@@ -64,7 +64,7 @@ export function PublishedSMPCard({ data, variant = 'card' }: { data: CurrentSMP 
   return (
     <div className="card" data-testid="published-smp">
       <p className="text-sm text-text-muted mb-1">공표 SMP ({region})</p>
-      <div className="text-2xl font-bold text-smp">{hasValue ? `${price.toFixed(1)} 원/kWh` : 'SMP 데이터 없음'}</div>
+      <div className="text-2xl font-bold text-[color:var(--color-warning-text)]">{hasValue ? `${price.toFixed(1)} 원/kWh` : 'SMP 데이터 없음'}</div>
       {data && <p className="text-xs text-text-muted mt-1">{dateLabel} · 거래일 {tradeDay} · 거래시간 {formatHour(tradeHour)}</p>}
       <p className="text-xs text-text-muted mt-1">{market} · 출처: {source} · 실시간 여부 확인 불가</p>
       {comparison && <p className="text-xs text-text-muted mt-1">{comparison}</p>}
@@ -94,7 +94,7 @@ export function DayAheadSMPCard({ data, variant = 'card' }: { data: DayAheadSMP 
   return (
     <div className="card" data-testid="day-ahead-smp">
       <p className="text-sm text-text-muted mb-1">제주 하루전시장 SMP (Day-ahead)</p>
-      <div className="text-2xl font-bold text-smp">{hasValue ? `${data.current_smp!.toFixed(1)} 원/kWh` : 'SMP 데이터 없음'}</div>
+      <div className="text-2xl font-bold text-[color:var(--color-warning-text)]">{hasValue ? `${data.current_smp!.toFixed(1)} 원/kWh` : 'SMP 데이터 없음'}</div>
       <p className="text-xs text-text-muted mt-1">거래일 {data?.trade_day || '확인 불가'} · 거래시간 {formatHour(data?.trade_hour)}</p>
       <p className="text-xs text-text-muted mt-1">출처: {data?.data_source || '확인 불가'} {link}</p>
     </div>

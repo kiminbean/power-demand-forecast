@@ -1,5 +1,5 @@
 /**
- * Main Layout Component - RE-BMS v6.0
+ * Main Layout Component - eXeco DS v1
  */
 
 import { Outlet } from 'react-router-dom';

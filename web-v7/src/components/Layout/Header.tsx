@@ -1,5 +1,5 @@
 /**
- * Header Component - RE-BMS v6.0
+ * Header Component - eXeco DS v1
  */
 
 import { useState, useEffect } from 'react';
@@ -36,18 +36,25 @@ export default function Header() {
   };
 
   return (
-    <header className="h-16 bg-secondary border-b border-border px-6 flex items-center justify-between transition-colors duration-200">
+    // eXeco DS v1: 헤더 그라데이션 #04265E → #0A3A7D, 항상 밝은 로고 사용
+    <header
+      className="h-16 px-6 flex items-center justify-between border-b"
+      style={{
+        background: 'linear-gradient(90deg, #04265E 0%, #0A3A7D 100%)',
+        borderBottomColor: 'rgba(148, 163, 184, 0.16)',
+      }}
+    >
       {/* Logo & Title */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
           <img
-            src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+            src="/logo-light.png"
             alt="eXeco"
             className="h-8 w-auto"
           />
-          <div className="border-l border-border pl-3">
-            <h1 className="text-sm font-bold text-brand">RE-BMS</h1>
-            <p className="text-xs text-text-muted">v6.0</p>
+          <div className="border-l border-white/25 pl-3">
+            <h1 className="text-sm font-bold text-white">eXeco</h1>
+            <p className="text-xs text-white/80">v7.0</p>
           </div>
         </div>
       </div>
@@ -55,28 +62,40 @@ export default function Header() {
       {/* Center - Time Display */}
       <div className="flex items-center gap-6">
         <div className="text-center">
-          <div className="text-2xl font-mono font-bold text-text-primary tabular-nums">
+          <div className="text-2xl font-mono font-bold text-white tabular-nums">
             {formatTime(currentTime)}
           </div>
-          <div className="text-xs text-text-muted">{formatDate(currentTime)}</div>
+          <div className="text-xs text-white/85">{formatDate(currentTime)}</div>
         </div>
       </div>
 
       {/* Right - Status & Actions */}
       <div className="flex items-center gap-4">
         {/* API Status */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded-lg">
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+          style={{
+            background: 'rgba(255, 255, 255, 0.10)',
+            borderColor: 'rgba(148, 163, 184, 0.24)',
+          }}
+        >
           <div className={`status-dot ${apiStatus === true ? 'status-success' : apiStatus === false ? 'status-danger' : 'status-warning'}`} />
-          <span className="text-sm text-text-muted">
+          <span className="text-sm font-medium text-white/90">
             {apiStatus === true ? 'API Connected' : apiStatus === false ? 'Offline' : 'Checking...'}
           </span>
         </div>
 
         {/* Model Info */}
         {modelInfo && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded-lg">
-            <Activity className="w-4 h-4 text-primary" />
-            <span className="text-sm text-text-muted">
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+            style={{
+              background: 'rgba(255, 255, 255, 0.10)',
+              borderColor: 'rgba(148, 163, 184, 0.24)',
+            }}
+          >
+            <Activity className="w-4 h-4 text-accent" />
+            <span className="text-sm font-medium text-white/90">
               {modelInfo.version} | {typeof modelInfo.mape === 'number' ? `MAPE: ${modelInfo.mape}%` : 'MAPE 재검증 전'}
             </span>
           </div>
@@ -85,31 +104,31 @@ export default function Header() {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 hover:bg-background rounded-lg transition-colors"
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {isDark ? (
-            <Sun className="w-5 h-5 text-text-muted hover:text-warning" />
+            <Sun className="w-5 h-5 text-white/85 hover:text-warning" />
           ) : (
-            <Moon className="w-5 h-5 text-text-muted hover:text-primary" />
+            <Moon className="w-5 h-5 text-white/85 hover:text-accent" />
           )}
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2 hover:bg-background rounded-lg transition-colors">
-          <Bell className="w-5 h-5 text-text-muted" />
+        <button className="relative p-2 hover:bg-white/10 rounded-lg transition-colors">
+          <Bell className="w-5 h-5 text-white/85" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" />
         </button>
 
         {/* Settings */}
-        <button className="p-2 hover:bg-background rounded-lg transition-colors">
-          <Settings className="w-5 h-5 text-text-muted" />
+        <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+          <Settings className="w-5 h-5 text-white/85" />
         </button>
 
         {/* User */}
-        <button className="flex items-center gap-2 p-2 hover:bg-background rounded-lg transition-colors">
-          <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-            <User className="w-4 h-4 text-primary" />
+        <button className="flex items-center gap-2 p-2 hover:bg-white/10 rounded-lg transition-colors">
+          <div className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
           </div>
         </button>
       </div>
