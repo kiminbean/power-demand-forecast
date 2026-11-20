@@ -29,10 +29,13 @@ def card_html(title: str) -> str:
 
 def test_model_metrics_disclose_fixed_reference_not_current_accuracy() -> None:
     html = card_html("모델 성능")
-    assert "고정 참고값" in html
-    assert "현재 예측 성능 아님" in html
-    assert "평가 조건 미확인" in html
-    for value in ("10.68%", "11.27 원/kWh", "82.5%", "0.59"):
+    # b25eef55에서 카드 본문이 검증된 벤치마크 값으로 교체됨에 따라 기대값 갱신.
+    # 회귀 검증 취지는 유지: 고정 참조 기준 공시 + 현재 예측 성능이 아님을 명시.
+    assert "벤치마크 검증값" in html
+    assert "README 운영 모델 성능 표 기준" in html
+    assert "모델 성능이 아님" in html
+    assert "학습에 안 쓴 기간" in html
+    for value in ("4.67%", "17.0%", "11.75%", "0.929", "0.41", "0.203"):
         assert value in html
 
 
