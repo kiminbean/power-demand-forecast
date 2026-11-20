@@ -147,6 +147,20 @@ def test_baseline_mape_matches_manual_calculation(tmp_path):
     assert p.mape == pytest.approx(np.mean(np.abs(errors) / np.abs(actuals)) * 100)  # 0%와 9.09%의 평균
 
 
+def test_baseline_backtests_holdout_coverage_with_enough_days(tmp_path):
+    # 평가일이 90일(적합 60 + 보류 30 이상)이면 80% 구간 적중률을 계산해 실어야 한다.
+    now = datetime(2026, 11, 5, 16, 14)
+    path = _history_csv(tmp_path, pd.Timestamp("2026-11-05"), 24 * 100)
+    raw = pd.read_csv(path)
+    for col in ("smp_jeju", "smp_mainland", "smp_max", "smp_min"):
+        raw[col] = 100.0  # 오차가 정확히 0인 이력 → 보류 30일이 전부 구간 안 → 적중률 100%
+    raw.to_csv(path, index=False)
+    p = SeasonalNaivePredictor(_provider(path, tmp_path))
+    result = p.predict_24h(now=now)
+    assert p.backtest["days"] == 99 and p.backtest["coverage_80"] == pytest.approx(100.0)
+    assert result["coverage"] == pytest.approx(100.0)
+
+
 def test_serving_prefers_baseline_over_v32_when_v41_gate_failed():
     serving = ServingSMPPredictor(_Fake(ready=False),
                                   _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 11.75, "coverage": None},
@@ -196,8 +210,8 @@ def test_serving_uses_v41_and_reports_its_walk_forward_metrics():
 
 
 def test_api_reports_the_baseline_when_it_serves(monkeypatch):
-    baseline = _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 11.75, "coverage": None},
-                     mape=11.75, coverage=None)
+    baseline = _Fake({**FORECAST, "model_used": "baseline-24h", "mape": 11.75, "coverage": 79.4},
+                     mape=11.75, coverage=79.4)
     baseline.backtest = {"days": 150}
     serving = ServingSMPPredictor(_Fake(ready=False), baseline, None)
     monkeypatch.setattr(v6_routes, "get_or_create_smp_predictor", lambda: serving)
@@ -205,8 +219,10 @@ def test_api_reports_the_baseline_when_it_serves(monkeypatch):
         forecast = client.get("/api/v1/smp-forecast").json()
         info = client.get("/api/v1/model/info").json()
     assert forecast["model_used"] == f"{BASELINE_LABEL} · 검증 MAPE 11.75%"
-    assert (info["version"], info["mape"], info["coverage"], info["status"]) == ("baseline-24h", 11.75, None, "active")
-    assert "150일" in info["data_source"]
+    assert forecast["confidence"] == pytest.approx(0.794)
+    assert (info["version"], info["mape"], info["coverage"], info["status"]) == ("baseline-24h", 11.75, 79.4, "active")
+    assert "150일" in info["data_source"] and "80% 구간 적중률 79%" in info["data_source"]
+    assert "보류 검증" in info["data_source"]
 
 
 def test_model_info_rounds_metrics_for_display(monkeypatch):
@@ -227,5 +243,5 @@ def test_api_reports_the_model_that_actually_served(monkeypatch):
         forecast = client.get("/api/v1/smp-forecast").json()
         info = client.get("/api/v1/model/info").json()
     assert forecast["model_used"] == f"{V41_LABEL} · 검증 MAPE 9.50%"
-    assert forecast["forecast_date"] == "2026-11-05" and forecast["confidence"] is None
+    assert forecast["forecast_date"] == "2026-11-05" and forecast["confidence"] == pytest.approx(0.76)
     assert (info["version"], info["mape"], info["coverage"], info["status"]) == ("v4.1", 9.5, 76.0, "active")

@@ -74,7 +74,7 @@ class ServingSMPPredictor:
                     "last_trained": meta.get("trained_at"), "train_range": meta.get("train_range"),
                     "eval_end": meta.get("eval_end")}
         if self.last_version == "baseline-24h":
-            return {**base, "label": BASELINE_LABEL, "mape": self.baseline.mape, "coverage": None,
+            return {**base, "label": BASELINE_LABEL, "mape": self.baseline.mape, "coverage": self.baseline.coverage,
                     "last_trained": None, "eval_days": self.baseline.backtest.get("days")}
         return {**base, "label": V32_LABEL, "mape": None, "coverage": None, "last_trained": None}
 

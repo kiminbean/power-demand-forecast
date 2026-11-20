@@ -41,6 +41,8 @@ HISTORY_CACHE_SECONDS = 3600
 API_RETRY_AFTER_FAILURE_SECONDS = 1800
 API_TOPUP_PAGES = 2  # 1000행/페이지 ≈ 10일씩
 BASELINE_EVAL_DAYS = 150  # 기준선 성능을 재현하는 최근 평가 일수 (연속 이틀이 있는 날만)
+BASELINE_COVERAGE_HOLDOUT_DAYS = 30  # 80% 구간 적중률을 마지막 30일 보류(holdout) 검증으로 계산
+BASELINE_COVERAGE_MIN_FIT_DAYS = 60  # 분위수 적합에 최소한으로 쓸 일수 (이보다 부족하면 적중률 미계산)
 MAPE_MIN_ABS = 10.0  # v4.1 평가와 같은 기준 (|실측| <= 10원은 MAPE에서 제외)
 
 
@@ -173,6 +175,11 @@ class SeasonalNaivePredictor:
     def mape(self) -> Optional[float]:
         return self.backtest.get("mape")
 
+    @property
+    def coverage(self) -> Optional[float]:
+        """80% 예측구간의 마지막 30일 보류(holdout) 적중률(%). 평가일이 부족하면 None."""
+        return self.backtest.get("coverage_80")
+
     def _backtest(self, df: pd.DataFrame) -> Dict[str, Any]:
         """연속 이틀(48시간)이 있는 최근 날들에서 '전날 값으로 다음 날 예측'을 재현한다."""
         series = df.set_index("datetime")["smp_jeju"]
@@ -190,13 +197,21 @@ class SeasonalNaivePredictor:
             return {}
         errors, actuals = np.array(errors[-BASELINE_EVAL_DAYS:]), np.array(actuals[-BASELINE_EVAL_DAYS:])
         mask = np.abs(actuals) > MAPE_MIN_ABS
-        return {
+        result = {
             "mape": float(np.mean(np.abs(errors[mask]) / np.abs(actuals[mask])) * 100),
             "days": len(errors),
-            # 시간대별 오차 분포로 80% 구간을 만든다 (같은 데이터로 맞춘 값이라 적중률은 내보내지 않는다).
+            # 시간대별 오차 분위수로 80% 구간을 만든다(서빙 구간은 전체 평가일로 적합).
             "q10_offset": np.percentile(errors, 10, axis=0),
             "q90_offset": np.percentile(errors, 90, axis=0),
         }
+        # 적중률은 같은 데이터로 재면하면 ~80%가 나오기 때문에, 마지막 30일을 떼어 놓고
+        # 그 30일이 (적합에 쓰지 않은) 나머지 일수의 분위수 구간에 들어가는 비율로 계산한다.
+        if len(errors) >= BASELINE_COVERAGE_HOLDOUT_DAYS + BASELINE_COVERAGE_MIN_FIT_DAYS:
+            fit, held = errors[:-BASELINE_COVERAGE_HOLDOUT_DAYS], errors[-BASELINE_COVERAGE_HOLDOUT_DAYS:]
+            fit_q10 = np.percentile(fit, 10, axis=0)
+            fit_q90 = np.percentile(fit, 90, axis=0)
+            result["coverage_80"] = float(np.mean((held >= fit_q10) & (held <= fit_q90)) * 100)
+        return result
 
     def predict_24h(self, now: Optional[datetime] = None) -> Dict[str, Any]:
         end_at = pd.Timestamp((now or datetime.now()).date())
@@ -207,7 +222,7 @@ class SeasonalNaivePredictor:
         q10 = point + self.backtest.get("q10_offset", np.zeros(OUTPUT_HOURS))
         q90 = point + self.backtest.get("q90_offset", np.zeros(OUTPUT_HOURS))
         q10, q90 = np.minimum(q10, point), np.maximum(q90, point)
-        return _result(end_at, q10, point, q90, self.version, self.mape, None)
+        return _result(end_at, q10, point, q90, self.version, self.mape, self.coverage)
 
 
 def _result(end_at: pd.Timestamp, q10, q50, q90, version: str, mape, coverage) -> Dict[str, Any]:

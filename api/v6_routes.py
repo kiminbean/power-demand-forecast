@@ -85,7 +85,7 @@ class SMPForecastResponse(BaseModel):
     q90: List[float] = Field(description="90% 분위수 (상한)")
     hours: List[int] = Field(description="시간 (1-24)")
     model_used: str = Field(description="사용된 모델")
-    confidence: Optional[float] = Field(default=None, description="예측 신뢰도; 검증된 지표가 없으면 null")
+    confidence: Optional[float] = Field(default=None, description="예측 신뢰도(80% 예측구간의 검증 적중률, 0~1); 검증된 지표가 없으면 null")
     created_at: str = Field(description="생성 시각")
     data_source: str = Field(description="데이터 소스")
     forecast_date: Optional[str] = Field(default=None, description="예측 대상 거래일(YYYY-MM-DD); hours 1~24가 이 날짜의 거래시간")
@@ -307,7 +307,9 @@ async def get_smp_forecast():
                 q90=q90,
                 hours=hours,
                 model_used="패턴 기반 대체값 (모델 예측 실패)" if is_fallback else _forecast_label(result),
-                confidence=None,
+                # 예측기가 검증한 80% 구간 적중률(%; 보류 검증)을 0~1 신뢰도로 내보낸다.
+                confidence=(round(result["coverage"] / 100, 4)
+                            if isinstance(result.get("coverage"), (int, float)) else None),
                 created_at=datetime.now().isoformat(),
                 data_source=("EPSIS 평균 패턴" if is_fallback
                              else "제주 하루전 SMP 이력 (제주시범사업 API·EPSIS)"
@@ -625,16 +627,21 @@ async def get_model_info():
             data_source=f"제주 하루전 SMP (제주시범사업 API·EPSIS), 평가 기간 끝 {info.get('eval_end')}",
         )
     if info["version"] == "baseline-24h":
-        # 학습 파라미터가 없는 기준선: MAPE는 최근 이력에서 '전날 값으로 다음 날 예측'을 재현한 값이다.
+        # 학습 파라미터가 없는 기준선: MAPE는 최근 이력에서 '전날 값으로 다음 날 예측'을 재현한 값이고,
+        # coverage는 그중 마지막 30일을 보류(holdout) 검증한 80% 구간 적중률이다.
+        coverage = info.get("coverage")
+        data_source = f"제주 하루전 SMP (제주시범사업 API·EPSIS), 최근 {info.get('eval_days')}일 재현 MAPE"
+        if coverage is not None:
+            data_source += f"· 80% 구간 적중률 {coverage:.0f}%(마지막 30일 보류 검증)"
         return ModelInfoResponse(
             status="active",
             version="baseline-24h",
             type="전날 같은 시간 가격 (기준선)",
             device="CPU",
             mape=info["mape"],
-            coverage=None,
+            coverage=coverage,
             last_trained=None,
-            data_source=f"제주 하루전 SMP (제주시범사업 API·EPSIS), 최근 {info.get('eval_days')}일 재현 MAPE",
+            data_source=data_source,
         )
     # v3.2 체크포인트의 기록 지표(MAPE 7.17%)는 스케일러 누수로 무효이고, coverage 94.5%는
     # 어떤 지표 파일에도 근거가 없었다. 재검증 전까지 지표를 null로 내보낸다.
