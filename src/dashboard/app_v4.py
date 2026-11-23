@@ -26,6 +26,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
+from html import escape as html_escape
 import plotly.graph_objects as go
 import folium
 from folium import plugins
@@ -2361,6 +2362,62 @@ PD_CSS_COMPONENTS = """
 [data-testid="stTab"] p{font-size:15px;font-weight:600;color:var(--pd-text-3)}
 [data-testid="stTab"][aria-selected="true"] p{color:var(--pd-primary)}
 @media (max-width:640px){[data-testid="stTab"] p{font-size:14px}[data-testid="stTab"] span[role="img"]{display:none!important}}
+/* ---- 8. 머리: 앱 바·경보 배너·상태 문장·읽는 법 띠·카드 머리 (2단계. 3장 토큰·타입 스케일만 쓴다) ---- */
+/* 앱 바는 투명 헤더 줄(60px)과 겹친다. 오른쪽 124px는 fragment 실행 표시(stStatusWidget)와 메뉴 자리다(0단계 E1 실측) */
+.pd-appbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 124px 0 24px;color:var(--pd-text-1)}
+.pd-appbar p{margin:0}
+.pd-appbar__brand{display:flex;align-items:center;gap:10px;flex:none}
+/* 로고 바탕은 3.3절 흰 글자 쌍(#2563EB 위 흰 글자 5.17:1)이라 두 테마가 같은 값을 쓴다 */
+.pd-appbar__logo{display:inline-flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border-radius:8px;background:#2563EB;color:#FFFFFF}
+.pd-appbar__logo .pd-ico{width:18px;height:18px}
+.pd-appbar__title{font-size:17px;font-weight:700;line-height:1.2;white-space:nowrap;color:var(--pd-text-1)}
+.pd-appbar__sub{font-size:12px;line-height:1.45;white-space:nowrap;color:var(--pd-text-3)}
+.pd-appbar__meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.pd-appbar__short{display:none}
+@media (max-width:1180px){.pd-appbar__sub,.pd-appbar__long{display:none}.pd-appbar__short{display:inline}}
+@media (max-width:640px){
+  .pd-appbar{flex-direction:column;align-items:stretch;gap:6px;padding:0}
+  .pd-appbar__brand{min-height:44px;padding:0 40px}
+  .pd-appbar__meta{justify-content:flex-start}
+  .pd-appbar__auto{display:none}
+}
+/* 칩·pill은 기본이 한 줄이다. 좁은 칸에서 긴 출처 문구가 칸 밖으로 넘치지 않게 이 자리들만 줄바꿈을 허용한다.
+   모서리 12px는 한 줄(높이 22~24px)일 때 999px와 같은 모양이고, 여러 줄로 접히면 글자가 둥근 끝 밖으로 나가지 않는다 */
+.pd-appbar__meta .pd-chip,.pd-kpi__head .pd-chip,.pd-status .pd-chip,.pd-kpi__sub .pd-pill{white-space:normal;padding-top:2px;padding-bottom:2px;line-height:1.3;border-radius:12px}
+.pd-alert{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border-left:4px solid currentColor}
+.pd-alert p{margin:0}
+.pd-alert--warning{color:var(--pd-warn-fg);background:var(--pd-warn-bg)}
+.pd-alert--danger{color:var(--pd-danger-fg);background:var(--pd-danger-bg)}
+.pd-alert--critical{color:var(--pd-crit-fg);background:var(--pd-crit-bg)}
+.pd-alert__icon{width:20px;height:20px}
+.pd-alert__body{flex:1 1 auto;min-width:0}
+.pd-alert__title{font-size:15px;font-weight:700;line-height:1.35}
+.pd-alert__msg{font-size:13px;line-height:1.55;color:var(--pd-text-1)}
+.pd-alert__value{flex:none;margin-left:auto}
+.pd-alert__value:empty{display:none}
+/* 좁은 폭: 아이콘과 문장은 한 줄에 두고(본문 기준폭 0) 칩만 문장 아래로 내린다 */
+@media (max-width:640px){.pd-alert{flex-wrap:wrap;align-items:flex-start;padding:12px}.pd-alert__body{flex:1 1 0}.pd-alert__value{flex:1 1 100%;margin-left:32px}}
+.pd-status{font-size:15px;font-weight:500;line-height:1.55;color:var(--pd-text-1)}
+.pd-status>.pd-pill,.pd-status>.pd-chip{margin-right:8px;vertical-align:1px}
+/* Streamlit 전역 규칙 p{font-size:1rem;font-weight:400}이 p에 직접 걸리므로 상속값 대신 p에 직접 준다 */
+.pd-status__text{display:inline;margin:0;font-size:15px;font-weight:500}
+.pd-status__text b{font-weight:600}
+.pd-status__src{display:inline-block;margin-left:12px;font-size:12px;font-weight:500;white-space:nowrap;color:var(--pd-text-3)}
+@media (max-width:1180px){.pd-status__src{display:block;margin:2px 0 0;white-space:normal}}
+.pd-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+.pd-legend__title{font-weight:700;color:var(--pd-text-2)}
+.pd-legend__item{display:inline-flex;align-items:center;gap:6px}
+.pd-legend__item b{font-weight:600;color:var(--pd-text-2)}
+.pd-legend .pd-glyph{color:var(--pd-text-2)}
+.pd-legend .pd-glyph--forecast{color:var(--pd-fc-fg)}
+.pd-legend .pd-glyph--example{color:var(--pd-ex-fg)}
+@media (max-width:640px){.pd-legend{gap:4px 12px}.pd-legend__desc,.pd-legend__long{display:none}}
+.pd-card__head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px}
+.pd-card__title{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;line-height:1.35;color:var(--pd-text-1)}
+/* st.markdown 안에서는 Streamlit의 .st-emotion-cache-… p{font-size:inherit}(0,1,1)가 이기므로 컨테이너로 한 단계 높인다 */
+.pd-card__note,[data-testid="stMarkdownContainer"] .pd-card__note{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+.pd-sim-value{display:flex;align-items:baseline;gap:5px;margin:10px 0 6px;white-space:nowrap}
+.pd-sim-value .pd-num{font-size:24px;font-weight:700;line-height:1.15}
 """
 
 
@@ -2394,6 +2451,498 @@ def _css_dashboard() -> str:
 
 
 # ============================================================================
+# 표시 계층: 경보 단계 · 출처 판정 · 머리 HTML (명세 5.4·5.5·7장)
+# 값과 경보 판정은 바꾸지 않는다(F7). "이 숫자를 어떻게 읽어야 하는지"만 정해 화면에 붙인다.
+# ============================================================================
+
+def _html_chip(kind: str, text: str) -> str:
+    """출처 칩 하나를 만든다(명세 3.3·7.1절).
+
+    Args:
+        kind: 글리프가 붙는 4상태 'measured'·'forecast'·'est'·'example', 글리프 없는 'plain'·'stale'.
+        text: 칩 글자. 이 함수는 이스케이프하지 않으므로 외부에서 온 문자열은 호출부가 html_escape로 넘긴다.
+
+    Returns:
+        span 한 개의 HTML.
+
+    Raises:
+        ValueError: kind가 위 여섯 가지가 아닐 때. 오타로 칩 모양(= 데이터 상태 표기)이 조용히 바뀌지 않게 한다.
+    """
+    if kind in ("plain", "stale"):
+        return f'<span class="pd-chip pd-chip--{kind}">{text}</span>'
+    if kind not in ("measured", "forecast", "est", "example"):
+        raise ValueError(f"알 수 없는 칩 종류: {kind!r}")
+    return (f'<span class="pd-chip pd-chip--{kind}"><span class="pd-chip__glyph" aria-hidden="true"></span>'
+            f'{text}</span>')
+
+
+def _html_meta_chip(icon: str, text_html: str, extra_class: str = "") -> str:
+    """앱 바의 아이콘 칩(중립 외곽선)을 만든다.
+
+    글자를 span 하나로 감싼다. 칩은 inline-flex라 글자 조각이 따로 놓이면 조각 사이마다 gap이 끼어
+    "SMP 거래시간 24h" 같은 한 문장이 벌어진다.
+
+    Raises:
+        ValueError: PD_ICONS에 없는 아이콘 이름. 빈 마스크(보이지 않는 아이콘)로 조용히 그려지지 않게 한다.
+    """
+    if icon not in PD_ICONS:
+        raise ValueError(f"PD_ICONS에 없는 아이콘: {icon!r}")
+    cls = f"pd-chip pd-chip--plain {extra_class}".strip()
+    return (f'<span class="{cls}"><span class="pd-ico pd-ico--{icon}" aria-hidden="true"></span>'
+            f'<span>{text_html}</span></span>')
+
+
+def _fmt_reserve_level(reserve_rate: float) -> Dict:
+    """예비율 단계표(명세 7.4절, KPX 기준 5·10·15%).
+
+    옛 main()의 if 문 값과 문구를 그대로 옮겼다. alert_title·alert_msg는 Slack·메일 본문에 그대로 들어가므로
+    글자를 바꾸면 운영 알림 문구가 바뀐다. 화면용 필드(banner_msg·verdict·다음 경계)만 더했다.
+    banner_msg에 수치를 넣지 않는 이유: 배너는 role="alert"라 문자열이 매분 바뀌면 화면 읽기 프로그램이 매분 다시 읽는다.
+
+    Args:
+        reserve_rate: 예비율(%).
+
+    Returns:
+        status·class·text·show_alert·alert_title·alert_msg·banner_msg·verdict·next_name·next_ratio.
+        next_ratio는 "공급능력 ÷ 비율 = 다음 단계 경계의 수요"에 쓰는 비율이고, 위험 단계는 다음 경계가 없어 None이다.
+    """
+    if reserve_rate < 5:
+        return {"status": "critical", "class": "status-critical", "text": "위험", "show_alert": True,
+                "alert_title": "전력 수급 위험 경보",
+                "alert_msg": f"예비율 {reserve_rate:.1f}% - 즉각적인 부하 감축 필요",
+                "banner_msg": "예비율이 5% 아래입니다. 즉각적인 부하 감축이 필요한 단계입니다",
+                "verdict": "공급이 빠듯합니다", "next_name": None, "next_ratio": None}
+    if reserve_rate < 10:
+        return {"status": "danger", "class": "status-danger", "text": "주의", "show_alert": True,
+                "alert_title": "전력 수급 주의 경보",
+                "alert_msg": f"예비율 {reserve_rate:.1f}% - 전력 수급 상황 주시 필요",
+                "banner_msg": "예비율이 10% 아래입니다. 수급 상황을 주시하는 단계입니다",
+                "verdict": "여유가 부족합니다", "next_name": "위험", "next_ratio": 1.05}
+    if reserve_rate < 15:
+        return {"status": "warning", "class": "status-warning", "text": "관심", "show_alert": True,
+                "alert_title": "전력 수급 관심 단계",
+                "alert_msg": f"예비율 {reserve_rate:.1f}% - 전력 사용 절감 협조 요청",
+                "banner_msg": "예비율이 15% 아래입니다. 전력 사용 절감 협조를 요청하는 단계입니다",
+                "verdict": "여유가 줄고 있습니다", "next_name": "주의", "next_ratio": 1.10}
+    return {"status": "normal", "class": "status-online", "text": "정상", "show_alert": False,
+            "alert_title": None, "alert_msg": None, "banner_msg": None,
+            "verdict": "넉넉합니다", "next_name": "관심", "next_ratio": 1.15}
+
+
+def _fmt_provenance(power_status: Dict, api_kpis: Optional[Dict], kpx_local: Optional[Dict],
+                    now: datetime) -> Dict:
+    """수요·예비율·공급능력의 출처 상태와 자리별 문구를 한 곳에서 정한다(명세 7.2·7.2b절, J1).
+
+    _backend_kpi_overrides가 API 값을 쓰면 KPX·EPSIS 파일·시뮬레이션 세 경로 모두 data_source가
+    "KPX 실시간 (API 서버)"로 덮이고 data_date에는 관측 시각이 아니라 앱 조회 시각이 들어간다.
+    그래서 실측 여부는 API 응답의 data_source(출처 항목을 " + "로 이은 문자열)에 수요 출처 항목이
+    들어 있는지로 판정한다(위에서부터 첫 일치 ①~⑨). 표시 전용이라 값과 경보 판정은 건드리지 않는다(F7).
+
+    Args:
+        power_status: get_current_power_status() 결과(또는 테스트 모드 사본).
+        api_kpis: fetch_backend_json("/api/v1/dashboard/kpis") 결과. 실패면 None.
+        kpx_local: fetch_jeju_realtime() 결과. 실패면 None.
+        now: 화면 기준 시각.
+
+    Returns:
+        상태 키(demand_state·reserve_state·demand_measured·reserve_measured·reserve_known·supply_measured·
+        all_measured·time_kind·src_label·reserve_note·reserve_why·query_hhmm), KPI 표시 키 묶음 display_keys
+        (pd_chip·pd_src_label·pd_state_class·pd_renew_time·pd_time), 자리별 문구(fresh_chip·status_src·
+        supply_chips·supply_meta·supply_foot·legend_demand_note·legend_supply_note·strip_now·demand_chips·
+        demand_meta·grid_chip).
+    """
+    ds = str(power_status.get("data_source", ""))
+    api_src = api_kpis.get("data_source") if isinstance(api_kpis, dict) else None
+    has_api_src = isinstance(api_src, str) and bool(api_src.strip())
+    kpx_is_dict = isinstance(kpx_local, dict)
+
+    reserve_note, reserve_why = "", ""
+    if ds == "테스트 모드":                                    # ① 관리자 테스트 값
+        demand_state, reserve_state, time_kind = "test", "test", "test"
+        src_label, reserve_note = "관리자 테스트 값", " · 테스트 값"
+    elif ds == "KPX 실시간 (API 서버)" and not has_api_src:   # ② 캐시 시차 등으로 API 출처를 못 읽음
+        demand_state, reserve_state, time_kind = "est", "est", "query"
+        src_label, reserve_note = "API 서버 값 (출처 확인 불가)", " · 실측 아님"
+    elif ds == "KPX 실시간 (API 서버)" and "Jeju Crawler" in api_src:  # ③ 제주 KPX 크롤러
+        demand_state, reserve_state, time_kind = "measured", "measured", "query"
+        src_label = "KPX 제주 실시간 (API 서버)"
+    elif ds == "KPX 실시간 (API 서버)" and "EPSIS Demand" in api_src:  # ④ 과거 파일 30일 평균, 예비율은 API 기본값
+        demand_state, reserve_state, time_kind = "est", "default", "query"
+        src_label, reserve_note = "EPSIS 30일 평균 (API 서버 대체값)", " · API 기본값 (실측 아님)"
+        reserve_why = "API 서버가 실측 대신 기본 예비율(25%)을 보냈습니다"
+    elif ds == "KPX 실시간 (API 서버)" and "KPX" in api_src:  # ⑤ 전국 공공 API: 수요 × 0.018, 예비율은 전국 값
+        demand_state, reserve_state, time_kind = "est", "national", "query"
+        src_label, reserve_note = "전국 값 × 0.018 비례 추정 (API 서버)", " · 전국 예비율 (제주 값 아님)"
+        reserve_why = "API 서버가 제주 대신 전국 예비율을 보냈습니다"
+    elif ds == "KPX 실시간 (API 서버)":                        # ⑥ 수요 출처 항목 없음: API 기본값 650 MW·25%
+        demand_state, reserve_state, time_kind = "sim", "default", "query"
+        src_label, reserve_note = "API 서버 기본값 650 MW·25% (실측 아님)", " · API 기본값 (실측 아님)"
+        reserve_why = "API 서버가 실측 대신 기본값(수요 650 MW·예비율 25%)을 보냈습니다"
+    elif ds == "KPX 실시간":                                   # ⑦ API 실패, 앱이 KPX를 직접 조회
+        # 응답에 키가 없으면 앱이 기본값(수요 800 MW·예비율 15%)을 쓴다. 지금 응답 자체가 없으면(두 캐시의
+        # 만료 시차) 앱이 KPX 응답을 받아 "KPX 실시간"을 붙인 판정을 따른다.
+        demand_ok = not kpx_is_dict or _finite_number(kpx_local.get("current_demand"))
+        reserve_ok = not kpx_is_dict or _finite_number(kpx_local.get("reserve_rate"))
+        demand_state = "measured" if demand_ok else "sim"
+        reserve_state = "measured" if reserve_ok else "default"
+        time_kind = "query"
+        src_label = "KPX 제주 실시간 (앱 직접 조회)" if demand_ok else "앱 기본값 800 MW (KPX 수요 미수신, 실측 아님)"
+        if not reserve_ok:
+            reserve_note, reserve_why = " · 앱 기본값 (실측 아님)", "앱이 기본 예비율(15%)을 쓰고 있습니다"
+    elif ds == "EPSIS 파일":                                   # ⑧ 과거 파일 값: 잰 값이지만 지연
+        demand_state, reserve_state, time_kind = "stale", "stale", "date"
+        src_label, reserve_note = "EPSIS 파일 (과거 값)", " · 지연"
+    else:                                                      # ⑨ 앱 시뮬레이션(예비율 15% 고정)
+        demand_state, reserve_state, time_kind = "sim", "default", "none"
+        src_label, reserve_note = "시뮬레이션 (실측 아님)", " · 앱 기본값 (실측 아님)"
+        reserve_why = "앱이 기본 예비율(15%)을 쓰고 있습니다"
+
+    demand_measured = demand_state == "measured"
+    reserve_measured = reserve_state == "measured"
+    reserve_known = reserve_state not in ("national", "default")
+    # 앱 KPX 조회에 공급능력이 없으면 앱은 수요 × 1.15나 EPSIS 파일 값을 쓰는데, API 값으로 출처가 덮인 뒤에는
+    # 어느 쪽인지 알 수 없으므로 보수적으로 추정으로 본다
+    supply_measured = bool(kpx_is_dict and _finite_number(kpx_local.get("supply_capacity")))
+    all_measured = demand_measured and reserve_measured and supply_measured
+
+    data_date = power_status.get("data_date", "N/A")
+    try:
+        queried = datetime.strptime(str(data_date).strip(), "%Y-%m-%d %H:%M")
+    except ValueError:
+        queried = None
+    # "조회"는 관측 시각이 아니라 앱이 값을 받아 온 시각이다(관측 시각 표시는 승인 P1 뒤, 7.3절)
+    query_hhmm = f"{queried:%H:%M}" if queried else f"{now:%H:%M}"
+    _, elapsed = _format_observation_age(data_date, now)
+    if elapsed == "N/A":
+        elapsed = "경과 시간 확인 불가"
+    elapsed_short = elapsed.split("일 ")[0] + "일 경과" if "일 " in elapsed else elapsed  # 앱 바 칩은 일 단위까지만
+    obs_date = html_escape(str(data_date)[:10])
+    screen = f"{now:%H:%M}"
+    curve_tail = " · 곡선은 앱 내장 일간 패턴 × 현재값 (가정값, 예측 모델 아님)"
+
+    # 7.2b 표: 지금 잰 값이 아니면 실측 칩(채운 점)과 "KPX 조회"라는 말을 쓰지 않는다
+    if demand_state == "measured":
+        fresh_chip = _html_meta_chip("clock", f"KPX 조회 {query_hhmm} KST · {elapsed}")
+        status_src = f"KPX 조회 {query_hhmm} KST"
+        pd_chip = _html_chip("measured", "실측")
+        supply_meta = f"출처 KPX 제주 실시간 · 조회 {query_hhmm} KST · {elapsed}{curve_tail}"
+        foot_demand = "KPX 제주 실시간(현재값)"
+        legend_demand_note = "점선 = 추정 패턴 · 점 = KPX 조회값"
+        strip_now = f"● 지금 {screen} · KPX 조회"
+        demand_meta = f"출처 {src_label} · 조회 {query_hhmm} KST · {elapsed}"
+    elif demand_state == "stale":
+        fresh_chip = (_html_meta_chip("clock", f"EPSIS 파일 {obs_date} · {elapsed_short}")
+                      + _html_chip("stale", "지연"))
+        status_src = f"EPSIS 파일 · {obs_date}"
+        pd_chip = _html_chip("measured", "실측") + _html_chip("stale", "지연")
+        supply_meta = f"출처 EPSIS 파일 {obs_date} · {elapsed}{curve_tail}"
+        foot_demand = f"EPSIS 파일 {obs_date}(현재값, 지연)"
+        legend_demand_note = "점선 = 추정 패턴 · 점 = EPSIS 파일 값 (지연)"
+        strip_now = f"○ 지금 {screen} · EPSIS 파일 값 (지연)"
+        demand_meta = f"출처 EPSIS 파일 {obs_date} · {elapsed}"
+    elif demand_state == "est":
+        fresh_chip = _html_chip("est", f"대체값 · {src_label}")
+        status_src = f"{src_label} · 조회 {query_hhmm} KST"
+        pd_chip = _html_chip("est", "추정 · 실측 아님")
+        supply_meta = f"출처 {src_label} · 조회 {query_hhmm} KST · {elapsed}{curve_tail}"
+        foot_demand = f"{src_label}(현재값, 실측 아님)"
+        legend_demand_note = "점선 = 추정 패턴 · 점 = 현재값 (추정)"
+        strip_now = f"○ 지금 {screen} · 추정값"
+        demand_meta = f"출처 {src_label} · 조회 {query_hhmm} KST"
+    elif demand_state == "sim":
+        fresh_chip = _html_chip("est", "시뮬레이션 모드 · 실측 아님")
+        status_src = src_label
+        pd_chip = _html_chip("est", "시뮬레이션 · 실측 아님")
+        supply_meta = f"출처 {src_label} · 화면 {screen} KST{curve_tail}"
+        foot_demand = f"{src_label}(현재값)"
+        legend_demand_note = "점선 = 추정 패턴 · 점 = 현재값 (시뮬레이션)"
+        strip_now = f"○ 지금 {screen} · 시뮬레이션 값"
+        demand_meta = f"출처 {src_label} · 화면 {screen} KST"
+    else:  # test
+        fresh_chip = _html_chip("est", "테스트 모드")
+        status_src = "관리자 테스트 값"
+        pd_chip = _html_chip("est", "테스트 값")
+        supply_meta = f"관리자 테스트 값 · 화면 {screen} KST"
+        foot_demand = "관리자 테스트 값"
+        legend_demand_note = "점 = 테스트 값"
+        strip_now = f"○ 지금 {screen} · 테스트 값"
+        demand_meta = f"관리자 테스트 값 · 화면 {screen} KST"
+
+    # 공급능력은 따로 판정하므로 한 카드에 두 상태가 섞일 수 있다(실측 칩은 실제로 잰 현재값에만 붙인다)
+    if demand_state == "test":
+        supply_chips = _html_chip("est", "테스트 모드")
+    elif demand_state == "measured":
+        supply_chips = _html_chip("est", "추정 패턴") + _html_chip(
+            "measured", "현재값만 실측" if supply_measured else "수요 현재값만 실측")
+    elif demand_state == "stale":
+        supply_chips = _html_chip("est", "추정 패턴") + _html_chip("measured", "현재값 = EPSIS 파일 · 지연")
+    elif supply_measured:
+        word = "추정" if demand_state == "est" else "시뮬레이션"
+        supply_chips = (_html_chip("est", f"추정 패턴 · 수요 현재값도 {word}")
+                        + _html_chip("measured", "공급능력 현재값만 실측"))
+    else:
+        word = "추정" if demand_state == "est" else "시뮬레이션"
+        supply_chips = _html_chip("est", f"추정 패턴 · 현재값도 {word}")
+
+    if demand_state == "test" or (demand_measured and supply_measured):
+        foot_first = foot_demand
+    else:
+        supply_part = "KPX 제주 실시간(현재값)" if supply_measured else "추정(KPX 공급능력 미수신)"
+        foot_first = f"수요 {foot_demand} · 공급능력 {supply_part}"
+    supply_foot = f"출처: {foot_first} · 곡선은 앱 내장 일간 패턴(가정값, 실측·EPSIS 아님) · 화면 갱신 {screen} KST"
+    legend_supply_note = "점선 = 현재 공급능력 × 수요 패턴(가정) · " + (
+        "점 = KPX 조회값" if supply_measured else "점 = 현재값 (추정 · KPX 공급능력 미수신)")
+
+    if demand_state == "test":
+        grid_chip = _html_chip("est", "테스트 값")
+    elif all_measured:
+        grid_chip = _html_chip("measured", "실측 기반 계산")
+    else:
+        grid_chip = _html_chip("est", "추정값 기준")
+
+    display_keys = {
+        "pd_chip": pd_chip,
+        "pd_src_label": src_label,
+        "pd_state_class": {"measured": "", "stale": "is-stale"}.get(demand_state, "is-est"),
+        # 재생 비율은 API 값(renewable_source 키가 있음)이면 조회 시각, 앱 추정이면 화면 시각
+        "pd_renew_time": (f"조회 {query_hhmm} KST" if "renewable_source" in power_status
+                          else f"화면 {screen} KST (앱 추정)"),
+        "pd_time": (f"조회 {query_hhmm} KST" if isinstance(api_kpis, dict)
+                    else f"화면 {screen} KST (앱 시뮬레이션)"),
+    }
+    return {
+        "demand_state": demand_state, "reserve_state": reserve_state,
+        "demand_measured": demand_measured, "reserve_measured": reserve_measured,
+        "reserve_known": reserve_known, "supply_measured": supply_measured, "all_measured": all_measured,
+        "time_kind": time_kind, "src_label": src_label, "reserve_note": reserve_note, "reserve_why": reserve_why,
+        "query_hhmm": query_hhmm, "display_keys": display_keys,
+        "fresh_chip": fresh_chip, "status_src": status_src,
+        "supply_chips": supply_chips, "supply_meta": supply_meta, "supply_foot": supply_foot,
+        "legend_demand_note": legend_demand_note, "legend_supply_note": legend_supply_note,
+        "strip_now": strip_now, "demand_chips": pd_chip, "demand_meta": demand_meta, "grid_chip": grid_chip,
+    }
+
+
+def _fmt_reserve_display(level: Dict, prov: Dict) -> Tuple[str, str]:
+    """KPI 예비율 pill의 (클래스, 글자)를 정한다(명세 7.2b절).
+
+    기본값(API 25%·앱 15%)이나 전국 예비율로 "정상"을 말하지 않도록 그 경우에는 단계 대신 "판정 안 함"을 쓴다.
+    추정·테스트 값은 단계 글자는 두되 빗금(is-est)과 덧말로 실측이 아님을 함께 보인다.
+    """
+    if not prov["reserve_known"]:
+        return "is-est", "판정 안 함" + prov["reserve_note"]
+    if prov["reserve_state"] in ("measured", "stale"):
+        return level["class"], level["text"] + prov["reserve_note"]
+    return f"{level['class']} is-est", level["text"] + prov["reserve_note"]
+
+
+def _fmt_observation_display(prov: Dict, observed_text: str, elapsed_text: str) -> Tuple[str, str]:
+    """'현재 수요' 카드 관측 줄의 두 칸(명세 7.3절).
+
+    카드 f-string의 "관측" 글자(T8 대상)는 그대로 두고 뒤의 값만 정직하게 바꾼다. API 경로의 data_date는
+    관측 시각이 아니라 앱 조회 시각이므로 "시각 미제공 · 조회 HH:MM KST"로 쓴다(관측 시각은 승인 P1 뒤).
+    """
+    kind = prov["time_kind"]
+    if kind == "test":
+        return "없음 (테스트 값)", "실측 아님"
+    if kind == "none":
+        return "없음 (시뮬레이션 값)", "실측 아님"
+    elapsed = elapsed_text if elapsed_text != "N/A" else "경과 시간 확인 불가"
+    if kind == "date":
+        return html_escape(str(observed_text)), elapsed
+    return f"시각 미제공 · 조회 {prov['query_hhmm']} KST", elapsed
+
+
+def _fmt_weather_provenance(api_kpis: Optional[Dict]) -> Optional[str]:
+    """기상 값의 출처 종류를 API 출처 문자열로 정한다(명세 7.2절 끝).
+
+    API는 실시간 기상과 파일이 모두 실패하면 5.0 °C·3.0 m/s 기본값을 출처 항목 없이 보내고, 앱은 값이
+    유한하기만 하면 source='kma'로 둔다. 그래서 source만 보면 API 기본값을 실측처럼 보이게 된다.
+
+    Returns:
+        'file'(과거 자료 24시간 평균) · 'live'(실시간) · 'default'(API 기본값) · None(API 응답 없음 = 앱 시뮬레이션 경로).
+    """
+    if not isinstance(api_kpis, dict):
+        return None
+    src = api_kpis.get("data_source")
+    src = src if isinstance(src, str) else ""
+    if "KMA Weather (파일)" in src:
+        return "file"
+    if any(token in src for token in ("KMA Weather Crawler", "KMA Real-time API", "기상청 (실시간)")):
+        return "live"
+    return "default"
+
+
+def _fmt_smp_display_keys(smp_data: Dict, now: datetime) -> Dict:
+    """SMP 출처 판정 표시 키(명세 5.10절). KPI·SMP 탭 카드·출처 표가 같은 판정을 쓰게 한 곳에서 만든다.
+
+    Returns:
+        pd_src_label(현재가 출처 문구), pd_stale_chip(오늘 가격이 아니면 지연 칩, 아니면 빈 문자열),
+        pd_fc_kind('model'·'api_fallback'·'local'), pd_fc_short(칩용 짧은 모델 이름), pd_confirmed_point(bool).
+    """
+    is_epsis = str(smp_data.get("data_source", "")).startswith("EPSIS")
+    trade_label = smp_data.get("trade_label")
+    if is_epsis and trade_label:
+        src_label = "EPSIS 하루전 (파일)"
+    elif is_epsis:
+        # 거래시간이 없으면 get_smp_data가 current에 최근 48시간 평균을 넣는다(확정 가격이 아니다)
+        src_label = "최근 48시간 평균 (확정 가격 아님)"
+    else:
+        src_label = "시뮬레이션 값 (실측 아님)"
+
+    trade_date = None
+    if trade_label:
+        try:
+            trade_date = datetime.strptime(str(trade_label)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            trade_date = None
+    stale_chip = ""
+    if is_epsis and trade_date is not None and (now.date() - trade_date).days > 0:
+        stale_chip = _html_chip("stale", f"지연 · {(now.date() - trade_date).days}일 전 가격")
+
+    model = smp_data.get("forecast_model")
+    if "forecast_model" not in smp_data:
+        fc_kind = "local"  # API 예측을 못 받아 앱이 시간대 평균 패턴으로 채웠다
+    elif isinstance(model, str) and any(token in model for token in ("대체값", "Fallback", "fallback")):
+        fc_kind = "api_fallback"  # API가 모델 대신 패턴·EPSIS 값을 보냈다
+    else:
+        fc_kind = "model"
+    name = model.strip() if isinstance(model, str) else ""
+    # 칩은 한 줄이라 긴 모델 이름을 넣으면 390px에서 넘친다. 운영 이름 세 가지는 짧은 이름으로 바꾼다
+    if "기준선" in name:
+        fc_short = "기준선"
+    elif "v4.1" in name:
+        fc_short = "v4.1"
+    elif "v3.2" in name:
+        fc_short = "v3.2 · 재검증 전"
+    elif not name:
+        fc_short = "모델 이름 미제공"
+    else:
+        fc_short = html_escape(name if len(name) <= 12 else name[:12] + "…")
+    confirmed_point = bool(is_epsis and trade_date is not None
+                           and str(smp_data.get("forecast_date") or "") == f"{trade_date:%Y-%m-%d}")
+    return {"pd_src_label": src_label, "pd_stale_chip": stale_chip, "pd_fc_kind": fc_kind,
+            "pd_fc_short": fc_short, "pd_confirmed_point": confirmed_point}
+
+
+def _html_app_bar(power_status: Dict, smp_data: Dict, level: Dict, prov: Dict, auto_refresh: bool) -> str:
+    """앱 바(명세 5.4절): 로고·제목·부제 | 수신 칩 · SMP 거래시간 칩 · 자동 갱신 칩.
+
+    Streamlit 헤더 줄(투명 60px)과 겹쳐 한 줄로 놓인다. 제목은 h1이 아니라 role="heading"인 p다
+    (Streamlit 전역 제목 스타일·앵커 링크를 피한다). 1180px 이하에서는 부제를 숨기고 칩 글자를 줄이며,
+    640px 이하에서는 2행(수신 칩과 SMP 칩만)이 된다. power_status·level은 명세 시그니처대로 받는다
+    (경보 단계는 배너가 맡으므로 앱 바에는 쓰지 않는다).
+    """
+    label = str(smp_data.get("trade_label") or "").strip()
+    hour = label.split(" ")[-1] if label else ""
+    if hour.endswith("h") and hour[:-1].isdigit():
+        smp_text = f'SMP<span class="pd-appbar__long"> 거래시간</span> {hour}'
+    else:
+        smp_text = 'SMP<span class="pd-appbar__long"> 거래시간</span> 확인 불가'
+    if auto_refresh:
+        auto_text = '<span class="pd-appbar__long">60초마다 자동 갱신</span><span class="pd-appbar__short">60초</span>'
+    else:
+        auto_text = '<span class="pd-appbar__long">자동 갱신 꺼짐</span><span class="pd-appbar__short">갱신 꺼짐</span>'
+    return (
+        '<div class="pd-appbar">'
+        '<div class="pd-appbar__brand">'
+        '<span class="pd-appbar__logo"><span class="pd-ico pd-ico--map" aria-hidden="true"></span></span>'
+        '<div><p class="pd-appbar__title" role="heading" aria-level="1">제주 전력 지도</p>'
+        '<p class="pd-appbar__sub">제주 전력 수급·SMP·재생에너지</p></div>'
+        '</div>'
+        f'<div class="pd-appbar__meta">{prov["fresh_chip"]}{_html_meta_chip("tag", smp_text)}'
+        f'{_html_meta_chip("refresh", auto_text, "pd-appbar__auto")}</div>'
+        '</div>'
+    )
+
+
+def _html_alert_banner(level: Dict, prov: Dict) -> str:
+    """경보 배너(명세 5.4절, 예비율 15% 미만일 때만).
+
+    매분 바뀌는 수치를 넣지 않는다: st.html은 문자열이 바뀌면 안쪽 DOM을 통째로 바꾸므로 role="alert"가
+    60초 fragment마다 다시 읽힌다. 고정 문장이면 나타날 때와 단계가 바뀔 때만 읽힌다.
+    예비율이 제주 실측이 아닌데(전국 예비율 등) 경보 단계가 나오면, 판정은 그대로 두고(F7) 그 사실을 밝힌다.
+    """
+    if prov["reserve_known"]:
+        msg = level["banner_msg"]
+    else:
+        msg = f"{prov['reserve_why']} · 경보는 이 값으로 판정됐습니다"
+    chip = "" if prov["all_measured"] else _html_chip("est", "추정값 기준")
+    return (
+        f'<div class="pd-alert pd-alert--{level["status"]}" role="alert">'
+        '<span class="pd-ico pd-ico--alert pd-alert__icon" aria-hidden="true"></span>'
+        f'<div class="pd-alert__body"><p class="pd-alert__title">{level["alert_title"]}</p>'
+        f'<p class="pd-alert__msg">{msg} · 기준 관심 15% · 주의 10% · 위험 5%</p></div>'
+        f'<div class="pd-alert__value">{chip}</div>'
+        '</div>'
+    )
+
+
+def _html_status_line(power_status: Dict, level: Dict, prov: Dict) -> str:
+    """상태 문장(명세 5.4절): 단계 pill + 쉬운 판정 문장 + 예비율과 출처.
+
+    문장 안에서 퍼센트를 다시 계산하지 않는다. API 예비율과 앱이 조회한 공급능력은 조회 시점이 달라
+    1~2%p 어긋날 수 있어, 재계산 값과 KPX 값을 나란히 두면 비전문 독자가 혼동한다. 그래서 MW 차이는
+    화면 KPI와 같은 반올림 값으로 계산하고, 예비율은 출처를 붙여 따로 보인다.
+    예비율이 기본값·전국 값이면 "넉넉합니다" 같은 판정을 쓰지 않는다. 60초마다 바뀌므로 aria-live를 쓰지 않는다.
+    """
+    reserve_class = _fmt_reserve_display(level, prov)[0]
+    pill_text = level["text"] if prov["reserve_known"] else "확인 불가"
+    pill = (f'<span class="pd-pill status-badge {reserve_class}"><span class="pd-pill__dot" aria-hidden="true">'
+            f'</span>{pill_text}</span>')
+    chip = "" if prov["all_measured"] else _html_chip("est", "추정값 기준")
+
+    demand, supply = power_status.get("demand"), power_status.get("total_supply")
+    if not prov["reserve_known"]:
+        sentence = f'<b>지금 제주 예비율은 확인할 수 없습니다.</b> {prov["reserve_why"]}.'
+    elif _finite_number(demand) and _finite_number(supply):
+        # KPI 타일의 {:,.0f}와 같은 반올림으로 정수를 만든 뒤 뺀다(화면에 보인 두 수와 차이가 맞게)
+        d_mw, s_mw = int(f"{demand:.0f}"), int(f"{supply:.0f}")
+        head = f'<b>지금 제주 전력은 {level["verdict"]}.</b> '
+        if s_mw > d_mw:
+            sentence = (f'{head}쓰는 전력(수요) {d_mw:,} MW보다 낼 수 있는 전력(공급능력) {s_mw:,} MW가 '
+                        f'{s_mw - d_mw:,} MW 더 많습니다.')
+        elif s_mw < d_mw:
+            sentence = (f'{head}쓰는 전력(수요) {d_mw:,} MW보다 낼 수 있는 전력(공급능력) {s_mw:,} MW가 '
+                        f'{d_mw - s_mw:,} MW 적습니다 (두 값의 조회 시점이 다를 수 있음).')
+        else:
+            sentence = f'{head}쓰는 전력(수요)과 낼 수 있는 전력(공급능력)이 {d_mw:,} MW로 같습니다.'
+    else:
+        sentence = f'<b>지금 제주 전력은 {level["verdict"]}.</b> 수요나 공급능력 값이 없어 둘의 차이는 보이지 않습니다.'
+    reserve_rate = power_status.get("reserve_rate")
+    reserve_txt = f"{reserve_rate:.1f}%" if _finite_number(reserve_rate) else "—"
+    return (
+        f'<div class="pd-status">{pill}{chip}'
+        f'<p class="pd-status__text">{sentence}</p>'
+        f'<span class="pd-status__src">예비율 {reserve_txt} · {prov["status_src"]}</span>'
+        '</div>'
+    )
+
+
+def _html_legend_strip() -> str:
+    """데이터 상태 읽는 법 띠(명세 5.4절, 정적). 칩·차트가 쓰는 4상태 글리프를 한 줄로 풀어 준다.
+
+    640px 이하에서는 제목을 "읽는 법"으로 줄이고 설명을 숨긴다(와이어프레임 4.1절 390). 숨길 부분만 span으로 감쌌다.
+    """
+    items = (
+        ("measured", "실측·확정", "잰 값·확정 가격 (실선·채운 점)"),
+        ("forecast", "예측", "모델 출력 (대시·80% 구간 띠)"),
+        ("est", "추정·시뮬레이션", "계산·가정·모의 값 (점선·빗금)"),
+        ("example", "예시", "설명용 고정 값 (점선 테두리·호박색 띠)"),
+    )
+    cells = "".join(
+        f'<span class="pd-legend__item"><span class="pd-glyph pd-glyph--{kind}" aria-hidden="true"></span>'
+        f'<b>{name}</b><span class="pd-legend__desc">{desc}</span></span>'
+        for kind, name, desc in items
+    )
+    return (
+        '<div class="pd-legend" role="group" aria-label="데이터 상태 읽는 법">'
+        '<span class="pd-legend__title"><span class="pd-legend__long">데이터 상태 </span>읽는 법</span>'
+        f'{cells}</div>'
+    )
+
+
+# ============================================================================
 # 메인 대시보드
 # ============================================================================
 
@@ -2401,19 +2950,24 @@ def main():
     """메인 함수"""
     st.html(_css_dashboard())  # <style>만 담아 레이아웃 공간 0 (st.html은 event 컨테이너로 간다)
 
-    # 데이터 로드
+    # 전체 실행 경로에서 쓰는 데이터만 읽는다. fragment는 각자 같은 캐시 함수를 다시 부른다(캐시 재사용)
     plants_df = get_jeju_power_plants()
     power_status = get_current_power_status()
+    # SMP 탭은 6단계에서 live_smp fragment로 옮기기 전까지 전체 실행 경로의 값을 쓴다
     smp_data = get_smp_data()
     # 예측은 다른 앱과 같은 API 서버 모델 예측을 쓴다 (실패 시 기존 로컬 추정 유지)
     backend_predictions = get_backend_smp_predictions()
     if backend_predictions:
         smp_data = {**smp_data, **backend_predictions}
-    weather = get_weather_data()
+
+    test_alert = False
+    test_reserve = None
 
     # ========== 사이드바: 테스트 모드 ==========
     with st.sidebar:
         st.markdown("### 설정")
+        # 머리·KPI(live_header fragment)를 60초마다 다시 그린다. 끄면 위젯을 만질 때만 갱신된다
+        auto_refresh = st.toggle("60초마다 자동 갱신", value=True, key="auto_refresh")
 
         # 알림 테스트 모드
         test_alert = st.checkbox("🧪 알림 테스트 모드", value=False)
@@ -2491,218 +3045,118 @@ def main():
         else:
             st.caption("경보 이력이 없습니다")
 
-    # ========== 헤더 ==========
-    # 데이터 출처 확인
-    smp_source = smp_data.get('data_source', 'N/A')
-    power_source = power_status.get('data_source', 'N/A')
-    is_kpx_realtime = 'KPX' in power_source
-    is_real_data = is_kpx_realtime or 'EPSIS' in smp_source or 'EPSIS' in power_source
-
-    # 데이터 상태 표시
-    if is_kpx_realtime:
-        data_status_text = '🔴 KPX 실시간 연동'
-        data_status_class = 'status-online'
-    elif is_real_data:
-        data_status_text = '📊 EPSIS 데이터 연동'
-        data_status_class = 'status-online'
-    else:
-        data_status_text = '⚠️ 시뮬레이션 모드'
-        data_status_class = 'status-warning'
-
-    st.markdown(f"""
-    <div class="main-header">
-        <div>
-            <h1 class="main-title"><svg width="0.95em" height="0.95em" viewBox="0 0 24 24" fill="none" stroke="#7DD3FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>제주 전력 지도</h1>
-            <p class="main-subtitle">실시간 재생에너지 모니터링 및 SMP 예측</p>
-            <div style="margin-top: 5px;">
-                <span class="status-badge {data_status_class}">
-                    {data_status_text}
-                </span>
-            </div>
-        </div>
-        <div class="header-meta">
-            <div class="header-meta-label">화면 갱신 시각</div>
-            <div class="header-meta-time">
-                {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-            </div>
-            <div class="header-meta-source">
-                SMP: {smp_data.get('record_count', 0):,}건 | 수요: {power_source}
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ========== 예비율 알림 시스템 ==========
+    # 경보 판정·기록·발송: 전체 실행 경로에만 둔다 (자동 갱신 fragment 안 금지, J2)
+    # fragment는 열린 세션마다 60초마다 돌기 때문에, 거기서 기록·발송하면 세션 수만큼 이력·알림이 겹친다
     reserve_rate = power_status['reserve_rate']
-
-    # 예비율 상태 판단 (KPX 기준)
-    # - 정상: >= 15%
-    # - 관심: >= 10%, < 15%
-    # - 주의: >= 5%, < 10%
-    # - 위험: < 5%
-    if reserve_rate < 5:
-        reserve_status = "critical"
-        reserve_class = "status-critical"
-        reserve_text = "위험"
-        alert_class = "alert-danger"
-        alert_icon = "🚨"
-        alert_title = "전력 수급 위험 경보"
-        alert_msg = f"예비율 {reserve_rate:.1f}% - 즉각적인 부하 감축 필요"
-        show_alert = True
-    elif reserve_rate < 10:
-        reserve_status = "danger"
-        reserve_class = "status-danger"
-        reserve_text = "주의"
-        alert_class = "alert-danger"
-        alert_icon = "⚠️"
-        alert_title = "전력 수급 주의 경보"
-        alert_msg = f"예비율 {reserve_rate:.1f}% - 전력 수급 상황 주시 필요"
-        show_alert = True
-    elif reserve_rate < 15:
-        reserve_status = "warning"
-        reserve_class = "status-warning"
-        reserve_text = "관심"
-        alert_class = "alert-warning"
-        alert_icon = "📢"
-        alert_title = "전력 수급 관심 단계"
-        alert_msg = f"예비율 {reserve_rate:.1f}% - 전력 사용 절감 협조 요청"
-        show_alert = True
-    else:
-        reserve_status = "normal"
-        reserve_class = "status-online"
-        reserve_text = "정상"
-        alert_title = None
-        alert_msg = None
-        show_alert = False
-
-    # 경보 이력 저장 (테스트 모드가 아닐 때만)
-    if show_alert and not test_alert:
+    level = _fmt_reserve_level(reserve_rate)
+    if level['show_alert'] and not test_alert:
         alert_history = get_alert_history()
-        alert_history.add_alert(
-            reserve_rate=reserve_rate,
-            status=reserve_status,
-            title=alert_title,
-            message=alert_msg
-        )
-
-        # 위험(critical) 경보일 때 이메일 발송
-        if reserve_status == "critical":
+        alert_history.add_alert(reserve_rate=reserve_rate, status=level['status'],
+                                title=level['alert_title'], message=level['alert_msg'])
+        if level['status'] == "critical":
             email_notifier = get_email_notifier()
             if email_notifier.is_configured():
                 success, email_msg = email_notifier.send_critical_alert(
-                    reserve_rate=reserve_rate,
-                    status=reserve_status,
-                    title=alert_title,
-                    message=alert_msg,
-                    power_data=power_status
-                )
+                    reserve_rate=reserve_rate, status=level['status'], title=level['alert_title'],
+                    message=level['alert_msg'], power_data=power_status)
                 if success:
-                    st.toast(f"📧 이메일 발송 완료", icon="✅")
-
-        # Slack 알림 발송 (모든 경보 레벨)
+                    st.toast("이메일 발송 완료", icon=":material/mail:")
         slack_notifier = get_slack_notifier()
         if slack_notifier.is_configured():
             success, slack_msg = slack_notifier.send_alert(
-                reserve_rate=reserve_rate,
-                status=reserve_status,
-                title=alert_title,
-                message=alert_msg,
-                power_data=power_status
-            )
+                reserve_rate=reserve_rate, status=level['status'], title=level['alert_title'],
+                message=level['alert_msg'], power_data=power_status)
             if success:
-                st.toast(f"💬 Slack 알림 발송 완료", icon="✅")
+                st.toast("Slack 알림 발송 완료", icon=":material/chat:")
 
-    # 알림 배너 표시
-    if show_alert:
-        st.markdown(f"""
-        <div class="alert-banner {alert_class}">
-            <div class="alert-icon">{alert_icon}</div>
-            <div class="alert-content">
-                <div class="alert-title">{alert_title}</div>
-                <div class="alert-message">{alert_msg}</div>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 2rem; font-weight: bold;">{reserve_rate:.1f}%</div>
-                <div style="font-size: 0.8rem;">예비율</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    run_every = "60s" if auto_refresh else None
 
-    # ========== 상단 메트릭 카드 ==========
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # 앱 바·경보 배너·상태 문장·KPI를 60초마다 다시 그린다. main() 안에 중첩 정의해야 회귀 테스트(ast.walk(main))가
+    # KPI 카드를 찾는다. 표시 키(pd_*)는 이 fragment의 사본 dict에만 넣는다(경보 발송에 넘긴 dict에는 넣지 않는다)
+    @st.fragment(run_every=run_every)
+    def live_header():
+        now = datetime.now()
+        power_status = dict(get_current_power_status())
+        if test_alert:
+            power_status['reserve_rate'] = test_reserve
+            power_status['data_source'] = '테스트 모드'
+        smp_data = get_smp_data()
+        backend_predictions = get_backend_smp_predictions()
+        if backend_predictions:
+            smp_data = {**smp_data, **backend_predictions}
+        weather = dict(get_weather_data())
+        api_kpis = fetch_backend_json("/api/v1/dashboard/kpis")
+        prov = _fmt_provenance(power_status, api_kpis, fetch_jeju_realtime(), now)
+        power_status.update(prov['display_keys'])      # pd_chip, pd_src_label, pd_state_class, pd_renew_time, pd_time
+        # 기상 값이 앱 시뮬레이션이면(캐시 5분 동안 API 실패 시점의 값) API 출처 판정을 붙이지 않는다.
+        # 붙이면 앱이 만든 값에 "API 기본값" 칩이 붙는다
+        weather['pd_src'] = _fmt_weather_provenance(api_kpis) if weather.get('source') == 'kma' else None
+        # 관측 시각을 주는 원천이 없다. API 값이면 앱 캐시 길이만 밝히고, 앱 시뮬레이션이면 화면 시각을 쓴다
+        weather['pd_time'] = ('관측 시각 미제공 · 최대 5분 캐시' if weather.get('source') == 'kma'
+                              else f'화면 {now:%H:%M} KST (앱 시뮬레이션)')
+        smp_data = {**smp_data, **_fmt_smp_display_keys(smp_data, now)}
+        reserve_rate = power_status['reserve_rate']
+        level = _fmt_reserve_level(reserve_rate)
+        # 실측이 아니면 빗금 클래스와 덧말을 붙이고, 기본값(API 25%·앱 15%)이면 단계를 판정하지 않는다(7.2b)
+        reserve_class, reserve_text = _fmt_reserve_display(level, prov)
+        demand_observed_text, demand_elapsed_text = _format_observation_age(
+            power_status.get('data_date', 'N/A')
+        )
+        demand_observed_text, demand_elapsed_text = _fmt_observation_display(
+            prov, demand_observed_text, demand_elapsed_text
+        )
 
-    # 수요 데이터 관측 시각·경과 시간 (EPSIS 파일 데이터는 며칠 묵은 값일 수 있음)
-    demand_observed_text, demand_elapsed_text = _format_observation_age(
-        power_status.get('data_date', 'N/A')
-    )
+        st.html(_html_app_bar(power_status, smp_data, level, prov, auto_refresh))
+        if level['show_alert']:
+            st.html(_html_alert_banner(level, prov))
+        st.html(_html_status_line(power_status, level, prov))
 
-    with col1:
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="info-card-title">현재 수요</div>
-            <div class="info-card-value">{power_status['demand']} <span style="font-size: 1rem;">MW</span></div>
-            <div class="info-card-change">
-                <span class="status-badge {reserve_class}">예비율 {reserve_rate:.1f}% ({reserve_text})</span>
-            </div>
-            <div class="info-card-meta" style="font-size: 0.7rem; color: #64748B; margin-top: 4px;">
-                관측: {demand_observed_text} · {demand_elapsed_text}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(key="kpi_row"):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.markdown(f"""<div class="pd-kpi {power_status.get('pd_state_class', '')}">
+<div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--bolt" aria-hidden="true"></span>현재 수요</span>{power_status.get('pd_chip', '')}</div>
+<div class="pd-kpi__value"><span class="pd-num">{power_status['demand']:,.0f}</span><span class="pd-kpi__unit">MW</span></div>
+<div class="pd-kpi__sub"><span class="pd-pill status-badge {reserve_class}"><span class="pd-pill__dot" aria-hidden="true"></span>예비율 {reserve_rate:.1f}% · {reserve_text}</span></div>
+<div class="pd-kpi__meta"><span>출처 {power_status.get('pd_src_label', 'KPX 실시간')}</span><span>관측 {demand_observed_text} · {demand_elapsed_text}</span></div>
+</div>""", unsafe_allow_html=True)
+            with col2:
+                # 이전 시간 실측값이 없으면 화살표/변화율 대신 안내 문구를 표시한다
+                if smp_data.get('prev_available', False) and smp_data['change'] is not None:
+                    smp_change_class = "is-up" if smp_data['change'] >= 0 else "is-down"
+                    smp_arrow = "▲" if smp_data['change'] >= 0 else "▼"
+                    smp_change_html = (
+                        f'{smp_arrow} {abs(smp_data["change"]):.1f} 원/kWh ({smp_data["change_pct"]:+.1f}%) · 전 거래시간 대비'
+                    )
+                else:
+                    smp_change_class = ""
+                    smp_change_html = "이전 시간 데이터 없음"
+                st.markdown(f"""<div class="pd-kpi{'' if str(smp_data.get('data_source', '')).startswith('EPSIS') and smp_data.get('trade_label') else ' is-est'}">
+<div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--tag" aria-hidden="true"></span>제주 하루전 SMP</span>{'<span class="pd-chip pd-chip--measured"><span class="pd-chip__glyph" aria-hidden="true"></span>확정 가격</span>' if str(smp_data.get('data_source', '')).startswith('EPSIS') and smp_data.get('trade_label') else ('<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · 최근 48시간 평균</span>' if str(smp_data.get('data_source', '')).startswith('EPSIS') else '<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>시뮬레이션 · 실측 아님</span>')}{smp_data.get('pd_stale_chip', '')}</div>
+<div class="pd-kpi__value"><span class="pd-num">{smp_data['current']:,.1f}</span><span class="pd-kpi__unit">원/kWh</span></div>
+<div class="pd-kpi__sub"><span class="pd-delta {smp_change_class}">{smp_change_html}</span></div>
+<div class="pd-kpi__meta"><span>출처 {smp_data.get('pd_src_label', '확인 불가')}</span><span>거래시간 {smp_data.get('trade_label') or '확인 불가'}</span></div>
+</div>""", unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""<div class="pd-kpi is-est">
+<div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--leaf" aria-hidden="true"></span>재생에너지 비율</span><span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · 실측 아님</span></div>
+<div class="pd-kpi__value"><span class="pd-num">{power_status['renewable_ratio']:.1f}</span><span class="pd-kpi__unit">%</span></div>
+<div class="pd-kpi__sub">태양광·풍력이 지금 수요를 채우는 비율</div>
+<div class="pd-kpi__meta"><span>{power_status.get('renewable_source', '태양광 + 풍력 (추정치)')}</span><span>{power_status.get('pd_renew_time', '조회 시각 미제공')} · 발전 현황 탭 구성비와 산출 근거 다름</span></div>
+</div>""", unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""<div class="pd-kpi{'' if weather.get('source') == 'kma' and weather.get('pd_src') not in ('file', 'default') else ' is-est'}">
+<div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--thermo" aria-hidden="true"></span>기상 현황</span>{'<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · 과거 자료 평균</span>' if weather.get('pd_src') == 'file' else ('<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · API 기본값 (실측 아님)</span>' if weather.get('pd_src') == 'default' else ('<span class="pd-chip pd-chip--measured"><span class="pd-chip__glyph" aria-hidden="true"></span>실측</span>' if weather.get('source') == 'kma' else '<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>시뮬레이션 · 실측 아님</span>'))}</div>
+<div class="pd-kpi__value"><span class="pd-num">{weather['temperature']:.1f}</span><span class="pd-kpi__unit">°C</span></div>
+<div class="pd-kpi__sub">풍속 {weather['wind_speed']:.1f} m/s{(' · ' + str(weather.get('condition'))) if weather.get('condition') else ''}</div>
+<div class="pd-kpi__meta"><span>{'기상청 과거 자료 24시간 평균 (API 서버) · 실시간 아님' if weather.get('pd_src') == 'file' else ('API 서버 기본값 (실측 아님)' if weather.get('pd_src') == 'default' else ('기상청 초단기실황 (API 서버)' if weather.get('source') == 'kma' else '시뮬레이션 값 (실측 아님)'))}</span><span>{weather.get('pd_time', '관측 시각 미제공 · 최대 5분 캐시')}</span></div>
+</div>""", unsafe_allow_html=True)
 
-    with col2:
-        # 이전 시간 실측값이 없으면 화살표/변화율 대신 안내 문구를 표시한다
-        if smp_data.get('prev_available', False) and smp_data['change'] is not None:
-            smp_change_class = "positive" if smp_data['change'] >= 0 else "negative"
-            smp_arrow = "↑" if smp_data['change'] >= 0 else "↓"
-            smp_change_html = (
-                f'{smp_arrow} {abs(smp_data["change"]):.1f}원 ({smp_data["change_pct"]:+.1f}%)'
-            )
-        else:
-            smp_change_class = ""
-            smp_change_html = "이전 시간 데이터 없음"
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="info-card-title">제주 하루전 SMP</div>
-            <div class="info-card-value">{smp_data['current']} <span style="font-size: 1rem;">원</span></div>
-            <div class="info-card-change {smp_change_class}">{smp_change_html}</div>
-            <div class="info-card-meta" style="font-size: 0.7rem; color: #64748B; margin-top: 4px;">거래시간 {smp_data.get('trade_label') or '확인 불가'}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    live_header()
+    st.html(_html_legend_strip())
 
-    with col3:
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="info-card-title">재생에너지 비율</div>
-            <div class="info-card-value">{power_status['renewable_ratio']:.1f} <span style="font-size: 1rem;">%</span></div>
-            <div class="info-card-change">{power_status.get('renewable_source', '태양광 + 풍력 (추정치)')}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="info-card-title">계통 주파수</div>
-            <div class="info-card-value">{power_status['frequency']:.2f} <span style="font-size: 1rem;">Hz</span></div>
-            <div class="info-card-change"><span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col5:
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="info-card-title">기상 현황</div>
-            <div class="info-card-value">{weather['temperature']:.0f} <span style="font-size: 1rem;">°C</span></div>
-            <div class="info-card-change">풍속 {weather['wind_speed']:.1f} m/s</div>
-            <div class="info-card-change">{'<span class="status-badge status-online">기상청 초단기실황</span>' if weather.get('source') == 'kma' else '<span class="status-badge status-warning">시뮬레이션 값 (실측 아님)</span>'}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ========== 메인 컨텐츠 ==========
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 탭 생성
-    tab1, tab2, tab3, tab4 = st.tabs(["실시간 현황", "SMP 예측", "발전 현황", "분석"])
+    tab1, tab2, tab3, tab4 = st.tabs([":material/map: 실시간 현황", ":material/sell: SMP 예측",
+                                      ":material/bolt: 발전 현황", ":material/insights: 분석"])
 
     with tab1:
         # 메인 대시보드 탭 (GE Inertia 스타일)
@@ -2742,6 +3196,15 @@ def main():
                     reserve=True
                 )
                 st.plotly_chart(reserve_gauge, width="stretch")
+
+            # 계통 주파수는 시뮬레이션 값이라 실측 KPI 띠에서 내렸다(KPI 5장 → 4장, 고아 카드 해소).
+            # 5단계에서 수급 상태 줄(status_row의 card_freq)로 옮기기 전까지 게이지 아래에 둔다
+            with st.container(border=True, key="card_freq"):
+                st.markdown(f"""<div class="pd-card-sim">
+<div class="pd-card__head"><span class="pd-card__title"><span class="pd-ico pd-ico--wave" aria-hidden="true"></span>계통 주파수</span><span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>시뮬레이션 · 실측 아님</span></div>
+<div class="pd-sim-value"><span class="pd-num">{power_status['frequency']:.2f}</span><span class="pd-kpi__unit">Hz</span></div>
+<p class="pd-card__note">API 서버 시뮬레이션 값 (실측 아님) · 계통 실측 연동 전 참고용 · 정격 60 Hz · {power_status.get('pd_time', '조회 시각 미제공')}</p>
+</div>""", unsafe_allow_html=True)
 
             # 하단: 제주도 지도
             st.markdown('<div class="info-card-title" style="margin-top: 10px;">제주도 발전소 현황</div>', unsafe_allow_html=True)
