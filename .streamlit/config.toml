@@ -1,9 +1,5 @@
-[theme]
-primaryColor = "#3B82F6"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F8FAFC"
-textColor = "#1E293B"
-font = "sans serif"
+# 제주 전력 지도 v4 (src/dashboard/app_v4.py) Streamlit 설정 — 2026-11-23 UI 빌드 명세 3장·8장
+# [server]·[browser]·[runner]는 기존 값을 그대로 둔다. 운영 포트·주소는 launchd CLI 인자가 덮어쓴다.
 
 [server]
 headless = true
@@ -21,5 +17,58 @@ magicEnabled = true
 fastReruns = true
 
 [client]
-showErrorDetails = true
-toolbarMode = "auto"
+# viewer: Deploy·개발 메뉴를 숨기고 ⋮ → Settings(테마 선택)는 남긴다. minimal이면 테마를 바꿀 길이 없다.
+toolbarMode = "viewer"
+# 공개 화면에 예외 종류·메시지·스택을 내보내지 않는다. 1.52.1 허용값 full|stacktrace|type|none (false는 stacktrace로 해석).
+showErrorDetails = "none"
+
+[theme]
+font = "Pretendard Variable:https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+headingFont = "Pretendard Variable:https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+baseRadius = "0.75rem"
+buttonRadius = "0.5rem"
+showWidgetBorder = true
+showSidebarBorder = true
+# 정확히 10색이어야 한다(1.52.1은 10개 미만이면 Plotly colorway 전체를 버린다). 계열 색은 trace마다 명시하고 이 목록은 안전망이다.
+# 순서: 수요 · 풍력 · 태양광 · ESS · 화력 · SMP · 예비력 · 공급능력 · HVDC · 기타
+chartCategoricalColors = ["#3B82F6", "#0891B2", "#B7791F", "#8B5CF6", "#8D6E63", "#C026D3", "#16A34A", "#64748B", "#7C8DB0", "#4D7C0F"]
+
+[theme.light]
+primaryColor = "#2563EB"
+backgroundColor = "#FFFFFF"            # 카드 면 = Plotly 배경·dataframe 셀·팝오버. 페이지 캔버스(#F6F8FB)는 CSS가 칠한다.
+secondaryBackgroundColor = "#EEF2F7"   # 입력 위젯 채움
+textColor = "#0F172A"
+linkColor = "#1D4ED8"
+borderColor = "#E2E8F0"
+dataframeBorderColor = "#E2E8F0"
+dataframeHeaderBackgroundColor = "#F1F5F9"
+redColor = "#B91C1C"
+orangeColor = "#B45309"
+greenColor = "#15803D"
+blueColor = "#1D4ED8"
+violetColor = "#7C3AED"
+grayColor = "#475569"
+
+[theme.dark]
+primaryColor = "#60A5FA"
+backgroundColor = "#121B31"            # 카드 면. 페이지 캔버스(#0B1220)는 CSS가 칠한다.
+secondaryBackgroundColor = "#1A2439"
+textColor = "#F1F5F9"
+linkColor = "#60A5FA"
+borderColor = "#24324D"
+dataframeBorderColor = "#24324D"
+dataframeHeaderBackgroundColor = "#1A2439"
+redColor = "#F87171"
+orangeColor = "#FBBF24"
+greenColor = "#4ADE80"
+blueColor = "#60A5FA"
+violetColor = "#A78BFA"
+grayColor = "#94A3B8"
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#EEF2F7"
+
+[theme.dark.sidebar]
+backgroundColor = "#101A2E"
+secondaryBackgroundColor = "#1A2439"

@@ -6,11 +6,11 @@
 실제 EPSIS 데이터 연동
 
 주요 기능:
-1. 🗺️ 제주도 지도 - 발전소 위치 및 실시간 발전량
-2. ⚡ SMP 예측 - EPSIS 실제 데이터 + AI 예측
-3. 📊 실시간 현황 - 제주 계통 수요/공급 실데이터
-4. 🌤️ 기상 연동 - 기상 데이터 오버레이
-5. 🔍 XAI 분석 - 예측 근거 설명
+1. 제주도 지도 - 발전소 위치 및 실시간 발전량
+2. SMP 예측 - EPSIS 실제 데이터 + AI 예측
+3. 실시간 현황 - 제주 계통 수요/공급 실데이터
+4. 기상 연동 - 기상 데이터 오버레이
+5. XAI 분석 - 예측 근거 설명
 
 Usage:
     PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
@@ -25,12 +25,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-import plotly.express as px
+from urllib.parse import quote
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import folium
 from folium import plugins
-from streamlit_folium import st_folium, folium_static
+from streamlit_folium import st_folium
 import json
 from pathlib import Path
 import sys
@@ -648,347 +647,14 @@ def get_slack_notifier() -> SlackNotifier:
 # 페이지 설정
 # ============================================================================
 
+# 페이지 아이콘은 Material 아이콘이다(이모지는 OS 글꼴마다 모양이 달라 화면 계층에서 쓰지 않는다, 명세 3.8절).
+# 화면 CSS는 모듈 최상위 st.markdown이 아니라 main() 첫 줄의 st.html(_css_dashboard())로 넣는다(명세 5.1·5.15절).
 st.set_page_config(
-    page_title="제주 전력 지도 v4.0",
-    page_icon="🗺️",
+    page_title="제주 전력 지도",
+    page_icon=":material/map:",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-
-# ============================================================================
-# CSS 스타일링 (60hz.io 스타일)
-# ============================================================================
-
-st.markdown("""
-<style>
-    /* eXeco DS v1 타이포: Pretendard Variable (CDN 로드 후 전역 스택 적용) */
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
-
-    /* eXeco DS v1 표면 토큰: bg #0B1220 / card #121B31 / border rgba(148,163,184,0.16) */
-    .stApp, .main, [data-testid="stSidebar"] {
-        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
-            'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif;
-        color: #F1F5F9;
-    }
-
-    /* 전체 배경 */
-    .stApp {
-        background: linear-gradient(135deg, #0B1220 0%, #0E1730 100%);
-    }
-
-    /* 사이드바 */
-    [data-testid="stSidebar"] {
-        background: #121B31;
-        border-right: 1px solid rgba(148,163,184,0.16);
-    }
-
-    /* 메인 헤더 (브랜드 네이비 그라데이션) */
-    .main-header {
-        background: linear-gradient(90deg, #04265E 0%, #0A3A7D 100%);
-        padding: 1rem 2rem;
-        border-radius: 14px;
-        margin-bottom: 1rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .main-title {
-        color: #F1F5F9;
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 0;
-    }
-
-    .main-subtitle {
-        color: rgba(255,255,255,0.8);
-        font-size: 0.9rem;
-    }
-
-    /* 정보 카드 (eXeco DS v1 카드 토큰) */
-    .info-card {
-        background: #121B31;
-        border: 1px solid rgba(148,163,184,0.16);
-        border-radius: 14px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 2px 8px rgba(2, 6, 23, 0.35);
-    }
-
-    .info-card-title {
-        color: #94A3B8;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-
-    .info-card-title svg {
-        flex-shrink: 0;
-        opacity: 0.85;
-    }
-
-    .info-card-value {
-        color: #F1F5F9;
-        font-size: 2rem;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .info-card-change {
-        font-size: 0.9rem;
-        margin-top: 0.5rem;
-    }
-
-    .positive { color: #10b981; }
-    .negative { color: #ef4444; }
-
-    /* 상태 표시 */
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .status-online {
-        background: rgba(16, 185, 129, 0.2);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-
-    .status-warning {
-        background: rgba(245, 158, 11, 0.2);
-        color: #f59e0b;
-        border: 1px solid rgba(245, 158, 11, 0.3);
-    }
-
-    .status-danger {
-        background: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-
-    .status-critical {
-        background: rgba(239, 68, 68, 0.3);
-        color: #fca5a5;
-        border: 1px solid rgba(239, 68, 68, 0.5);
-        animation: pulse-danger 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse-danger {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-
-    /* 알림 배너 */
-    .alert-banner {
-        padding: 1rem 1.5rem;
-        border-radius: 0.75rem;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .alert-danger {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.3) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.5);
-        color: #fca5a5;
-    }
-
-    .alert-warning {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(180, 83, 9, 0.3) 100%);
-        border: 1px solid rgba(245, 158, 11, 0.5);
-        color: #fcd34d;
-    }
-
-    .alert-icon {
-        font-size: 2rem;
-    }
-
-    .alert-content {
-        flex: 1;
-    }
-
-    .alert-title {
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin-bottom: 0.25rem;
-    }
-
-    .alert-message {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-
-    /* 지도 컨테이너 */
-    .map-container {
-        background: #121B31;
-        border: 1px solid rgba(148,163,184,0.16);
-        border-radius: 14px;
-        padding: 0.5rem;
-        overflow: hidden;
-    }
-
-    /* 범례 */
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.25rem 0;
-        color: #F1F5F9;
-        font-size: 0.85rem;
-    }
-
-    .legend-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-    }
-
-    .main-title svg {
-        vertical-align: -0.12em;
-        margin-right: 0.45rem;
-    }
-
-    /* 탭 스타일 */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: #121B31;
-        border: 1px solid rgba(148,163,184,0.16);
-        border-radius: 14px;
-        padding: 0.25rem;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        color: #94a3b8;
-        border-radius: 0.5rem;
-        padding: 0.5rem 1rem;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, #04265E 0%, #0A3A7D 100%);
-        color: #F1F5F9;
-    }
-
-    /* 메트릭 카드 그리드 */
-    .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    /* 차트 컨테이너 */
-    .chart-container {
-        background: #121B31;
-        border: 1px solid rgba(148,163,184,0.16);
-        border-radius: 14px;
-        padding: 1rem;
-    }
-
-    /* 숨기기 */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    [data-testid="stHeader"] { background: #0B1220; color: #F1F5F9; }
-    [data-testid="stHeader"] button { color: #F1F5F9; }
-
-    /* Metric 스타일 오버라이드 */
-    [data-testid="stMetricValue"] {
-        color: #F1F5F9;
-        font-size: 1.8rem;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-
-    [data-testid="stMetricLabel"] {
-        color: #94A3B8;
-    }
-
-    [data-testid="stMetricDelta"] svg {
-        display: none;
-    }
-
-    /* 대시보드의 정보 밀도와 작은 화면 대응 */
-    .main .block-container {
-        max-width: 1600px;
-        padding-top: 4.5rem;
-        padding-bottom: 2rem;
-    }
-    .main-header {
-        gap: 1.5rem;
-        background: linear-gradient(120deg, #04265E, #0A3A7D 58%, #0E4494);
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        padding: 1.5rem 1.75rem;
-        box-shadow: 0 2px 10px rgba(2, 6, 23, 0.4);
-    }
-    .main-header h1.main-title {
-        color: #F1F5F9;
-        font-size: clamp(1.5rem, 2.3vw, 2rem);
-        line-height: 1.2;
-        padding: 0;
-    }
-    .main-subtitle { margin: 0.45rem 0; }
-    .header-meta { text-align: right; color: #F1F5F9; flex-shrink: 0; }
-    .header-meta-label { font-size: 0.8rem; color: #BFDBFE; }
-    .header-meta-time { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .header-meta-source { font-size: 0.75rem; color: #BFDBFE; margin-top: 0.3rem; }
-    .info-card {
-        min-height: 138px;
-        padding: 1.15rem;
-        margin-bottom: 0;
-        background: #121B31;
-        border-color: rgba(148,163,184,0.16);
-    }
-    .info-card-title { color: #94A3B8; letter-spacing: 0; }
-    .info-card-value { font-size: clamp(1.45rem, 2vw, 1.9rem); font-variant-numeric: tabular-nums; }
-    .info-card-change { color: #CBD5E1; font-size: 0.8rem; }
-    .positive { color: #10B981; }
-    .negative { color: #EF4444; }
-    .status-online { color: #22C55E; }
-    [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] label,
-    [data-testid="stCheckbox"] label p { color: #F1F5F9; }
-    [data-testid="stSidebar"] [data-testid="stAlert"] p { color: #BFDBFE; }
-    .stTabs [data-baseweb="tab-list"] { gap: 0.25rem; overflow-x: auto; }
-    .stTabs [data-baseweb="tab"] { min-height: 44px; white-space: nowrap; color: #CBD5E1; }
-    .stTabs [data-baseweb="tab"]:focus-visible,
-    button:focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; }
-    @media (max-width: 640px) {
-        .main .block-container { padding: 4rem 1rem 1.5rem; }
-        .main-header { flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.2rem; }
-        .header-meta { text-align: left; }
-        div[data-testid="stHorizontalBlock"]:has(.info-card) {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            column-gap: 0.65rem;
-            row-gap: 1.75rem;
-        }
-        div[data-testid="stHorizontalBlock"]:has(.info-card) > div[data-testid="column"] {
-            width: 100% !important;
-            min-width: 0 !important;
-        }
-        .info-card { min-height: 126px; padding: 0.85rem; }
-        .info-card-title { font-size: 0.78rem; }
-        .info-card-value { font-size: 1.4rem; }
-        .status-badge { padding: 0.2rem 0.45rem; }
-        .alert-banner { flex-wrap: wrap; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .status-critical { animation: none; }
-    }
-</style>
-""", unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -2524,11 +2190,216 @@ def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
 
 
 # ============================================================================
+# 화면 CSS · 아이콘 (빌드 명세 3장 토큰 · 3.8절 아이콘 · 5.15절 CSS)
+# ============================================================================
+
+# 아이콘 path 원본은 docs/2026-11-23-dashboard-ui-top1/icons.json(시안 A ICONS 24개)이고 wave는 3.8절에서 더했다.
+# 이모지 대신 CSS 마스크로 그리므로 글꼴·OS에 따라 모양이 바뀌지 않고 글자색(currentColor)을 따른다.
+PD_ICONS: Dict[str, str] = {
+    "map": "<path d='M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z'/><path d='M9 4v14M15 6v14'/>",
+    "bolt": "<path d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/>",
+    "sun": "<circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/>",
+    "wind": "<path d='M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8'/>",
+    "battery": "<rect x='2' y='7' width='17' height='10' rx='2'/><path d='M22 11v2M6 10v4M10 10v4'/>",
+    "flame": "<path d='M12 2s5 4.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 1.5-4S9 11 11 11c0-3 1-6 1-9z'/>",
+    "plug": "<path d='M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0V7zM12 17v5'/>",
+    "clock": "<circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/>",
+    "refresh": "<path d='M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5'/>",
+    "info": "<circle cx='12' cy='12' r='9'/><path d='M12 11v5M12 8h.01'/>",
+    "alert": "<path d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/><path d='M12 9v4M12 17h.01'/>",
+    "chart": "<path d='M3 3v18h18'/><path d='M7 15l4-4 3 3 5-6'/>",
+    "tag": "<path d='M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z'/><circle cx='7.5' cy='7.5' r='1.5'/>",
+    "spark": "<circle cx='12' cy='12' r='3'/><path d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'/>",
+    "thermo": "<path d='M14 14.8V3.5a2.5 2.5 0 0 0-5 0v11.3a4.5 4.5 0 1 0 5 0z'/>",
+    "db": "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3'/>",
+    "plus": "<path d='M12 5v14M5 12h14'/>",
+    "minus": "<path d='M5 12h14'/>",
+    "layers": "<path d='M12 2 2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5M2 12l10 5 10-5'/>",
+    "gauge": "<path d='M12 14l4-4'/><path d='M3.3 19a10 10 0 1 1 17.4 0'/>",
+    "chev": "<path d='M9 6l6 6-6 6'/>",
+    "chev2": "<path d='M6 7l5 5-5 5M13 7l5 5-5 5'/>",
+    "leaf": "<path d='M11 20A7 7 0 0 1 4 13c0-6 6-9 16-9 0 10-3 16-9 16z'/><path d='M4 20c4-6 8-9 12-11'/>",
+    "list": "<path d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/>",
+    "wave": "<path d='M2 12h3l3-7 4 14 3-7h7'/>",
+}
+
+# 토큰은 light-dark()로 두 테마 값을 함께 둔다. Streamlit 1.52.1이 stApp·stSidebar에 활성 테마의
+# color-scheme을 넣으므로 ⋮ → Settings에서 테마를 바꾸면 rerun 없이 바로 따라간다(명세 F1).
+# 세 상수 모두 여는 꺾쇠를 쓰지 않는다: st.html의 style 블록에 꺾쇠가 섞이면 DOMPurify가 블록 전체를 지운다.
+PD_CSS_TOKENS = """
+/* ---- 1. 토큰: light-dark() 미지원 브라우저는 라이트 값으로 떨어진다 ---- */
+:root{
+  --pd-canvas:#F6F8FB;--pd-surface:#FFFFFF;--pd-well:#F1F5F9;--pd-raised:#FFFFFF;
+  --pd-border:#E2E8F0;--pd-border-strong:#7B8798;
+  --pd-text-1:#0F172A;--pd-text-2:#334155;--pd-text-3:#56657A;--pd-link:#1D4ED8;
+  --pd-primary:#2563EB;--pd-focus:#2563EB;--pd-shadow-c:rgba(15,23,42,.06);
+  --pd-ok-fg:#166534;--pd-ok-bg:#DCFCE7;--pd-warn-fg:#92400E;--pd-warn-bg:#FEF3C7;
+  --pd-danger-fg:#9A3412;--pd-danger-bg:#FFEDD5;--pd-crit-fg:#B91C1C;--pd-crit-bg:#FEE2E2;
+  --pd-info-fg:#1D4ED8;--pd-info-bg:#DBEAFE;--pd-meas-border:#94A3B8;
+  --pd-fc-fg:#1D4ED8;--pd-fc-bg:#EFF6FF;--pd-fc-border:#3B82F6;
+  --pd-est-fg:#334155;--pd-est-bg:#F1F5F9;--pd-est-stripe:rgba(100,116,139,.22);
+  --pd-ex-fg:#92400E;--pd-ex-bg:#FFFBEB;--pd-ex-border:rgba(217,119,6,.55);
+  --pd-s-demand:#3B82F6;--pd-s-supply:#64748B;--pd-s-reserve:#16A34A;--pd-s-solar:#B7791F;
+  --pd-s-wind:#0891B2;--pd-s-ess:#8B5CF6;--pd-s-thermal:#8D6E63;--pd-s-hvdc:#7C8DB0;--pd-s-smp:#C026D3;
+}
+@supports (color: light-dark(#000, #fff)){
+  :root{
+    --pd-canvas:light-dark(#F6F8FB,#0B1220);--pd-surface:light-dark(#FFFFFF,#121B31);
+    --pd-well:light-dark(#F1F5F9,#1A2439);--pd-raised:light-dark(#FFFFFF,#1A2439);
+    --pd-border:light-dark(#E2E8F0,#24324D);--pd-border-strong:light-dark(#7B8798,#6B7A93);
+    --pd-text-1:light-dark(#0F172A,#F1F5F9);--pd-text-2:light-dark(#334155,#CBD5E1);
+    --pd-text-3:light-dark(#56657A,#94A3B8);--pd-link:light-dark(#1D4ED8,#60A5FA);
+    --pd-primary:light-dark(#2563EB,#60A5FA);--pd-focus:light-dark(#2563EB,#60A5FA);
+    --pd-shadow-c:light-dark(rgba(15,23,42,.06),transparent);
+    --pd-ok-fg:light-dark(#166534,#4ADE80);--pd-ok-bg:light-dark(#DCFCE7,rgba(74,222,128,.14));
+    --pd-warn-fg:light-dark(#92400E,#FBBF24);--pd-warn-bg:light-dark(#FEF3C7,rgba(251,191,36,.14));
+    --pd-danger-fg:light-dark(#9A3412,#FB923C);--pd-danger-bg:light-dark(#FFEDD5,rgba(251,146,60,.14));
+    --pd-crit-fg:light-dark(#B91C1C,#F87171);--pd-crit-bg:light-dark(#FEE2E2,rgba(248,113,113,.16));
+    --pd-info-fg:light-dark(#1D4ED8,#93C5FD);--pd-info-bg:light-dark(#DBEAFE,rgba(96,165,250,.14));
+    --pd-meas-border:light-dark(#94A3B8,#64748B);
+    --pd-fc-fg:light-dark(#1D4ED8,#93C5FD);--pd-fc-bg:light-dark(#EFF6FF,rgba(96,165,250,.12));--pd-fc-border:light-dark(#3B82F6,#60A5FA);
+    --pd-est-fg:light-dark(#334155,#CBD5E1);--pd-est-bg:light-dark(#F1F5F9,#1A2439);
+    --pd-est-stripe:light-dark(rgba(100,116,139,.22),rgba(148,163,184,.22));
+    --pd-ex-fg:light-dark(#92400E,#FCD34D);--pd-ex-bg:light-dark(#FFFBEB,rgba(245,158,11,.12));
+    --pd-ex-border:light-dark(rgba(217,119,6,.55),rgba(245,158,11,.45));
+  }
+}
+"""
+
+# Streamlit 1.52.1 DOM(stHeader 60px, stMainBlockContainer)에 기대는 규칙이다. 버전을 올리면 명세 9.4절 E1·E7을 다시 돌린다.
+PD_CSS_BASE = """
+/* ---- 2. 바탕·헤더·글꼴 ---- */
+[data-testid="stApp"]{background:var(--pd-canvas);word-break:keep-all;overflow-wrap:anywhere}
+[data-testid="stHeader"]{background:transparent;pointer-events:none}
+[data-testid="stHeader"] button{pointer-events:auto;border-radius:8px;background:color-mix(in srgb,var(--pd-canvas) 88%,transparent)}
+[data-testid="stMainBlockContainer"]{max-width:1440px;padding:.5rem 2rem 3rem}
+@media (max-width:640px){[data-testid="stMainBlockContainer"]{padding:.5rem 1rem 2.5rem}}
+.pd-num,[data-testid="stPlotlyChart"] text{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--pd-focus);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.pd-fresh-dot{animation:none!important}}
+"""
+
+# 카드·KPI·칩·반응형 행·탭. 높이 연쇄·:has() 행 선택자·data-baseweb 탭 선택자는 1.52.1 DOM 전제다(명세 10장 업그레이드 체크리스트).
+# 탭 라벨의 :material: 아이콘은 1.52.1에서 stIconMaterial이 아니라 인라인 display를 가진 span[role="img"]라
+# 명세의 stIconMaterial 선택자로는 숨겨지지 않는다(0단계 E7 실측). 그래서 span[role="img"]를 !important로 숨긴다.
+PD_CSS_COMPONENTS = """
+/* ---- 3. 카드 ---- */
+.st-key-map_stage,[class*="st-key-card_"]{background:var(--pd-surface);border-color:var(--pd-border)!important;border-radius:12px;box-shadow:0 1px 2px var(--pd-shadow-c);padding:16px 20px!important}
+.st-key-map_stage{border-radius:14px;padding:16px!important}
+@media (max-width:640px){.st-key-map_stage,[class*="st-key-card_"]{padding:12px!important}}
+/* ---- 4. KPI: 같은 높이 연쇄 (시안 A 실험 연쇄. code_audit D6 안은 stMarkdown 안쪽 div 때문에 맞지 않았다) ---- */
+.st-key-kpi_row [data-testid="stHorizontalBlock"]{align-items:stretch;gap:16px}
+.st-key-kpi_row [data-testid="stColumn"]>[data-testid="stVerticalBlock"],
+.st-key-kpi_row [data-testid="stElementContainer"],
+.st-key-kpi_row [data-testid="stMarkdown"],
+.st-key-kpi_row [data-testid="stMarkdown"]>div,
+.st-key-kpi_row [data-testid="stMarkdownContainer"]{height:100%}
+.st-key-kpi_row [data-testid="stMarkdownContainer"]{margin-bottom:0}
+@media (max-width:1180px){
+  .st-key-kpi_row [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .st-key-kpi_row [data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:none!important}
+}
+@media (max-width:640px){.st-key-kpi_row [data-testid="stHorizontalBlock"]{gap:8px}}
+.pd-kpi{position:relative;height:100%;display:flex;flex-direction:column;gap:6px;padding:14px 16px;background:var(--pd-surface);border:1px solid var(--pd-border);border-radius:12px;box-shadow:0 1px 2px var(--pd-shadow-c);color:var(--pd-text-1)}
+.pd-kpi__head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}
+.pd-kpi__label{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--pd-text-2)}
+.pd-kpi__value{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.pd-kpi__value .pd-num{font-size:30px;font-weight:700;line-height:1.15}
+.pd-kpi__unit{font-size:14px;font-weight:500;color:var(--pd-text-3)}
+.pd-kpi__sub{font-size:13px;color:var(--pd-text-2)}
+.pd-kpi__meta{margin-top:auto;padding-top:8px;border-top:1px solid var(--pd-border);display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+.pd-kpi.is-est .pd-kpi__value .pd-num,.pd-sim-value .pd-num{color:var(--pd-text-2)}
+.pd-kpi.is-stale .pd-kpi__meta{color:var(--pd-warn-fg)}
+.pd-kpi.is-est::before,.pd-card-sim::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;background:repeating-linear-gradient(180deg,var(--pd-border-strong) 0 3px,transparent 3px 6px)}
+.pd-card-sim{position:relative;padding-left:10px}
+@media (max-width:640px){.pd-kpi{padding:12px}.pd-kpi__value .pd-num{font-size:24px}}
+/* ---- 5. 칩·pill·글리프 ---- */
+.pd-chip{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:0 8px;border-radius:999px;border:1px solid var(--pd-meas-border);font-size:12px;font-weight:600;line-height:1.2;color:var(--pd-text-2);white-space:nowrap}
+.pd-chip--plain{border-color:var(--pd-border);color:var(--pd-text-2)}
+.pd-chip__glyph,.pd-glyph{flex:none;display:inline-block}
+.pd-chip--measured .pd-chip__glyph,.pd-glyph--measured{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pd-chip--forecast{color:var(--pd-fc-fg);background:var(--pd-fc-bg);border:1px dashed var(--pd-fc-border)}
+.pd-chip--forecast .pd-chip__glyph,.pd-glyph--forecast{width:14px;border-top:2px dashed currentColor}
+.pd-chip--est{color:var(--pd-est-fg);border:1.5px dotted var(--pd-border-strong);background:repeating-linear-gradient(135deg,var(--pd-est-stripe) 0 2px,transparent 2px 6px),var(--pd-est-bg)}
+.pd-chip--est .pd-chip__glyph,.pd-glyph--est{width:12px;height:8px;border:1.5px dotted currentColor;border-radius:2px}
+.pd-chip--example{color:var(--pd-ex-fg);background:var(--pd-ex-bg);border:1px dashed var(--pd-ex-border)}
+.pd-chip--example .pd-chip__glyph,.pd-glyph--example{width:12px;height:8px;border:1.5px dashed currentColor;border-radius:2px}
+.pd-chip--stale{color:var(--pd-warn-fg);background:var(--pd-warn-bg);border-color:transparent}
+.pd-pill{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.pd-pill__dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.status-online{color:var(--pd-ok-fg);background:var(--pd-ok-bg)}
+.status-warning{color:var(--pd-warn-fg);background:var(--pd-warn-bg)}
+.status-danger{color:var(--pd-danger-fg);background:var(--pd-danger-bg)}
+.status-critical{color:var(--pd-crit-fg);background:var(--pd-crit-bg)}
+.pd-pill.is-est{color:var(--pd-est-fg);background:repeating-linear-gradient(135deg,var(--pd-est-stripe) 0 2px,transparent 2px 6px),var(--pd-est-bg)}
+.pd-delta{font-size:13px;font-weight:600;color:var(--pd-text-2)} /* 오름·내림에 빨강·초록을 쓰지 않는다 */
+.pd-ico{display:inline-block;width:16px;height:16px;flex:none;background-color:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+/* ---- 6. 반응형 행 (컬럼을 품은 행은 :has로 정확히 고른다. 하위 st.columns에는 걸리지 않는다) ---- */
+@media (max-width:1180px){
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-map_col),
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp),
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_mix){flex-wrap:wrap}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-map_col) > [data-testid="stColumn"],
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp) > [data-testid="stColumn"],
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_mix) > [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid){display:grid!important;grid-template-columns:1fr 1fr;gap:16px}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid) > [data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:none!important}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid) > [data-testid="stColumn"]:first-child{grid-column:1 / -1}
+  .st-key-map_col iframe{height:440px!important}
+}
+@media (max-width:1023px){
+  .st-key-ex_zone [data-testid="stHorizontalBlock"]{flex-wrap:wrap}
+  .st-key-ex_zone [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important}
+}
+@media (max-width:640px){
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid){grid-template-columns:1fr}
+  .st-key-map_col iframe{height:340px!important}
+}
+/* ---- 7. 탭 ---- */
+[data-testid="stTabs"] [data-baseweb="tab-list"]{gap:4px;border-bottom:1px solid var(--pd-border)}
+[data-testid="stTab"]{padding:10px 12px}
+[data-testid="stTab"] p{font-size:15px;font-weight:600;color:var(--pd-text-3)}
+[data-testid="stTab"][aria-selected="true"] p{color:var(--pd-primary)}
+@media (max-width:640px){[data-testid="stTab"] p{font-size:14px}[data-testid="stTab"] span[role="img"]{display:none!important}}
+"""
+
+
+def _css_icons() -> str:
+    """아이콘마다 `.pd-ico--<이름>{--ico:url(data URI)}` 규칙을 만든다.
+
+    SVG를 퍼센트 인코딩해야 style 블록에 날 꺾쇠가 남지 않는다(명세 3.8절 [계약]).
+    인코딩하지 않은 SVG가 하나라도 섞이면 DOMPurify가 style 블록 전체를 지워 화면 CSS가 모두 사라진다.
+    """
+    rules = []
+    for name, body in PD_ICONS.items():
+        svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' "
+            "stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>" + body + "</svg>"
+        )
+        enc = quote(svg, safe=" =':/,.-")
+        rules.append(f'.pd-ico--{name}{{--ico:url("data:image/svg+xml,{enc}")}}')
+    return "\n".join(rules)
+
+
+def _css_dashboard() -> str:
+    """화면 CSS 전체(토큰 + 기반 + 컴포넌트 + 아이콘)를 style 블록 하나로 돌려준다.
+
+    main() 첫 줄의 st.html로 넣는다. style만 담은 st.html은 레이아웃 칸을 차지하지 않는다.
+    본문에 여는 꺾쇠가 있으면 DOMPurify가 블록 전체를 지우므로, 조용히 깨지지 않게 바로 실패시킨다.
+    """
+    body = PD_CSS_TOKENS + PD_CSS_BASE + PD_CSS_COMPONENTS + _css_icons()
+    if chr(60) in body:
+        raise ValueError("화면 CSS 본문에 여는 꺾쇠(문자 코드 60)가 있다: DOMPurify가 style 블록 전체를 지운다")
+    return "<style>" + body + "</style>"
+
+
+# ============================================================================
 # 메인 대시보드
 # ============================================================================
 
 def main():
     """메인 함수"""
+    st.html(_css_dashboard())  # <style>만 담아 레이아웃 공간 0 (st.html은 event 컨테이너로 간다)
 
     # 데이터 로드
     plants_df = get_jeju_power_plants()
