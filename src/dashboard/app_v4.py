@@ -1447,6 +1447,15 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         # folium 0.20은 tiles=None이면 min_zoom·max_zoom 인자를 기본 타일에만 넘기고 버린다(0단계 E3) → 지도 옵션으로 직접 준다
         **{"minZoom": 8, "maxZoom": 14},
     )
+    # folium 기본 자원 중 이 지도가 쓰는 것만 남긴다(N16·G11 첫 로드). 기호는 DivIcon SVG, 툴팁·팝업 틀은 Leaflet 기본이라
+    # Bootstrap·Font Awesome·Glyphicons·awesome-markers는 쓰지 않는다(첫 로드 약 67 KB, S6 실측). jQuery는 남긴다:
+    # folium 0.20 Popup 템플릿이 팝업 HTML을 $(`…`)[0]로 만들어서 빼면 첫 팝업에서 스크립트가 멈춘다.
+    # Bootstrap이 하던 body 여백 0은 PD_CSS_MAP이 맡는다. 대신 iframe 안 글꼴을 바깥 화면과 같은 Pretendard로 맞춘다(F8).
+    # st_folium은 머리의 link·script를 지우고 각 요소의 default_css·default_js만 불러오므로 지도 객체의 목록을 바꾼다
+    # (folium.Map 클래스 목록은 그대로 두고 이 인스턴스에만 준다)
+    m.default_js = [item for item in folium.Map.default_js if item[0] in ("leaflet", "jquery")]
+    m.default_css = ([item for item in folium.Map.default_css if item[0] == "leaflet_css"]
+                     + [("pretendard_css", PD_CSS_FONT_URL)])
     folium.TileLayer(tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                      attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                      name="OpenStreetMap", control=False, max_zoom=19).add_to(m)
@@ -2489,6 +2498,67 @@ PD_CSS_COMPONENTS = """
 .st-key-ex_zone [data-testid="stMarkdown"]>div,
 .st-key-ex_zone [data-testid="stMarkdownContainer"]{height:100%}
 .st-key-ex_zone [data-testid="stMarkdownContainer"]{margin-bottom:0}
+/* ---- 13. 사이드바 · 출처와 기준 시각 · 푸터 (7단계, 명세 4.6·5.12~5.14절. 3장 토큰만 쓴다) ---- */
+/* 사이드바도 Streamlit이 color-scheme을 넣으므로 토큰이 사이드바 테마(라이트 #FFFFFF · 다크 #101A2E)를 따른다.
+   전역 p·ol{font-size:1rem}이 요소에 직접 걸리므로 글자 크기는 클래스로 요소에 직접 준다(2단계 메모) */
+.pd-side-head{margin:4px 0 0;font-size:13px;font-weight:700;line-height:1.35;color:var(--pd-text-2)}
+.pd-side-hint{margin:0;font-size:12px;line-height:1.5;color:var(--pd-text-3)}
+.pd-side-alerts{display:flex;flex-direction:column;gap:8px;color:var(--pd-text-2)}
+/* 건수 세 칸은 기본 사이드바 폭(안쪽 약 216px)에서 한 줄에 들어가게 좁게 둔다 */
+.pd-side-alerts__counts{display:flex;flex-wrap:wrap;gap:4px}
+.pd-side-count{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:0 8px;border-radius:999px;background:var(--pd-well);font-size:12px;font-weight:600;line-height:1.2;color:var(--pd-text-2)}
+.pd-side-count b{font-size:13px;font-weight:700;color:var(--pd-text-1)}
+/* 단계 점은 상태 글자 토큰(well 위 그래픽 3:1 이상). 글자가 단계 이름을 함께 쓴다 */
+.pd-side-count__dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--pd-text-3)}
+.pd-side-count--critical .pd-side-count__dot{background:var(--pd-crit-fg)}
+.pd-side-count--danger .pd-side-count__dot{background:var(--pd-danger-fg)}
+.pd-side-count--warning .pd-side-count__dot{background:var(--pd-warn-fg)}
+.pd-side-alerts__list{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.pd-side-alerts__list li{margin:0;padding:2px 0 2px 8px;border-left:2px solid var(--pd-border);font-size:12px;line-height:1.5;color:var(--pd-text-2)}
+.pd-side-level{font-weight:700}
+.pd-side-level--critical{color:var(--pd-crit-fg)}
+.pd-side-level--danger{color:var(--pd-danger-fg)}
+.pd-side-level--warning{color:var(--pd-warn-fg)}
+.pd-side-alerts__empty{margin:0;font-size:13px;line-height:1.5;color:var(--pd-text-2)}
+/* 출처와 기준 시각: st.html 한 개라 카드 면·테두리를 직접 칠한다(3절 카드와 같은 값) */
+.pd-sources{display:flex;flex-direction:column;gap:10px;padding:16px 20px;border:1px solid var(--pd-border);border-radius:12px;background:var(--pd-surface);box-shadow:0 1px 2px var(--pd-shadow-c);color:var(--pd-text-2)}
+.pd-sources__table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.45;color:var(--pd-text-2)}
+.pd-sources__table thead th{padding:6px 10px;font-size:12px;font-weight:600;text-align:left;white-space:nowrap;color:var(--pd-text-3);background:var(--pd-well)}
+.pd-sources__table thead th:first-child{border-radius:8px 0 0 8px}
+.pd-sources__table thead th:last-child{border-radius:0 8px 8px 0}
+.pd-sources__table tbody th{padding:8px 10px;font-weight:600;text-align:left;white-space:nowrap;vertical-align:top;color:var(--pd-text-1)}
+.pd-sources__table td{padding:8px 10px;vertical-align:top}
+.pd-sources__table tbody tr+tr>*{border-top:1px solid var(--pd-border)}
+.pd-sources__basis{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--pd-text-2)}
+/* 상태 칩은 한 줄로 둔다(칩 글자가 두 줄로 접히면 칩 모양이 깨진다, 1024 실측). 칩이 둘이면 칸 안에서 다음 줄로 간다 */
+.pd-sources__chips .pd-chip{margin:0 4px 2px 0}
+.pd-sources__m{display:none}
+.pd-nowrap{white-space:nowrap}
+@media (max-width:1180px){.pd-sources__basis{white-space:normal}}
+@media (max-width:640px){.pd-sources{padding:12px}}
+/* 좁은 폭: 표를 2줄 목록으로(1줄 항목 + 칩, 2줄 출처 · 기준). 머리 줄은 화면 읽기 프로그램용으로만 남긴다.
+   기준폭은 명세 기본값 640px 대신 720px: 641~720px에서는 4칸 표의 출처 칸이 약 80px로 좁아 한 행이 205px까지 늘어났다(641 실측) */
+@media (max-width:720px){
+  .pd-sources__table,.pd-sources__table tbody{display:block}
+  .pd-sources__table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .pd-sources__table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 8px;padding:8px 0}
+  .pd-sources__table tbody tr+tr{border-top:1px solid var(--pd-border)}
+  .pd-sources__table tbody tr+tr>*{border-top:0}
+  .pd-sources__table tbody th,.pd-sources__table td{padding:0;white-space:normal}
+  .pd-sources__table tbody th{grid-column:1;grid-row:1}
+  .pd-sources__chips{grid-column:2;grid-row:1;text-align:right}
+  .pd-sources__src{grid-column:1 / -1;grid-row:2;font-size:12px}
+  .pd-sources__basis{display:none}
+  .pd-sources__m{display:inline;color:var(--pd-text-3)}
+}
+/* 대화상자는 포털이라 stApp의 한글 줄바꿈 규칙을 물려받지 않는다(1440 실측: '지웁니|다'로 끊김). 글자 규칙만 준다 */
+[role="dialog"]{word-break:keep-all;overflow-wrap:anywhere}
+/* 푸터(st.markdown): 마크다운 컨테이너의 p 규칙(0,1,1)을 이기도록 컨테이너로 한 단계 높인다 */
+.pd-footer{padding:14px 0;border-top:1px solid var(--pd-border)}
+[data-testid="stMarkdownContainer"] .pd-footer p,.pd-footer p{margin:0;font-size:12px;line-height:1.6;color:var(--pd-text-3)}
+/* 좁은 폭에서 두 문단(출처 줄·모델 줄)이 여러 줄로 접히면 경계가 안 보여 문단 사이만 조금 띄운다 */
+[data-testid="stMarkdownContainer"] .pd-footer p+p{margin-top:4px}
+.pd-footer b{font-weight:700;color:var(--pd-text-2)}
 """
 
 # 지도 iframe 머리에 넣는 CSS(명세 6.7절). 바깥 페이지 토큰은 iframe에 닿지 않으므로 Streamlit 컴포넌트가 iframe :root에
@@ -2498,7 +2568,12 @@ PD_CSS_COMPONENTS = """
 # map_div가 iframe 높이(100vh)를 따르는 조건을 240px 이상으로 둔다: 1180px 초과 폭에서는 Leaflet이 fitBounds를 계산하는
 # 순간 iframe이 아직 과도기 높이(실측 18px)라 1px 조건이면 지도가 18px로 잡혀 minZoom 8로 떨어진다(S3 실측).
 # 과도기에는 st_folium 인라인 480px를 쓰고, 실제 높이(480·440·340px)가 되면 iframe 높이를 따른다.
+# 지도 iframe은 바깥 테마 글꼴(.streamlit/config.toml [theme] font)을 물려받지 않으므로 같은 CSS를 iframe에도 불러온다.
+# 주소가 같아 바깥 화면이 이미 받은 CSS·글꼴 조각은 브라우저 캐시로 다시 쓴다(config.toml과 같은 판을 유지할 것)
+PD_CSS_FONT_URL = ("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/"
+                   "pretendardvariable-dynamic-subset.min.css")
 PD_CSS_MAP = """
+html,body{margin:0;padding:0}
 html,body,.leaflet-container{background:var(--background-color)}
 @media (min-height:240px){ #map_div{height:100vh!important}}
 .leaflet-container{color:var(--text-color);font-family:"Pretendard Variable",var(--font),-apple-system,"Apple SD Gothic Neo",sans-serif}
@@ -3980,6 +4055,299 @@ def _html_example_ribbon() -> str:
 
 
 # ============================================================================
+# 표시 계층: 사이드바 · 출처와 기준 시각 (명세 4.6·5.12·5.13절, 7단계)
+# 경보 이력은 화면에 보일 것만 고른다(공유 파일 data/alerts/alert_history.json을 다시 쓰지 않는다).
+# 출처 표는 KPI·카드가 쓰는 판정 함수를 다시 불러 같은 상태를 한 표에 모은다(판정 규칙을 두 군데에 두지 않는다).
+# ============================================================================
+
+def _html_sidebar_section(title: str) -> str:
+    """사이드바 섹션 머리(명세 5.12절, 13/700 text-2). st.markdown 제목이 아니라 role="heading"인 p다(제목 앵커를 피한다)."""
+    return f'<p class="pd-side-head" role="heading" aria-level="2">{title}</p>'
+
+
+def _html_theme_hint() -> str:
+    """화면 테마를 바꾸는 법(명세 4.6·5.12절). 1.52.1은 고른 테마를 저장하지 않아 새로 고치면 시스템 설정으로 돌아간다."""
+    return ('<p class="pd-side-hint">화면 테마: 오른쪽 위 ⋮ → Settings → Choose app theme (Light · Dark · Use system setting). '
+            '새로 고치면 시스템 설정으로 돌아갑니다 (현재 Streamlit 버전 제약)</p>')
+
+
+def _fmt_alert_history(entries: object, now: datetime) -> Dict:
+    """사이드바 경보 이력의 표시값(명세 5.12절, D10). 공유 파일은 다시 쓰지 않고 화면에 보일 것만 고른다.
+
+    1) 시드 제외를 먼저 한다: 저장소에 커밋된 예시 기록(f85c4f45, 2025-12-19 정각 15분 간격 5건)은 앱이 쓴 기록이
+       아니다. 앱은 status critical·danger·warning과 제목 "전력 수급 … 경보/단계"만 쓴다(_fmt_reserve_level).
+       그래서 status가 'caution'이거나 제목이 "관심 (CAUTION)" 꼴인 항목은 건수·목록·마지막 기록에서 모두 뺀다.
+    2) 남은 앱 기록의 단계는 제목의 위험·주의·관심으로, 제목으로 못 정하면 status로 정한다(앱 어휘에서 warning = 관심).
+    3) 최근 7일만 세고 최신순 최대 5행을 보인다. 7일 안에 없을 때만 그보다 오래된 앱 기록의 마지막 시각을 붙인다
+       (시드 시각이 실제 경보처럼 보이지 않게 시드는 여기에도 넣지 않는다).
+
+    Args:
+        entries: AlertHistory.get_recent() 결과(dict 목록). 목록이 아니면 빈 이력으로 본다.
+        now: 7일 창의 기준 시각(앱 기록과 같은 naive 로컬 시각).
+
+    Returns:
+        counts(위험·주의·관심 7일 건수), rows(최대 5행: time·level·cls·reserve), recent_total(7일 건수 합),
+        last_old(7일 안 기록이 없을 때만 그보다 오래된 앱 기록의 마지막 시각, 없으면 None),
+        seed_count(뺀 시드 수), invalid_count(시각·단계를 읽지 못해 뺀 기록 수. 조용히 버리지 않고 화면에 밝힌다).
+    """
+    seed_title = re.compile(r"^(관심|주의|위험) \((CAUTION|WARNING|CRITICAL)\)$")
+    status_level = {"critical": "위험", "danger": "주의", "warning": "관심"}
+    level_class = {"위험": "critical", "주의": "danger", "관심": "warning"}
+    records: List[Dict] = []
+    seed_count = invalid_count = 0
+    for item in entries if isinstance(entries, list) else []:
+        if not isinstance(item, dict):
+            invalid_count += 1
+            continue
+        status = str(item.get("status") or "").strip()
+        title = str(item.get("title") or "").strip()
+        if status == "caution" or seed_title.match(title):
+            seed_count += 1
+            continue
+        level = next((name for name in ("위험", "주의", "관심") if name in title), None) or status_level.get(status)
+        try:
+            stamp = datetime.fromisoformat(str(item.get("timestamp")).strip())
+        except ValueError:
+            stamp = None
+        if level is None or stamp is None:
+            invalid_count += 1
+            continue
+        if stamp.tzinfo is not None:  # 앱은 naive 로컬 시각을 쓴다. 다른 도구가 넣은 시간대 붙은 값은 로컬로 맞춰 비교한다
+            stamp = stamp.astimezone().replace(tzinfo=None)
+        rate = item.get("reserve_rate")
+        records.append({"stamp": stamp, "level": level,
+                        "reserve": f"{float(rate):.1f}%" if _finite_number(rate) else "—"})
+    records.sort(key=lambda r: r["stamp"], reverse=True)
+    window_start = now - timedelta(days=7)
+    recent = [r for r in records if r["stamp"] >= window_start]
+    older = [r for r in records if r["stamp"] < window_start]
+    return {
+        "counts": {name: sum(1 for r in recent if r["level"] == name) for name in ("위험", "주의", "관심")},
+        "rows": [{"time": f"{r['stamp']:%Y-%m-%d %H:%M}", "level": r["level"], "cls": level_class[r["level"]],
+                  "reserve": r["reserve"]} for r in recent[:5]],
+        "recent_total": len(recent),
+        "last_old": f"{older[0]['stamp']:%Y-%m-%d %H:%M}" if (not recent and older) else None,
+        "seed_count": seed_count,
+        "invalid_count": invalid_count,
+    }
+
+
+def _html_alert_history(hist: Dict) -> str:
+    """사이드바 경보 이력(명세 4.6·5.12절): 위험·주의·관심 7일 건수 + 최근 기록 최대 5행.
+
+    st.metric·이모지를 쓰지 않는다(D12). 단계 글자가 함께 있어 색만으로 단계를 전하지 않는다.
+    시드·읽지 못한 기록을 뺐으면 그 사실을 작게 밝힌다(파일과 화면 건수가 왜 다른지 알 수 있게).
+    """
+    counts = "".join(
+        f'<span class="pd-side-count pd-side-count--{cls}"><span class="pd-side-count__dot" aria-hidden="true"></span>'
+        f'{name} <b class="pd-num">{hist["counts"][name]}</b></span>'
+        for name, cls in (("위험", "critical"), ("주의", "danger"), ("관심", "warning")))
+    if hist["rows"]:
+        body = '<ol class="pd-side-alerts__list">' + "".join(
+            f'<li><span class="pd-num">{r["time"]}</span> · <b class="pd-side-level pd-side-level--{r["cls"]}">'
+            f'{r["level"]}</b> · 예비율 <span class="pd-num">{r["reserve"]}</span></li>' for r in hist["rows"]) + "</ol>"
+    else:
+        tail = f' · 마지막 기록 {hist["last_old"]}' if hist["last_old"] else ""
+        body = f'<p class="pd-side-alerts__empty">최근 7일 경보 없음{tail}</p>'
+    notes = []
+    if hist["seed_count"]:
+        notes.append(f'예시 기록 {hist["seed_count"]}건 제외 (앱 경보 아님)')
+    if hist["invalid_count"]:
+        notes.append(f'읽지 못한 기록 {hist["invalid_count"]}건 제외')
+    note = f'<p class="pd-side-hint">{" · ".join(notes)}</p>' if notes else ""
+    return ('<div class="pd-side-alerts"><div class="pd-side-alerts__counts" role="group" aria-label="최근 7일 경보 건수">'
+            f'{counts}</div>{body}{note}</div>')
+
+
+@st.dialog("경보 이력 초기화")
+def _render_clear_history_dialog(alert_history: AlertHistory) -> None:
+    """경보 이력 초기화 확인 대화상자(명세 5.2·5.12절, N6). 관리자 플래그로 띄운 서버에서만 열 수 있다.
+
+    대화상자는 포털로 그려져 페이지 color-scheme을 물려받지 않으므로 pd- HTML 없이 Streamlit 요소만 쓴다(5.1-4).
+    안내문은 st.write로 쓴다: main 밖 함수 안 .markdown( 호출은 회귀 테스트의 너비 우선 탐색을 가로챈다(5.1-7).
+    확인 버튼은 secondary다: 1.52.1 primary 버튼은 다크 #60A5FA 위 흰 글자 2.54:1로 AA 미달이다(8.4절).
+    """
+    st.write("공유 파일 data/alerts/alert_history.json의 경보 이력을 모두 지웁니다. 되돌릴 수 없습니다.")
+    confirm_col, cancel_col = st.columns(2)
+    if confirm_col.button("모두 지우기", type="secondary", icon=":material/delete:", key="clear_history_confirm",
+                          width="stretch"):
+        alert_history.clear()
+        st.rerun()
+    if cancel_col.button("취소", key="clear_history_cancel", width="stretch"):
+        st.rerun()
+
+
+def _fmt_data_status(power_status: Dict, smp_data: Dict, backend_predictions: Optional[Dict], weather: Dict,
+                     api_kpis: Optional[Dict], kpx_local: Optional[Dict], registry: Optional[Dict], now: datetime,
+                     *, plants_df: Optional[pd.DataFrame] = None) -> List[Dict]:
+    """출처와 기준 시각 표의 8행(명세 5.13절). 행마다 name·source·basis·chips(HTML)를 돌려준다.
+
+    판정은 KPI·카드와 같은 함수(_fmt_provenance·_fmt_smp_display_keys·_fmt_weather_provenance·_fmt_registry_summary)를
+    다시 불러 정한다. 같은 입력이면 KPI 칩과 이 표의 칩이 어긋나지 않는다. 행 이름은 카드 제목과 겹치지 않게
+    쓴다(재생 비중·기상·발전소 출력·주파수, 명세 5.3절 골격 규칙). API에서 온 문자열(모델 이름·날짜)은 이스케이프한다.
+
+    Args:
+        power_status·smp_data·backend_predictions·weather·api_kpis·kpx_local·registry: 같은 이름의 캐시 함수 결과
+            (power_status는 테스트 모드면 사본).
+        now: 화면 기준 시각.
+        plants_df: get_jeju_power_plants() 결과. 등록부 곳 수·출력 원천을 센다(없으면 그 부분을 비운다).
+    """
+    rows: List[Dict] = []
+    prov = _fmt_provenance(power_status, api_kpis, kpx_local, now)
+    data_date = str(power_status.get("data_date", "")).strip()
+    try:
+        queried: Optional[datetime] = datetime.strptime(data_date, "%Y-%m-%d %H:%M")
+    except ValueError:
+        queried = None
+    _, elapsed = _format_observation_age(data_date or "N/A", now)
+    elapsed = elapsed if elapsed != "N/A" else "경과 시간 확인 불가"
+    screen = f"화면 {now:%H:%M}"
+    if prov["time_kind"] == "query":
+        demand_basis = f"조회 {prov['query_hhmm']} · {elapsed}"
+    elif prov["time_kind"] == "date":
+        demand_basis = f"{html_escape(data_date[:10])} · {elapsed}"
+    elif prov["time_kind"] == "test":
+        demand_basis = f"테스트 값 · {screen}"
+    else:
+        demand_basis = f"시각 없음 · {screen}"
+    reserve_tail = {"default": " · 예비율 기본값", "national": " · 예비율 전국 값 (제주 아님)"}.get(prov["reserve_state"], "")
+    rows.append({"name": "수요·예비율", "source": prov["src_label"] + reserve_tail, "basis": demand_basis,
+                 "chips": prov["display_keys"]["pd_chip"]})
+
+    # 공급능력은 따로 판정한다(7.2절 끝). 테스트 모드는 예비율만 바꾸므로 공급능력 시각은 원래 조회 시각을 쓴다
+    if queried is not None:
+        supply_basis = f"조회 {queried:%H:%M} · {elapsed}"
+    elif prov["time_kind"] == "date":
+        supply_basis = demand_basis
+    else:
+        supply_basis = f"시각 없음 · {screen}"
+    if prov["supply_measured"]:
+        supply = ("KPX 제주 실시간 (앱 직접 조회)", _html_chip("measured", "실측"))
+    else:
+        supply = ("추정 · KPX 공급능력 미수신", _html_chip("est", "추정 · 실측 아님"))
+    rows.append({"name": "공급능력", "source": supply[0], "basis": supply_basis, "chips": supply[1]})
+
+    # SMP는 live_header와 같이 API 예측을 합친 dict로 판정해야 KPI 칩과 같은 상태가 나온다
+    smp = {**smp_data, **backend_predictions} if isinstance(backend_predictions, dict) else dict(smp_data)
+    keys = _fmt_smp_display_keys(smp, now)
+    is_epsis = str(smp.get("data_source", "")).startswith("EPSIS")
+    trade_label = smp.get("trade_label")
+    if is_epsis and trade_label:
+        smp_chip = _html_chip("measured", "확정 가격") + keys["pd_stale_chip"]
+    elif is_epsis:
+        smp_chip = _html_chip("est", "추정 · 최근 48시간 평균")
+    else:
+        smp_chip = _html_chip("est", "시뮬레이션 · 실측 아님")
+    rows.append({"name": "제주 하루전 SMP", "source": keys["pd_src_label"],
+                 "basis": f"거래시간 {html_escape(str(trade_label))}" if trade_label else "거래시간 확인 불가",
+                 "chips": smp_chip})
+
+    model = smp.get("forecast_model")
+    model_name = html_escape(model.strip()) if isinstance(model, str) and model.strip() else "모델 이름 미제공"
+    if keys["pd_fc_kind"] == "model":
+        forecast = (f"API 서버 /smp-forecast · {model_name}", _html_chip("forecast", "예측"))
+    elif keys["pd_fc_kind"] == "api_fallback":
+        forecast = (f"API 대체값 (모델 예측 아님) · {model_name}", _html_chip("est", "추정 · 모델 예측 아님"))
+    else:
+        forecast = ("앱 로컬 대체 (시간대 평균 패턴)", _html_chip("est", "추정 · 시간대 평균 패턴"))
+    forecast_date = str(smp.get("forecast_date") or "").strip()
+    forecast_chips = forecast[1]
+    if keys["pd_fc_kind"] == "local":
+        forecast_basis = "지금부터 24시간 (예측일 없음)"
+    elif forecast_date:
+        forecast_basis = f"예측일 {html_escape(forecast_date)}"
+        try:
+            if datetime.strptime(forecast_date[:10], "%Y-%m-%d").date() < now.date():
+                forecast_chips += _html_chip("stale", "예측일 지연")
+        except ValueError:
+            pass  # 날짜 꼴이 아니면 지연 여부를 판정하지 않는다(문자열은 이미 그대로 보인다)
+    else:
+        forecast_basis = "예측일 미제공"
+    rows.append({"name": "SMP 예측", "source": forecast[0], "basis": forecast_basis, "chips": forecast_chips})
+
+    # 기상: KPI 카드와 같은 규칙(값이 앱 시뮬레이션이면 API 출처 판정을 붙이지 않는다)
+    weather_src = _fmt_weather_provenance(api_kpis) if weather.get("source") == "kma" else None
+    if weather.get("source") != "kma":
+        weather_row = ("시뮬레이션 (실측 아님)", _html_chip("est", "시뮬레이션 · 실측 아님"))
+    elif weather_src == "file":
+        weather_row = ("기상청 과거 자료 24시간 평균 (API 서버)", _html_chip("est", "추정 · 과거 자료 평균"))
+    elif weather_src == "default":
+        weather_row = ("API 서버 기본값 (실측 아님)", _html_chip("est", "추정 · API 기본값 (실측 아님)"))
+    else:
+        weather_row = ("기상청 초단기실황 (API 서버)", _html_chip("measured", "실측"))
+    # get_weather_data는 ttl=300이고 관측 시각을 돌려주지 않는다
+    rows.append({"name": "기상", "source": weather_row[0], "basis": "앱 5분 캐시 (시각 미제공)", "chips": weather_row[1]})
+
+    if "renewable_source" in power_status:
+        renew = ("섬 전체 태양광+풍력 ML 추정 (API 서버)", f"조회 {prov['query_hhmm']}")
+    else:
+        renew = ("앱 추정 (시간대 패턴 · 실측 아님)", screen)
+    rows.append({"name": "재생 비중", "source": renew[0], "basis": renew[1], "chips": _html_chip("est", "추정 · 실측 아님")})
+
+    df = plants_df if isinstance(plants_df, pd.DataFrame) else None
+    if df is not None:
+        summary = _fmt_registry_summary(df, registry, "전체")
+        if summary["fallback"]:
+            plants_row = ("앱 내장 예비 목록 (등록부를 읽지 못함)", _html_chip("est", "예비 목록 · 등록부 아님"))
+        else:
+            excluded = ", ".join(f"{status} {e['count']}곳" for status, e in summary["excluded"].items())
+            plants_row = (f"발전소 등록부 (운영중 {summary['total']['count']}곳"
+                          + (f", {excluded} 제외)" if excluded else ")"), _html_chip("measured", "확정"))
+    else:
+        plants_row = ("발전소 등록부", _html_chip("measured", "확정"))
+    reference = _fmt_registry_ref(registry)
+    rows.append({"name": "발전소 위치·설비", "source": plants_row[0],
+                 "basis": reference[len("등록부 "):] if reference.startswith("등록부 ") else reference,
+                 "chips": plants_row[1]})
+
+    # 발전소 출력은 API 서버 시뮬레이션 값(ID로 맞춘 행)이고 화력 등 나머지는 앱 추정이다. 주파수도 API 시뮬레이션이다
+    origins = (df["data_source"] if df is not None and "data_source" in df.columns
+               else pd.Series(dtype=object))
+    n_api = int((origins == "API 서버 시뮬레이션").sum())
+    if n_api and n_api == len(origins):
+        output_src = "API 서버 시뮬레이션"
+    elif n_api:
+        output_src = f"API 서버 시뮬레이션 · {len(origins) - n_api}곳은 앱 추정"
+    else:
+        output_src = "앱 시뮬레이션 (API 서버 출력 미수신)"
+    output_basis = (f"조회 {prov['query_hhmm']} · 60초 캐시" if isinstance(api_kpis, dict)
+                    else f"{screen} · 60초 캐시")
+    rows.append({"name": "발전소 출력·주파수", "source": output_src, "basis": output_basis,
+                 "chips": _html_chip("est", "시뮬레이션 · 실측 아님")})
+    return rows
+
+
+def _html_data_status(power_status: Dict, smp_data: Dict, backend_predictions: Optional[Dict], weather: Dict,
+                      api_kpis: Optional[Dict], kpx_local: Optional[Dict], registry: Optional[Dict], now: datetime,
+                      *, plants_df: Optional[pd.DataFrame] = None, refresh_note: str = "60초마다 갱신") -> str:
+    """출처와 기준 시각 카드(명세 5.13절): 항목 · 출처 · 기준 (KST) · 상태 표 + 각주.
+
+    640px 이하에서는 표를 2줄 목록(1줄 항목 + 칩, 2줄 출처 · 기준)으로 바꾼다. 둘째 줄은 같은 글자를 한 칸에 둔
+    좁은 폭 전용 span이 맡는다(표 칸 둘은 한 줄로 합칠 수 없어서). 넓은 폭에서는 그 span을 숨긴다.
+    """
+    rows = _fmt_data_status(power_status, smp_data, backend_predictions, weather, api_kpis, kpx_local, registry, now,
+                            plants_df=plants_df)
+
+    def parts(text: str) -> str:
+        # 기준 칸은 " · " 사이에서만 줄을 바꾼다: 좁은 표(641~1180px)에서 "2026-11-|24" 같은 날짜·시각 토막이 끊겼다(768 실측)
+        return " · ".join(f'<span class="pd-nowrap">{part}</span>' for part in text.split(" · "))
+
+    body = "".join(
+        f'<tr><th scope="row">{r["name"]}</th>'
+        f'<td class="pd-sources__src">{r["source"]}<span class="pd-sources__m"> · {parts(r["basis"])}</span></td>'
+        f'<td class="pd-sources__basis">{parts(r["basis"])}</td><td class="pd-sources__chips">{r["chips"]}</td></tr>'
+        for r in rows)
+    head = _html_card_head("출처와 기준 시각", "항목마다 값이 어디서 왔고 언제 기준인지", "",
+                           f"화면 {now:%H:%M} KST ({refresh_note})")
+    return ('<section class="pd-sources" aria-label="출처와 기준 시각">' + head
+            + '<table class="pd-sources__table"><thead><tr><th scope="col">항목</th><th scope="col">출처</th>'
+            + '<th scope="col">기준 (KST)</th><th scope="col">상태</th></tr></thead>'
+            + f'<tbody>{body}</tbody></table>'
+            + '<p class="pd-card__foot">실제로 잰 시간별 이력은 아직 연결되지 않아 수급 곡선은 일간 패턴으로 그린 추정입니다 · '
+            + '화면 테마: 오른쪽 위 ⋮ → Settings → Choose app theme (새로 고치면 시스템 설정으로 돌아갑니다)</p></section>')
+
+
+# ============================================================================
 # 메인 대시보드
 # ============================================================================
 
@@ -3995,93 +4363,36 @@ def main():
         plants_df = get_jeju_power_plants()
         power_status = get_current_power_status()
         registry = load_power_plants_data()                   # 캐시 재사용: 지도 밖 자원·등록부 기준일
-        # SMP 탭은 live_smp fragment가 직접 읽는다. 이 값은 사이드바의 옛 '데이터 출처' 안내만 쓴다(7단계에서 함께 삭제)
-        smp_data = get_smp_data()
 
+    # 관리자 도구(알림 테스트·이력 초기화)는 실행 명령에 이 플래그를 준 서버에서만 보인다(N6). 공유 .env에는 넣지 않는다:
+    # 워크트리 .env는 운영 .env의 심볼릭 링크라 거기에 넣으면 공개 운영 화면에 파괴적 컨트롤이 나타난다(명세 9.0절)
+    admin_mode = os.environ.get("POWERDEMAND_DASHBOARD_ADMIN", "").strip() == "1"
     test_alert = False
     test_reserve = None
 
-    # ========== 사이드바: 테스트 모드 ==========
+    # ========== 사이드바: 보기 · 경보 이력 · 관리자 도구 (명세 4.6·5.12절, 기본 접힘) ==========
+    # 옛 '데이터 출처' 안내(st.info 2개)는 본문 '출처와 기준 시각' 표로 옮겼다(T1 기준점은 푸터 하나만 남긴다)
     with st.sidebar:
-        st.markdown("### 설정")
-        # 머리·KPI(live_header fragment)를 60초마다 다시 그린다. 끄면 위젯을 만질 때만 갱신된다
+        st.html(_html_sidebar_section("보기"))
+        # 60초 fragment(머리·KPI·수급·출처 표)와 300초 fragment(SMP·발전 탭)를 다시 그린다. 끄면 위젯을 만질 때만 갱신된다
         auto_refresh = st.toggle("60초마다 자동 갱신", value=True, key="auto_refresh")
-
-        # 알림 테스트 모드
-        test_alert = st.checkbox("🧪 알림 테스트 모드", value=False)
-        if test_alert:
-            test_reserve = st.slider(
-                "테스트 예비율 (%)",
-                min_value=0.0,
-                max_value=30.0,
-                value=12.0,
-                step=1.0,
-                help="예비율을 낮춰서 알림 시스템을 테스트합니다"
-            )
-            # 테스트용 예비율 적용
-            power_status = dict(power_status)  # 복사본 생성
-            power_status['reserve_rate'] = test_reserve
-            power_status['data_source'] = '테스트 모드'
-
-            st.warning(f"⚠️ 테스트 모드: 예비율 {test_reserve:.1f}%")
-
-        st.markdown("---")
-        st.markdown("### 데이터 출처")
-        st.info(f"전력: {power_status.get('data_source', 'N/A')}")
-        st.info(f"SMP: {smp_data.get('data_source', 'N/A')}")
-
-        # ========== 경보 이력 ==========
-        st.markdown("---")
-        st.markdown("### 경보 이력")
-
+        st.html(_html_theme_hint())
+        st.html(_html_sidebar_section("경보 이력 · 최근 7일"))
         alert_history = get_alert_history()
-        recent_alerts = alert_history.get_recent(10)
-        stats = alert_history.get_stats()
-
-        # 통계 표시
-        if stats['total'] > 0:
-            stat_cols = st.columns(3)
-            with stat_cols[0]:
-                st.metric("🚨 위험", stats['critical'])
-            with stat_cols[1]:
-                st.metric("⚠️ 주의", stats['danger'])
-            with stat_cols[2]:
-                st.metric("📢 관심", stats['warning'])
-
-        # 최근 경보 목록
-        if recent_alerts:
-            for alert in recent_alerts[:5]:
-                timestamp = datetime.fromisoformat(alert['timestamp'])
-                time_str = timestamp.strftime("%m/%d %H:%M")
-                status = alert['status']
-
-                # 상태별 아이콘
-                if status == 'critical':
-                    icon = "🚨"
-                    color = "#ef4444"
-                elif status == 'danger':
-                    icon = "⚠️"
-                    color = "#f97316"
-                else:
-                    icon = "📢"
-                    color = "#eab308"
-
-                st.markdown(f"""
-                <div style="background: rgba(30,41,59,0.5); padding: 8px; border-radius: 8px;
-                            margin-bottom: 5px; border-left: 3px solid {color};">
-                    <div style="font-size: 0.75rem; color: #94a3b8;">{time_str}</div>
-                    <div style="font-size: 0.85rem; color: white;">
-                        {icon} {alert['reserve_rate']}% - {alert['title']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # 이력 초기화 버튼
-            if st.button("🗑️ 이력 초기화", key="clear_history"):
-                alert_history.clear()
-                st.rerun()
-        else:
-            st.caption("경보 이력이 없습니다")
+        st.html(_html_alert_history(_fmt_alert_history(alert_history.get_recent(100), datetime.now())))
+        if admin_mode:
+            st.html(_html_sidebar_section("관리자 도구"))
+            test_alert = st.toggle("알림 테스트 모드", value=False, key="admin_test_alert")
+            if test_alert:
+                test_reserve = st.slider("테스트 예비율 (%)", min_value=0.0, max_value=30.0, value=12.0, step=1.0,
+                                         help="화면 표시만 바꿉니다. 테스트 모드에서는 경보를 기록하거나 보내지 않습니다")
+                # 테스트 값은 사본에만 넣는다. data_source를 바꿔야 출처 판정이 '테스트'가 되어 실측 칩이 붙지 않는다
+                power_status = dict(power_status)
+                power_status['reserve_rate'] = test_reserve
+                power_status['data_source'] = '테스트 모드'
+            # 공유 이력 파일을 지우는 동작이라 확인 대화상자를 거친다(버튼 한 번으로 지우지 않는다)
+            if st.button("경보 이력 초기화", key="clear_history", icon=":material/delete:"):
+                _render_clear_history_dialog(alert_history)
 
     # 경보 판정·기록·발송: 전체 실행 경로에만 둔다 (자동 갱신 fragment 안 금지, J2)
     # fragment는 열린 세션마다 60초마다 돌기 때문에, 거기서 기록·발송하면 세션 수만큼 이력·알림이 겹친다
@@ -4201,7 +4512,10 @@ def main():
 </div>""", unsafe_allow_html=True)
 
     live_header()
-    st.html(_html_legend_strip())
+    # 문서 언어를 한국어로 밝힌다(N13: 화면 읽기 프로그램 발음·:lang 규칙). Streamlit index.html이 lang="en"이라 정적 요소인
+    # 읽는 법 띠에 스크립트 한 줄을 붙여 마운트 때 한 번 바꾼다. 스크립트만 담은 st.html은 빈 칸과 16px 간격을 만든다(G16)
+    st.html(_html_legend_strip() + '<script>document.documentElement.lang = "ko";</script>',
+            unsafe_allow_javascript=True)
 
     tab1, tab2, tab3, tab4 = st.tabs([":material/map: 실시간 현황", ":material/sell: SMP 예측",
                                       ":material/bolt: 발전 현황", ":material/insights: 분석"])
@@ -4436,16 +4750,36 @@ def main():
 </div>
 </div>""", unsafe_allow_html=True)
 
-    # ========== 푸터 ==========
-    st.markdown("""
-    <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.85rem;">
-        <p>제주 전력 지도 v4.0 | Powered by AI | © 2025 Power Demand Forecast Team</p>
-        <p style="font-size: 0.75rem;">
-            데이터 출처: EPSIS, KPX | 모델: 수요 예측 AR+GBM · 태양광 공급 추정 GradientBoosting · SMP 어제 가격 naive<br>
-            (기상·발전량 비율 등 일부 지표는 추정치 포함)
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # 출처와 기준 시각 표(명세 5.13절)를 60초마다 다시 그린다(N12). 머리·KPI·카드가 쓰는 판정 함수를 다시 불러
+    # 같은 상태를 한 표에 모은다. main() 안에 중첩 정의한다(골격 규칙). 모든 탭 본문 아래, 푸터 위에 놓인다
+    @st.fragment(run_every=run_every)
+    def live_sources():
+        now = datetime.now()
+        # 세 번째 60초 fragment라 다른 60초 fragment와 같은 때 돈다. 그때 먼저 도는 실행은 조기 종료로 끝나 낡은 요소가
+        # 지워지지 않으므로(S4 실측) 캐시 진행 표시가 요소 위치를 밀지 않게 데이터 읽기를 한 칸 안에서 한다
+        with st.empty():
+            power_status = dict(get_current_power_status())
+            if test_alert:
+                power_status['reserve_rate'] = test_reserve
+                power_status['data_source'] = '테스트 모드'  # 빠지면 테스트 값의 행에 '실측' 칩이 붙는다
+            smp_data = get_smp_data()
+            backend_predictions = get_backend_smp_predictions()
+            weather = get_weather_data()
+            api_kpis = fetch_backend_json("/api/v1/dashboard/kpis")
+            kpx_local = fetch_jeju_realtime()
+            sources_plants = get_jeju_power_plants()
+            sources_registry = load_power_plants_data()
+        st.html(_html_data_status(power_status, smp_data, backend_predictions, weather, api_kpis, kpx_local,
+                                  sources_registry, now, plants_df=sources_plants,
+                                  refresh_note="60초마다 갱신" if auto_refresh else "자동 갱신 꺼짐"))
+
+    live_sources()
+
+    # ========== 푸터 (main() 최상위 상수: T1 '데이터 출처' 기준점) ==========
+    st.markdown("""<div class="pd-footer">
+<p><b>제주 전력 지도 v4.1</b> · 데이터 출처: KPX(수요·공급능력, 5분), EPSIS(SMP 하루전 가격), 초단기실황(API 서버), 발전소 등록부</p>
+<p>모델: 수요 AR+GBM · 태양광 GradientBoosting · SMP 어제 같은 시각(naive) · 추정·시뮬레이션 값은 화면에 그렇게 표시합니다 · 화면 테마: 오른쪽 위 ⋮ → Settings · Power Demand Forecast Team</p>
+</div>""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
