@@ -30,8 +30,12 @@ from html import escape as html_escape
 import plotly.graph_objects as go
 import folium
 from folium import plugins
+from folium.utilities import JsCode
+from branca.element import MacroElement
+from jinja2 import Template
 from streamlit_folium import st_folium
 import json
+import re
 from pathlib import Path
 import sys
 import random
@@ -1423,159 +1427,120 @@ def get_backend_smp_predictions() -> Optional[Dict]:
 # ============================================================================
 
 def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> folium.Map:
-    """제주도 지도 생성"""
+    """제주 발전소 지도(명세 6.7절). 등록부의 위치·설비만 기호로 보이고, 시뮬레이션 값은 팝업에서 '추정'으로만 보인다.
 
-    # 제주도 중심 좌표
-    jeju_center = [33.3846, 126.5535]
-
-    # 제주도 지도 생성
+    - 타일: OSM 표준 타일 하나. CARTO 무키 타일은 "API KEY REQUIRED" 워터마크만 준다(J13, 2026-11-24 확인).
+      테마는 타일 칸에 CSS 필터로 입히고, 라이트·다크 판단은 iframe 안 _MapThemeSync가 한다(J14).
+      st.context.theme로 고르면 지도가 fragment 밖이라 메뉴로 테마를 바꾼 뒤 다음 전체 실행까지 어긋나고,
+      테마마다 지도 JS가 달라져 iframe이 다시 마운트된다.
+    - 기호: 모양(풍력 원·태양광 사각·ESS 마름모·화력 삼각)과 색으로 유형을, 크기로 설비용량을 보인다(J8).
+    - 터치 기기에서는 끌기를 꺼서 한 손가락 스와이프가 페이지를 스크롤한다(J15·N17). 두 손가락은 확대·이동.
+    - 범례는 지도 밖 _html_map_legend가 맡는다(옛 지도 안 고정 범례는 화력을 빠뜨렸고 지도를 가렸다).
+    """
     m = folium.Map(
-        location=jeju_center,
-        zoom_start=10,
-        tiles=None,
-        control_scale=True,
+        location=[33.38, 126.55], zoom_start=10, tiles=None, control_scale=True,
+        font_size="0.75rem",                     # D7 근본 원인: 기본 1rem이 출처 표기를 16px로 만든다
+        zoom_control="topleft", zoom_snap=0.25,
+        scroll_wheel_zoom=False,                 # 데스크톱 휠은 페이지 스크롤
+        dragging=JsCode("!window.matchMedia('(pointer: coarse)').matches"),  # 터치 기기만 끌기 끔 (J15)
+        max_bounds=True, min_lat=32.9, max_lat=33.9, min_lon=125.8, max_lon=127.3,
+        # folium 0.20은 tiles=None이면 min_zoom·max_zoom 인자를 기본 타일에만 넘기고 버린다(0단계 E3) → 지도 옵션으로 직접 준다
+        **{"minZoom": 8, "maxZoom": 14},
     )
+    folium.TileLayer(tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                     attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                     name="OpenStreetMap", control=False, max_zoom=19).add_to(m)
+    _MapThemeSync().add_to(m)
+    # folium.Element 문자열은 Jinja 템플릿이라 '{#'가 주석 시작이 된다. 지도 높이 규칙이 조용히 사라지면
+    # Leaflet이 높이 0에서 fitBounds를 계산해 세계 지도(zoom 0)가 되므로(0단계 E3) 바로 실패시킨다
+    if any(token in PD_CSS_MAP for token in ("{#", "{{", "{%")):
+        raise ValueError("PD_CSS_MAP에 Jinja 구문 문자('{#'·'{{'·'{%')가 있어 iframe CSS 일부가 사라진다")
+    m.get_root().header.add_child(folium.Element("<style>" + PD_CSS_MAP + "</style>"))
 
-    # OpenStreetMap 지도 타일 추가
-    folium.TileLayer(
-        tiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        name='OpenStreetMap',
-        control=False,
-    ).add_to(m)
-
-    # 발전소 타입별 색상 및 아이콘
-    type_config = {
-        'solar': {'color': '#fbbf24', 'icon': 'sun', 'prefix': 'fa', 'label': '태양광'},
-        'wind': {'color': '#3b82f6', 'icon': 'wind', 'prefix': 'fa', 'label': '풍력'},
-        'ess': {'color': '#8b5cf6', 'icon': 'battery-half', 'prefix': 'fa', 'label': 'ESS'},
-        'thermal': {'color': '#ef4444', 'icon': 'fire', 'prefix': 'fa', 'label': '화력'},
+    type_labels = {"solar": "태양광", "wind": "풍력", "ess": "ESS", "thermal": "화력"}
+    subtype_labels = {
+        'onshore': '육상', 'offshore': '해상', 'island': '도서',
+        'ground-mounted': '지상설치', 'rooftop': '옥상설치', 'community': '시민참여',
+        'utility-scale': '대규모', 'renewable-coupled': '재생연계',
+        'combined-cycle': '복합화력', 'steam': '기력',
     }
+    registry_ref = _fmt_registry_ref(load_power_plants_data())
 
-    # 발전소 마커 추가
-    for _, plant in plants_df.iterrows():
-        config = type_config.get(plant['type'], {'color': 'gray', 'icon': 'bolt', 'prefix': 'fa', 'label': '기타'})
+    def cell(value: object) -> str:
+        """등록부 문자열을 팝업·툴팁 HTML에 넣는다. 비었으면 '—'.
 
-        # 추가 정보 (operator, address, source)
-        operator = plant.get('operator', '-') if pd.notna(plant.get('operator')) else '-'
-        address = plant.get('address', '-') if pd.notna(plant.get('address')) else '-'
-        source = plant.get('source', '-') if pd.notna(plant.get('source')) else '-'
-        subtype = plant.get('subtype', '') if pd.notna(plant.get('subtype')) else ''
-
-        # 서브타입 한글 변환
-        subtype_labels = {
-            'onshore': '육상', 'offshore': '해상', 'island': '도서',
-            'ground-mounted': '지상설치', 'rooftop': '옥상설치', 'community': '시민참여',
-            'utility-scale': '대규모', 'renewable-coupled': '재생연계',
-            'combined-cycle': '복합화력'
-        }
-        subtype_label = subtype_labels.get(subtype, subtype)
-
-        # 팝업 내용 (실제 데이터 정보 포함)
-        popup_html = f"""
-        <div style="font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif; width: 240px;">
-            <h4 style="margin: 0 0 10px 0; color: {config['color']};">
-                {plant['name']}
-            </h4>
-            <table style="width: 100%; font-size: 12px;">
-                <tr>
-                    <td style="color: #666;">유형</td>
-                    <td style="text-align: right; font-weight: bold;">
-                        {config['label']} {f"({subtype_label})" if subtype_label else ""}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">설비용량</td>
-                    <td style="text-align: right; font-weight: bold;">{plant['capacity']:.1f} MW</td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">현재 발전량 (추정)</td>
-                    <td style="text-align: right; font-weight: bold; color: #10b981;">
-                        {plant['generation']:.1f} MW
-                    </td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">이용률 (추정)</td>
-                    <td style="text-align: right; font-weight: bold;">{plant['utilization']:.1f}%</td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">운영사</td>
-                    <td style="text-align: right; font-size: 10px;">{operator}</td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">위치</td>
-                    <td style="text-align: right; font-size: 10px;">{address}</td>
-                </tr>
-                <tr>
-                    <td style="color: #666;">상태</td>
-                    <td style="text-align: right;">
-                        <span style="background: {'#10b981' if plant['status'] == '운영중' else '#f59e0b' if plant['status'] == '점검중' else '#6b7280'};
-                                     color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
-                            {plant['status']}
-                        </span>
-                    </td>
-                </tr>
-            </table>
-            <div style="margin-top: 8px; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 5px;">
-                발전량·이용률은 시뮬레이션 추정치 (실측 아님)<br/>
-                데이터 출처: {source}
-            </div>
-        </div>
+        folium은 팝업·툴팁을 JS 템플릿 문자열(백틱)에 그대로 넣으므로 HTML 이스케이프에 더해 백틱과 '$'도 바꾼다.
         """
+        text = value.strip() if isinstance(value, str) else ""
+        if not text:
+            return "—"
+        return html_escape(text).replace("`", "&#96;").replace("$", "&#36;")
 
-        # 마커 크기 (발전량 기반, 화력은 더 크게)
-        base_radius = 10 if plant['type'] == 'thermal' else 5
-        radius = max(8, min(30, abs(plant['generation']) / 10 + base_radius))
-
-        # 원형 마커
-        folium.CircleMarker(
+    # 큰 기호부터 추가해 작은 기호가 위에 놓이게 한다(작은 발전소가 큰 기호에 가려 눌리지 않게)
+    ordered = plants_df.assign(_cap=pd.to_numeric(plants_df['capacity'], errors='coerce').fillna(0.0))
+    for _, plant in ordered.sort_values('_cap', ascending=False, kind='stable').iterrows():
+        kind = plant['type']
+        type_label = type_labels.get(kind, cell(kind))
+        cap = float(plant['_cap'])
+        name = cell(plant.get('name'))
+        subtype_raw = plant.get('subtype')
+        subtype = subtype_labels.get(subtype_raw, subtype_raw) if isinstance(subtype_raw, str) and subtype_raw else ""
+        type_text = f"{type_label} ({cell(subtype)})" if subtype else type_label
+        generation, utilization = plant.get('generation'), plant.get('utilization')
+        generation_text = f"≈{generation:.1f} MW" if _finite_number(generation) else "—"
+        utilization_text = f"{utilization:.1f}%" if _finite_number(utilization) else "—"
+        source_note = ("출처 예비 목록 (등록부를 읽지 못함)" if str(plant.get('id', '')).startswith('fallback_')
+                       else f"출처 발전소 {cell(registry_ref)}")
+        # 팝업 글자색은 iframe 테마 변수를 따른다(PD_CSS_MAP). 옛 9px #999 고지(2.85:1)를 12px로 바꿨다
+        popup_html = (
+            f'<div class="pd-pop"><p class="pd-pop__title">{name}</p><table>'
+            f'<tr><th>유형</th><td>{type_text}</td></tr>'
+            f'<tr><th>설비용량</th><td>{cap:,.1f} MW</td></tr>'
+            f'<tr><th>현재 발전량 (추정)</th><td>{generation_text}</td></tr>'
+            f'<tr><th>이용률 (추정)</th><td>{utilization_text}</td></tr>'
+            f'<tr><th>운영사</th><td>{cell(plant.get("operator"))}</td></tr>'
+            f'<tr><th>위치</th><td>{cell(plant.get("address"))}</td></tr>'
+            f'<tr><th>상태</th><td>{cell(plant.get("status"))}</td></tr></table>'
+            f'<p class="pd-pop__note">발전량·이용률은 시뮬레이션 추정치 (실측 아님)<br>{source_note}</p></div>'
+        )
+        # 툴팁·기호 이름은 등록부 사실만(이름·유형·설비). 시뮬레이션 출력은 넣지 않는다(J4)
+        label = f"{name} · {type_label} · 설비 {cap:,.1f} MW"
+        icon_html, box = _html_marker(kind, cap, label)
+        folium.Marker(
             location=[plant['lat'], plant['lng']],
-            radius=radius,
-            popup=folium.Popup(popup_html, max_width=250),
-            tooltip=f"{plant['name']}: {plant['generation']:.1f} MW",
-            color=config['color'],
-            fill=True,
-            fillColor=config['color'],
-            fillOpacity=0.7,
-            weight=2,
+            icon=folium.DivIcon(html=icon_html, icon_size=(box, box), icon_anchor=(box // 2, box // 2),
+                                class_name="pd-mk"),
+            popup=folium.Popup(popup_html, max_width=280),
+            tooltip=label,
         ).add_to(m)
 
-    # 히트맵 (옵션)
+    # 지역 callout: 등록부 사실(곳 수·설비·유형 구성)만 바다 위에 둔다. 좁은 iframe(480px 이하)에서는 CSS로 숨긴다
+    summary = _fmt_registry_summary(plants_df, None, "전체")
+    for region, location in (("제주시", [33.62, 126.33]), ("서귀포시", [33.14, 126.80])):
+        block = summary["regions"][region]
+        if block["count"] == 0 or block["mw"] <= 0:
+            continue
+        segments = "".join(
+            f'<span style="width:{block["by_type"][kind]["mw"] / block["mw"] * 100:.1f}%;background:{SERIES[kind]}"></span>'
+            for kind in ("wind", "solar", "ess", "thermal") if block["by_type"][kind]["mw"] > 0
+        )
+        callout = (f'<div class="pd-callout"><b>{region}</b> · {block["count"]}곳 · 설비 {block["mw"]:,.1f} MW'
+                   f'<span class="pd-callout__bar" aria-hidden="true">{segments}</span></div>')
+        folium.Marker(location, icon=folium.DivIcon(html=callout, icon_size=(220, 44), icon_anchor=(0, 22),
+                                                   class_name="pd-callout-mk"),
+                      interactive=False, keyboard=False).add_to(m)
+
+    # 열지도(토글 켤 때만): 시뮬레이션 출력이라 지도 바로 아래에 추정 칩을 붙인다(main). 무지개 대신 풍력 청록 한 색 농도
     if show_heatmap:
         heat_data = [[row['lat'], row['lng'], row['generation']]
-                     for _, row in plants_df.iterrows() if row['generation'] > 0]
+                     for _, row in plants_df.iterrows() if _finite_number(row['generation']) and row['generation'] > 0]
         if heat_data:
             plugins.HeatMap(
-                heat_data,
-                min_opacity=0.3,
-                max_zoom=13,
-                radius=30,
-                blur=20,
-                gradient={0.4: 'blue', 0.65: 'lime', 0.8: 'yellow', 1: 'red'}
+                heat_data, min_opacity=0.25, radius=28, blur=22,
+                gradient={0.2: "#A5F3FC", 0.5: "#22D3EE", 0.8: "#0891B2", 1.0: "#0E7490"},
             ).add_to(m)
 
-    # 범례 추가
-    legend_html = """
-    <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
-                background: rgba(15, 23, 42, 0.9); padding: 15px; border-radius: 10px;
-                border: 1px solid rgba(255,255,255,0.1);">
-        <h4 style="margin: 0 0 10px 0; color: white; font-size: 14px;">발전소 유형</h4>
-        <div style="display: flex; align-items: center; gap: 8px; margin: 5px 0; color: white; font-size: 12px;">
-            <span style="width: 14px; height: 14px; background: #fbbf24; border-radius: 50%;"></span>
-            태양광
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px; margin: 5px 0; color: white; font-size: 12px;">
-            <span style="width: 14px; height: 14px; background: #3b82f6; border-radius: 50%;"></span>
-            풍력
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px; margin: 5px 0; color: white; font-size: 12px;">
-            <span style="width: 14px; height: 14px; background: #8b5cf6; border-radius: 50%;"></span>
-            ESS
-        </div>
-    </div>
-    """
-    m.get_root().html.add_child(folium.Element(legend_html))
-
+    m.fit_bounds([[33.10, 126.10], [33.66, 127.00]])
     return m
 
 
@@ -1620,6 +1585,7 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
     ))
 
     # 현재 시점 표시 (API 예측은 오늘 0~23시이므로 현재 시각 위치, 로컬 예측은 첫 지점)
+    # 선은 '#000036'(getGray70, 그래픽 3:1 두 테마 통과), 글자는 색을 주지 않아 _chart_base의 '#000037'을 따른다
     if predictions:
         now_point = predictions[min(smp_data.get('current_index', 0), len(predictions) - 1)]['time']
         fig.add_shape(
@@ -1629,7 +1595,7 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
             y0=0,
             y1=1,
             yref="paper",
-            line=dict(color="#10b981", width=2, dash="dash"),
+            line=dict(color="#000036", width=1.5, dash="dash"),
         )
         # 현재 시점 주석
         fig.add_annotation(
@@ -1638,38 +1604,21 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
             yref="paper",
             text="현재",
             showarrow=False,
-            font=dict(color="#10b981", size=12),
             yanchor="bottom",
         )
-    # 다른 앱과 같이 예측 대상일을 표시하고, 오늘이 아니면 입력 지연을 밝힌다.
+    # 다른 앱과 같이 예측 대상일을 표시하고, 오늘이 아니면 입력 지연을 밝힌다(색이 아니라 글자로).
+    # '현재' 글자와 같은 줄에 두면 좁은 폭(390px)에서 겹치므로 한 줄 위(yshift 18px)에 둔다
     forecast_date = smp_data.get('forecast_date')
     if forecast_date:
         stale = forecast_date != datetime.now().strftime("%Y-%m-%d")
         fig.add_annotation(
-            x=0, y=1.08, xref="paper", yref="paper", xanchor="left", showarrow=False,
+            x=0, y=1, xref="paper", yref="paper", xanchor="left", yanchor="bottom", yshift=18, showarrow=False,
             text=f"예측일 {forecast_date}" + (" (입력 지연)" if stale else ""),
-            font=dict(color="#ef4444" if stale else "#64748B", size=11),
         )
 
-    fig.update_layout(
-        title=None,
-        xaxis_title=None,
-        yaxis_title="SMP (원/kWh)",
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=20, b=0),
-        height=300,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ),
-        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-    )
+    # 제목·범례는 그림에 두지 않는다(title=None은 'undefined'가 된다, D3). 6단계에서 카드 머리가 단위를 가져가기 전까지 y축 제목으로 단위를 둔다
+    _chart_base(fig, height=300, margin=dict(l=8, r=8, t=44, b=8))
+    fig.update_layout(yaxis_title="SMP (원/kWh)")
 
     return fig
 
@@ -1827,6 +1776,7 @@ def create_realtime_power_chart() -> go.Figure:
         hoverinfo='skip'
     ))
 
+    # 툴팁은 x 통합(_chart_base)이라 머리에 시각이 한 번 나온다. 그래서 줄마다 %{x}를 되풀이하지 않는다(명세 6.1절)
     # ===== 과거 공급능력 =====
     fig.add_trace(go.Scatter(
         x=past_hours,
@@ -1835,7 +1785,7 @@ def create_realtime_power_chart() -> go.Figure:
         name='공급능력 (실측)',
         line=dict(color='#10b981', width=2),
         customdata=actual_reserve,
-        hovertemplate='%{x}<br>공급능력: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='공급능력: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 과거 실측 수요 =====
@@ -1846,7 +1796,7 @@ def create_realtime_power_chart() -> go.Figure:
         name='전력수요 (실측)',
         line=dict(color='#3b82f6', width=3),
         customdata=actual_reserve,
-        hovertemplate='%{x}<br>실측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='실측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 예측 공급능력 =====
@@ -1857,7 +1807,7 @@ def create_realtime_power_chart() -> go.Figure:
         name='공급능력 (예측)',
         line=dict(color='#10b981', width=2, dash='dot'),
         customdata=forecast_reserve,
-        hovertemplate='%{x}<br>예측 공급: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='예측 공급: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 예측 수요 =====
@@ -1868,7 +1818,7 @@ def create_realtime_power_chart() -> go.Figure:
         name='전력수요 (예측)',
         line=dict(color='#fbbf24', width=3),
         customdata=forecast_reserve,
-        hovertemplate='%{x}<br>예측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='예측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 과거 태양광 발전 (스택 영역) =====
@@ -1880,7 +1830,7 @@ def create_realtime_power_chart() -> go.Figure:
         fill='tozeroy',
         fillcolor='rgba(251, 191, 36, 0.4)',  # 노란색
         line=dict(color='#fbbf24', width=1),
-        hovertemplate='%{x}<br>태양광: %{y:.1f} MW<extra></extra>'
+        hovertemplate='태양광: %{y:.1f} MW<extra></extra>'
     ))
 
     # ===== 과거 풍력 발전 (스택 영역) =====
@@ -1893,7 +1843,7 @@ def create_realtime_power_chart() -> go.Figure:
         fillcolor='rgba(59, 130, 246, 0.4)',  # 파란색
         line=dict(color='#3b82f6', width=1),
         customdata=actual_wind,
-        hovertemplate='%{x}<br>풍력: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='풍력: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 태양광 발전 (스택 영역) =====
@@ -1905,7 +1855,7 @@ def create_realtime_power_chart() -> go.Figure:
         fill='tozeroy',
         fillcolor='rgba(251, 191, 36, 0.25)',  # 연한 노란색
         line=dict(color='#fbbf24', width=1, dash='dot'),
-        hovertemplate='%{x}<br>태양광 예측: %{y:.1f} MW<extra></extra>'
+        hovertemplate='태양광 예측: %{y:.1f} MW<extra></extra>'
     ))
 
     # ===== 미래 풍력 발전 (스택 영역) =====
@@ -1918,11 +1868,11 @@ def create_realtime_power_chart() -> go.Figure:
         fillcolor='rgba(59, 130, 246, 0.25)',  # 연한 파란색
         line=dict(color='#3b82f6', width=1, dash='dot'),
         customdata=forecast_wind,
-        hovertemplate='%{x}<br>풍력 예측: %{customdata:.1f} MW<extra></extra>'
+        hovertemplate='풍력 예측: %{customdata:.1f} MW<extra></extra>'
     ))
 
     # ===== 현재 시점 표시 (중앙) =====
-    # 현재 시점 수직선 (shape으로 직접 추가)
+    # 선은 '#000036'(getGray70, 그래픽 3:1 두 테마 통과). 빨강은 경보 전용이라 현재 표시에 쓰지 않는다(F5)
     current_demand = actual_demand[-1]
     y_min = min(min(actual_demand), min(forecast_lower)) * 0.95
     y_max = max(max(actual_supply), max(forecast_upper)) * 1.05
@@ -1931,67 +1881,34 @@ def create_realtime_power_chart() -> go.Figure:
         type="line",
         x0=now, x1=now,
         y0=y_min, y1=y_max,
-        line=dict(color='#ef4444', width=2, dash='dash'),
+        line=dict(color='#000036', width=1.5, dash='dash'),
     )
 
-    # 현재 시점 라벨
+    # 현재 시점 라벨 (글자색은 _chart_base의 '#000037')
     fig.add_annotation(
         x=now,
         y=y_max,
         text="현재",
         showarrow=False,
-        font=dict(color='#ef4444', size=12),
         yshift=10
     )
 
-    # 현재 값 annotation
+    # 현재 값 주석: 바탕은 '#000038'(테마 배경 = 카드 면)이라 선 위에서도 글자가 두 테마 모두 읽힌다
     fig.add_annotation(
         x=now,
         y=current_demand,
         text=f"<b>{current_demand:.0f}</b> MW",
         showarrow=True,
         arrowhead=2,
-        arrowcolor='#ef4444',
-        font=dict(color='white', size=12),
-        bgcolor='rgba(239, 68, 68, 0.8)',
-        bordercolor='#ef4444'
+        arrowcolor='#000036',
+        bgcolor='#000038',
+        bordercolor='#000036'
     )
 
-    fig.update_layout(
-        title=dict(
-            text='제주 전력수급 현황 - 실측 vs 예측 (MW)',
-            font=dict(size=18, color='white'),
-            x=0.5
-        ),
-        xaxis=dict(
-            title='',
-            showgrid=True,
-            gridcolor='rgba(148, 163, 184, 0.1)',
-            tickformat='%m/%d %H:%M',
-            tickfont=dict(color='#94a3b8'),
-        ),
-        yaxis=dict(
-            title=dict(text='전력 (MW)', font=dict(color='#94a3b8')),
-            showgrid=True,
-            gridcolor='rgba(148, 163, 184, 0.1)',
-            tickfont=dict(color='#94a3b8'),
-        ),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02,
-            xanchor='left',
-            x=0,
-            font=dict(color='white', size=10),
-            bgcolor='rgba(0,0,0,0)'
-        ),
-        template='plotly_dark',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=60, r=30, t=140, b=50),
-        height=450,
-        hovermode='x unified'
-    )
+    # 제목·범례는 그림에 두지 않는다(5단계 카드 머리·범례 겸 표가 맡는다, D5). 단위는 그때까지 y축 제목으로 둔다
+    _chart_base(fig, height=450)
+    fig.update_xaxes(tickformat='%m/%d %H:%M')
+    fig.update_yaxes(title_text='전력 (MW)')
 
     return fig
 
@@ -1999,7 +1916,11 @@ def create_realtime_power_chart() -> go.Figure:
 def create_gauge_chart(value: float, title: str, max_val: float = 100,
                        color: str = '#3b82f6', suffix: str = '',
                        reserve: bool = False) -> go.Figure:
-    """Create a gauge chart, using low-value risk bands for reserve margins."""
+    """Create a gauge chart, using low-value risk bands for reserve margins.
+
+    T7(test_v4_reserve_gauge)이 이 함수를 go만 있는 이름공간에서 실행하므로 _chart_base를 부르지 않고
+    리터럴만 쓴다. 글자색 '#000037'은 Streamlit 1.52.1 Plotly 테마 자리표시자(getGray90)라 두 테마에서 4.5:1을 넘는다.
+    """
     if reserve:
         # 예비율은 낮을수록 위험하며 표시 범위는 실제 값을 포함한다.
         low = min(0, value)
@@ -2020,10 +1941,10 @@ def create_gauge_chart(value: float, title: str, max_val: float = 100,
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
-        number={'suffix': suffix, 'font': {'size': 20, 'color': color}},
-        title={'text': title, 'font': {'size': 14, 'color': '#94a3b8'}},
+        number={'suffix': suffix, 'font': {'size': 20, 'color': '#000037'}},
+        title={'text': title, 'font': {'size': 14, 'color': '#000037'}},
         gauge={
-            'axis': {'range': [low, max_val], 'tickfont': {'color': '#64748b'}},
+            'axis': {'range': [low, max_val], 'tickfont': {'color': '#000037'}},
             'bar': {'color': color},
             'bgcolor': 'rgba(30, 41, 59, 0.5)',
             'borderwidth': 0,
@@ -2036,12 +1957,11 @@ def create_gauge_chart(value: float, title: str, max_val: float = 100,
         }
     ))
 
+    # 배경·템플릿은 Streamlit 테마에 맡긴다(테마 배경 = 카드 면). 끌기를 꺼야 모바일에서 손가락 스와이프가 페이지를 스크롤한다
     fig.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=8, r=8, t=50, b=20),
         height=200,
+        dragmode=False,
     )
 
     return fig
@@ -2055,21 +1975,24 @@ def create_supply_donut(power_status: Dict) -> go.Figure:
     values = [supply['solar'], supply['wind'], supply['thermal'], abs(supply['ess'])]
     colors = ['#fbbf24', '#3b82f6', '#6b7280', '#8b5cf6']
 
+    # Plotly 범례를 끄므로(_chart_base) 조각 이름을 바깥 글자로 함께 보인다. 6단계에서 범례 겸 표가 이 일을 넘겨받는다.
+    # 글자색을 주지 않아 _chart_base의 '#000037'을 따른다(흰 글자는 라이트 카드 위에서 보이지 않았다)
     fig = go.Figure(data=[go.Pie(
         labels=labels,
         values=values,
         hole=0.6,
         marker_colors=colors,
-        textinfo='percent',
+        textinfo='label+percent',
         textposition='outside',
-        textfont=dict(color='white', size=12),
+        automargin=True,
+        textfont=dict(size=12),
     )])
 
     # 중앙 텍스트
     fig.add_annotation(
         text=f"<b>{power_status['demand']}</b><br>MW",
         x=0.5, y=0.5,
-        font=dict(size=20, color='white'),
+        font=dict(size=20),
         showarrow=False,
     )
 
@@ -2079,27 +2002,9 @@ def create_supply_donut(power_status: Dict) -> go.Figure:
         x=0, y=1.12,
         xref="paper", yref="paper",
         showarrow=False,
-        font=dict(size=11, color='#f59e0b'),
     )
 
-    fig.update_layout(
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.1,
-            xanchor="center",
-            x=0.5,
-            font=dict(color='white'),
-        ),
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=20, r=20, t=20, b=40),
-        height=280,
-    )
-
-    return fig
+    return _chart_base(fig, height=280, margin=dict(l=20, r=20, t=40, b=20))
 
 
 def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
@@ -2145,48 +2050,84 @@ def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
         fillcolor='rgba(59, 130, 246, 0.3)',
     ))
 
-    # 현재 시점
+    # 현재 시점 (선은 '#000036' = getGray70, 그래픽 3:1 두 테마 통과)
     fig.add_vline(
         x=current_hour,
         line_dash="dash",
-        line_color="#10b981",
+        line_color="#000036",
     )
 
-    # 시뮬레이션 값임을 표기 (실측 아님)
+    # 시뮬레이션 값임을 표기 (실측 아님). 글자색은 _chart_base의 '#000037'
     fig.add_annotation(
         text="시뮬레이션 추정치 (실측 아님)",
         x=0.99, y=1.12,
         xref="paper", yref="paper",
         xanchor="right",
         showarrow=False,
-        font=dict(size=11, color='#f59e0b'),
     )
 
+    # 범례·격자색은 그림에 두지 않는다(6단계 카드 머리·범례가 맡는다). 단위는 그때까지 축 제목으로 둔다
+    _chart_base(fig, height=250, margin=dict(l=8, r=8, t=36, b=8))
+    fig.update_layout(xaxis_title="시간", yaxis_title="발전량 (MW)")
+    fig.update_xaxes(tickmode='array', tickvals=list(range(0, 24, 3)),
+                     ticktext=[f"{h}시" for h in range(0, 24, 3)])
+
+    return fig
+
+
+# ============================================================================
+# 계열 색 · 차트 공통 (빌드 명세 3.4절 · 6.1절)
+# ============================================================================
+
+# app_v4.py 모듈 상수. 지도·차트·범례·칩·표가 모두 여기서 읽는다 (F5)
+# Streamlit 1.52.1은 테마별 차트 색을 나눌 수 없어(1.62부터) 두 테마의 카드·캔버스 바탕 모두에서 3:1을 넘는 단일값을 쓴다.
+SERIES = {
+    "demand": "#3B82F6",   # 수요
+    "supply": "#64748B",   # 공급능력
+    "reserve": "#16A34A",  # 예비력 (면은 4% + 빗금 8%)
+    "solar": "#B7791F",    # 태양광 (앰버 #F59E0B는 라이트 2.02로 미달 → 황토)
+    "wind": "#0891B2",     # 풍력 (수요 파랑과 분리, web-v7 풍력 청록 계열)
+    "ess": "#8B5CF6",      # ESS
+    "thermal": "#8D6E63",  # 화력 LNG·유류 (지도 빨강·도넛 회색 불일치 해소)
+    "hvdc": "#7C8DB0",     # HVDC 연계
+    "smp": "#C026D3",      # SMP
+    "other": "#4D7C0F",    # 기타 (10색 채움용)
+}
+BOUNDARY_COLOR = "#B45309"  # 관심 경계선 (예비율 15%)
+ALERT_RED = "#DC2626"       # 경보·임계선 전용. 데이터 계열에 쓰지 않는다
+
+
+def _chart_base(fig: go.Figure, *, height: int, margin: Optional[Dict] = None) -> go.Figure:
+    """테마 색은 Streamlit에 맡기고, 글자색은 1.52.1 자리표시자 '#000037'(getGray90)로 AA를 맞춘다.
+
+    Streamlit 1.52.1은 figure JSON 문자열의 '#000032'~'#000040'을 활성 테마 색으로 바꿔 그린다
+    ('#000036' = getGray70, '#000037' = getGray90, '#000038' = 테마 배경 = 카드 면). 그래서 글자색을 하드코딩하지 않는다.
+    기본 눈금색 getGray70(라이트 #808495)은 흰 카드 위 3.49:1로 AA 미달이라 글자에는 '#000037'만 쓴다.
+    단, 이 치환은 그림을 처음 그릴 때만 일어난다: ⋮ → Settings로 테마를 바꾸면 이미 색이 들어간 그림에 다시 적용되므로
+    글자가 이전 테마 색으로 남는다(S3 실측). 테마 전환은 PD_CSS_COMPONENTS 10절 CSS가 글자를 페이지 토큰으로 덮어 맞춘다.
+    이 치환은 1.52.1 번들 전제다(버전을 올리면 명세 9.4절 E4와 테마 전환 검사를 다시 돌린다).
+
+    끌기·확대를 끄고(dragmode=False, fixedrange) 모드바를 숨기면(호출부 config) 손가락 스와이프가 차트에 갇히지 않고
+    페이지를 스크롤한다(N17). 제목·범례는 그림에 두지 않는다: title=None은 '<b>undefined</b>'가 되고(D3),
+    범례는 카드의 HTML 범례 겸 표가 맡는다.
+
+    Args:
+        fig: 꾸밀 그림. 제자리에서 바꾸고 그대로 돌려준다.
+        height: 그림 높이(px). Plotly 높이는 CSS로 바꿀 수 없으므로 모든 폭에서 같다.
+        margin: 여백 dict. 없으면 l=8, r=8, t=32, b=8.
+
+    Returns:
+        같은 fig.
+    """
     fig.update_layout(
-        xaxis_title="시간",
-        yaxis_title="발전량 (MW)",
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=20, b=0),
-        height=250,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ),
-        xaxis=dict(
-            tickmode='array',
-            tickvals=list(range(0, 24, 3)),
-            ticktext=[f"{h}시" for h in range(0, 24, 3)],
-            showgrid=True,
-            gridcolor='rgba(255,255,255,0.1)',
-        ),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+        height=height,
+        margin=margin or dict(l=8, r=8, t=32, b=8),
+        dragmode=False, hovermode="x unified", showlegend=False,
+        font=dict(color="#000037", size=12),
+        hoverlabel=dict(font=dict(color="#000037")),
     )
-
+    fig.update_xaxes(fixedrange=True, tickfont=dict(color="#000037", size=12))
+    fig.update_yaxes(fixedrange=True, tickfont=dict(color="#000037", size=12), zeroline=False)
     return fig
 
 
@@ -2418,6 +2359,117 @@ PD_CSS_COMPONENTS = """
 .pd-card__note,[data-testid="stMarkdownContainer"] .pd-card__note{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
 .pd-sim-value{display:flex;align-items:baseline;gap:5px;margin:10px 0 6px;white-space:nowrap}
 .pd-sim-value .pd-num{font-size:24px;font-weight:700;line-height:1.15}
+/* 3칸 카드 머리(제목·부제·칩, 명세 5.7절). 칩 묶음의 자동 여백이 남는 공간을 먼저 가져가므로 제목·부제는 붙어 있고,
+   2칸 머리(제목|칩)는 space-between 그대로 양 끝에 놓인다 */
+.pd-card__sub{font-size:13px;font-weight:500;line-height:1.35;color:var(--pd-text-3)}
+.pd-card__head:has(> .pd-card__sub){justify-content:flex-start}
+.pd-card__chips{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto}
+.pd-card__meta{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+.pd-card__meta .pd-ico{width:14px;height:14px}
+/* 선택된 세그먼트는 primary 글자가 primary 10% 바탕 위에 놓여 라이트에서 4.49:1로 AA 미달이다(S3 실측). 링크 토큰
+   (라이트 #1D4ED8 약 5.8:1, 다크는 primary와 같은 #60A5FA)으로 바꾼다. 지역·SMP 보기·발전 유형 세그먼트 모두에 걸린다 */
+[data-testid="stBaseButton-segmented_controlActive"]{color:var(--pd-link)!important}
+/* ---- 9. 지도 무대 · 인스펙터 (4단계. iframe 안쪽 CSS는 PD_CSS_MAP) ---- */
+/* iframe이 인라인 요소면 기준선 여백 8px가 더해져 지도 아래 간격이 26px가 된다(0단계 E3) */
+.st-key-map_col iframe{display:block;border-radius:10px}
+@media (min-width:641px){.st-key-map_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"]{align-items:flex-end}}
+.pd-maplegend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+.pd-maplegend__item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pd-maplegend__item b{font-weight:600;color:var(--pd-text-2)}
+.pd-maplegend__note{flex-basis:100%}
+/* 지도 기호와 같은 모양(원·사각·마름모·삼각) + 인라인 --c 계열 색. 카드 면 위 채움 대비는 3.4절 card 열(최저 3.64) */
+.pd-mkey{flex:none;display:inline-block;width:11px;height:11px;background:var(--c)}
+.pd-mkey--wind{border-radius:50%}
+.pd-mkey--solar{border-radius:2px}
+.pd-mkey--ess{width:9px;height:9px;margin:0 1px;transform:rotate(45deg)}
+.pd-mkey--thermal{width:12px;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.pd-insp,.pd-insp__side,.pd-insp__main{display:flex;flex-direction:column;gap:12px;min-width:0;color:var(--pd-text-2)}
+.pd-insp__crumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:13px;font-weight:600;line-height:1.45;color:var(--pd-text-2)}
+.pd-insp__crumb .pd-ico{width:14px;height:14px;color:var(--pd-text-3)}
+.pd-insp__crumb b{font-weight:700;color:var(--pd-text-1)}
+.pd-insp__ref{margin-left:auto;font-size:12px;font-weight:500;color:var(--pd-text-3)}
+.pd-insp__notice{margin:0;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:600;line-height:1.45;color:var(--pd-warn-fg);background:var(--pd-warn-bg)}
+.pd-insp__stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pd-stat{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px 12px;border-radius:10px;background:var(--pd-well)}
+.pd-stat__label{font-size:12px;font-weight:600;line-height:1.35;color:var(--pd-text-2)}
+.pd-stat__value{font-size:20px;font-weight:700;line-height:1.2;white-space:nowrap;color:var(--pd-text-1)}
+.pd-stat__value small{margin-left:3px;font-size:13px;font-weight:500;color:var(--pd-text-3)}
+.pd-stat__value--text{font-size:13px;font-weight:600;line-height:1.45;white-space:normal}
+.pd-stat__src{font-size:12px;line-height:1.4;color:var(--pd-text-3)}
+.pd-insp__table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--pd-text-2)}
+.pd-insp__table th{padding:6px 8px;font-size:12px;font-weight:600;text-align:left;white-space:nowrap;color:var(--pd-text-3);background:var(--pd-well)}
+.pd-insp__table th:first-child{border-radius:8px 0 0 8px}
+.pd-insp__table th:last-child{border-radius:0 8px 8px 0}
+.pd-insp__table td{padding:6px 8px;border-bottom:1px solid var(--pd-border);vertical-align:middle}
+.pd-insp__table .pd-num{text-align:right;white-space:nowrap}
+.pd-insp__table tr[aria-current="true"] td{font-weight:700;color:var(--pd-primary)}
+.pd-insp__child td:first-child{padding-left:12px;white-space:nowrap}
+/* 트리 기호는 화면 읽기 프로그램이 읽지 않게 대체 글자를 비운다(미지원 브라우저는 선언을 버리고 들여쓰기만 남는다) */
+.pd-insp__child td:first-child::before{content:"└ " / "";color:var(--pd-text-3)}
+.pd-insp__sect td{padding:12px 8px 4px;font-size:12px;font-weight:700;color:var(--pd-text-3)}
+.pd-insp__note{font-size:12px;color:var(--pd-text-3)}
+.pd-bar{display:flex;width:100%;min-width:56px;height:8px;border-radius:4px;overflow:hidden;background:var(--pd-well)}
+.pd-bar>span{display:block;height:100%;background:var(--c)}
+.pd-insp__foot{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+/* 무대가 세로로 쌓이는 폭(641~1180px)에서는 인스펙터를 2단(왼쪽 경로·통계, 오른쪽 지역 표)으로 */
+@media (max-width:1180px) and (min-width:641px){.pd-insp{display:grid;grid-template-columns:1fr 1.3fr;align-items:start;gap:16px}}
+@media (max-width:640px){
+  .pd-insp__stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pd-insp__stats .pd-stat:last-child{grid-column:1 / -1}
+  .pd-stat__value{font-size:17px}
+  .pd-insp__table .pd-insp__mix{display:none}
+}
+/* ---- 10. Plotly 글자: 테마 전환을 따라가게 페이지 토큰으로 칠한다 (명세 9.4절 E4 대체안) ----
+   1.52.1은 '#000037' 같은 자리표시자를 그림을 처음 그릴 때만 테마 색으로 바꾼다. ⋮ → Settings로 테마를 바꾸면 이미 색이
+   들어간 그림에 다시 적용하므로 글자가 이전 테마 색으로 남는다(라이트→다크에서 어두운 바탕 위 #262730, S3 실측).
+   그림 바탕은 템플릿이 다시 칠해 따라오므로 글자만 토큰으로 맞춘다. 바탕을 칠한 주석(흰 글자 pill·카드색 상자)과
+   도넛 조각 글자는 건드리지 않는다(조각 안 흰 글자 대체안을 덮지 않게) */
+[data-testid="stPlotlyChart"] :is(.xtick,.ytick,.g-xtitle,.g-ytitle,.xangularaxistick) text,
+[data-testid="stPlotlyChart"] .indicatorlayer text.title{fill:var(--pd-text-2)!important}
+[data-testid="stPlotlyChart"] .hoverlayer text,
+[data-testid="stPlotlyChart"] .indicatorlayer text.number,
+[data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0;"]) text.annotation-text{fill:var(--pd-text-1)!important}
+"""
+
+# 지도 iframe 머리에 넣는 CSS(명세 6.7절). 바깥 페이지 토큰은 iframe에 닿지 않으므로 Streamlit 컴포넌트가 iframe :root에
+# 넣는 테마 변수(--background-color·--text-color·--primary-color·--secondary-background-color)만 쓴다.
+# folium.Element는 이 문자열을 Jinja 템플릿으로 읽는다: 여는 중괄호 바로 뒤에 '#'이 오면 주석 시작이 되므로
+# '@media (…){ #map_div…'처럼 중괄호 뒤에 공백을 둔다(0단계 E3, create_jeju_map이 검사한다).
+# map_div가 iframe 높이(100vh)를 따르는 조건을 240px 이상으로 둔다: 1180px 초과 폭에서는 Leaflet이 fitBounds를 계산하는
+# 순간 iframe이 아직 과도기 높이(실측 18px)라 1px 조건이면 지도가 18px로 잡혀 minZoom 8로 떨어진다(S3 실측).
+# 과도기에는 st_folium 인라인 480px를 쓰고, 실제 높이(480·440·340px)가 되면 iframe 높이를 따른다.
+PD_CSS_MAP = """
+html,body,.leaflet-container{background:var(--background-color)}
+@media (min-height:240px){ #map_div{height:100vh!important}}
+.leaflet-container{color:var(--text-color);font-family:"Pretendard Variable",var(--font),-apple-system,"Apple SD Gothic Neo",sans-serif}
+.leaflet-tile-pane{filter:grayscale(.85) saturate(.6) brightness(1.04) contrast(.9)}
+html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.88) grayscale(.5)}
+.leaflet-control-attribution{font-size:12px;line-height:1.4;color:var(--text-color);background:color-mix(in srgb,var(--background-color) 85%,transparent)!important}
+.leaflet-control-attribution a{color:var(--primary-color)}
+.leaflet-control-scale-line{color:var(--text-color);border-color:var(--text-color);text-shadow:none;background:color-mix(in srgb,var(--background-color) 80%,transparent)}
+.leaflet-bar a{background:var(--background-color);color:var(--text-color);border-color:var(--secondary-background-color)}
+.leaflet-bar a.leaflet-disabled{background:var(--secondary-background-color);color:color-mix(in srgb,var(--text-color) 45%,transparent)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--background-color);color:var(--text-color)}
+.leaflet-container a.leaflet-popup-close-button{color:var(--text-color)}
+.leaflet-tooltip{background:var(--background-color);color:var(--text-color);border-color:var(--secondary-background-color);font-size:12px}
+.leaflet-tooltip-top:before{border-top-color:var(--background-color)}
+.leaflet-tooltip-bottom:before{border-bottom-color:var(--background-color)}
+.leaflet-tooltip-left:before{border-left-color:var(--background-color)}
+.leaflet-tooltip-right:before{border-right-color:var(--background-color)}
+.leaflet-marker-icon.pd-mk{display:flex;align-items:center;justify-content:center;background:none;border:0;border-radius:50%}
+.leaflet-marker-icon.pd-mk:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+.pd-callout-mk{background:none;border:0}
+.pd-callout{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--background-color);color:var(--text-color);border:1px solid var(--secondary-background-color);font-size:12px;line-height:1.35;white-space:nowrap}
+.pd-callout b{font-weight:700}
+.pd-callout__bar{display:flex;height:4px;margin-top:4px;border-radius:2px;overflow:hidden}
+.pd-callout__bar span{display:block;height:100%}
+.pd-pop{font-size:13px;line-height:1.4}
+.pd-pop__title{margin:0 0 6px;font-size:14px;font-weight:700;line-height:1.3}
+.pd-pop table{width:100%;border-collapse:collapse}
+.pd-pop th{padding:2px 12px 2px 0;font-weight:500;text-align:left;white-space:nowrap;opacity:.8}
+.pd-pop td{padding:2px 0;font-weight:600;text-align:right}
+.pd-pop__note{margin:6px 0 0;font-size:12px;opacity:.8;border-top:1px solid var(--secondary-background-color);padding-top:4px}
+@media (max-width:480px){.pd-callout,.leaflet-control-scale{display:none}}
 """
 
 
@@ -2942,6 +2994,314 @@ def _html_legend_strip() -> str:
     )
 
 
+def _html_card_head(title: str, subtitle: str, chips_html: str, meta_html: str) -> str:
+    """카드·무대 머리(명세 5.7절): 제목 · 부제 · 칩 한 줄 + 메타 줄(출처 · HH:MM KST · 경과 | 해석).
+
+    차트 제목은 여기에만 둔다(Plotly title 키를 쓰지 않는다). 부제·칩·메타가 비면 그 칸을 만들지 않는다:
+    빈 칸에도 flex gap이 끼어 제목 옆이 벌어지고, 메타가 비면 시계 아이콘만 남는다.
+    네 인자 모두 호출부가 만든 HTML이다(API·파일에서 온 문자열은 호출부가 html_escape로 넘긴다).
+    """
+    sub = f'<span class="pd-card__sub">{subtitle}</span>' if subtitle else ""
+    chips = f'<span class="pd-card__chips">{chips_html}</span>' if chips_html else ""
+    head = (f'<div class="pd-card__head"><span class="pd-card__title" role="heading" aria-level="2">{title}</span>'
+            f'{sub}{chips}</div>')
+    if meta_html:
+        head += (f'<div class="pd-card__meta"><span class="pd-ico pd-ico--clock" aria-hidden="true"></span>'
+                 f'<span>{meta_html}</span></div>')
+    return head
+
+
+# ============================================================================
+# 표시 계층: 지도 무대 · 인스펙터 (명세 5.8·6.7절)
+# 숫자는 등록부 사실(곳 수·설비·지역)만 센다. 시뮬레이션 출력은 지도 무대에 넣지 않는다(J4: 추정 출력 합계가
+# 실측 수요보다 커서 첫 화면 신뢰를 깎는다). 출력 추정치는 지도 팝업과 발전 현황 탭에서만 '추정'으로 보인다.
+# ============================================================================
+
+class _MapThemeSync(MacroElement):
+    """컴포넌트가 iframe :root에 넣는 --background-color 밝기로 <html data-pd-theme>를 정한다(1초 간격).
+
+    테마 판단을 iframe 안에서 하므로 지도 JS가 테마에 따라 바뀌지 않아 iframe이 다시 마운트되지 않고,
+    ⋮ → Settings로 테마를 바꾸면 다음 전체 실행을 기다리지 않고 타일 필터가 따라간다(명세 J14).
+    지도 변수를 쓰지 않으므로 st_folium이 지도 변수 이름을 map_div로 바꿔도 영향이 없다.
+    """
+    _template = Template(r"""
+{% macro script(this, kwargs) %}
+(function () {
+  function mode() {
+    var v = getComputedStyle(document.documentElement).getPropertyValue("--background-color").trim();
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(v), r, g, b;
+    if (m) { r = parseInt(m[1], 16); g = parseInt(m[2], 16); b = parseInt(m[3], 16); }
+    else { m = /(\d+)\D+(\d+)\D+(\d+)/.exec(v); if (!m) { return "light"; } r = +m[1]; g = +m[2]; b = +m[3]; }
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128 ? "dark" : "light";
+  }
+  function apply() { var t = mode(); if (document.documentElement.dataset.pdTheme !== t) { document.documentElement.dataset.pdTheme = t; } }
+  apply(); setInterval(apply, 1000);
+})();
+{% endmacro %}
+""")
+
+
+def _html_marker(kind: str, capacity_mw: float, label: str = "") -> Tuple[str, int]:
+    """지도 기호 SVG와 DivIcon 칸 크기를 돌려준다(명세 6.7절 J8).
+
+    모양(풍력 원·태양광 사각·ESS 마름모·화력 삼각)으로도 유형을 구분해 색만으로 유형을 전하지 않는다.
+    크기는 등록부 설비용량이다: 시뮬레이션 출력으로 정하면 60초마다 기호 크기가 흔들려 추정값이 사실처럼 보인다.
+    채움은 SERIES 계열 색, 외곽선은 iframe 테마 글자색이다. 라이트 바다 위 채움은 3:1에 못 미치므로 외곽선이
+    경계 대비를 맡는다(명세 3.5절 H). iframe 안 Leaflet DOM이라 st.html과 달리 인라인 SVG가 지워지지 않는다.
+
+    Args:
+        kind: 'wind'·'solar'·'ess'·'thermal'.
+        capacity_mw: 설비용량(MW). 유한수가 아니거나 음수면 가장 작은 기호가 된다.
+        label: 화면 읽기 프로그램이 읽을 이름(이스케이프한 HTML). 비우면 SVG를 숨긴다.
+
+    Returns:
+        (SVG HTML, 칸 크기 px). 칸은 터치 대상이라 최소 24px이다.
+
+    Raises:
+        ValueError: 알 수 없는 kind. 모양 없는 기호가 조용히 그려지지 않게 한다.
+    """
+    shapes = {
+        "wind": '<circle cx="12" cy="12" r="10.5"/>',
+        "solar": '<rect x="2" y="2" width="20" height="20" rx="2.5"/>',
+        "ess": '<path d="M12 1.5 22.5 12 12 22.5 1.5 12z"/>',
+        "thermal": '<path d="M12 2.5 22.5 21h-21z"/>',
+    }
+    if kind not in shapes:
+        raise ValueError(f"알 수 없는 발전 유형: {kind!r}")
+    capacity = float(capacity_mw) if _finite_number(capacity_mw) else 0.0
+    size = int(round(min(28, max(10, 6.4 + 1.5 * np.sqrt(max(capacity, 0.0))))))
+    box = max(24, size)
+    # CSS 변수는 SVG 표현 속성에 쓸 수 없고 style에서만 풀리므로 채움·외곽선을 style로 준다
+    style = (f"fill:{SERIES[kind]};stroke:var(--text-color);stroke-width:1.25;stroke-opacity:.8;"
+             "vector-effect:non-scaling-stroke")
+    a11y = f'role="img" aria-label="{label}"' if label else 'aria-hidden="true"'
+    svg = (f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" {a11y} style="display:block;overflow:visible">'
+           + shapes[kind].replace("/>", f' style="{style}"/>') + "</svg>")
+    return svg, box
+
+
+def _fmt_region(address: object) -> str:
+    """주소 앞부분으로 행정시를 정한다(명세 5.8절). 추측해 넣지 않으므로 그 밖은 '미상'이다."""
+    text = address.strip() if isinstance(address, str) else ""
+    if text.startswith("제주시"):
+        return "제주시"
+    if text.startswith("서귀포시"):
+        return "서귀포시"
+    return "미상"
+
+
+def _fmt_registry_summary(plants_df: pd.DataFrame, registry: Optional[Dict], region: str = "전체") -> Dict:
+    """인스펙터·지도 머리·범례·callout이 쓰는 등록부 사실 숫자를 한 곳에서 센다(명세 5.8절, G13).
+
+    plants_df는 get_jeju_power_plants 결과(운영중만, 분산형 합산값 제외)이고, 지역은 _fmt_region(address)로 나눈다.
+    registry(load_power_plants_data 결과)에서는 지도에서 빠진 항목(운영중이 아닌 곳)과 지도 밖 자원
+    (분산형 태양광 합산값, HVDC 연계)만 센다. 출력·이용률 같은 시뮬레이션 값은 세지 않는다(J4).
+
+    Args:
+        plants_df: 발전소 표. type·capacity·address·id 열을 쓴다(address가 없으면 모두 '미상').
+        registry: 등록부 dict. dict가 아니면 등록부 항목 숫자는 None·0·빈 값으로 둔다.
+        region: '전체'·'제주시'·'서귀포시'.
+
+    Returns:
+        selected·total·regions(제주시·서귀포시·미상) 묶음(각 count·mw·by_type{유형: count·mw}),
+        excluded(상태별 count·mw)와 excluded_note("건설중 2곳·165 MW"), distributed_mw·distributed_sites,
+        hvdc_count·hvdc_mw, fallback(등록부를 못 읽어 예비 목록인지).
+
+    Raises:
+        ValueError: region이 위 세 값이 아닐 때(선택지 오타가 '전체' 숫자로 조용히 바뀌지 않게).
+    """
+    if region not in ("전체", "제주시", "서귀포시"):
+        raise ValueError(f"알 수 없는 지역: {region!r}")
+    kinds = ("wind", "solar", "ess", "thermal")
+    df = plants_df if isinstance(plants_df, pd.DataFrame) else pd.DataFrame()
+    types = df["type"] if "type" in df.columns else pd.Series("", index=df.index)
+    caps = (pd.to_numeric(df["capacity"], errors="coerce").fillna(0.0) if "capacity" in df.columns
+            else pd.Series(0.0, index=df.index))
+    regions = df["address"].map(_fmt_region) if "address" in df.columns else pd.Series("미상", index=df.index)
+
+    def block(mask: pd.Series) -> Dict:
+        return {
+            "count": int(mask.sum()),
+            "mw": float(caps[mask].sum()),
+            "by_type": {kind: {"count": int((mask & (types == kind)).sum()),
+                               "mw": float(caps[mask & (types == kind)].sum())} for kind in kinds},
+        }
+
+    total = block(pd.Series(True, index=df.index))
+    by_region = {name: block(regions == name) for name in ("제주시", "서귀포시", "미상")}
+
+    reg = registry if isinstance(registry, dict) else {}
+    excluded: Dict[str, Dict] = {}
+    for key in ("wind_farms", "solar_farms", "ess_facilities", "thermal_plants"):
+        items = reg.get(key)
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict) or item.get("subtype") == "distributed":
+                continue
+            status = str(item.get("status") or "상태 미상").strip()
+            if status == "운영중":
+                continue
+            entry = excluded.setdefault(status, {"count": 0, "mw": 0.0})
+            entry["count"] += 1
+            entry["mw"] += float(item["capacity_mw"]) if _finite_number(item.get("capacity_mw")) else 0.0
+    # 165.0 MW처럼 정수면 "165 MW", 아니면 소수 1자리(명세 4.2절 "건설중 2곳·165 MW 제외")
+    excluded_note = " · ".join(
+        f'{status} {e["count"]}곳·' + (f'{e["mw"]:,.0f}' if abs(e["mw"] - round(e["mw"])) < 0.05 else f'{e["mw"]:,.1f}')
+        + " MW" for status, e in excluded.items())
+
+    solar_items = reg.get("solar_farms") if isinstance(reg.get("solar_farms"), list) else []
+    distributed = next((s for s in solar_items if isinstance(s, dict) and s.get("subtype") == "distributed"), None)
+    distributed_mw = (float(distributed["capacity_mw"])
+                      if distributed is not None and _finite_number(distributed.get("capacity_mw")) else None)
+    # 개소 수는 등록부에 숫자 칸이 없고 운영사 문구 "다수 (1,620개소)"에만 있다
+    sites = re.search(r"([\d,]+)\s*개소", str(distributed.get("operator") or "")) if distributed is not None else None
+    hvdc_items = reg.get("hvdc_links") if isinstance(reg.get("hvdc_links"), list) else []
+    hvdc = [h for h in hvdc_items if isinstance(h, dict) and h.get("status") == "운영중"]
+    ids = df["id"].astype(str) if "id" in df.columns else pd.Series("", index=df.index, dtype=str)
+    return {
+        "selected": total if region == "전체" else by_region[region],
+        "total": total,
+        "regions": by_region,
+        "excluded": excluded,
+        "excluded_note": excluded_note,
+        "distributed_mw": distributed_mw,
+        "distributed_sites": int(sites.group(1).replace(",", "")) if sites else None,
+        "hvdc_count": len(hvdc),
+        "hvdc_mw": float(sum(float(h["capacity_mw"]) for h in hvdc if _finite_number(h.get("capacity_mw")))),
+        "fallback": bool(ids.str.startswith("fallback_").any()),
+    }
+
+
+def _fmt_registry_ref(registry: Optional[Dict]) -> str:
+    """등록부 기준일 문구 "등록부 2024년 기준 · 2025-12-18 갱신"(metadata.data_reference·last_updated)."""
+    meta = registry.get("metadata") if isinstance(registry, dict) else None
+    meta = meta if isinstance(meta, dict) else {}
+    reference = str(meta.get("data_reference") or "").strip()
+    basis = re.search(r"\d{4}년\s*기준", reference)
+    updated = str(meta.get("last_updated") or "").strip()
+    parts = [p for p in ((basis.group(0) if basis else reference), (f"{updated} 갱신" if updated else "")) if p]
+    return "등록부 " + " · ".join(parts) if parts else "등록부 기준일 확인 불가"
+
+
+def _fmt_registry_sources(registry: Optional[Dict]) -> str:
+    """등록부 metadata.sources를 " · "로 그대로 잇는다(없으면 빈 문자열).
+
+    함수 docstring에만 있는 출처(한국에너지공단·thewindpower.net)는 등록부 JSON에 없으므로 쓰지 않는다(명세 5.8절).
+    """
+    meta = registry.get("metadata") if isinstance(registry, dict) else None
+    sources = meta.get("sources") if isinstance(meta, dict) else None
+    if not isinstance(sources, list):
+        return ""
+    return " · ".join(str(s).strip() for s in sources if str(s).strip())
+
+
+def _html_map_head(plants_df: pd.DataFrame, registry: Optional[Dict]) -> str:
+    """지도 무대 머리(명세 5.8절): '발전소 지도' + 운영중 곳 수·설비(건설중 제외 표기) + 등록부 칩."""
+    summary = _fmt_registry_summary(plants_df, registry, "전체")
+    total = summary["total"]
+    title = '<span class="pd-ico pd-ico--map" aria-hidden="true"></span>발전소 지도'
+    if summary["fallback"]:
+        return _html_card_head(title, f'예비 목록 {total["count"]}곳 · 등록부를 읽지 못함',
+                               _html_chip("est", "예비 목록 · 등록부 아님"), "")
+    note = f' ({summary["excluded_note"]} 제외)' if summary["excluded_note"] else ""
+    return _html_card_head(title, f'운영중 {total["count"]}곳 · 설비 {total["mw"]:,.1f} MW{note}',
+                           _html_chip("measured", "위치·설비 등록부"), "")
+
+
+def _html_map_legend(plants_df: pd.DataFrame) -> str:
+    """지도 밖 범례(명세 5.8절): 유형별 기호·곳 수·설비 + 기호 크기 읽는 법.
+
+    옛 지도 안 고정 범례는 iframe을 줄이면 지도를 가렸고 화력이 빠져 있었다(D7). 기호는 지도와 같은 모양의
+    CSS 도형이고 색은 SERIES 인라인 --c라 지도·범례·표가 같은 색이다(F5).
+    """
+    by_type = _fmt_registry_summary(plants_df, None, "전체")["total"]["by_type"]
+    items = (("wind", "풍력"), ("solar", "태양광"), ("ess", "ESS"), ("thermal", "화력"))
+    cells = "".join(
+        f'<span class="pd-maplegend__item"><span class="pd-mkey pd-mkey--{kind}" style="--c:{SERIES[kind]}" '
+        f'aria-hidden="true"></span><b>{name}</b>{by_type[kind]["count"]}곳 · {by_type[kind]["mw"]:,.1f} MW</span>'
+        for kind, name in items
+    )
+    return ('<div class="pd-maplegend" role="group" aria-label="발전소 지도 범례">' + cells
+            + '<span class="pd-maplegend__note">기호 크기 = 설비용량 (예: 1 · 30 · 240 MW) · 목록은 발전 현황 탭</span>'
+            + '</div>')
+
+
+def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: str) -> str:
+    """지역 인스펙터(명세 5.8절): 경로 · 통계 3칸 · 지역 표 · 지도 밖 자원 · 출처.
+
+    등록부 사실만 보인다(J4: 시뮬레이션 출력·이용률·0–24시 출력 막대를 넣지 않는다). 지역을 고르면 통계가
+    그 지역 값이 되고 표의 그 행에 aria-current와 강조색을 준다. 지도 시점은 바꾸지 않는다(지도를 다시
+    마운트하지 않게, 지역 확대는 10장 후속 L1).
+    """
+    summary = _fmt_registry_summary(plants_df, registry, region)
+    selected, total = summary["selected"], summary["total"]
+    kinds = (("wind", "풍력"), ("solar", "태양광"), ("ess", "ESS"), ("thermal", "화력"))
+    src = "예비 목록" if summary["fallback"] else "등록부"
+
+    def bar(block: Dict) -> str:
+        """유형별 설비 비중 100% 막대. 색만으로 읽지 않게 비중 글자를 aria-label·title로 함께 둔다."""
+        parts = [(kind, name, block["by_type"][kind]["mw"] / block["mw"] * 100) for kind, name in kinds
+                 if block["mw"] > 0 and block["by_type"][kind]["mw"] > 0]
+        text = " · ".join(f"{name} {pct:.0f}%" for _, name, pct in parts) or "설비 없음"
+        spans = "".join(f'<span style="width:{pct:.1f}%;--c:{SERIES[kind]}"></span>' for kind, _, pct in parts)
+        return f'<span class="pd-bar" role="img" aria-label="설비 구성 {text}" title="{text}">{spans}</span>'
+
+    def row(name: str, block: Dict, current: bool, child: bool) -> str:
+        cls = ' class="pd-insp__child"' if child else ""
+        cur = ' aria-current="true"' if current else ""
+        return (f'<tr{cls}{cur}><td>{name}</td><td class="pd-num">{block["count"]}</td>'
+                f'<td class="pd-num">{block["mw"]:,.1f}</td><td class="pd-insp__mix">{bar(block)}</td></tr>')
+
+    rows = [row("제주도 전체", total, region == "전체", False)]
+    for name in ("제주시", "서귀포시", "미상"):
+        block = summary["regions"][name]
+        if name == "미상" and block["count"] == 0:
+            continue  # 주소로 지역을 못 정한 곳이 있을 때만 보인다(추측해 넣지 않는다)
+        rows.append(row(name, block, region == name, True))
+    dist_mw, dist_sites = summary["distributed_mw"], summary["distributed_sites"]
+    dist_mw_text = f"{dist_mw:,.1f}" if dist_mw is not None else "—"
+    dist_sites_cell = f"{dist_sites:,}개소" if dist_sites is not None else "—"
+    hvdc_count, hvdc_mw = summary["hvdc_count"], summary["hvdc_mw"]
+    rows.append('<tr class="pd-insp__sect"><td colspan="4">지도 밖 자원</td></tr>')
+    rows.append(f'<tr class="pd-insp__child"><td>분산형 태양광</td><td class="pd-num">{dist_sites_cell}</td>'
+                f'<td class="pd-num">{dist_mw_text}</td><td class="pd-insp__note">위치 없음</td></tr>')
+    rows.append(f'<tr class="pd-insp__child"><td>HVDC 연계</td>'
+                f'<td class="pd-num">{f"{hvdc_count}회선" if hvdc_count else "—"}</td>'
+                f'<td class="pd-num">{f"{hvdc_mw:,.1f}" if hvdc_count else "—"}</td>'
+                f'<td class="pd-insp__note">육지 연계 · 송전량 실측 미연동</td></tr>')
+    table = ('<table class="pd-insp__table" aria-label="지역별 발전소 등록부 요약"><thead><tr>'
+             '<th scope="col">지역</th><th scope="col" class="pd-num">발전소</th>'
+             '<th scope="col" class="pd-num">설비 MW</th><th scope="col" class="pd-insp__mix">설비 구성</th>'
+             '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>')
+
+    if region == "전체":
+        unit = "<small>MW</small>" if dist_mw is not None else ""
+        third = (f'<div class="pd-stat"><span class="pd-stat__label">지도 밖 분산형 태양광</span>'
+                 f'<span class="pd-stat__value pd-num">{dist_mw_text}{unit}</span>'
+                 f'<span class="pd-stat__src">{dist_sites_cell if dist_sites is not None else "개소 수 미제공"} · 위치 없음'
+                 '</span></div>')
+    else:
+        mix = " · ".join(f'{name} {selected["by_type"][kind]["count"]}' for kind, name in kinds)
+        third = (f'<div class="pd-stat"><span class="pd-stat__label">유형 구성 (곳)</span>'
+                 f'<span class="pd-stat__value pd-stat__value--text">{mix}</span>'
+                 f'<span class="pd-stat__src">{src}</span></div>')
+    stats = (f'<div class="pd-stat"><span class="pd-stat__label">발전소</span>'
+             f'<span class="pd-stat__value pd-num">{selected["count"]}<small>곳</small></span>'
+             f'<span class="pd-stat__src">{src}</span></div>'
+             f'<div class="pd-stat"><span class="pd-stat__label">설비용량</span>'
+             f'<span class="pd-stat__value pd-num">{selected["mw"]:,.1f}<small>MW</small></span>'
+             f'<span class="pd-stat__src">{src}</span></div>' + third)
+
+    crumb = (f'<div class="pd-insp__crumb"><span>제주도</span><span class="pd-ico pd-ico--chev" aria-hidden="true">'
+             f'</span><b>{region}</b><span class="pd-insp__ref">{html_escape(_fmt_registry_ref(registry))}</span></div>')
+    notice = (f'<p class="pd-insp__notice">등록부를 읽지 못해 예비 목록 {total["count"]}곳만 표시합니다</p>'
+              if summary["fallback"] else "")
+    sources = html_escape(_fmt_registry_sources(registry))
+    foot = (f'<p class="pd-insp__foot">출처 발전소 등록부{f"({sources})" if sources else ""} · '
+            '출력 추정치는 발전 현황 탭(시뮬레이션 · 실측 아님)</p>')
+    return (f'<div class="pd-insp"><div class="pd-insp__side">{crumb}{notice}<div class="pd-insp__stats">{stats}'
+            f'</div></div><div class="pd-insp__main">{table}{foot}</div></div>')
+
+
 # ============================================================================
 # 메인 대시보드
 # ============================================================================
@@ -2953,6 +3313,7 @@ def main():
     # 전체 실행 경로에서 쓰는 데이터만 읽는다. fragment는 각자 같은 캐시 함수를 다시 부른다(캐시 재사용)
     plants_df = get_jeju_power_plants()
     power_status = get_current_power_status()
+    registry = load_power_plants_data()                       # 캐시 재사용: 지도 밖 자원·등록부 기준일
     # SMP 탭은 6단계에서 live_smp fragment로 옮기기 전까지 전체 실행 경로의 값을 쓴다
     smp_data = get_smp_data()
     # 예측은 다른 앱과 같은 API 서버 모델 예측을 쓴다 (실패 시 기존 로컬 추정 유지)
@@ -3159,14 +3520,38 @@ def main():
                                       ":material/bolt: 발전 현황", ":material/insights: 분석"])
 
     with tab1:
-        # 메인 대시보드 탭 (GE Inertia 스타일)
+        # 지도 무대(지도 8/12 + 인스펙터 4/12, 명세 5.8절). 지도(st_folium)는 fragment 밖에 둔다:
+        # 안에 두면 60초마다 지도 JS가 바뀌어 iframe이 다시 마운트된다(N14)
+        with st.container(border=True, key="map_stage"):
+            with st.container(key="map_head"):
+                head_l, head_r = st.columns([3, 1], vertical_alignment="center")
+                with head_l:
+                    st.html(_html_map_head(plants_df, registry))
+                with head_r:
+                    show_heatmap = st.toggle("추정 출력 열지도", value=False, key="map_heatmap")
+            with st.container(key="map_body"):
+                map_col, insp_col = st.columns([8, 4], gap="medium")
+                with map_col:
+                    with st.container(key="map_col"):
+                        jeju_map = create_jeju_map(plants_df, show_heatmap)
+                        st_folium(jeju_map, height=480, use_container_width=True, returned_objects=[], key="jeju_map")
+                        st.html(_html_map_legend(plants_df))
+                        if show_heatmap:
+                            st.html(_html_chip("est", "열지도 = 시뮬레이션 추정 출력 · 실측 아님"))
+                with insp_col:
+                    map_region = st.segmented_control("지역", ["전체", "제주시", "서귀포시"], default="전체",
+                                                      key="map_region", label_visibility="collapsed") or "전체"
+                    st.html(_html_inspector(plants_df, registry, map_region))
+
+        # 수급 추이·게이지·계통 주파수는 5단계에서 card_supply(live_supply fragment)·status_row로 옮긴다
         col_chart, col_right = st.columns([3, 1])
 
         with col_chart:
             # 실시간 전력수급 현황 차트 (메인)
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             fig = create_realtime_power_chart()
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False},
+                            key="chart_supply")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_right:
@@ -3182,7 +3567,8 @@ def main():
                     color='#3b82f6',
                     suffix=' MW'
                 )
-                st.plotly_chart(demand_gauge, width="stretch")
+                st.plotly_chart(demand_gauge, theme="streamlit", width="stretch", config={"displayModeBar": False},
+                                key="gauge_demand")
 
             with gauge_col2:
                 # 예비율 게이지
@@ -3195,7 +3581,8 @@ def main():
                     suffix='%',
                     reserve=True
                 )
-                st.plotly_chart(reserve_gauge, width="stretch")
+                st.plotly_chart(reserve_gauge, theme="streamlit", width="stretch", config={"displayModeBar": False},
+                                key="gauge_reserve")
 
             # 계통 주파수는 시뮬레이션 값이라 실측 KPI 띠에서 내렸다(KPI 5장 → 4장, 고아 카드 해소).
             # 5단계에서 수급 상태 줄(status_row의 card_freq)로 옮기기 전까지 게이지 아래에 둔다
@@ -3206,12 +3593,6 @@ def main():
 <p class="pd-card__note">API 서버 시뮬레이션 값 (실측 아님) · 계통 실측 연동 전 참고용 · 정격 60 Hz · {power_status.get('pd_time', '조회 시각 미제공')}</p>
 </div>""", unsafe_allow_html=True)
 
-            # 하단: 제주도 지도
-            st.markdown('<div class="info-card-title" style="margin-top: 10px;">제주도 발전소 현황</div>', unsafe_allow_html=True)
-            show_heatmap = st.checkbox("히트맵", value=False, key="map_heatmap")
-            jeju_map = create_jeju_map(plants_df, show_heatmap)
-            st_folium(jeju_map, width=None, height=350, returned_objects=[])
-
     with tab2:
         # SMP 예측 탭
         col_chart, col_summary = st.columns([2, 1])
@@ -3220,7 +3601,7 @@ def main():
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### 24시간 SMP 예측")
             fig = create_smp_chart(smp_data)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False}, key="chart_smp")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_summary:
@@ -3276,14 +3657,15 @@ def main():
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### 전력 공급 구성 (시뮬레이션 추정)")
             fig = create_supply_donut(power_status)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False}, key="chart_mix")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_timeline:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### 시간대별 발전량 (시뮬레이션)")
             fig = create_generation_timeline(plants_df)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False},
+                            key="chart_timeline")
             st.markdown('</div>', unsafe_allow_html=True)
 
         # 발전소 상세 테이블
