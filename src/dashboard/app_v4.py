@@ -1623,23 +1623,39 @@ def create_smp_chart(smp_data: Dict) -> go.Figure:
     return fig
 
 
-def create_realtime_power_chart() -> go.Figure:
-    """제주 실시간 전력수급 현황 차트 (과거 12시간 + 미래 12시간 예측) - KPX 실시간 데이터 기반"""
-    now = datetime.now()
+def create_realtime_power_chart(demand_now: float, supply_now: float, demand_measured: bool,
+                                supply_measured: bool, *, now: Optional[datetime] = None,
+                                query_hhmm: str = "") -> go.Figure:
+    """수급 추이: 지난 12시간 · 다음 12시간 (명세 6.2절, N3·N4·J3·J5).
 
-    # KPX 실시간 데이터 (현재값) - 가장 중요한 데이터 소스
-    realtime_data = fetch_jeju_realtime()
-    current_demand = realtime_data.get('current_demand', 650) if realtime_data else 650
-    current_supply = realtime_data.get('supply_capacity', 1200) if realtime_data else 1200
-    data_source = "KPX 실시간" if realtime_data else "시뮬레이션"
+    곡선은 앱 내장 일간 패턴(get_load_pattern, 손으로 정한 구간 선형식)에 현재값을 맞춘 '추정 패턴'이다.
+    시간별 실측 이력을 주는 원천이 아직 없으므로(명세 10장 P2) 선은 모두 점선으로 그리고 이름에 '추정 패턴'을
+    붙인다. 실측일 수 있는 것은 현재 점 두 개뿐이고, 지금 잰 값이 아니면 빈 원과 '실측 아님' 툴팁으로 그린다.
+    EPSIS 자료가 아니므로 'EPSIS 패턴'이라고 쓰지 않는다. 고정 가정값 범위 띠는 통계 구간이 아니라서 그리지 않는다(J3).
 
-    # 시간 범위 생성
+    Args:
+        demand_now: 지금 수요(MW). 수요 KPI와 같은 power_status['demand']를 받아 두 숫자가 어긋나지 않게 한다(N3).
+        supply_now: 지금 공급능력(MW). power_status['total_supply'].
+        demand_measured: 수요 현재값이 지금 잰 KPX 값인지(_fmt_provenance ③⑦).
+        supply_measured: 공급능력 현재값이 KPX 조회값인지.
+        now: 화면 기준 시각(기본: 지금). 초 아래를 버려 같은 분·같은 입력이면 같은 그림이 된다.
+        query_hhmm: 실측 현재 점 툴팁에 쓰는 조회 시각(HH:MM). 관측 시각이 아니다(명세 7.3절).
+
+    Returns:
+        _chart_base를 적용한 그림. 현재값이 유한수가 아니면 안내 문장만 있는 빈 그림.
+    """
+    now = (now or datetime.now()).replace(second=0, microsecond=0)
+    # 5분 버킷 시드의 지역 난수: 전역 난수 상태를 바꾸지 않고, 위젯을 눌러 다시 그려도 5분 안에서는 곡선이 같다(N4).
+    # 버킷 경계는 KST 정각·5분 단위와 맞으므로 한 버킷 안에서는 30분 격자의 시(hour)도 바뀌지 않는다
+    rng = np.random.default_rng(int(now.timestamp() // 300))
+
+    # 시간 범위는 옛 차트와 같다: 과거 24점·미래 25점(30분 간격, 둘 다 지금 점을 포함)
     past_hours = pd.date_range(end=now, periods=24, freq='30min')
     future_hours = pd.date_range(start=now, periods=25, freq='30min')
 
     # ===== 일간 패턴 함수 (단일 진실 공급원) =====
     def get_load_pattern(hour: int) -> float:
-        """제주 전력 수요 일간 패턴 - 단일 함수로 통일"""
+        """제주 전력 수요 일간 패턴 - 단일 함수로 통일 (손으로 정한 구간 선형식, 실측·EPSIS 자료 아님)"""
         if 6 <= hour <= 9:
             return 0.9 + 0.1 * (hour - 6) / 3  # 아침 증가
         elif 9 <= hour <= 14:
@@ -1651,319 +1667,152 @@ def create_realtime_power_chart() -> go.Figure:
         else:
             return 0.85  # 심야
 
-    # ===== 태양광/풍력 발전량 계산 함수 =====
-    def get_solar_gen(hour: int) -> float:
-        """태양광 발전량 (MW) - 일출~일몰 사인파 패턴"""
-        if 6 <= hour <= 18:
-            return 150 * np.sin(np.pi * (hour - 6) / 12) * np.random.uniform(0.8, 1.0)
-        return 0
-
-    def get_wind_gen(hour: int) -> float:
-        """풍력 발전량 (MW) - 시간대별 변동"""
-        return 200 * (0.5 + 0.3 * np.sin(np.pi * hour / 24)) * np.random.uniform(0.7, 1.0)
-
-    # ===== 과거 실측 데이터 (KPX 실시간 값 기반 일간 패턴 적용) =====
-    actual_demand = []
-    actual_supply = []
-    actual_solar = []
-    actual_wind = []
-
-    # 현재 시간의 일간 패턴 계수 계산 (동일한 함수 사용)
-    current_hour = now.hour
-    current_pattern = get_load_pattern(current_hour)
-
-    # 기준 수요 (현재 실시간 값에서 패턴 제거)
-    base_demand = current_demand / current_pattern if current_pattern > 0 else current_demand
-    base_supply = current_supply / current_pattern if current_pattern > 0 else current_supply
-
-    for h in past_hours:
-        hour = h.hour
-        # 동일한 패턴 함수 사용
-        pattern = get_load_pattern(hour)
-
-        # 약간의 변동성 추가
-        noise = np.random.uniform(-0.02, 0.02)
-        demand = base_demand * pattern * (1 + noise)
-        supply = base_supply * pattern * (1 + noise * 0.5)
-
-        actual_demand.append(demand)
-        actual_supply.append(supply)
-        actual_solar.append(get_solar_gen(hour))
-        actual_wind.append(get_wind_gen(hour))
-
-    # 마지막 값을 현재 실시간 값으로 보정 (패턴이 동일하므로 점프 최소화)
-    actual_demand[-1] = current_demand
-    actual_supply[-1] = current_supply
-
-    # ===== 미래 예측 데이터 =====
-    forecast_demand = []
-    forecast_upper = []
-    forecast_lower = []
-    forecast_supply = []
-    forecast_solar = []
-    forecast_wind = []
-
-    for i, h in enumerate(future_hours):
-        hour = h.hour
-
-        if i == 0:
-            # 첫 번째 점은 현재 실측값 (연결)
-            demand = current_demand
-            supply = current_supply
-            uncertainty = 0
-            solar = actual_solar[-1] if actual_solar else get_solar_gen(hour)
-            wind = actual_wind[-1] if actual_wind else get_wind_gen(hour)
-        else:
-            # 동일한 패턴 함수 사용 (Single Source of Truth)
-            pattern = get_load_pattern(hour)
-
-            demand = base_demand * pattern
-            supply = base_supply * pattern
-            # 시간이 지날수록 불확실성 증가
-            uncertainty = 0.02 + (i * 0.003)
-            solar = get_solar_gen(hour)
-            wind = get_wind_gen(hour)
-
-        upper = demand * (1 + uncertainty)
-        lower = demand * (1 - uncertainty)
-
-        forecast_demand.append(demand)
-        forecast_upper.append(upper)
-        forecast_lower.append(lower)
-        forecast_supply.append(supply)
-        forecast_solar.append(solar)
-        forecast_wind.append(wind)
-
-    # ===== 예비 전력 계산 =====
-    actual_reserve = [s - d for s, d in zip(actual_supply, actual_demand)]
-    forecast_reserve = [s - d for s, d in zip(forecast_supply, forecast_demand)]
-
     fig = go.Figure()
+    if not (_finite_number(demand_now) and _finite_number(supply_now)):
+        # 현재값이 없으면 패턴의 기준을 정할 수 없다. 지어낸 기본값으로 곡선을 그리지 않는다
+        fig.add_annotation(text="수요·공급능력 현재값이 없어 곡선을 그리지 않습니다", x=0.5, y=0.5,
+                           xref="paper", yref="paper", showarrow=False)
+        _chart_base(fig, height=360)
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        return fig
 
-    # ===== 예측 신뢰구간 (미래 영역만) =====
+    # 현재값을 지금 시각의 패턴 계수로 나눠 기준값을 만들고, 시각마다 패턴을 곱한다
+    current_pattern = get_load_pattern(now.hour)
+    base_demand = demand_now / current_pattern if current_pattern > 0 else demand_now
+    base_supply = supply_now / current_pattern if current_pattern > 0 else supply_now
+
+    demand, supply = [], []
+    for h in past_hours:
+        pattern = get_load_pattern(h.hour)
+        noise = rng.uniform(-0.02, 0.02)  # 약간의 변동성 (5분 버킷 시드)
+        demand.append(base_demand * pattern * (1 + noise))
+        supply.append(base_supply * pattern * (1 + noise * 0.5))
+    # 지금 점은 현재값 그대로(과거 곡선의 끝 = 미래 곡선의 시작). 미래는 같은 패턴을 잇기만 한다(예측 모델 아님)
+    demand[-1], supply[-1] = demand_now, supply_now
+    for h in future_hours[1:]:
+        pattern = get_load_pattern(h.hour)
+        demand.append(base_demand * pattern)
+        supply.append(base_supply * pattern)
+
+    # 과거와 미래를 한 trace로 잇는다(지금 점 한 번). 소수 1자리로 줄여 60초 fragment 전송량을 줄인다
+    xs = [t.to_pydatetime() for t in past_hours] + [t.to_pydatetime() for t in future_hours[1:]]
+    demand = [round(float(v), 1) for v in demand]
+    supply = [round(float(v), 1) for v in supply]
+    boundary = [round(v / 1.15, 1) for v in supply]  # 관심 경계: 예비율 15% = 공급능력 ÷ 1.15
+    end = xs[-1]
+
+    # 공급능력 → 수요 순서여야 수요의 fill="tonexty"가 두 선 사이(예비력)를 칠한다.
+    # 예비력 면은 4% + 빗금 8%로 연하게 둬서 점선이 빗금 위에서도 3:1을 넘는다(J5, 명세 3.5절 F표)
     fig.add_trace(go.Scatter(
-        x=list(future_hours) + list(future_hours)[::-1],
-        y=forecast_upper + forecast_lower[::-1],
-        fill='toself',
-        fillcolor='rgba(251, 191, 36, 0.2)',  # 노란색 (예측 구간)
-        line=dict(color='rgba(0,0,0,0)'),
-        name='예측 신뢰구간',
-        showlegend=True,
-        hoverinfo='skip'
+        x=xs, y=supply, mode="lines", name="공급능력 (추정 패턴)",
+        line=dict(color=SERIES["supply"], width=1.8, dash="dot"),
+        hovertemplate="%{y:,.0f} MW<extra>공급능력 · 추정 패턴</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=xs, y=demand, mode="lines", name="수요 (추정 패턴)",
+        line=dict(color=SERIES["demand"], width=2.4, dash="dot"),
+        fill="tonexty", fillcolor="rgba(22,163,74,0.04)",
+        fillpattern=dict(shape="/", fgcolor=SERIES["reserve"], fgopacity=0.08, size=10, solidity=0.12),
+        hovertemplate="%{y:,.0f} MW<extra>수요 · 추정 패턴</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=xs, y=boundary, mode="lines", name="관심 경계 (예비율 15%)",
+        line=dict(color=BOUNDARY_COLOR, width=1.2, dash="dash"),
+        hovertemplate="%{y:,.0f} MW<extra>관심 경계 · 공급능력 ÷ 1.15</extra>",
     ))
 
-    # ===== 과거 예비전력 (공급-수요 사이 음영) =====
-    fig.add_trace(go.Scatter(
-        x=list(past_hours) + list(past_hours)[::-1],
-        y=list(actual_supply) + list(actual_demand)[::-1],
-        fill='toself',
-        fillcolor='rgba(16, 185, 129, 0.25)',  # 초록색 음영
-        line=dict(color='rgba(0,0,0,0)'),
-        name='예비전력 (실측)',
-        showlegend=True,
-        hoverinfo='skip'
-    ))
+    # 현재 점: 지금 잰 값이면 채운 원(테두리 '#000038' = 카드 면이라 선 위에 떠 보인다), 아니면 빈 원(색 외 단서).
+    # 통합 툴팁에서 두 점이 함께 보이므로 <extra>에 어느 값인지와 출처를 함께 쓴다
+    for value, color, name, measured, below in (
+        (demand_now, SERIES["demand"], "수요 현재값", demand_measured, True),
+        (supply_now, SERIES["supply"], "공급능력 현재값", supply_measured, False),
+    ):
+        if measured:
+            source = f"KPX 실측 · 조회 {query_hhmm} KST" if query_hhmm else "KPX 실측"
+        else:
+            source = "추정 · 실측 아님"
+        fig.add_trace(go.Scatter(
+            x=[now], y=[value], mode="markers", name=name,
+            marker=dict(size=11, color=color, symbol="circle" if measured else "circle-open",
+                        line=dict(color="#000038" if measured else color, width=2)),
+            hovertemplate=f"%{{y:,.0f}} MW<extra>{name} · {source}</extra>",
+        ))
+        # 값 글자는 색을 주지 않아 '#000037'(두 테마 AA)을 따른다. 수요는 점 아래, 공급능력은 점 위에 두어
+        # 두 값이 가까워져도 글자끼리 멀어진다. 현재선 왼쪽에 두는 이유: 오른쪽 끝의 관심 경계 pill과
+        # 360~390px 폭에서 몇 px 간격까지 붙었다(S4 실측). 선이 글자를 지나가도 CSS 테두리(11절)로 읽힌다
+        fig.add_annotation(x=now, y=value, text=f"{value:,.0f} MW", showarrow=False, xanchor="right", xshift=-8,
+                           yanchor="top" if below else "bottom", yshift=-6 if below else 6)
 
-    # ===== 미래 예비전력 (공급-수요 사이 음영) =====
-    fig.add_trace(go.Scatter(
-        x=list(future_hours) + list(future_hours)[::-1],
-        y=list(forecast_supply) + list(forecast_demand)[::-1],
-        fill='toself',
-        fillcolor='rgba(16, 185, 129, 0.15)',  # 연한 초록색 음영
-        line=dict(color='rgba(0,0,0,0)'),
-        name='예비전력 (예측)',
-        showlegend=True,
-        hoverinfo='skip'
-    ))
+    # 현재선 '#000036'(getGray70)은 그래픽 3:1을 두 테마에서 넘는다. datetime 축에서
+    # add_vline(annotation_text=…)은 plotly 6.5 + pandas 2.3에서 TypeError라 pill은 주석으로 따로 단다(명세 6.1절)
+    fig.add_vline(x=now, line=dict(color="#000036", width=1.5))
+    fig.add_annotation(x=now, y=1, yref="paper", yanchor="bottom", showarrow=False,
+                       text=f"현재 {now:%H:%M} KST", bgcolor="#475569",
+                       font=dict(color="#FFFFFF", size=12), borderpad=4)    # 흰 글자 7.58:1
+    fig.add_vrect(x0=now, x1=end, fillcolor="#000036", opacity=0.06, line_width=0, layer="below")  # 미래 음영
+    # 관심 경계 pill: #B45309 위 흰 글자 5.02:1(명세 3.3절). 플롯 오른쪽 끝 안쪽에 붙여 390px에서도 안 잘린다
+    fig.add_annotation(x=end, y=boundary[-1], text="관심 경계 15%", showarrow=False, xanchor="right",
+                       yanchor="bottom", yshift=2, bgcolor=BOUNDARY_COLOR,
+                       font=dict(color="#FFFFFF", size=11), borderpad=3)
 
-    # 툴팁은 x 통합(_chart_base)이라 머리에 시각이 한 번 나온다. 그래서 줄마다 %{x}를 되풀이하지 않는다(명세 6.1절)
-    # ===== 과거 공급능력 =====
-    fig.add_trace(go.Scatter(
-        x=past_hours,
-        y=actual_supply,
-        mode='lines',
-        name='공급능력 (실측)',
-        line=dict(color='#10b981', width=2),
-        customdata=actual_reserve,
-        hovertemplate='공급능력: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 과거 실측 수요 =====
-    fig.add_trace(go.Scatter(
-        x=past_hours,
-        y=actual_demand,
-        mode='lines',
-        name='전력수요 (실측)',
-        line=dict(color='#3b82f6', width=3),
-        customdata=actual_reserve,
-        hovertemplate='실측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 미래 예측 공급능력 =====
-    fig.add_trace(go.Scatter(
-        x=future_hours,
-        y=forecast_supply,
-        mode='lines',
-        name='공급능력 (예측)',
-        line=dict(color='#10b981', width=2, dash='dot'),
-        customdata=forecast_reserve,
-        hovertemplate='예측 공급: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 미래 예측 수요 =====
-    fig.add_trace(go.Scatter(
-        x=future_hours,
-        y=forecast_demand,
-        mode='lines',
-        name='전력수요 (예측)',
-        line=dict(color='#fbbf24', width=3),
-        customdata=forecast_reserve,
-        hovertemplate='예측 수요: %{y:.1f} MW<br>예비전력: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 과거 태양광 발전 (스택 영역) =====
-    fig.add_trace(go.Scatter(
-        x=past_hours,
-        y=actual_solar,
-        mode='lines',
-        name='태양광 (실측)',
-        fill='tozeroy',
-        fillcolor='rgba(251, 191, 36, 0.4)',  # 노란색
-        line=dict(color='#fbbf24', width=1),
-        hovertemplate='태양광: %{y:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 과거 풍력 발전 (스택 영역) =====
-    fig.add_trace(go.Scatter(
-        x=past_hours,
-        y=[s + w for s, w in zip(actual_solar, actual_wind)],
-        mode='lines',
-        name='풍력 (실측)',
-        fill='tonexty',
-        fillcolor='rgba(59, 130, 246, 0.4)',  # 파란색
-        line=dict(color='#3b82f6', width=1),
-        customdata=actual_wind,
-        hovertemplate='풍력: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 미래 태양광 발전 (스택 영역) =====
-    fig.add_trace(go.Scatter(
-        x=future_hours,
-        y=forecast_solar,
-        mode='lines',
-        name='태양광 (예측)',
-        fill='tozeroy',
-        fillcolor='rgba(251, 191, 36, 0.25)',  # 연한 노란색
-        line=dict(color='#fbbf24', width=1, dash='dot'),
-        hovertemplate='태양광 예측: %{y:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 미래 풍력 발전 (스택 영역) =====
-    fig.add_trace(go.Scatter(
-        x=future_hours,
-        y=[s + w for s, w in zip(forecast_solar, forecast_wind)],
-        mode='lines',
-        name='풍력 (예측)',
-        fill='tonexty',
-        fillcolor='rgba(59, 130, 246, 0.25)',  # 연한 파란색
-        line=dict(color='#3b82f6', width=1, dash='dot'),
-        customdata=forecast_wind,
-        hovertemplate='풍력 예측: %{customdata:.1f} MW<extra></extra>'
-    ))
-
-    # ===== 현재 시점 표시 (중앙) =====
-    # 선은 '#000036'(getGray70, 그래픽 3:1 두 테마 통과). 빨강은 경보 전용이라 현재 표시에 쓰지 않는다(F5)
-    current_demand = actual_demand[-1]
-    y_min = min(min(actual_demand), min(forecast_lower)) * 0.95
-    y_max = max(max(actual_supply), max(forecast_upper)) * 1.05
-
-    fig.add_shape(
-        type="line",
-        x0=now, x1=now,
-        y0=y_min, y1=y_max,
-        line=dict(color='#000036', width=1.5, dash='dash'),
+    # 단위는 축 제목 대신 y 눈금 위에 둔다(와이어프레임 4.2절 'MW 1,600 ┤'). 축 제목은 회전 글자라 좁은 폭에서 자리를 먹는다
+    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4,
+                       text="MW", showarrow=False)
+    # 구간 설명은 플롯 안 글자 대신 카드 아래 시간 띠가 맡는다(명세 5.7절). Plotly 범례 대신 범례 겸 표(D5)
+    _chart_base(fig, height=360)
+    # 위를 15% 비워 공급능력 값 글자가 위 여백의 현재 pill과 겹치지 않게 한다. 0부터 그린다(rangemode tozero 기준)
+    y_top = max(max(supply), max(demand)) * 1.15
+    fig.update_layout(
+        yaxis=dict(tickformat=",", rangemode="tozero", range=[0, y_top]),
+        xaxis=dict(tickformat="%H:%M", hoverformat="%m-%d %H:%M"),  # 눈금 수는 축 길이에 맡긴다(명세 6.1절)
     )
-
-    # 현재 시점 라벨 (글자색은 _chart_base의 '#000037')
-    fig.add_annotation(
-        x=now,
-        y=y_max,
-        text="현재",
-        showarrow=False,
-        yshift=10
-    )
-
-    # 현재 값 주석: 바탕은 '#000038'(테마 배경 = 카드 면)이라 선 위에서도 글자가 두 테마 모두 읽힌다
-    fig.add_annotation(
-        x=now,
-        y=current_demand,
-        text=f"<b>{current_demand:.0f}</b> MW",
-        showarrow=True,
-        arrowhead=2,
-        arrowcolor='#000036',
-        bgcolor='#000038',
-        bordercolor='#000036'
-    )
-
-    # 제목·범례는 그림에 두지 않는다(5단계 카드 머리·범례 겸 표가 맡는다, D5). 단위는 그때까지 y축 제목으로 둔다
-    _chart_base(fig, height=450)
-    fig.update_xaxes(tickformat='%m/%d %H:%M')
-    fig.update_yaxes(title_text='전력 (MW)')
-
     return fig
 
 
 def create_gauge_chart(value: float, title: str, max_val: float = 100,
-                       color: str = '#3b82f6', suffix: str = '',
+                       color: str = '#3B82F6', suffix: str = '',
                        reserve: bool = False) -> go.Figure:
-    """Create a gauge chart, using low-value risk bands for reserve margins.
+    """게이지. 예비율은 낮을수록 위험한 구간색을 쓴다.
 
-    T7(test_v4_reserve_gauge)이 이 함수를 go만 있는 이름공간에서 실행하므로 _chart_base를 부르지 않고
-    리터럴만 쓴다. 글자색 '#000037'은 Streamlit 1.52.1 Plotly 테마 자리표시자(getGray90)라 두 테마에서 4.5:1을 넘는다.
+    T7(test_v4_reserve_gauge)이 이 함수를 go만 있는 이름공간에서 실행하므로
+    리터럴과 builtins만 쓴다. 글자색 '#000037'은 Streamlit 1.52.1 Plotly 테마의
+    자리표시자(getGray90: 라이트 #262730 / 다크 #FAFAFA)라 두 테마에서 4.5:1을 넘는다.
     """
     if reserve:
         # 예비율은 낮을수록 위험하며 표시 범위는 실제 값을 포함한다.
         low = min(0, value)
         max_val = max(max_val, value * 1.1)
         steps = [
-            {'range': [low, 10], 'color': 'rgba(239, 68, 68, 0.3)'},
-            {'range': [10, 15], 'color': 'rgba(245, 158, 11, 0.3)'},
-            {'range': [15, max_val], 'color': 'rgba(16, 185, 129, 0.3)'},
+            {'range': [low, 10], 'color': 'rgba(220, 38, 38, 0.22)'},
+            {'range': [10, 15], 'color': 'rgba(180, 83, 9, 0.22)'},
+            {'range': [15, max_val], 'color': 'rgba(22, 163, 74, 0.18)'},
         ]
         threshold = 10
     else:
         low = 0
         steps = [
-            {'range': [0, max_val * 0.5], 'color': 'rgba(30, 41, 59, 0.3)'},
-            {'range': [max_val * 0.5, max_val * 0.8], 'color': 'rgba(30, 41, 59, 0.2)'},
+            {'range': [0, max_val * 0.5], 'color': 'rgba(100, 116, 139, 0.10)'},
+            {'range': [max_val * 0.5, max_val * 0.8], 'color': 'rgba(100, 116, 139, 0.18)'},
         ]
         threshold = max_val * 0.9
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
-        number={'suffix': suffix, 'font': {'size': 20, 'color': '#000037'}},
-        title={'text': title, 'font': {'size': 14, 'color': '#000037'}},
+        number={'suffix': suffix, 'valueformat': '.1f' if reserve else ',.0f',
+                'font': {'size': 28, 'color': '#000037'}},
+        title={'text': title, 'font': {'size': 13, 'color': '#000037'}},
         gauge={
-            'axis': {'range': [low, max_val], 'tickfont': {'color': '#000037'}},
-            'bar': {'color': color},
-            'bgcolor': 'rgba(30, 41, 59, 0.5)',
+            'axis': {'range': [low, max_val], 'nticks': 6,
+                     'tickfont': {'size': 12, 'color': '#000037'}},
+            'bar': {'color': color, 'thickness': 0.6},
+            'bgcolor': 'rgba(100, 116, 139, 0.10)',
             'borderwidth': 0,
             'steps': steps,
-            'threshold': {
-                'line': {'color': '#ef4444', 'width': 2},
-                'thickness': 0.8,
-                'value': threshold
-            }
-        }
+            'threshold': {'line': {'color': '#DC2626', 'width': 2.5}, 'thickness': 0.85, 'value': threshold},
+        },
     ))
-
-    # 배경·템플릿은 Streamlit 테마에 맡긴다(테마 배경 = 카드 면). 끌기를 꺼야 모바일에서 손가락 스와이프가 페이지를 스크롤한다
-    fig.update_layout(
-        margin=dict(l=8, r=8, t=50, b=20),
-        height=200,
-        dragmode=False,
-    )
-
+    fig.update_layout(margin=dict(l=28, r=28, t=16, b=8), height=190, dragmode=False)
     return fig
 
 
@@ -2284,10 +2133,15 @@ PD_CSS_COMPONENTS = """
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-map_col) > [data-testid="stColumn"],
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp) > [data-testid="stColumn"],
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_mix) > [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important}
+  .st-key-map_col iframe{height:440px!important}
+}
+/* 상태 줄(수급 게이지 5 · 계통 상태 4 · 주파수 3)은 1365px 이하에서 2행 격자로 바꾼다(명세 기본값 1180px에서 조정).
+   3열이면 게이지 한 개 폭 = ((화면 − 128) × 5/12 − 56) ÷ 2라 1320px 미만에서 220px 아래로 내려가
+   28px 게이지 숫자가 호에 닿는다(S4 실측: 1280px에서 214px). 1366px 노트북은 3열(약 230px)을 유지한다 */
+@media (max-width:1365px){
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid){display:grid!important;grid-template-columns:1fr 1fr;gap:16px}
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid) > [data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:none!important}
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_grid) > [data-testid="stColumn"]:first-child{grid-column:1 / -1}
-  .st-key-map_col iframe{height:440px!important}
 }
 @media (max-width:1023px){
   .st-key-ex_zone [data-testid="stHorizontalBlock"]{flex-wrap:wrap}
@@ -2429,6 +2283,58 @@ PD_CSS_COMPONENTS = """
 [data-testid="stPlotlyChart"] .hoverlayer text,
 [data-testid="stPlotlyChart"] .indicatorlayer text.number,
 [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0;"]) text.annotation-text{fill:var(--pd-text-1)!important}
+/* ---- 11. 수급 추이 카드 · 상태 줄 (5단계, 명세 5.7·5.9절. 3장 토큰과 인라인 --c 계열 색만 쓴다) ---- */
+/* 범례 겸 표: 칸마다 견본 · 이름 · 읽는 법 | 현재값 · 값 출처. 1180px 이하 2칸, 640px 이하 1칸 */
+.pd-legend-table{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+.pd-legend-table__cell{display:flex;align-items:center;gap:10px;min-width:0;margin:0;padding:8px 10px;border-radius:10px;background:var(--pd-well);font-size:13px}
+.pd-legend-table__txt{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.35}
+.pd-legend-table__name{font-size:13px;font-weight:600;color:var(--pd-text-1)}
+.pd-legend-table__desc{font-size:12px;color:var(--pd-text-3)}
+.pd-legend-table__val{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;font-size:14px;font-weight:700;line-height:1.35;text-align:right;white-space:nowrap;color:var(--pd-text-1)}
+.pd-legend-table__val small{font-size:12px;font-weight:500;color:var(--pd-text-3)}
+@media (max-width:1180px){.pd-legend-table{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.pd-legend-table{grid-template-columns:1fr}}
+/* 견본 26px: 차트와 같은 선 모양(점선·대시)과 현재 점 모양(채운 원 = 지금 잰 값, 빈 원 = 실측 아님) */
+.pd-swatch{position:relative;flex:none;display:inline-block;width:26px;height:14px;border-radius:3px}
+.pd-swatch--line::before,.pd-swatch--dash::before{content:"";position:absolute;left:0;right:0;top:6px;border-top:2px dotted var(--c)}
+.pd-swatch--dash::before{border-top-style:dashed}
+.pd-swatch--line::after{content:"";position:absolute;left:8px;top:2px;width:10px;height:10px;box-sizing:border-box;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--pd-well)}
+.pd-swatch--line.is-open::after{background:var(--pd-well);border:2px solid var(--c)}
+.pd-swatch--hatch{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 55%,transparent) 0 2px,transparent 2px 5px);border:1px solid color-mix(in srgb,var(--c) 60%,transparent)}
+/* 시간 띠: 차트 아래에서 지난·지금·다음 구간의 뜻을 글로 밝힌다(C·EM 스크러버 이식). 640px 이하는 3줄 */
+.pd-timestrip{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;font-size:12px;line-height:1.4}
+.pd-timestrip__seg{display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px;padding:3px 10px;border-radius:8px;border:1.5px dotted var(--pd-border-strong);background:repeating-linear-gradient(135deg,var(--pd-est-stripe) 0 2px,transparent 2px 6px),var(--pd-est-bg);color:var(--pd-est-fg);text-align:center}
+.pd-timestrip__now{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:700;white-space:nowrap;color:var(--pd-text-1)}
+.pd-timestrip__dot{flex:none;width:9px;height:9px;box-sizing:border-box;border-radius:50%;background:currentColor}
+.pd-timestrip__dot.is-open{background:transparent;border:1.5px solid currentColor}
+@media (max-width:640px){.pd-timestrip{grid-template-columns:1fr}}
+.pd-card__foot{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
+/* 수급 차트의 바탕 없는 주석(현재값·단위)에 카드 면 색 테두리를 둘러 점선이 지나가도 읽히게 한다.
+   바탕 상자('#000038')는 테마 전환 뒤 이전 테마 색으로 남으므로(S3 실측) 쓰지 않고 토큰으로 칠한다 */
+.st-key-card_supply [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0;"]) text.annotation-text{paint-order:stroke;stroke:var(--pd-surface);stroke-width:4px;stroke-linejoin:round}
+/* 상태 줄 카드 3장은 같은 행에서 높이를 맞춘다(열 → 세로 블록 → 레이아웃 래퍼 → 카드, 1.52.1 DOM 실측).
+   1180px 이하 격자(6절)에서도 같은 행의 두 카드가 같은 높이가 된다 */
+.st-key-status_row [data-testid="stColumn"]>[data-testid="stVerticalBlock"]>[data-testid="stLayoutWrapper"]{flex:1 1 auto;display:flex;flex-direction:column}
+.st-key-status_row [data-testid="stLayoutWrapper"]>[class*="st-key-card_"]{flex:1 1 auto}
+/* 게이지 그림 폭 상한 340px(가운데 정렬): 높이가 190px로 고정이라(명세 6.4절) 폭이 약 350px를 넘으면 호가 높이에
+   맞춰 커져 꼭대기 눈금 글자가 그림 위로 잘린다(S4 실측: 1024px에서 451px 폭일 때 '60'이 svg 밖). 폭으로 크기가 정해지게 둔다 */
+.st-key-card_gauges [data-testid="stElementContainer"]:has([data-testid="stPlotlyChart"]){width:100%;max-width:340px;margin-inline:auto}
+/* 게이지 이름표: 그림 안 제목 대신 이름과 읽는 법을 HTML로 둔다(명세 6.4절 title='') */
+.pd-gauge-label{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}
+.pd-gauge-label__name{font-size:13px;font-weight:600;line-height:1.35;color:var(--pd-text-2)}
+.pd-gauge-label__how{font-size:12px;line-height:1.4;color:var(--pd-text-3)}
+/* 계통 상태: 예비율 단계 사다리(순서 척도라 4칸 같은 폭) + 다음 단계까지 여유 MW */
+.pd-grid-state{display:flex;flex-direction:column;gap:12px;min-width:0;color:var(--pd-text-2)}
+.pd-grid-state p{margin:0}
+.pd-ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0;padding:0;list-style:none}
+.pd-ladder__step{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;min-height:52px;margin:0;padding:6px 4px;border:1px solid transparent;border-radius:8px;font-size:13px;font-weight:600;line-height:1.3;text-align:center}
+.pd-ladder__step small{font-size:12px;font-weight:500;white-space:nowrap}
+/* 현재 칸만 단계 바탕·글자 + 테두리. 나머지는 well 바탕 text-3(상태 클래스보다 앞서게 선택자를 한 단계 높인다) */
+.pd-ladder .pd-ladder__step:not(.is-current){background:var(--pd-well);color:var(--pd-text-3)}
+.pd-ladder__step.is-current{border-color:currentColor;font-weight:700}
+.pd-grid-state__value{font-size:14px;line-height:1.5;color:var(--pd-text-2)}
+.pd-grid-state__value b{font-size:20px;font-weight:700;color:var(--pd-text-1)}
+@media (max-width:640px){.pd-grid-state__value b{font-size:17px}}
 """
 
 # 지도 iframe 머리에 넣는 CSS(명세 6.7절). 바깥 페이지 토큰은 iframe에 닿지 않으므로 Streamlit 컴포넌트가 iframe :root에
@@ -3303,6 +3209,198 @@ def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: s
 
 
 # ============================================================================
+# 표시 계층: 수급 추이 카드 · 상태 줄 (명세 5.7·5.9·6.2절)
+# 곡선은 추정 패턴이고 실측일 수 있는 것은 현재값뿐이다(N3). 자리마다 문구는 _fmt_provenance가 한 곳에서 정하고
+# 여기서는 그대로 쓴다. 숫자는 화면 KPI와 같은 반올림 정수로 계산해 보인 숫자끼리 맞게 한다.
+# ============================================================================
+
+def _html_card_foot(text: str) -> str:
+    """카드 각주(명세 5.7절): 원천 목록 + 화면 갱신 시각. 12px text-3.
+
+    text는 호출부가 만든 HTML이다(_fmt_provenance 문구는 외부 문자열을 이미 이스케이프했다).
+    """
+    return f'<p class="pd-card__foot">{text}</p>'
+
+
+def _html_supply_legend(power_status: Dict, prov: Dict) -> str:
+    """수급 차트의 범례 겸 표(명세 5.7절, Open Electricity 문법): 견본 · 이름 · 읽는 법 | 현재값 · 값 출처.
+
+    Plotly 범례 대신 이 표가 계열을 설명한다(D5). 견본은 차트와 같은 선 모양이고, 현재 점 모양도 같다
+    (채운 원 = 지금 잰 값, 빈 원 = 실측 아님). 지금 잰 값이 아니면 'KPX 조회'라는 말을 쓰지 않는다(7.2b절).
+    MW 차이·경계 여유는 화면에 보인 반올림 정수끼리 계산한다(보인 두 수의 차이와 맞게).
+    """
+    demand, supply = power_status.get("demand"), power_status.get("total_supply")
+    reserve_rate = power_status.get("reserve_rate")
+    d_mw = int(f"{demand:.0f}") if _finite_number(demand) else None
+    s_mw = int(f"{supply:.0f}") if _finite_number(supply) else None
+    b_mw = int(f"{supply / 1.15:.0f}") if s_mw is not None else None
+
+    def mw(value: Optional[int]) -> str:
+        return "—" if value is None else f"{value:,} MW".replace("-", "−")
+
+    query = f"조회 {prov['query_hhmm']} KST"
+    demand_src = {"measured": query, "stale": "EPSIS 파일 · 지연", "est": "추정 · 실측 아님",
+                  "sim": "시뮬레이션 · 실측 아님", "test": "테스트 값"}.get(prov["demand_state"], "확인 불가")
+    supply_src = query if prov["supply_measured"] else "추정 · 실측 아님"
+    if prov["reserve_state"] == "measured":
+        reserve_how = "KPX 값"
+    elif prov["reserve_state"] == "stale":
+        reserve_how = "EPSIS 파일 값 (지연)"
+    else:
+        reserve_how = prov["reserve_note"].lstrip(" ·") or "실측 아님"
+    reserve_val = mw(s_mw - d_mw if s_mw is not None and d_mw is not None else None)
+    if _finite_number(reserve_rate):
+        reserve_val += f" · {reserve_rate:.1f}%"
+    if b_mw is not None and d_mw is not None:
+        margin = b_mw - d_mw
+        margin_txt = f"여유 +{margin:,} MW" if margin >= 0 else f"경계보다 수요가 {-margin:,} MW 많음"
+    else:
+        margin_txt = "여유 계산 불가"
+
+    def cell(swatch: str, color: str, name: str, desc: str, value: str, src: str) -> str:
+        return (f'<li class="pd-legend-table__cell"><span class="pd-swatch {swatch}" style="--c:{color}" '
+                f'aria-hidden="true"></span><span class="pd-legend-table__txt">'
+                f'<span class="pd-legend-table__name">{name}</span><span class="pd-legend-table__desc">{desc}</span>'
+                f'</span><span class="pd-legend-table__val pd-num">{value}<small>{src}</small></span></li>')
+
+    cells = (
+        cell("pd-swatch--line" + ("" if prov["demand_measured"] else " is-open"), SERIES["demand"], "수요",
+             prov["legend_demand_note"], mw(d_mw), demand_src),
+        cell("pd-swatch--line" + ("" if prov["supply_measured"] else " is-open"), SERIES["supply"], "공급능력",
+             prov["legend_supply_note"], mw(s_mw), supply_src),
+        cell("pd-swatch--hatch", SERIES["reserve"], "예비력", f"공급능력 − 수요 (MW) · 예비율은 {reserve_how}",
+             reserve_val, "계산값"),
+        cell("pd-swatch--dash", BOUNDARY_COLOR, "관심 경계", f"공급능력 ÷ 1.15 · {margin_txt}", mw(b_mw), "계산값"),
+    )
+    return f'<ul class="pd-legend-table" aria-label="수급 추이 범례와 현재값">{"".join(cells)}</ul>'
+
+
+def _html_time_strip(prov: Dict) -> str:
+    """차트 아래 시간 띠(명세 5.7절, C·EM 스크러버 이식): 지난 12시간 · 지금 · 다음 12시간이 무엇인지 글로 밝힌다.
+
+    플롯 안에 구간 글자를 넣으면 좁은 폭에서 선·눈금과 겹치므로 여기서 말한다. 같은 뜻이 범례 겸 표·각주에도
+    있어 화면 읽기 프로그램에는 숨긴다. 가운데 칸은 prov['strip_now']의 첫 글자(● 실측 · ○ 그 밖)를 CSS 점으로 바꿔
+    칩 글리프와 같은 모양으로 그린다. 실측 이력·운영 예측이 연결되면(10장 P2·P3) 같은 자리의 문구만 바뀐다.
+    """
+    now_text = prov["strip_now"]
+    dot = ""
+    if now_text[:2] in ("● ", "○ "):
+        dot = ('<span class="pd-timestrip__dot" aria-hidden="true"></span>' if now_text[0] == "●"
+               else '<span class="pd-timestrip__dot is-open" aria-hidden="true"></span>')
+        now_text = now_text[2:]
+    seg = '<span class="pd-timestrip__seg"><span class="pd-glyph pd-glyph--est" aria-hidden="true"></span>{}</span>'
+    return ('<div class="pd-timestrip" aria-hidden="true">'
+            + seg.format("지난 12시간 · 일간 패턴 추정")
+            + f'<span class="pd-timestrip__now">{dot}<span>{now_text}</span></span>'
+            + seg.format("다음 12시간 · 패턴 연장 · 예측 모델 아님")
+            + '</div>')
+
+
+def _chart_table_supply(fig: go.Figure, now_label: str = "지금") -> pd.DataFrame:
+    """수급 차트의 '표로 보기'(명세 6.2절, J10): 30분 점을 하나씩 건너뛴 1시간 간격 표.
+
+    차트에 실제로 그린 값을 옮긴다(차트와 표가 어긋나지 않게). 지금 점을 기준으로 앞뒤 1시간마다 한 행씩 고르므로
+    과거 24점(지금 − 11.5시간부터)에서는 지금 − 11시간이 첫 행이다. 지금 행의 구분 칸에만 출처 상태 문구
+    (prov['strip_now'])를 쓴다.
+
+    Args:
+        fig: create_realtime_power_chart가 만든 그림.
+        now_label: 지금 행의 구분 칸 문구.
+
+    Returns:
+        열 시각 · 수요 (MW) · 공급능력 (MW) · 구분. 그림에 곡선이 없으면(현재값 없음) 빈 표.
+    """
+    columns = ["시각", "수요 (MW)", "공급능력 (MW)", "구분"]
+    traces = {t.name: t for t in fig.data}
+    demand, supply, point = (traces.get("수요 (추정 패턴)"), traces.get("공급능력 (추정 패턴)"),
+                             traces.get("수요 현재값"))
+    if demand is None or supply is None or point is None or not len(demand.x):
+        return pd.DataFrame(columns=columns)
+    xs = pd.to_datetime(list(demand.x))
+    now_x = pd.to_datetime(point.x[0])
+    now_i = int(np.argmin(np.abs((xs - now_x).total_seconds())))
+    rows = []
+    for i in range(now_i % 2, len(xs), 2):
+        kind = now_label if i == now_i else ("지난 추정 패턴" if i < now_i else "다음 추정 패턴")
+        rows.append([f"{xs[i]:%m-%d %H:%M}", int(f"{demand.y[i]:.0f}"), int(f"{supply.y[i]:.0f}"), kind])
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _fmt_supply_columns() -> Dict:
+    """수급 '표로 보기' 열 설정: MW 열에 천 단위 구분을 넣는다(F12).
+
+    st.dataframe의 정수 기본 형식은 구분 기호가 없다(S4 실측 '1651'). 글자로 바꾸면 오른쪽 정렬이 사라지므로
+    숫자 열 그대로 두고 브라우저 지역 형식('localized')을 쓴다.
+    """
+    return {
+        "수요 (MW)": st.column_config.NumberColumn(format="localized"),
+        "공급능력 (MW)": st.column_config.NumberColumn(format="localized"),
+    }
+
+
+def _html_gauge_label(name: str, how_to_read: str) -> str:
+    """게이지 위 이름표(명세 5.9절). 게이지 그림에는 제목을 넣지 않고(title='') 이름과 읽는 법을 HTML로 둔다."""
+    return (f'<div class="pd-gauge-label"><span class="pd-gauge-label__name">{name}</span>'
+            f'<span class="pd-gauge-label__how">{how_to_read}</span></div>')
+
+
+def _html_grid_state(power_status: Dict, level: Dict, prov: Dict) -> str:
+    """계통 상태 카드(명세 5.9절, B 이식, J6): 예비율 단계 사다리 + 다음 단계까지 수요 여유 MW.
+
+    같은 숫자를 네 번 되풀이하던 수급 표 대신 운영 판단에 쓰는 숫자 하나를 보인다.
+    여유 MW = 공급능력 ÷ 다음 경계비 − 수요(정상 → 관심 1.15, 관심 → 주의 1.10, 주의 → 위험 1.05).
+    경계 비율은 tests/test_dashboard.py의 5/10/15% 기준과 같다. 화면에 보인 반올림 정수끼리 계산한다.
+    예비율이 기본값·전국 값이면(reserve_known 거짓) 현재 칸을 강조하지 않고 단계를 판정하지 않는다고 쓴다
+    ('정상'·'넉넉'을 말하지 않는다, 7.2절). 사다리 4칸은 순서 척도라 같은 폭이다.
+    """
+    known = prov["reserve_known"]
+    steps = (("critical", "status-critical", "위험", "5% 미만"), ("danger", "status-danger", "주의", "5–10%"),
+             ("warning", "status-warning", "관심", "10–15%"), ("normal", "status-online", "정상", "15% 이상"))
+    items = []
+    for status, cls, name, band in steps:
+        if known and level["status"] == status:
+            items.append(f'<li class="pd-ladder__step {cls} is-current" aria-current="step">{name}<small>{band}</small></li>')
+        else:
+            items.append(f'<li class="pd-ladder__step {cls}">{name}<small>{band}</small></li>')
+
+    demand, supply = power_status.get("demand"), power_status.get("total_supply")
+    reserve_rate = power_status.get("reserve_rate")
+    rate_txt = f"{reserve_rate:.1f}%" if _finite_number(reserve_rate) else "—"
+    have_mw = _finite_number(demand) and _finite_number(supply)
+    if not known:
+        value = ("예비율 기본값이라 단계를 판정하지 않습니다" if prov["reserve_state"] == "default"
+                 else "전국 예비율이라 제주 단계를 판정하지 않습니다")
+    elif level["next_ratio"] is None:
+        value = f'<b class="pd-num">{rate_txt}</b> 예비율 · 위험 단계 · 예비율 5% 미만'
+    elif have_mw:
+        margin = int(f"{supply / level['next_ratio']:.0f}") - int(f"{demand:.0f}")
+        margin_txt = f"+{margin:,}" if margin >= 0 else f"−{-margin:,}"
+        value = (f'<b class="pd-num">{rate_txt}</b> 예비율 · <b class="pd-num">{margin_txt} MW</b> '
+                 f'{level["next_name"]} 단계까지 수요 여유')
+        if margin < 0:
+            value += " (두 값의 조회 시점이 다를 수 있음)"
+    else:
+        value = f'<b class="pd-num">{rate_txt}</b> 예비율 · 수요·공급능력 값이 없어 여유를 계산하지 않습니다'
+
+    # 각주는 값 줄이 쓴 경계를 풀어 쓴다. 위험 단계는 다음 경계가 없어 지나온 위험 경계를, 판정 안 함이면 관심 경계를 보인다
+    if known and level["next_ratio"] is not None:
+        ratio, bound = level["next_ratio"], level["next_name"]
+    elif known:
+        ratio, bound = 1.05, "위험"
+    else:
+        ratio, bound = 1.15, "관심"
+    if have_mw:
+        note = (f'{bound} 경계 {int(f"{supply / ratio:.0f}"):,} MW = 공급능력 {int(f"{supply:.0f}"):,} MW ÷ {ratio:.2f}'
+                f' · {prov["status_src"]}')
+    else:
+        note = prov["status_src"]
+    return (f'<div class="pd-grid-state">{_html_card_head("계통 상태", "", prov["grid_chip"], "")}'
+            f'<ol class="pd-ladder" aria-label="예비율 단계">{"".join(items)}</ol>'
+            f'<p class="pd-grid-state__value">{value}</p>'
+            f'<p class="pd-card__note">{note}</p></div>')
+
+
+# ============================================================================
 # 메인 대시보드
 # ============================================================================
 
@@ -3437,17 +3535,22 @@ def main():
     @st.fragment(run_every=run_every)
     def live_header():
         now = datetime.now()
-        power_status = dict(get_current_power_status())
-        if test_alert:
-            power_status['reserve_rate'] = test_reserve
-            power_status['data_source'] = '테스트 모드'
-        smp_data = get_smp_data()
-        backend_predictions = get_backend_smp_predictions()
-        if backend_predictions:
-            smp_data = {**smp_data, **backend_predictions}
-        weather = dict(get_weather_data())
-        api_kpis = fetch_backend_json("/api/v1/dashboard/kpis")
-        prov = _fmt_provenance(power_status, api_kpis, fetch_jeju_realtime(), now)
+        # 캐시가 만료된 실행에서는 st.cache_data가 진행 표시 자리를 지금 위치에 끼워 넣어 뒤 요소가 그만큼 밀린다.
+        # 60초 fragment가 둘 이상이면 이 fragment 실행은 '재실행으로 조기 종료'(script_finished 2)로 끝나고 1.52.1 화면은
+        # 그때 지난 실행의 요소를 지우지 않으므로, 밀린 실행 다음의 적중 실행에서 앱 바·상태 문장·KPI가 두 번 보였다(S4 실측).
+        # 데이터 읽기를 st.empty() 한 칸 안에서 해 진행 표시가 그 칸만 쓰게 하고, 화면 요소의 위치를 실행마다 같게 한다
+        with st.empty():
+            power_status = dict(get_current_power_status())
+            if test_alert:
+                power_status['reserve_rate'] = test_reserve
+                power_status['data_source'] = '테스트 모드'
+            smp_data = get_smp_data()
+            backend_predictions = get_backend_smp_predictions()
+            if backend_predictions:
+                smp_data = {**smp_data, **backend_predictions}
+            weather = dict(get_weather_data())
+            api_kpis = fetch_backend_json("/api/v1/dashboard/kpis")
+            prov = _fmt_provenance(power_status, api_kpis, fetch_jeju_realtime(), now)
         power_status.update(prov['display_keys'])      # pd_chip, pd_src_label, pd_state_class, pd_renew_time, pd_time
         # 기상 값이 앱 시뮬레이션이면(캐시 5분 동안 API 실패 시점의 값) API 출처 판정을 붙이지 않는다.
         # 붙이면 앱이 만든 값에 "API 기본값" 칩이 붙는다
@@ -3468,8 +3571,12 @@ def main():
         )
 
         st.html(_html_app_bar(power_status, smp_data, level, prov, auto_refresh))
+        # 경보 배너 자리도 st.empty()로 늘 만들어 요소 개수를 고정한다(위와 같은 이유: 배너가 조건부 요소면 배너가
+        # 사라지는 순간 뒤 요소가 한 칸씩 당겨지고 지난 KPI 줄이 남는다). 빈 자리는 공간을 차지하지 않고, 배너는 따로 된
+        # 요소라 글자가 같으면 DOM이 유지돼 role="alert"가 매분 다시 읽히지 않는다
+        alert_slot = st.empty()
         if level['show_alert']:
-            st.html(_html_alert_banner(level, prov))
+            alert_slot.html(_html_alert_banner(level, prov))
         st.html(_html_status_line(power_status, level, prov))
 
         with st.container(key="kpi_row"):
@@ -3543,55 +3650,71 @@ def main():
                                                       key="map_region", label_visibility="collapsed") or "전체"
                     st.html(_html_inspector(plants_df, registry, map_region))
 
-        # 수급 추이·게이지·계통 주파수는 5단계에서 card_supply(live_supply fragment)·status_row로 옮긴다
-        col_chart, col_right = st.columns([3, 1])
-
-        with col_chart:
-            # 실시간 전력수급 현황 차트 (메인)
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            fig = create_realtime_power_chart()
-            st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False},
-                            key="chart_supply")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col_right:
-            # 상단: 게이지 차트들
-            gauge_col1, gauge_col2 = st.columns(2)
-
-            with gauge_col1:
-                # 현재 수요 게이지
-                demand_gauge = create_gauge_chart(
-                    value=power_status['demand'],
-                    title='현재 수요 (MW)',
-                    max_val=1200,
-                    color='#3b82f6',
-                    suffix=' MW'
-                )
-                st.plotly_chart(demand_gauge, theme="streamlit", width="stretch", config={"displayModeBar": False},
-                                key="gauge_demand")
-
-            with gauge_col2:
-                # 예비율 게이지
-                reserve_color = '#10b981' if power_status['reserve_rate'] >= 15 else '#f59e0b' if power_status['reserve_rate'] >= 10 else '#ef4444'
-                reserve_gauge = create_gauge_chart(
-                    value=power_status['reserve_rate'],
-                    title='예비율 (%)',
-                    max_val=30,
-                    color=reserve_color,
-                    suffix='%',
-                    reserve=True
-                )
-                st.plotly_chart(reserve_gauge, theme="streamlit", width="stretch", config={"displayModeBar": False},
-                                key="gauge_reserve")
-
-            # 계통 주파수는 시뮬레이션 값이라 실측 KPI 띠에서 내렸다(KPI 5장 → 4장, 고아 카드 해소).
-            # 5단계에서 수급 상태 줄(status_row의 card_freq)로 옮기기 전까지 게이지 아래에 둔다
-            with st.container(border=True, key="card_freq"):
-                st.markdown(f"""<div class="pd-card-sim">
+        # 수급 추이 카드와 상태 줄(게이지 · 계통 상태 · 주파수)을 60초마다 다시 그린다(N12). 지도는 이 fragment 밖이다(N14).
+        # main() 안에 중첩 정의해야 회귀 테스트(ast.walk(main))가 게이지 할당과 주파수 카드를 찾는다
+        @st.fragment(run_every=run_every)
+        def live_supply():
+            now = datetime.now()
+            # 데이터 읽기를 한 칸 안에서 해 캐시 진행 표시가 화면 요소 위치를 밀지 않게 한다(live_header 주석과 같은 이유.
+            # 60초 fragment가 늘면 이 fragment 실행도 조기 종료로 끝날 수 있다)
+            with st.empty():
+                power_status = dict(get_current_power_status())
+                if test_alert:
+                    power_status['reserve_rate'] = test_reserve
+                    power_status['data_source'] = '테스트 모드'  # 빠지면 테스트 값에 '실측' 칩이 붙는다
+                prov = _fmt_provenance(power_status, fetch_backend_json("/api/v1/dashboard/kpis"), fetch_jeju_realtime(), now)
+            # 주파수 카드의 조회 시각(pd_time) 등 표시 키는 이 화면 전용 사본에만 넣는다(경보 발송 dict와 별개)
+            power_status.update(prov['display_keys'])
+            with st.container(border=True, key="card_supply"):
+                st.html(_html_card_head("수급 추이", "지난 12시간 · 다음 12시간", prov['supply_chips'], prov['supply_meta']))
+                st.html(_html_supply_legend(power_status, prov))
+                # 현재 점은 KPI와 같은 값으로 그린다(N3). now·조회 시각을 넘겨 pill·시간 띠·툴팁의 시각이 같게 한다
+                fig = create_realtime_power_chart(power_status['demand'], power_status['total_supply'],
+                                                  prov['demand_measured'], prov['supply_measured'],
+                                                  now=now, query_hhmm=prov['query_hhmm'])
+                st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False}, key="chart_supply")
+                st.html(_html_time_strip(prov))
+                with st.expander("표로 보기", icon=":material/table_view:"):
+                    supply_table = _chart_table_supply(fig, prov['strip_now'])  # 1시간 간격(명세 6.2절)
+                    st.dataframe(supply_table, hide_index=True, width="stretch",
+                                 height=(len(supply_table) + 1) * 35 + 3,  # 표 안 세로 스크롤 없음(N17)
+                                 column_config=_fmt_supply_columns())
+                st.html(_html_card_foot(prov['supply_foot']))
+            with st.container(key="status_row"):
+                c_gauge, c_grid, c_freq = st.columns([5, 4, 3], gap="medium")
+                with c_gauge:
+                    with st.container(border=True, key="card_gauges"):
+                        st.html(_html_card_head("수급 게이지", "", prov['demand_chips'], prov['demand_meta']))
+                        g1, g2 = st.columns(2, gap="small")
+                        with g1:
+                            st.html(_html_gauge_label("수요", "축 0–1,200 MW · 빨간 눈금 1,080 MW"))
+                            demand_gauge = create_gauge_chart(
+                                value=power_status['demand'], title='', max_val=1200, color='#3B82F6', suffix=' MW'
+                            )
+                            st.plotly_chart(demand_gauge, theme="streamlit", width="stretch",
+                                            config={"displayModeBar": False}, key="gauge_demand")
+                        with g2:
+                            st.html(_html_gauge_label("예비율", "빨강 10% 미만 · 호박 10–15% · 초록 15% 이상"))
+                            reserve_color = '#16A34A' if power_status['reserve_rate'] >= 15 else '#B45309' if power_status['reserve_rate'] >= 10 else '#DC2626'
+                            reserve_gauge = create_gauge_chart(
+                                value=power_status['reserve_rate'], title='', max_val=30, color=reserve_color,
+                                suffix='%', reserve=True
+                            )
+                            st.plotly_chart(reserve_gauge, theme="streamlit", width="stretch",
+                                            config={"displayModeBar": False}, key="gauge_reserve")
+                with c_grid:
+                    with st.container(border=True, key="card_grid"):
+                        st.html(_html_grid_state(power_status, _fmt_reserve_level(power_status['reserve_rate']), prov))
+                with c_freq:
+                    # 시뮬레이션 값이라 KPI 띠에서 내려 상태 줄 맨 끝에 둔다(명세 2.2·5.9절)
+                    with st.container(border=True, key="card_freq"):
+                        st.markdown(f"""<div class="pd-card-sim">
 <div class="pd-card__head"><span class="pd-card__title"><span class="pd-ico pd-ico--wave" aria-hidden="true"></span>계통 주파수</span><span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>시뮬레이션 · 실측 아님</span></div>
 <div class="pd-sim-value"><span class="pd-num">{power_status['frequency']:.2f}</span><span class="pd-kpi__unit">Hz</span></div>
 <p class="pd-card__note">API 서버 시뮬레이션 값 (실측 아님) · 계통 실측 연동 전 참고용 · 정격 60 Hz · {power_status.get('pd_time', '조회 시각 미제공')}</p>
 </div>""", unsafe_allow_html=True)
+
+        live_supply()
 
     with tab2:
         # SMP 예측 탭
