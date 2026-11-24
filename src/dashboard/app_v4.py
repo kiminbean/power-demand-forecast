@@ -1479,7 +1479,9 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         zoom_control="topleft", zoom_snap=0.25,
         scroll_wheel_zoom=False,                 # 데스크톱 휠은 페이지 스크롤
         dragging=JsCode("!window.matchMedia('(pointer: coarse)').matches"),  # 터치 기기만 끌기 끔 (J15)
-        max_bounds=True, min_lat=32.9, max_lat=33.9, min_lon=125.8, max_lon=127.3,
+        # 경계가 섬에 붙어 있으면 360~430px(지도 340px, 줌 8.75~9)에서 Leaflet autoPan이 막혀 팝업 27개 중 25~27개의 위쪽이
+        # 지도 틀 밖으로 잘렸다(5차 평가). 북·동·서로 넓혀 팝업을 지도 안으로 옮길 자리를 준다(12.2절 E7)
+        max_bounds=True, min_lat=32.9, max_lat=34.6, min_lon=125.6, max_lon=127.5,
         # folium 0.20은 tiles=None이면 min_zoom·max_zoom 인자를 기본 타일에만 넘기고 버린다(0단계 E3) → 지도 옵션으로 직접 준다
         **{"minZoom": 8, "maxZoom": 14},
     )
@@ -1503,6 +1505,8 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
     if any(token in PD_CSS_MAP for token in ("{#", "{{", "{%")):
         raise ValueError("PD_CSS_MAP에 Jinja 구문 문자('{#'·'{{'·'{%')가 있어 iframe CSS 일부가 사라진다")
     m.get_root().header.add_child(folium.Element("<style>" + PD_CSS_MAP + "</style>"))
+    # 다크 타일 색 행렬(PD_CSS_MAP이 url(#pd-tiles-dark)로 부른다). st_folium은 root html을 지도 스크립트보다 먼저 iframe에 넣는다
+    m.get_root().html.add_child(folium.Element(_html_map_tile_filter()))
 
     type_labels = {"solar": "태양광", "wind": "풍력", "ess": "ESS", "thermal": "화력"}
     subtype_labels = {
@@ -1533,9 +1537,10 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         subtype_raw = plant.get('subtype')
         subtype = subtype_labels.get(subtype_raw, subtype_raw) if isinstance(subtype_raw, str) and subtype_raw else ""
         type_text = f"{type_label} ({cell(subtype)})" if subtype else type_label
-        generation, utilization = plant.get('generation'), plant.get('utilization')
-        generation_text = f"≈{generation:.1f} MW" if _finite_number(generation) else "—"
-        utilization_text = f"{utilization:.1f}%" if _finite_number(utilization) else "—"
+        # 표와 같은 규칙(12.1절 E2): 설비를 넘는 추정 출력은 '설비 초과 · 모형 한계', 이용률은 '>100% · 모형 한계'
+        # (cap은 기호 크기용으로 결측을 0으로 채운 값이라 설비 초과 판정에는 원래 값을 넘긴다)
+        generation_text, utilization_text = _fmt_plant_estimate(plant.get('generation'), plant.get('capacity'),
+                                                                plant.get('utilization'))
         source_note = ("출처 예비 목록 (등록부를 읽지 못함)" if str(plant.get('id', '')).startswith('fallback_')
                        else f"출처 발전소 {cell(registry_ref)}")
         # 팝업 글자색은 iframe 테마 변수를 따른다(PD_CSS_MAP). 옛 9px #999 고지(2.85:1)를 12px로 바꿨다
@@ -1592,8 +1597,10 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
 
     # 명세 6.7 기본값([[33.10, 126.10], [33.66, 127.00]])은 위도 폭 0.56°가 880×480 칸에 줌 10으로 들어가지 않아(최대 0.55°)
     # 줌 9.75가 되고 섬이 칸 폭의 56%만 채웠다(1차 평가). 위도 폭 0.49°면 1440·1366·1280·1024·768px에서 줌 10(정수 줌이라
-    # 타일 이음선도 생기지 않는다), 390·430px에서 줌 9다. 등록부 기호 27곳(위도 33.164~33.556, 경도 126.163~126.923)이 모두 들어간다
-    m.fit_bounds(_fmt_MAP_HOME_BOUNDS)
+    # 타일 이음선도 생기지 않는다), 390·430px에서 줌 9다. 등록부 기호 27곳(위도 33.164~33.556, 경도 126.163~126.923)이 모두 들어간다.
+    # 1181px 이상에서는 지도 높이가 인스펙터를 따라 502~562px로 바뀌어(12.2절 E6) 열지도를 켜고 끌 때마다 줌이 10·10.25로
+    # 오갔다 → 기본 시점은 줌 10을 넘지 않는다(z10 타일을 늘리지 않아 글자가 흐려지지 않는다)
+    m.fit_bounds(_fmt_MAP_HOME_BOUNDS, max_zoom=_fmt_MAP_HOME_MAX_ZOOM)
     return m
 
 
@@ -2569,15 +2576,17 @@ PD_CSS_COMPONENTS = """
 .pd-bar{display:flex;width:100%;min-width:56px;height:8px;border-radius:4px;overflow:hidden;background:var(--pd-well)}
 .pd-bar>span{display:block;height:100%;background:var(--c)}
 .pd-insp__foot{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
-/* 1181px 이상(지도 | 인스펙터 두 열): 인스펙터를 지도 열 높이까지 채우고 '출처 발전소 등록부' 펼침을 맨 아래로 내린다(4차 평가
-   parity: 인스펙터가 지도·범례 바닥보다 약 110px 먼저 끝나 무대 오른쪽 아래가 빈 칸이었다). 두 열은 이미 같은 높이로 늘어나므로
-   (1.52.1 실측 align-items: stretch) 인스펙터 요소 칸만 남는 높이를 받게 한다. 좁은 폭(두 열이 쌓임)에는 걸지 않는다 */
+/* 1181px 이상(지도 | 인스펙터 두 열, 12.2절 E6): 인스펙터가 지도·범례보다 짧아 표와 출처 펼침 사이(5차, 펼침을 바닥으로
+   내린 4차 수정 뒤) 또는 인스펙터 아래(그 전)에 110~170px 빈 띠가 있었다. 지도 아래 범례(열지도 칩 포함)를 인스펙터의
+   출처 펼침 위로 옮기고(지도 열 범례는 화면 읽기·건너뛰기 도착점으로만 남김), 지도 칸이 두 열의 남는 높이를 받게 한다
+   (두 열은 align-items: stretch로 같은 높이, 1.52.1 실측). 지도는 480px 아래로 줄지 않는다 */
 @media (min-width:1181px){
-  .st-key-map_body [data-testid="stElementContainer"]:has(> [data-testid="stHtml"] > .pd-insp),
-  .st-key-map_body [data-testid="stHtml"]:has(> .pd-insp){flex:1 1 auto;display:flex;flex-direction:column}
-  .st-key-map_body .pd-insp,.st-key-map_body .pd-insp__main{flex:1 1 auto}
-  .st-key-map_body .pd-insp__foot{margin-top:auto}
+  .st-key-map_col [data-testid="stElementContainer"]:has(.pd-maplegend){position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .st-key-map_body [data-testid="stLayoutWrapper"]:has(> .st-key-map_col),
+  .st-key-map_col [data-testid="stElementContainer"]:has(iframe){flex:1 1 auto}
+  .st-key-map_col [data-testid="stElementContainer"]:has(iframe) > div,.st-key-map_col iframe{height:100%!important;min-height:480px}
 }
+@media (max-width:1180px){.pd-insp .pd-maplegend{display:none}}
 /* 무대가 세로로 쌓이는 폭(641~1180px)에서는 인스펙터를 한 단으로 두고 통계 3칸을 지역 표 위 한 줄에 놓는다(명세 5.8의
    2단 배치에서 바꿈): 2단이면 왼쪽 통계 단이 오른쪽 표보다 약 97px 먼저 끝나 빈 칸이 생겼다(2차 평가 1024). 한 단이면
    칸 폭이 넉넉해(641px에서 약 180px) 3칸이어도 '974.2 MW'가 넘치지 않는다. 640px 이하는 2칸 + 가로 전체 1칸 */
@@ -3007,14 +3016,14 @@ html,body,.leaflet-container{background:var(--background-color)}
 @media (min-height:240px){ #map_div{height:100vh!important}}
 .leaflet-container{color:var(--text-color);font-family:"Pretendard Variable",var(--font),-apple-system,"Apple SD Gothic Neo",sans-serif}
 /* 타일 필터(명세 6.7에서 조정, 2차 평가). 라이트는 대비를 .9 → .84로 낮춰 도로·뱃길 점선이 덜 튀게 했다(채도 중앙값 .036).
-   다크는 예전 필터가 한라산 숲을 올리브(색상 102°·채도 .18), 바다를 청록(191°)으로 남겨 남색 카드 위에서 탁해 보였다.
-   반전 뒤 회색으로 만들고 sepia → hue-rotate로 카드 남색 쪽(색상 약 225°, 카드 #121B31은 223°)에 채도 .066만 남긴다
-   (실측: 1440·390 타일 칸 채도 중앙값 .066 · 99분위 .071, build/r2fix/map). 반전이 지명을 밝은 글자로 바꾼다 */
+   다크는 SVG 색 행렬(_html_map_tile_filter, 12.3절 E10)이다. 반전 필터는 하늘색 바다보다 더 밝은 미색 육지를 더 어둡게 만들어
+   섬이 바다보다 어둡게 뒤집혀 읽혔다(5차 평가). CSS 필터 함수 조합으로는 '바다 = 카드 남색 · 섬은 그보다 밝게 · 지명은 밝게'를
+   함께 맞출 수 없었다(숲·바다 밝기가 거의 같아서, 조합 약 40만 개 탐색 0건) */
 .leaflet-tile-pane{filter:grayscale(.85) saturate(.6) brightness(1.05) contrast(.84)}
 /* 소수 줌(641px 9.75 · 640px 9.5 · 360px 8.75)에서 타일 사이 1px 밝은 이음선이 지도를 가로질렀다(1차 평가). OSM 타일(256px)을
    0.5px씩 겹쳐 틈을 덮는다(정수 줌에서는 0.2% 확대라 보이지 않는다, 1차 수정 때 360·640 다크 스크린샷으로 확인) */
 .leaflet-tile-container img.leaflet-tile{width:256.5px!important;height:256.5px!important}
-html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(.82) contrast(.85) sepia(.3) hue-rotate(190deg) saturate(1.2)}
+html[data-pd-theme="dark"] .leaflet-tile-pane{filter:url(#pd-tiles-dark)}
 .leaflet-control-attribution{font-size:12px;line-height:1.4;color:var(--text-color);background:color-mix(in srgb,var(--background-color) 85%,transparent)!important}
 /* Leaflet 1.9 출처 접두어의 국기 그림은 제품 화면과 어울리지 않는 장식이라 숨긴다. OSM 출처 표기는 그대로 둔다(G18) */
 .leaflet-attribution-flag{display:none!important}
@@ -3046,8 +3055,9 @@ html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) grayscale(1) brig
 .leaflet-marker-icon{transition:opacity .2s}
 @media (prefers-reduced-motion:reduce){.leaflet-marker-icon{transition:none}}
 /* 좁은 지도(iframe 640px 이하, 바깥 화면 약 700px 이하)에서는 기호 그림만 22% 줄여 타일 지명(서귀포시·대정 등)을 덜 가린다.
-   누르기 상자(최소 24px)는 그대로 둔다(2차 평가 390) */
-@media (max-width:640px){.leaflet-marker-icon.pd-mk svg{transform:scale(.78)}}
+   누르기 상자(최소 24px)는 그대로 둔다(2차 평가 390). 타일도 조금 흐리게 해 기호가 지명 위에 서게 한다(12.3절 E11,
+   다크 지명 글자 대비는 흐린 뒤에도 4.5:1 이상 — build/f5 실측) */
+@media (max-width:640px){.leaflet-marker-icon.pd-mk svg{transform:scale(.78)}.leaflet-tile-pane{opacity:.75}}
 .pd-callout-mk{background:none;border:0}
 .pd-callout{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--background-color);color:var(--text-color);border:1px solid var(--secondary-background-color);font-size:12px;line-height:1.35;white-space:nowrap}
 .pd-callout b{font-weight:700}
@@ -3057,11 +3067,15 @@ html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) grayscale(1) brig
 .pd-pop__title{margin:0 0 6px;font-size:14px;font-weight:700;line-height:1.3}
 .pd-pop table{width:100%;border-collapse:collapse}
 .pd-pop th{padding:2px 12px 2px 0;font-weight:500;text-align:left;white-space:nowrap;opacity:.8}
-.pd-pop td{padding:2px 0;font-weight:600;text-align:right}
+.pd-pop td{padding:2px 0;font-weight:600;text-align:right;word-break:keep-all;overflow-wrap:break-word}
 .pd-pop__note{margin:6px 0 0;font-size:12px;opacity:.8;border-top:1px solid var(--secondary-background-color);padding-top:4px}
+/* 팝업이 열린 동안 확대 버튼을 숨긴다: 컨트롤 층이 팝업보다 위라, 왼쪽 위로 autoPan된 팝업(1440 서쪽 기호 4곳, 390 대부분)의
+   글자 위에 버튼이 그려졌다(12.2절 E7) */
+.leaflet-container:has(.leaflet-popup) .leaflet-control-zoom{visibility:hidden}
 /* 좁은 지도(iframe 480px 이하)는 callout만 숨긴다. 축척 막대는 390에서도 보인다(11.3절 D11: 거리 감각을 주는 유일한 단서).
-   막대를 출처 표기 위 줄로 올려 둘이 같은 줄에서 겹치지 않게 한다 */
-@media (max-width:480px){.pd-callout{display:none}.leaflet-bottom.leaflet-left .leaflet-control-scale{margin-bottom:26px}}
+   막대를 출처 표기 위 줄로 올려 둘이 같은 줄에서 겹치지 않게 한다. 팝업은 지도 폭 안에 맞춘다(12.2절 E7) */
+@media (max-width:480px){.pd-callout{display:none}.leaflet-bottom.leaflet-left .leaflet-control-scale{margin-bottom:26px}
+  .leaflet-popup-content{max-width:calc(100vw - 62px)!important}}
 """
 
 
@@ -3900,9 +3914,47 @@ class _MapThemeSync(MacroElement):
     var x = document.querySelector(".leaflet-popup-close-button");
     if (x) { x.click(); }
   });
+  // 팝업이 열린 동안 같은 기호의 hover 툴팁이 남아 지명을 가렸다(5차 평가, 12.2절 E7). Leaflet 1.9.3은 기호 click에도 툴팁을
+  // 다시 여는 처리기를 걸어 두어 popupopen 때 닫아도 같은 click 안에서 다시 열린다 → 팝업이나 툴팁이 열릴 때마다 다음 차례에
+  // 팝업이 열려 있으면 툴팁을 닫는다. 이 스크립트는 기호보다 먼저 돌아 앞으로 만들어질 기호마다 이 처리기를 건다
+  L.Marker.addInitHook(function () {
+    this.on("popupopen tooltipopen", function () {
+      var marker = this;
+      setTimeout(function () { if (marker.isPopupOpen()) { marker.closeTooltip(); } }, 0);
+    });
+  });
+  // 열지도를 켠 채 다른 탭으로 가면 지도 iframe 크기가 0이 되고, 그때 창 크기가 바뀌면 leaflet.heat가 폭 0 캔버스에서
+  // getImageData를 불러 페이지 예외가 났다(5차 평가, 12.3절 E13). 지도 크기가 0이면 그리지 않는다(다시 보이면 resize가 그린다)
+  if (L.HeatLayer && !L.HeatLayer.prototype.pdGuarded) {
+    var redraw = L.HeatLayer.prototype._redraw;
+    L.HeatLayer.prototype._redraw = function () {
+      var size = this._map && this._map.getSize();
+      if (!size || !size.x || !size.y) { this._frame = null; return; }
+      return redraw.apply(this, arguments);
+    };
+    L.HeatLayer.prototype.pdGuarded = true;
+  }
 })();
 {% endmacro %}
 """)
+
+
+def _html_map_tile_filter() -> str:
+    """다크 지도 타일 색 행렬 필터(SVG feColorMatrix) 마크업(12.3절 E10). PD_CSS_MAP 다크 규칙이 url(#pd-tiles-dark)로 쓴다.
+
+    OSM 원색 네 개를 정한 자리로 옮기는 아핀 변환을 푼다(원색은 원본 타일 실측, 행렬은 sRGB에서 계산 — build/f5):
+    작은 지명 글자 심(회색 96) → 밝은 글자, 육지 → 바다보다 한 단 밝은 남색, 바다 → 카드 남색 #16213A,
+    숲(한라산) → 육지와 같은 단. 그 밖의 색(도로·경계선·안티에일리어싱 가장자리)은 같은 변환을 따라 섞인 비율대로 옮겨진다.
+    """
+    anchors = (((96, 96, 96), (241, 245, 250)), ((242, 239, 233), (36, 47, 72)),
+               ((170, 211, 223), (22, 33, 58)), ((173, 209, 158), (38, 52, 72)))
+    src = np.array([[r / 255, g / 255, b / 255, 1.0] for (r, g, b), _ in anchors])
+    dst = np.array([[r / 255, g / 255, b / 255] for _, (r, g, b) in anchors])
+    matrix = np.linalg.solve(src, dst).T  # 출력 채널마다 (R, G, B, 상수)
+    values = " ".join(f"{a:.4f} {b:.4f} {c:.4f} 0 {d:.4f}" for a, b, c, d in matrix) + " 0 0 0 1 0"
+    return ('<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">'
+            '<filter id="pd-tiles-dark" color-interpolation-filters="sRGB">'
+            f'<feColorMatrix type="matrix" values="{values}"/></filter></svg>')
 
 
 def _html_marker(kind: str, capacity_mw: float, label: str = "") -> Tuple[str, int]:
@@ -3934,13 +3986,20 @@ def _html_marker(kind: str, capacity_mw: float, label: str = "") -> Tuple[str, i
         raise ValueError(f"알 수 없는 발전 유형: {kind!r}")
     capacity = float(capacity_mw) if _finite_number(capacity_mw) else 0.0
     size = int(round(min(28, max(10, 6.4 + 1.5 * np.sqrt(max(capacity, 0.0))))))
-    halo = ""
+    ring = 0.0
     if kind == "thermal":
         # OSM 타일의 오름(산봉우리) 회색 삼각형이 화력 ▲처럼 읽혔다(3차 평가 PAR-8). 화력 기호는 최소 14px로 두고 바깥에
-        # 1.5px 흰 테두리를 두른다(11.3절 D11): 외곽선(1.25px) 밖으로 1.5px가 남도록 흰 선 폭 = 1.25 + 2 × 1.5
+        # 1.5px 흰 테두리를 두른다(11.3절 D11)
         size = max(14, size)
-        halo = shapes[kind].replace("/>", ' style="fill:none;stroke:#FFFFFF;stroke-width:4.25;stroke-linejoin:round;'
-                                          'vector-effect:non-scaling-stroke"/>')
+        ring = 1.5
+
+    def stroke(color: str, outside: float) -> str:
+        """도형 외곽선(1.25px) 밖으로 outside px가 남는 채움 없는 선(선 폭 = 1.25 + 2 × outside)."""
+        return shapes[kind].replace("/>", f' style="fill:none;stroke:{color};stroke-width:{1.25 + 2 * outside:g};'
+                                          'stroke-linejoin:round;vector-effect:non-scaling-stroke"/>')
+
+    # 바깥에 바탕색 2px 후광을 둘러 타일 지명 글자가 기호 밑을 지날 때 기호 둘레가 글자와 붙어 읽히지 않게 한다(12.3절 E11)
+    halo = stroke("var(--background-color)", ring + 2) + (stroke("#FFFFFF", ring) if ring else "")
     box = max(24, size)
     # CSS 변수는 SVG 표현 속성에 쓸 수 없고 style에서만 풀리므로 채움·외곽선을 style로 준다
     style = (f"fill:{SERIES[kind]};stroke:var(--text-color);stroke-width:1.25;stroke-opacity:.8;"
@@ -3966,8 +4025,9 @@ def _fmt_region_slug(region: str) -> str:
     return {"제주시": "jeju", "서귀포시": "seogwipo"}.get(region, "unknown")
 
 
-# 지도 시점 기본값(create_jeju_map의 fit_bounds와 같은 값). '전체'로 돌아갈 때 이 범위로 맞춘다
+# 지도 시점 기본값(create_jeju_map의 fit_bounds와 같은 값). '전체'로 돌아갈 때 이 범위·줌 상한(정수 줌 10)으로 맞춘다
 _fmt_MAP_HOME_BOUNDS = [[33.13, 126.12], [33.62, 126.98]]
+_fmt_MAP_HOME_MAX_ZOOM = 10
 # 지역 맞춤 확대 상한(11.3절 D11). Leaflet은 소수 줌에서 Math.round(줌) 단계 타일을 받는다: 10.5부터 z11 타일이 와서 OSM 오름
 # 삼각형 수십 개가 화력 ▲처럼 보였다(3차 평가). zoomSnap 0.25라 상한 10.4는 10.5로 반올림되므로 10.25로 둔다(z10 타일 유지)
 _fmt_MAP_FOCUS_MAX_ZOOM = 10.25
@@ -4002,7 +4062,7 @@ def _render_map_focus(plants_df: pd.DataFrame, region: str) -> folium.FeatureGro
         "  window.__pdFocus = slug;\n"
         "  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n"
         f"  if (slug || !first) {{ map.fitBounds({json.dumps(bounds)}, "
-        f"{{animate: !still, maxZoom: {_fmt_MAP_FOCUS_MAX_ZOOM}}}); }}\n"
+        f"{{animate: !still, maxZoom: {_fmt_MAP_FOCUS_MAX_ZOOM if slug else _fmt_MAP_HOME_MAX_ZOOM}}}); }}\n"
         "  var els = document.querySelectorAll('.leaflet-marker-icon[class*=\"pd-rg--\"]');\n"
         "  for (var i = 0; i < els.length; i++) {\n"
         "    els[i].classList.toggle('pd-dim', !!slug && !els[i].classList.contains('pd-rg--' + slug));\n"
@@ -4126,7 +4186,10 @@ def _fmt_registry_sources(registry: Optional[Dict]) -> str:
 
 
 def _html_map_head(plants_df: pd.DataFrame, registry: Optional[Dict]) -> str:
-    """지도 무대 머리(명세 5.8절): '발전소 지도' + 운영중 곳 수·설비(건설중 제외 표기) + 등록부 칩."""
+    """지도 무대 머리(명세 5.8절 → 12.3절 E12): '발전소 지도' + 지도에 무엇이 있고 무엇이 빠졌는지 + 등록부 칩.
+
+    곳 수·설비 합계는 바로 옆 인스펙터(통계 칸·표 첫 행)에 있어 머리에서는 되풀이하지 않는다(5차 평가: 같은 숫자 세 번).
+    """
     summary = _fmt_registry_summary(plants_df, registry, "전체")
     total = summary["total"]
     title = '<span class="pd-ico pd-ico--map" aria-hidden="true"></span>발전소 지도'
@@ -4136,17 +4199,21 @@ def _html_map_head(plants_df: pd.DataFrame, registry: Optional[Dict]) -> str:
     if summary["fallback"]:
         return _html_card_head(title, f'예비 목록 {total["count"]}곳 · 등록부를 읽지 못함',
                                _html_chip("est", "예비 목록 · 등록부 아님"), "") + skip
-    note = f' ({summary["excluded_note"]} 제외)' if summary["excluded_note"] else ""
-    total_mw = _html_nowrap(f"{total['mw']:,.1f} MW")
-    return _html_card_head(title, f'운영중 {total["count"]}곳 · 설비 {total_mw}{note}',
-                           _html_chip("measured", "위치·설비 등록부"), "") + skip
+    note = f' · {summary["excluded_note"]} 제외' if summary["excluded_note"] else ""
+    return _html_card_head(title, f'운영중 발전소 위치{note}', _html_chip("measured", "위치·설비 등록부"), "") + skip
 
 
-def _html_map_legend(plants_df: pd.DataFrame) -> str:
-    """지도 밖 범례(명세 5.8절): 유형별 기호·곳 수·설비 + 기호 크기 읽는 법.
+def _html_map_legend(plants_df: pd.DataFrame, heatmap: bool = False, *, mirror: bool = False) -> str:
+    """지도 밖 범례(명세 5.8절): 유형별 기호·곳 수·설비 + 기호 크기 읽는 법 (+ 열지도를 켜면 추정 칩).
 
     옛 지도 안 고정 범례는 iframe을 줄이면 지도를 가렸고 화력이 빠져 있었다(D7). 기호는 지도와 같은 모양의
     CSS 도형이고 색은 SERIES 인라인 --c라 지도·범례·표가 같은 색이다(F5).
+    1181px 이상에서는 같은 범례를 인스펙터 출처 펼침 위에 보이고(12.2절 E6: 인스펙터 아래 빈 띠), 지도 열 범례는 보이지 않게
+    남긴다(CSS): 화면 읽기 순서(지도 바로 다음)와 '지도 건너뛰기' 링크의 도착점은 지도 열 범례다.
+
+    Args:
+        heatmap: 열지도를 켰을 때 범례 끝에 '열지도 = 시뮬레이션 추정 출력 · 실측 아님' 칩을 붙인다(지도 위에는 칩을 못 그린다).
+        mirror: 인스펙터에 넣는 눈으로 보는 사본. 화면 읽기에서는 숨기고(같은 내용을 두 번 읽지 않게) id를 두지 않는다.
     """
     by_type = _fmt_registry_summary(plants_df, None, "전체")["total"]["by_type"]
     items = (("wind", "풍력"), ("solar", "태양광"), ("ess", "ESS"), ("thermal", "화력"))
@@ -4155,17 +4222,22 @@ def _html_map_legend(plants_df: pd.DataFrame) -> str:
         f'aria-hidden="true"></span><b>{name}</b>{by_type[kind]["count"]}곳 · {by_type[kind]["mw"]:,.1f} MW</span>'
         for kind, name in items
     )
-    return ('<div class="pd-maplegend" id="pd-map-end" tabindex="-1" role="group" aria-label="발전소 지도 범례">' + cells
+    chip = (f'<span class="pd-maplegend__note">{_html_chip("est", "열지도 = 시뮬레이션 추정 출력 · 실측 아님")}</span>'
+            if heatmap else "")
+    attrs = ('aria-hidden="true"' if mirror
+             else 'id="pd-map-end" tabindex="-1" role="group" aria-label="발전소 지도 범례"')
+    return (f'<div class="pd-maplegend" {attrs}>' + cells
             + '<span class="pd-maplegend__note">기호 크기 = 설비용량 (예: 1 · 30 · 240 MW) · 목록은 발전 현황 탭</span>'
-            + '</div>')
+            + chip + '</div>')
 
 
-def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: str) -> str:
-    """지역 인스펙터(명세 5.8절): 경로 · 통계 3칸 · 지역 표 · 지도 밖 자원 · 출처.
+def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: str, legend: str = "") -> str:
+    """지역 인스펙터(명세 5.8절): 경로 · 통계 3칸 · 지역 표 · 지도 밖 자원 · (지도 범례) · 출처.
 
     등록부 사실만 보인다(J4: 시뮬레이션 출력·이용률·0–24시 출력 막대를 넣지 않는다). 지역을 고르면 통계가
     그 지역 값이 되고 표의 그 행에 aria-current와 강조색을 준다. 지도 시점은 바꾸지 않는다(지도를 다시
-    마운트하지 않게, 지역 확대는 10장 후속 L1).
+    마운트하지 않게, 지역 확대는 10장 후속 L1). legend(_html_map_legend 사본)는 표와 출처 펼침 사이에 넣고
+    1181px 이상에서만 보인다(12.2절 E6).
     """
     summary = _fmt_registry_summary(plants_df, registry, region)
     selected, total = summary["selected"], summary["total"]
@@ -4245,7 +4317,7 @@ def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: s
                else '<p class="pd-card__note">출처 발전소 등록부 · 출력 추정치는 발전 현황 탭(시뮬레이션 · 실측 아님)</p>')
             + '</div>')
     return (f'<div class="pd-insp"><div class="pd-insp__side">{crumb}{notice}<div class="pd-insp__stats">{stats}'
-            f'</div></div><div class="pd-insp__main">{table}{foot}</div></div>')
+            f'</div></div><div class="pd-insp__main">{table}{legend}{foot}</div></div>')
 
 
 # ============================================================================
@@ -5178,6 +5250,24 @@ def _chart_table_timeline(fig: go.Figure) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
+def _fmt_plant_estimate(generation: object, capacity: object, utilization: object) -> Tuple[str, str]:
+    """발전소 추정 출력·이용률 글자(12.1절 E2: 지도 팝업과 등록부 표가 이 규칙 하나를 쓴다).
+
+    추정 출력이 설비를 넘는 곳(HVDC·수요를 넣지 않는 모형 한계, D4)은 이용률이 100%에서 잘려 팝업에 '100.0%'와 설비를
+    넘는 출력이 함께 보였다(5차 평가). 그런 곳은 출력에 '설비 초과 · 모형 한계'를 붙이고 이용률을 '>100% · 모형 한계'로 쓴다.
+    설비 초과는 화면에 보이는 소수 1자리 값끼리 비교한다(표 요약 줄의 판정과 같다). 값은 바꾸지 않는다.
+
+    Returns:
+        (출력 글자 '≈12.3 MW'·'≈275 MW (설비 초과 · 모형 한계)'·'—', 이용률 글자 '≈62%'·'>100% · 모형 한계'·'—').
+    """
+    gen = round(float(generation), 1) if _finite_number(generation) else None
+    cap = round(float(capacity), 1) if _finite_number(capacity) else None
+    if gen is not None and cap is not None and gen > cap:
+        return f"≈{gen:,.0f} MW (설비 초과 · 모형 한계)", ">100% · 모형 한계"
+    return (f"≈{gen:,.1f} MW" if gen is not None else "—",
+            f"≈{float(utilization):.0f}%" if _finite_number(utilization) else "—")
+
+
 def _fmt_plant_table(plants_df: pd.DataFrame, type_filter: str, *, show_est: bool = False) -> pd.DataFrame:
     """발전소 등록부 표(명세 5.11절, N8 → 11.2절 D4): 기본 열은 등록부 사실(발전소 · 설비 · 유형 · 지역)만.
 
@@ -5214,14 +5304,8 @@ def _fmt_plant_table(plants_df: pd.DataFrame, type_filter: str, *, show_est: boo
     if show_est:
         output = pd.to_numeric(col("generation", np.nan), errors="coerce").round(1)
         util = pd.to_numeric(col("utilization", np.nan), errors="coerce")
-
-        def util_text(i: object) -> str:
-            if pd.notna(output[i]) and pd.notna(capacity[i]) and output[i] > capacity[i]:
-                return ">100% · 모형 한계"
-            return f"≈{util[i]:.0f}%" if pd.notna(util[i]) else "—"
-
         data["추정 출력 (MW)"] = output
-        data["이용률 (추정)"] = [util_text(i) for i in df.index]
+        data["이용률 (추정)"] = [_fmt_plant_estimate(output[i], capacity[i], util[i])[1] for i in df.index]
     out = pd.DataFrame(data, columns=columns)
     if type_filter != "전체":
         out = out[out["유형"] == type_filter]
@@ -6086,13 +6170,12 @@ def main():
                         map_focus = _render_map_focus(plants_df, st.session_state.get("map_region") or "전체")
                         st_folium(jeju_map, height=480, use_container_width=True, returned_objects=[], key="jeju_map",
                                   feature_group_to_add=map_focus)
-                        st.html(_html_map_legend(plants_df))
-                        if show_heatmap:
-                            st.html(_html_chip("est", "열지도 = 시뮬레이션 추정 출력 · 실측 아님"))
+                        st.html(_html_map_legend(plants_df, show_heatmap))
                 with insp_col:
                     map_region = st.segmented_control("지역", ["전체", "제주시", "서귀포시"], default="전체",
                                                       key="map_region", label_visibility="collapsed") or "전체"
-                    st.html(_html_inspector(plants_df, registry, map_region))
+                    st.html(_html_inspector(plants_df, registry, map_region,
+                                            _html_map_legend(plants_df, show_heatmap, mirror=True)))
 
         # 수급 추이 카드와 상태 줄(게이지 · 계통 상태 · 주파수)을 60초마다 다시 그린다(N12). 지도는 이 fragment 밖이다(N14).
         # main() 안에 중첩 정의해야 회귀 테스트(ast.walk(main))가 게이지 할당과 주파수 카드를 찾는다
