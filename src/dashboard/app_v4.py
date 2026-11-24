@@ -1515,10 +1515,11 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         # 툴팁·기호 이름은 등록부 사실만(이름·유형·설비). 시뮬레이션 출력은 넣지 않는다(J4)
         label = f"{name} · {type_label} · 설비 {cap:,.1f} MW"
         icon_html, box = _html_marker(kind, cap, label)
+        # 지역 클래스(pd-rg--jeju 등)는 인스펙터에서 지역을 고르면 다른 지역 기호를 흐리게 하는 데 쓴다(_render_map_focus)
         folium.Marker(
             location=[plant['lat'], plant['lng']],
             icon=folium.DivIcon(html=icon_html, icon_size=(box, box), icon_anchor=(box // 2, box // 2),
-                                class_name="pd-mk"),
+                                class_name=f"pd-mk pd-rg--{_fmt_region_slug(_fmt_region(plant.get('address')))}"),
             popup=folium.Popup(popup_html, max_width=280),
             tooltip=label,
         ).add_to(m)
@@ -1538,7 +1539,7 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
         callout = (f'<div class="pd-callout"><b>{region}</b> · {block["count"]}곳 · 설비 {block["mw"]:,.1f} MW'
                    f'<span class="pd-callout__bar" aria-hidden="true">{segments}</span></div>')
         folium.Marker(location, icon=folium.DivIcon(html=callout, icon_size=(220, 44), icon_anchor=(0, 22),
-                                                   class_name="pd-callout-mk"),
+                                                   class_name=f"pd-callout-mk pd-rg--{_fmt_region_slug(region)}"),
                       interactive=False, keyboard=False).add_to(m)
 
     # 열지도(토글 켤 때만): 시뮬레이션 출력이라 지도 바로 아래에 추정 칩을 붙인다(main). 무지개 대신 풍력 청록 한 색 농도
@@ -1554,7 +1555,7 @@ def create_jeju_map(plants_df: pd.DataFrame, show_heatmap: bool = False) -> foli
     # 명세 6.7 기본값([[33.10, 126.10], [33.66, 127.00]])은 위도 폭 0.56°가 880×480 칸에 줌 10으로 들어가지 않아(최대 0.55°)
     # 줌 9.75가 되고 섬이 칸 폭의 56%만 채웠다(1차 평가). 위도 폭 0.49°면 1440·1366·1280·1024·768px에서 줌 10(정수 줌이라
     # 타일 이음선도 생기지 않는다), 390·430px에서 줌 9다. 등록부 기호 27곳(위도 33.164~33.556, 경도 126.163~126.923)이 모두 들어간다
-    m.fit_bounds([[33.13, 126.12], [33.62, 126.98]])
+    m.fit_bounds(_fmt_MAP_HOME_BOUNDS)
     return m
 
 
@@ -1635,11 +1636,13 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
                            text=f"거래시간 {slot['trade_hour']:02d}h", bgcolor="#475569",
                            font=dict(color="#FFFFFF", size=12), borderpad=4)
 
-    # 기준선: 중앙값 일평균. 라벨은 플롯 안 오른쪽 위라 오른쪽 여백을 쓰지 않아 390px에서도 잘리지 않는다
+    # 기준선: 중앙값 일평균. 라벨은 플롯 안 오른쪽 위라 오른쪽 여백을 쓰지 않아 390px에서도 잘리지 않는다.
+    # 바탕 없는 라벨은 22→23h 계단 세로선이 글자를 가로질렀다(2차 평가 1440·390) → 카드 면 상자('#000038')를 깐다.
+    # 테마를 바꾼 뒤 그림이 다시 그려지기 전까지는 상자가 이전 테마 색으로 남으므로 CSS 12절이 상자·글자를 토큰으로 칠한다
     mean = sum(q50) / len(q50)
     fig.add_hline(y=mean, line=dict(dash="dot", color="#000036", width=1))
-    fig.add_annotation(x=1, xref="paper", y=mean, xanchor="right", yanchor="bottom", showarrow=False,
-                       text=f"{'예측' if is_model else '패턴'} 평균 {mean:,.1f}")
+    fig.add_annotation(x=1, xref="paper", y=mean, xanchor="right", yanchor="bottom", yshift=1, showarrow=False,
+                       text=f"{'예측' if is_model else '패턴'} 평균 {mean:,.1f}", bgcolor="#000038", borderpad=2)
 
     # 툴팁 전용 점(보이지 않음)은 계단 가운데에 둬서 커서가 놓인 계단의 값이 잡힌다. 통합 툴팁 머리는 칸 시작 시각.
     # 통합 툴팁은 trace를 거꾸로 나열하므로 확정 가격 점 → 80% 구간 → 중앙값 순서로 넣어 중앙값이 머리 바로 아래 온다
@@ -1816,20 +1819,40 @@ def create_realtime_power_chart(demand_now: float, supply_now: float, demand_mea
                        text=f"현재 {now:%H:%M} KST", bgcolor="#475569",
                        font=dict(color="#FFFFFF", size=12), borderpad=4)    # 흰 글자 7.58:1
     fig.add_vrect(x0=now, x1=end, fillcolor="#000036", opacity=0.06, line_width=0, layer="below")  # 미래 음영
-    # 관심 경계 pill: #B45309 위 흰 글자 5.02:1(명세 3.3절). 플롯 오른쪽 끝 안쪽에 붙여 390px에서도 안 잘린다
+
+    # 세로축: 0 대신 자료 범위에 맞춘다(명세 6.2 rangemode tozero에서 바꿈). 0부터 그리면 플롯의 약 40%(0–600 MW)가 비어
+    # 일간 모양이 납작했다(2차 평가). 막대가 아닌 선 그림이라 0이 아닌 기준선을 써도 길이를 잘못 읽지 않고, 예비력 면도
+    # 두 선 사이라 그대로다. 위 12%는 공급능력 값 글자가 위 여백의 현재 pill과 겹치지 않게 비운다
+    y_low = 0.8 * min(demand)
+    y_high = 1.12 * max(max(supply), max(demand))
+    y_span = max(y_high - y_low, 1.0)
+
+    # 관심 경계 pill: #B45309 위 흰 글자 5.02:1(명세 3.3절). 플롯 오른쪽 끝 안쪽에 붙여 390px에서도 안 잘린다.
+    # 경계선 위·아래 중 빈 쪽에 둔다: 위에 두면 390px에서 pill(약 85px = 4~5시간 폭)이 공급능력 선을 덮었다(2차 평가).
+    # 보통은 경계선과 수요 선 사이(예비력 면 안)가 더 넓다
+    room_above = supply[-1] - boundary[-1]
+    room_below = boundary[-1] - demand[-1]
+    below = room_below >= room_above
     fig.add_annotation(x=end, y=boundary[-1], text="관심 경계 15%", showarrow=False, xanchor="right",
-                       yanchor="bottom", yshift=2, bgcolor=BOUNDARY_COLOR,
+                       yanchor="top" if below else "bottom", yshift=-3 if below else 2, bgcolor=BOUNDARY_COLOR,
                        font=dict(color="#FFFFFF", size=11), borderpad=3)
+    # 예비력 면(4% + 빗금 8%, J5)은 연해서 범례 견본만으로는 그림 속 자리를 찾기 어려웠다(2차 평가). 지금 선 왼쪽, 수요 선과
+    # 관심 경계선 사이에 이름만 단다(값은 범례 겸 표·상태 문장에 있다). 면이 좁으면(플롯 높이의 18% 미만) 선과 겹치므로 생략
+    boundary_now = supply_now / 1.15
+    if boundary_now - demand_now >= 0.18 * y_span:
+        fig.add_annotation(x=now, y=(demand_now + boundary_now) / 2, text="예비력", showarrow=False,
+                           xanchor="right", xshift=-8, yanchor="middle")
 
     # 단위는 축 제목 대신 y 눈금 위에 둔다(와이어프레임 4.2절 'MW 1,600 ┤'). 축 제목은 회전 글자라 좁은 폭에서 자리를 먹는다
     fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4,
                        text="MW", showarrow=False)
+    # 0 기준이 아니라는 것을 플롯 왼쪽 아래에 밝힌다(수요 선의 최솟값은 아래 끝보다 20% 위라 글자와 겹치지 않는다)
+    fig.add_annotation(x=0, xref="paper", y=0, yref="paper", xanchor="left", yanchor="bottom", xshift=4, yshift=2,
+                       text="세로축 0 기준 아님", showarrow=False, font=dict(size=11))
     # 구간 설명은 플롯 안 글자 대신 카드 아래 시간 띠가 맡는다(명세 5.7절). Plotly 범례 대신 범례 겸 표(D5)
     _chart_base(fig, height=360)
-    # 위를 15% 비워 공급능력 값 글자가 위 여백의 현재 pill과 겹치지 않게 한다. 0부터 그린다(rangemode tozero 기준)
-    y_top = max(max(supply), max(demand)) * 1.15
     fig.update_layout(
-        yaxis=dict(tickformat=",", rangemode="tozero", range=[0, y_top]),
+        yaxis=dict(tickformat=",", range=[y_low, y_high]),
         xaxis=dict(tickformat="%H:%M", hoverformat="%m-%d %H:%M"),  # 눈금 수는 축 길이에 맡긴다(명세 6.1절)
     )
     return fig
@@ -1895,6 +1918,7 @@ def create_supply_donut(power_status: Dict) -> go.Figure:
     values = [supply['solar'], supply['wind'], supply['thermal'], abs(supply['ess'])]
     colors = [SERIES["solar"], SERIES["wind"], SERIES["thermal"], SERIES["ess"]]
 
+    # 흰 빗금은 명세 6.5의 45%에서 28%로 낮췄다(2차 평가: 십자·점 무늬가 무거워 보임). 빗금 방향은 그대로 색 외 단서다.
     # 조각 경계 '#000038'은 테마 배경(카드 면)이라 두 테마에서 조각 사이가 갈라져 보인다.
     # 무늬 바탕색(bgcolor)을 조각 색으로 직접 준다: 기본 fillmode "replace"는 조각 색을 무늬로 바꾸고, 바탕색을 주지 않으면
     # Streamlit 테마 템플릿의 #FFFFFF(그림을 처음 그린 테마 배경)가 들어가 흰 바탕에 흰 빗금만 남는다(조각이 안 보임, 6단계 실측)
@@ -1906,7 +1930,7 @@ def create_supply_donut(power_status: Dict) -> go.Figure:
         direction="clockwise",
         textinfo="none",
         marker=dict(colors=colors, line=dict(color="#000038", width=2),
-                    pattern=dict(shape=["/", "\\", "x", "."], bgcolor=colors, fgcolor="rgba(255,255,255,0.45)",
+                    pattern=dict(shape=["/", "\\", "x", "."], bgcolor=colors, fgcolor="rgba(255,255,255,0.28)",
                                  size=6, solidity=0.25)),
         hovertemplate="%{label} %{value:,.0f} MW (%{percent})<extra>시뮬레이션 추정</extra>",
     )])
@@ -1954,19 +1978,21 @@ def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
     wind_gen = [round(float(v), 1) for v in wind_gen]
     tip = "%{y:,.1f} MW<extra>%{fullData.name} · 시뮬레이션, 실측 아님</extra>"
 
+    # 빗금 진하기는 명세 6.6의 0.6에서 0.3으로 낮췄다: 모든 막대가 추정이라 무늬가 구분 정보 없이 카드를 덮었다(2차 평가).
+    # 추정 표시는 카드 머리 칩과 범례가 맡는다.
     # 무늬 바탕색을 막대 채움색(계열 35%)으로 직접 준다. 주지 않으면 기본 fillmode "replace"가 채움색을 버리고 테마 템플릿의
     # 배경색(처음 그린 테마 값)을 깔아, 테마를 바꾼 뒤 막대 안이 이전 테마 바탕색으로 남는다(도넛과 같은 원인)
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=hours, y=wind_gen, name="풍력", hovertemplate=tip,
         marker=dict(color="rgba(8,145,178,0.35)", line=dict(color=SERIES["wind"], width=1),
-                    pattern=dict(shape="\\", bgcolor="rgba(8,145,178,0.35)", fgcolor=SERIES["wind"], fgopacity=0.6,
+                    pattern=dict(shape="\\", bgcolor="rgba(8,145,178,0.35)", fgcolor=SERIES["wind"], fgopacity=0.3,
                                  size=6, solidity=0.3)),
     ))
     fig.add_trace(go.Bar(
         x=hours, y=solar_gen, name="태양광", hovertemplate=tip,
         marker=dict(color="rgba(183,121,31,0.35)", line=dict(color=SERIES["solar"], width=1),
-                    pattern=dict(shape="/", bgcolor="rgba(183,121,31,0.35)", fgcolor=SERIES["solar"], fgopacity=0.6,
+                    pattern=dict(shape="/", bgcolor="rgba(183,121,31,0.35)", fgcolor=SERIES["solar"], fgopacity=0.3,
                                  size=6, solidity=0.3)),
     ))
 
@@ -2144,17 +2170,31 @@ PD_CSS_BASE = """
    보이지 않았다(1차 평가: 탭 outline none, WCAG 2.4.7). 탭 줄은 가로 스크롤 칸이라 바깥 테두리가 잘리므로 안쪽(-2px)에 그린다 */
 [data-testid="stTab"]:focus-visible,[data-testid="stMain"]:focus-visible{outline:2px solid var(--pd-focus)!important;outline-offset:-2px}
 [data-testid="stTab"]:focus-visible{border-radius:8px}
-/* 헤더 »·⋮ 버튼의 기본 초점 고리(rgba .2)는 캔버스 대비 1.5:1(다크 1.04:1)이라 안 보였다. 이 둘이 사이드바·테마 메뉴의 유일한 입구다 */
-[data-testid="stHeader"] button:focus-visible{box-shadow:0 0 0 2px var(--pd-focus)!important}
+/* 헤더 »·⋮ 버튼의 기본 초점 고리(rgba .2)는 캔버스 대비 1.5:1(다크 1.04:1)이라 안 보였다. 이 둘이 사이드바·테마 메뉴의 유일한 입구다.
+   열린 사이드바의 « 닫기 버튼은 헤더가 아니라 사이드바 머리에 있어 같은 기본 고리(라이트 1.48:1 · 다크 1.03:1)가 남았다(2차 평가) */
+[data-testid="stHeader"] button:focus-visible,[data-testid="stSidebarCollapseButton"] button:focus-visible{box-shadow:0 0 0 2px var(--pd-focus)!important}
 /* 토글은 input이 0×0이라 전역 테두리가 보이지 않는다 → 보이는 label에 테두리를 준다 */
 [data-testid="stCheckbox"] label:has(input:focus-visible){outline:2px solid var(--pd-focus);outline-offset:2px;border-radius:6px}
-/* 표 도구 막대(열 보기·CSV·검색·전체 화면) 버튼에 초점이 있는 동안 막대가 투명하게 남지 않게 하고, 22px 버튼이 간격 없이
-   붙어 있어 누르기 대상 최소 24px(WCAG 2.5.8)에 못 미쳤으므로 24px로 키운다 */
-[data-testid="stElementContainer"]:focus-within [data-testid="stElementToolbar"]{opacity:1!important}
+/* 표 도구 막대(열 보기·CSV·검색·전체 화면): 초점이 막대 버튼에 있는 동안 막대를 보이고, Streamlit이 마우스를 올렸을 때 쓰는
+   위치(-2.65rem, 1.52.1 Toolbar 번들)로 올린다. 쉬는 자리(-1rem)에 두면 막대가 표 캔버스 안으로 32px 들어가 캔버스가 버튼을
+   덮었다(2차 평가: 버튼 가운데 elementFromPoint = 표 스크롤 칸). 버튼 기본 초점은 바탕만 바뀌어 고리를 준다.
+   22px 버튼이 간격 없이 붙어 누르기 대상 최소 24px(WCAG 2.5.8)에 못 미쳤으므로 24px로 키운다 */
+[data-testid="stElementContainer"]:focus-within [data-testid="stElementToolbar"]{opacity:1!important;top:-2.65rem!important}
 [data-testid="stBaseButton-elementToolbar"]{min-width:24px;min-height:24px}
+[data-testid="stBaseButton-elementToolbar"]:focus-visible{outline:2px solid var(--pd-focus)!important;outline-offset:1px}
 /* 접힌 사이드바는 화면 밖(-256px)에 있어도 자동 갱신 토글이 첫 Tab 자리를 차지해 초점이 사라졌고, 그 자리에서 Space를 누르면
-   자동 갱신이 조용히 꺼졌다(1차 평가 실측). 접힌 동안만 탭 순서에서 뺀다(열면 aria-expanded="true"라 바로 보인다) */
+   자동 갱신이 조용히 꺼졌다(1차 평가 실측). 접힌 동안만 탭 순서에서 뺀다(열면 aria-expanded="true"라 바로 보인다).
+   576px 이하에서는 Streamlit 규칙이 « 닫기 버튼만 visibility:visible로 되살려 화면 밖 버튼이 첫 Tab이 됐다(2차 평가 360~576px) */
 [data-testid="stSidebar"][aria-expanded="false"]{visibility:hidden}
+[data-testid="stSidebar"][aria-expanded="false"] [data-testid="stSidebarCollapseButton"]{visibility:hidden!important}
+/* 펼침 제목·세그먼트 버튼·설정 대화상자 닫기는 Streamlit 기본 고리(primary 50% 3.2px 그림자, 2.1~2.7:1)가 전역 테두리를 이겨
+   비텍스트 3:1(WCAG 1.4.11)에 못 미쳤다(2차 평가 14개). 세그먼트는 옆 버튼이 고리 오른쪽을 덮어 안쪽에 그리고 위로 올린다.
+   선택 상자는 캐럿 크기 input에 작은 상자가 생겨, 상자 전체에 고리를 준다 */
+[data-testid="stExpander"] summary:focus-visible{outline:2px solid var(--pd-focus)!important;outline-offset:-2px;box-shadow:none!important}
+[data-testid="stButtonGroup"] button:focus-visible{outline:2px solid var(--pd-focus)!important;outline-offset:-2px;box-shadow:none!important;position:relative;z-index:1}
+[data-baseweb="select"] input:focus-visible{outline:none}
+[data-baseweb="select"]:focus-within>div{box-shadow:0 0 0 2px var(--pd-focus)}
+[role="dialog"] button:focus-visible{outline:2px solid #2563EB!important;outline-offset:2px;box-shadow:none!important}
 /* st.markdown 문단·목록은 Streamlit 규칙 '.st-emotion-cache-… p{word-break:break-word}'가 stApp의 keep-all을 덮어
    '학/습한'·'오른/쪽'처럼 낱말 가운데서 끊겼다(1차 평가 계산 스타일 확인). 긴 토막은 overflow-wrap이 계속 끊어 준다 */
 [data-testid="stMarkdownContainer"] :is(p,li){word-break:keep-all!important}
@@ -2373,11 +2413,10 @@ PD_CSS_COMPONENTS = """
 .pd-bar{display:flex;width:100%;min-width:56px;height:8px;border-radius:4px;overflow:hidden;background:var(--pd-well)}
 .pd-bar>span{display:block;height:100%;background:var(--c)}
 .pd-insp__foot{margin:0;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
-/* 무대가 세로로 쌓이는 폭(641~1180px)에서는 인스펙터를 2단(왼쪽 경로·통계, 오른쪽 지역 표)으로 */
-@media (max-width:1180px) and (min-width:641px){.pd-insp{display:grid;grid-template-columns:1fr 1.3fr;align-items:start;gap:16px}}
-/* 통계는 1180px 이하 모든 폭에서 2칸 + 가로 전체 1칸이다: 2단 인스펙터의 왼쪽 단이 좁아 3칸이면 칸이 71~89px가 되어
-   '974.2 MW'가 옆 칸으로 넘쳤다(1차 평가: 768px 7px, 641px 25px) */
-@media (max-width:1180px){
+/* 무대가 세로로 쌓이는 폭(641~1180px)에서는 인스펙터를 한 단으로 두고 통계 3칸을 지역 표 위 한 줄에 놓는다(명세 5.8의
+   2단 배치에서 바꿈): 2단이면 왼쪽 통계 단이 오른쪽 표보다 약 97px 먼저 끝나 빈 칸이 생겼다(2차 평가 1024). 한 단이면
+   칸 폭이 넉넉해(641px에서 약 180px) 3칸이어도 '974.2 MW'가 넘치지 않는다. 640px 이하는 2칸 + 가로 전체 1칸 */
+@media (max-width:640px){
   .pd-insp__stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pd-insp__stats .pd-stat:last-child{grid-column:1 / -1}
 }
@@ -2481,17 +2520,19 @@ PD_CSS_COMPONENTS = """
 .pd-mini-table tr:last-child td{border-bottom:0}
 .pd-mini-table b{font-weight:600;color:var(--pd-text-1)}
 .pd-smp-model__name{margin:8px 0 4px;font-size:13px;font-weight:600;line-height:1.5;color:var(--pd-text-1)}
-/* 공급 구성 표 견본: 도넛 조각과 같은 색 + 같은 방향 빗금(흰 45%는 도넛 pattern.fgcolor와 같은 값이다) */
+/* 공급 구성 표 견본: 도넛 조각과 같은 색 + 같은 방향 빗금(흰 28%는 도넛 pattern.fgcolor와 같은 값이다. 2차 평가에서
+   모든 조각·막대가 빗금이라 무늬가 대비 없이 카드를 덮는다는 지적으로 45% → 28%, 추정 표시는 카드 칩이 맡는다) */
 .pd-mix-name{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--pd-text-1)}
 .pd-swatch[class*="pd-swatch--hatch-"]{width:18px;height:14px;background-color:var(--c)}
-.pd-swatch--hatch-slash{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.45) 0 1.5px,transparent 1.5px 5px)}
-.pd-swatch--hatch-backslash{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.45) 0 1.5px,transparent 1.5px 5px)}
-.pd-swatch--hatch-cross{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.45) 0 1.5px,transparent 1.5px 5px),repeating-linear-gradient(135deg,rgba(255,255,255,.45) 0 1.5px,transparent 1.5px 5px)}
-.pd-swatch--hatch-dot{background-image:radial-gradient(rgba(255,255,255,.6) 1px,transparent 1.4px);background-size:5px 5px}
-/* 시간대별 발전량 범례 견본: 막대와 같은 모양(계열 35% 면 + 같은 색 빗금 + 1px 테두리)과 현재 시각 점선 상자 */
+.pd-swatch--hatch-slash{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 1.5px,transparent 1.5px 5px)}
+.pd-swatch--hatch-backslash{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 1.5px,transparent 1.5px 5px)}
+.pd-swatch--hatch-cross{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 1.5px,transparent 1.5px 5px),repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 1.5px,transparent 1.5px 5px)}
+.pd-swatch--hatch-dot{background-image:radial-gradient(rgba(255,255,255,.4) 1px,transparent 1.4px);background-size:5px 5px}
+/* 시간대별 발전량 범례 견본: 막대와 같은 모양(계열 35% 면 + 같은 색 빗금 + 1px 테두리)과 현재 시각 점선 상자.
+   빗금 진하기는 막대 fgopacity(0.6 → 0.3, 2차 평가)에 맞춰 70% → 40% */
 .pd-swatch--bar{width:18px;height:14px;border:1px solid var(--c);background-color:color-mix(in srgb,var(--c) 35%,transparent)}
-.pd-swatch--bar-slash{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 70%,transparent) 0 1.5px,transparent 1.5px 5px)}
-.pd-swatch--bar-backslash{background-image:repeating-linear-gradient(45deg,color-mix(in srgb,var(--c) 70%,transparent) 0 1.5px,transparent 1.5px 5px)}
+.pd-swatch--bar-slash{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 40%,transparent) 0 1.5px,transparent 1.5px 5px)}
+.pd-swatch--bar-backslash{background-image:repeating-linear-gradient(45deg,color-mix(in srgb,var(--c) 40%,transparent) 0 1.5px,transparent 1.5px 5px)}
 .pd-swatch--now{width:14px;height:14px;border:1.2px dotted var(--pd-text-1);border-radius:2px}
 /* 발전 현황 첫 행(도넛 5 · 타임라인 7)은 같은 행에서 카드 높이를 맞춘다(11절 상태 줄과 같은 연쇄). 타임라인의 '표로 보기'를
    펼치면(표 24행 878px) 도넛 카드까지 늘어나 빈 카드가 되므로, 행 안에 펼친 expander가 있으면 맞추지 않는다 */
@@ -2616,6 +2657,54 @@ PD_CSS_COMPONENTS = """
 /* 좁은 폭에서 두 문단(출처 줄·모델 줄)이 여러 줄로 접히면 경계가 안 보여 문단 사이만 조금 띄운다 */
 [data-testid="stMarkdownContainer"] .pd-footer p+p{margin-top:4px}
 .pd-footer b{font-weight:700;color:var(--pd-text-2)}
+/* 마지막 낱말이 홀로 한 줄에 남지 않게 한다(2차 평가 1024: 'Team'만 둘째 줄). 계약 글자(5.14)는 그대로다 */
+.pd-footer p{text-wrap:pretty}
+/* ---- 14. 2차 평가 반영 (3장 토큰만 쓴다) ---- */
+/* 시간대별 발전량 범례의 설명 줄은 줄바꿈한다(범례 칸은 한 줄 nowrap) */
+.pd-maplegend__item.pd-maplegend__note{white-space:normal}
+/* 등록부 표 가로 스크롤 안내: 640px 이하 표 칸(약 334px)에는 이름·이용률·유형만 들어가고 캔버스 스크롤 손잡이가 보이지 않는다 */
+.pd-plant-summary .pd-plant-summary__scroll{display:none;font-size:12px;color:var(--pd-text-3)}
+@media (max-width:640px){.pd-plant-summary .pd-plant-summary__scroll{display:block}}
+/* SMP 평균선 이름표의 카드 면 상자('#000038'): 처음 그린 테마의 카드 색(라이트 rgb(255,255,255) · 다크 rgb(18,27,49))으로
+   남지 않게 토큰으로 다시 칠한다. 현재 거래시간 pill(#475569)과 바탕 없는 주석은 이 선택자에 걸리지 않는다 */
+.st-key-card_smp [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill: rgb(255, 255, 255)"],rect.bg[style*="fill: rgb(18, 27, 49)"]) rect.bg{fill:var(--pd-surface)!important}
+.st-key-card_smp [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill: rgb(255, 255, 255)"],rect.bg[style*="fill: rgb(18, 27, 49)"]) text.annotation-text{fill:var(--pd-text-1)!important}
+/* SMP 통계: 카드가 가로 전체가 되는 폭(641~1180px)에서는 이름과 값이 약 850px 떨어져 읽기 어려웠다(2차 평가 1024).
+   인스펙터 통계와 같은 칸 모양으로 바꿔 768px 이상 4칸, 그 아래 2×2로 둔다. 1181px 이상(오른쪽 4/12 열)은 목록 그대로 */
+@media (max-width:1180px) and (min-width:641px){
+  .st-key-card_smp_stats .pd-statlist{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .st-key-card_smp_stats .pd-statlist__row{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;padding:10px 12px;border:0;border-radius:10px;background:var(--pd-well)}
+  .st-key-card_smp_stats .pd-statlist dd{text-align:left}
+}
+@media (max-width:767px) and (min-width:641px){.st-key-card_smp_stats .pd-statlist{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* SMP 탭 1181px 이상: 차트 카드(8/12)가 오른쪽 열(통계·시간대·모델·예시)보다 약 96px 먼저 끝나 빈 칸이 생겼다(2차 평가).
+   두 열 높이를 맞추고 출처 줄을 카드 아래 끝에 붙인다. 예시 expander를 펼친 동안에는 맞추지 않는다(차트 카드가 빈 칸이 된다) */
+@media (min-width:1181px){
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp):not(:has(details[open])) > [data-testid="stColumn"]:first-child > [data-testid="stVerticalBlock"]{height:100%}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp):not(:has(details[open])) > [data-testid="stColumn"]:first-child > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]{flex:1 1 auto;display:flex;flex-direction:column}
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-card_smp):not(:has(details[open])) .st-key-card_smp{flex:1 1 auto}
+  .st-key-card_smp > [data-testid="stElementContainer"]:last-child{margin-top:auto}
+}
+/* 상태 줄 둘째 행(1180px 이하): 계통 주파수 카드가 옆 계통 상태 카드 높이로 늘어나 아래에 약 75px 빈 칸이 남았다(2차 평가).
+   KPI 카드처럼 각주를 카드 아래 끝에 붙여 빈 칸이 값과 각주 사이로 가게 한다 */
+.st-key-card_freq > [data-testid="stElementContainer"]{flex:1 1 auto}
+.st-key-card_freq [data-testid="stMarkdown"],.st-key-card_freq [data-testid="stMarkdown"]>div,.st-key-card_freq [data-testid="stMarkdownContainer"]{height:100%}
+.st-key-card_freq .pd-card-sim{height:100%;display:flex;flex-direction:column}
+.st-key-card_freq .pd-card-sim .pd-card__note{margin-top:auto}
+/* 출처와 기준 시각(명세 5.13에서 바꿈): 접는 칸(st.expander)이 카드 면이 되고 안쪽 표 카드는 테두리를 뺀다. 접힘 제목 줄이
+   같은 이름을 보이므로 안쪽 제목은 숨긴다. 641px 이상에서 실시간 현황 탭(첫 탭)이 선택돼 있으면 접힘과 상관없이 내용을 보이고
+   제목 줄을 숨겨 예전 카드와 같게 보인다. ::details-content를 모르는 브라우저는 접힌 칸 그대로 둔다(내용이 숨어 버리지 않게) */
+.st-key-sources_fold [data-testid="stExpander"] details{background:var(--pd-surface);border-color:var(--pd-border);border-radius:12px;box-shadow:0 1px 2px var(--pd-shadow-c)}
+.st-key-sources_fold .pd-sources{padding:0;border:0;border-radius:0;box-shadow:none;background:none}
+.st-key-sources_fold .pd-sources>.pd-card__head .pd-card__title{display:none}
+@supports selector(::details-content){
+  @media (min-width:641px){
+    [data-testid="stApp"]:has([data-testid="stTab"]:first-of-type[aria-selected="true"]) .st-key-sources_fold details::details-content{content-visibility:visible}
+    [data-testid="stApp"]:has([data-testid="stTab"]:first-of-type[aria-selected="true"]) .st-key-sources_fold summary{display:none}
+    [data-testid="stApp"]:has([data-testid="stTab"]:first-of-type[aria-selected="true"]) .st-key-sources_fold [data-testid="stExpanderDetails"]{padding-top:16px}
+    [data-testid="stApp"]:has([data-testid="stTab"]:first-of-type[aria-selected="true"]) .st-key-sources_fold .pd-sources>.pd-card__head .pd-card__title{display:inline-flex}
+  }
+}
 """
 
 # 지도 iframe 머리에 넣는 CSS(명세 6.7절). 바깥 페이지 토큰은 iframe에 닿지 않으므로 Streamlit 컴포넌트가 iframe :root에
@@ -2634,12 +2723,18 @@ html,body{margin:0;padding:0}
 html,body,.leaflet-container{background:var(--background-color)}
 @media (min-height:240px){ #map_div{height:100vh!important}}
 .leaflet-container{color:var(--text-color);font-family:"Pretendard Variable",var(--font),-apple-system,"Apple SD Gothic Neo",sans-serif}
-.leaflet-tile-pane{filter:grayscale(.85) saturate(.6) brightness(1.04) contrast(.9)}
+/* 타일 필터(명세 6.7에서 조정, 2차 평가). 라이트는 대비를 .9 → .84로 낮춰 도로·뱃길 점선이 덜 튀게 했다(채도 중앙값 .036).
+   다크는 예전 필터가 한라산 숲을 올리브(색상 102°·채도 .18), 바다를 청록(191°)으로 남겨 남색 카드 위에서 탁해 보였다.
+   반전 뒤 회색으로 만들고 sepia → hue-rotate로 카드 남색 쪽(색상 약 225°, 카드 #121B31은 223°)에 채도 .066만 남긴다
+   (실측: 1440·390 타일 칸 채도 중앙값 .066 · 99분위 .071, build/r2fix/map). 반전이 지명을 밝은 글자로 바꾼다 */
+.leaflet-tile-pane{filter:grayscale(.85) saturate(.6) brightness(1.05) contrast(.84)}
 /* 소수 줌(641px 9.75 · 640px 9.5 · 360px 8.75)에서 타일 사이 1px 밝은 이음선이 지도를 가로질렀다(1차 평가). OSM 타일(256px)을
    0.5px씩 겹쳐 틈을 덮는다(정수 줌에서는 0.2% 확대라 보이지 않는다, 1차 수정 때 360·640 다크 스크린샷으로 확인) */
 .leaflet-tile-container img.leaflet-tile{width:256.5px!important;height:256.5px!important}
-html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.88) grayscale(.5)}
+html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(.82) contrast(.85) sepia(.3) hue-rotate(190deg) saturate(1.2)}
 .leaflet-control-attribution{font-size:12px;line-height:1.4;color:var(--text-color);background:color-mix(in srgb,var(--background-color) 85%,transparent)!important}
+/* Leaflet 1.9 출처 접두어의 국기 그림은 제품 화면과 어울리지 않는 장식이라 숨긴다. OSM 출처 표기는 그대로 둔다(G18) */
+.leaflet-attribution-flag{display:none!important}
 .leaflet-control-attribution a{color:var(--primary-color)}
 .leaflet-control-scale-line{color:var(--text-color);border-color:var(--text-color);text-shadow:none;background:color-mix(in srgb,var(--background-color) 80%,transparent)}
 /* 축척은 미터 막대만 둔다(국내 화면에서 마일 막대는 잡음, 1차 평가) */
@@ -2657,6 +2752,13 @@ html[data-pd-theme="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg
 .leaflet-tooltip-right:before{border-right-color:var(--background-color)}
 .leaflet-marker-icon.pd-mk{display:flex;align-items:center;justify-content:center;background:none;border:0;border-radius:50%}
 .leaflet-marker-icon.pd-mk:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+/* 인스펙터에서 고른 지역 밖의 기호·callout(_render_map_focus가 붙인다). 기호 모양·색은 남겨 위치는 읽힌다 */
+.leaflet-marker-icon.pd-dim{opacity:.25}
+.leaflet-marker-icon{transition:opacity .2s}
+@media (prefers-reduced-motion:reduce){.leaflet-marker-icon{transition:none}}
+/* 좁은 지도(iframe 640px 이하, 바깥 화면 약 700px 이하)에서는 기호 그림만 22% 줄여 타일 지명(서귀포시·대정 등)을 덜 가린다.
+   누르기 상자(최소 24px)는 그대로 둔다(2차 평가 390) */
+@media (max-width:640px){.leaflet-marker-icon.pd-mk svg{transform:scale(.78)}}
 .pd-callout-mk{background:none;border:0}
 .pd-callout{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--background-color);color:var(--text-color);border:1px solid var(--secondary-background-color);font-size:12px;line-height:1.35;white-space:nowrap}
 .pd-callout b{font-weight:700}
@@ -2869,24 +2971,27 @@ def _fmt_provenance(power_status: Dict, api_kpis: Optional[Dict], kpx_local: Opt
     elapsed_short = elapsed.split("일 ")[0] + "일 경과" if "일 " in elapsed else elapsed  # 앱 바 칩은 일 단위까지만
     obs_date = html_escape(str(data_date)[:10])
     screen = f"{now:%H:%M}"
-    curve_tail = " · 곡선은 앱 내장 일간 패턴 × 현재값 (가정값, 예측 모델 아님)"
+    # 수급 카드 메타에 붙던 곡선 설명(" · 곡선은 앱 내장 일간 패턴 × 현재값 …")은 같은 카드의 칩("추정 패턴")·시간 띠·각주가
+    # 이미 말해 한 카드에 같은 면책이 네 번 나왔다(2차 평가 멘토). 명세 7.2b supply_meta에서 빼고 메타는 출처·시각만 둔다
 
     # 7.2b 표: 지금 잰 값이 아니면 실측 칩(채운 점)과 "KPX 조회"라는 말을 쓰지 않는다
     if demand_state == "measured":
         fresh_chip = _html_meta_chip("clock", f"KPX 조회 {query_hhmm} KST · {elapsed}")
         status_src = f"KPX 조회 {query_hhmm} KST"
         pd_chip = _html_chip("measured", "실측")
-        supply_meta = f"출처 KPX 제주 실시간 · 조회 {query_hhmm} KST · {elapsed}{curve_tail}"
+        supply_meta = f"출처 KPX 제주 실시간 · 조회 {query_hhmm} KST · {elapsed}"
         foot_demand = "KPX 제주 실시간(현재값)"
         legend_demand_note = "점선 = 추정 패턴 · 점 = KPX 조회값"
-        strip_now = f"● 지금 {screen} · KPX 조회"
+        # 화면 시각과 조회 시각이 다를 수 있어(1분 캐시) 조회 시각을 함께 쓴다: "지금 10:43 · KPX 조회"는 화면 시각에
+        # 조회한 것처럼 읽혔다(2차 평가: 앱 바·메타·출처 표는 "KPX 조회 10:42")
+        strip_now = f"● 지금 {screen} · KPX 조회 {query_hhmm}"
         demand_meta = f"출처 {src_label} · 조회 {query_hhmm} KST · {elapsed}"
     elif demand_state == "stale":
         fresh_chip = (_html_meta_chip("clock", f"EPSIS 파일 {obs_date} · {elapsed_short}")
                       + _html_chip("stale", "지연"))
         status_src = f"EPSIS 파일 · {obs_date}"
         pd_chip = _html_chip("measured", "실측") + _html_chip("stale", "지연")
-        supply_meta = f"출처 EPSIS 파일 {obs_date} · {elapsed}{curve_tail}"
+        supply_meta = f"출처 EPSIS 파일 {obs_date} · {elapsed}"
         foot_demand = f"EPSIS 파일 {obs_date}(현재값, 지연)"
         legend_demand_note = "점선 = 추정 패턴 · 점 = EPSIS 파일 값 (지연)"
         strip_now = f"○ 지금 {screen} · EPSIS 파일 값 (지연)"
@@ -2895,7 +3000,7 @@ def _fmt_provenance(power_status: Dict, api_kpis: Optional[Dict], kpx_local: Opt
         fresh_chip = _html_chip("est", f"대체값 · {src_label}")
         status_src = f"{src_label} · 조회 {query_hhmm} KST"
         pd_chip = _html_chip("est", "추정 · 실측 아님")
-        supply_meta = f"출처 {src_label} · 조회 {query_hhmm} KST · {elapsed}{curve_tail}"
+        supply_meta = f"출처 {src_label} · 조회 {query_hhmm} KST · {elapsed}"
         foot_demand = f"{src_label}(현재값, 실측 아님)"
         legend_demand_note = "점선 = 추정 패턴 · 점 = 현재값 (추정)"
         strip_now = f"○ 지금 {screen} · 추정값"
@@ -2904,7 +3009,7 @@ def _fmt_provenance(power_status: Dict, api_kpis: Optional[Dict], kpx_local: Opt
         fresh_chip = _html_chip("est", "시뮬레이션 모드 · 실측 아님")
         status_src = src_label
         pd_chip = _html_chip("est", "시뮬레이션 · 실측 아님")
-        supply_meta = f"출처 {src_label} · 화면 {screen} KST{curve_tail}"
+        supply_meta = f"출처 {src_label} · 화면 {screen} KST"
         foot_demand = f"{src_label}(현재값)"
         legend_demand_note = "점선 = 추정 패턴 · 점 = 현재값 (시뮬레이션)"
         strip_now = f"○ 지금 {screen} · 시뮬레이션 값"
@@ -3289,6 +3394,60 @@ def _fmt_region(address: object) -> str:
     return "미상"
 
 
+def _fmt_region_slug(region: str) -> str:
+    """지도 기호에 붙이는 ASCII 지역 클래스 조각('제주시' → 'jeju'). 한글 클래스는 선택자에서 다루기 번거로워 바꾼다."""
+    return {"제주시": "jeju", "서귀포시": "seogwipo"}.get(region, "unknown")
+
+
+# 지도 시점 기본값(create_jeju_map의 fit_bounds와 같은 값). '전체'로 돌아갈 때 이 범위로 맞춘다
+_fmt_MAP_HOME_BOUNDS = [[33.13, 126.12], [33.62, 126.98]]
+
+
+def _render_map_focus(plants_df: pd.DataFrame, region: str) -> folium.FeatureGroup:
+    """인스펙터 지역 선택을 지도에 옮기는 스크립트 묶음(명세 10장 L1, 2차 평가 반영).
+
+    st_folium의 feature_group_to_add로 넘기면 컴포넌트가 이 묶음의 JS만 iframe 안에서 다시 실행한다(지도 재마운트 없음,
+    streamlit_folium 0.25.3 finalizeOnRender의 eval). 고른 지역의 발전소 범위로 fitBounds하고, 다른 지역 기호·callout을
+    흐리게(.pd-dim) 한다. 지역이 같으면 묶음 문자열이 같아 다시 실행하지 않으므로 사용자가 끌어 옮긴 시점을 덮지 않는다.
+    처음 마운트에서 '전체'이면 이미 기본 시점이라 맞추지 않는다(과도기 iframe 높이에서 다시 계산하지 않게, 0단계 E3).
+    움직임 줄이기 설정이면 확대 애니메이션을 끈다. 지도 시점만 바꾸며 값·경보와 무관하다(표시 계층).
+    """
+    slug = "" if region == "전체" else _fmt_region_slug(region)
+    bounds = _fmt_MAP_HOME_BOUNDS
+    if slug and isinstance(plants_df, pd.DataFrame) and not plants_df.empty and "address" in plants_df.columns:
+        picked = plants_df[plants_df["address"].map(_fmt_region) == region]
+        lat = pd.to_numeric(picked.get("lat"), errors="coerce").dropna()
+        lng = pd.to_numeric(picked.get("lng"), errors="coerce").dropna()
+        if len(lat) and len(lng):
+            # 기호가 칸 가장자리에 붙지 않게 0.04°(약 4 km) 여유를 두고, 한 곳뿐이어도 너무 크게 확대되지 않게 최소 폭을 둔다
+            half_lat = max((lat.max() - lat.min()) / 2 + 0.04, 0.08)
+            half_lng = max((lng.max() - lng.min()) / 2 + 0.04, 0.12)
+            c_lat, c_lng = (lat.max() + lat.min()) / 2, (lng.max() + lng.min()) / 2
+            bounds = [[round(c_lat - half_lat, 4), round(c_lng - half_lng, 4)],
+                      [round(c_lat + half_lat, 4), round(c_lng + half_lng, 4)]]
+    script = (
+        "(function () {\n"
+        "  var map = window.map; if (!map) { return; }\n"
+        f'  var slug = "{slug}", first = window.__pdFocus === undefined;\n'
+        "  window.__pdFocus = slug;\n"
+        "  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n"
+        f"  if (slug || !first) {{ map.fitBounds({json.dumps(bounds)}, {{animate: !still}}); }}\n"
+        "  var els = document.querySelectorAll('.leaflet-marker-icon[class*=\"pd-rg--\"]');\n"
+        "  for (var i = 0; i < els.length; i++) {\n"
+        "    els[i].classList.toggle('pd-dim', !!slug && !els[i].classList.contains('pd-rg--' + slug));\n"
+        "  }\n"
+        "})();"
+    )
+    # folium 요소 템플릿은 Jinja라 스크립트에 '{{'·'{%'·'{#'가 생기면 조용히 깨진다(PD_CSS_MAP과 같은 검사)
+    if any(token in script for token in ("{#", "{{", "{%")):
+        raise ValueError("지도 지역 스크립트에 Jinja 구문 문자가 있다")
+    focus = MacroElement()
+    focus._template = Template("{% macro script(this, kwargs) %}\n" + script + "\n{% endmacro %}")
+    group = folium.FeatureGroup(name="pd_region_focus", control=False)
+    focus.add_to(group)
+    return group
+
+
 def _fmt_registry_summary(plants_df: pd.DataFrame, registry: Optional[Dict], region: str = "전체") -> Dict:
     """인스펙터·지도 머리·범례·callout이 쓰는 등록부 사실 숫자를 한 곳에서 센다(명세 5.8절, G13).
 
@@ -3551,11 +3710,12 @@ def _html_supply_legend(power_status: Dict, prov: Dict) -> str:
     reserve_val = mw(s_mw - d_mw if s_mw is not None and d_mw is not None else None)
     if _finite_number(reserve_rate):
         reserve_val += f" · {reserve_rate:.1f}%"
-    if b_mw is not None and d_mw is not None:
-        margin = b_mw - d_mw
-        margin_txt = f"여유 +{margin:,} MW" if margin >= 0 else f"경계보다 수요가 {-margin:,} MW 많음"
+    # 관심 경계 칸은 선의 뜻만 쉬운 말로 쓴다. 계산식(공급능력 ÷ 1.15)과 여유 MW는 바로 아래 계통 상태 카드가 한 번만
+    # 보인다(2차 평가 멘토: 같은 식·같은 여유가 두 곳에 반복). 경계를 이미 넘었으면 그 사실을 쓴다
+    if b_mw is not None and d_mw is not None and b_mw < d_mw:
+        boundary_desc = f"수요가 이 선을 {d_mw - b_mw:,} MW 넘어 예비율 15% 아래"
     else:
-        margin_txt = "여유 계산 불가"
+        boundary_desc = "수요가 이 선을 넘으면 예비율 15% 아래(관심 단계)"
 
     def cell(swatch: str, color: str, name: str, desc: str, value: str, src: str) -> str:
         return (f'<li class="pd-legend-table__cell"><span class="pd-swatch {swatch}" style="--c:{color}" '
@@ -3570,7 +3730,7 @@ def _html_supply_legend(power_status: Dict, prov: Dict) -> str:
              prov["legend_supply_note"], mw(s_mw), supply_src),
         cell("pd-swatch--hatch", SERIES["reserve"], "예비력", f"공급능력 − 수요 (MW) · 예비율은 {reserve_how}",
              reserve_val, "계산값"),
-        cell("pd-swatch--dash", BOUNDARY_COLOR, "관심 경계", f"공급능력 ÷ 1.15 · {margin_txt}", mw(b_mw), "계산값"),
+        cell("pd-swatch--dash", BOUNDARY_COLOR, "관심 경계", boundary_desc, mw(b_mw), "계산값"),
     )
     return f'<ul class="pd-legend-table" aria-label="수급 추이 범례와 현재값">{"".join(cells)}</ul>'
 
@@ -3816,7 +3976,10 @@ def _html_smp_head(smp_data: Dict, now: datetime, *, refresh_note: str = "5분�
         explain = "SMP(계통한계가격)는 시간대별 도매 전력 가격입니다. 점선 계단 = 추정 패턴(예측 모델 아님)"
     # 같은 날이어도 오른쪽 통계(그날 확정 가격)와 계단(예측값)의 최고·최저가 달라 모순처럼 읽혔고, '거래시간 10h'가 몇 시인지
     # 풀어 쓴 곳이 없었다(1차 평가 멘토 5초 판독) → 점이 1개뿐인 이유와 거래시간 읽는 법을 한 번 밝힌다
-    explain += (", 점 = 지금 거래시간 확정 가격(하루 확정 가격 통계는 SMP 통계 카드)." if point else ".")
+    # 같은 날의 다른 거래시간도 이미 확정 가격이 있는데 차트에는 1점뿐이라, 확정된 시간에 예측 띠를 그린 것처럼 읽혔다
+    # (2차 평가). 나머지 확정 가격을 그리는 것은 데이터 변경(승인 필요)이라 여기서는 아직 연결하지 않았다고 밝힌다
+    explain += (", 점 = 지금 거래시간 확정 가격 1개(같은 날 나머지 거래시간의 확정 가격은 아직 차트에 연결하지 않았습니다 · "
+                "하루 확정 가격 통계는 SMP 통계 카드)." if point else ".")
     # 예시는 차트 pill과 같은 거래시간으로 든다(pill '거래시간 11h'가 바로 풀린다). 지금 칸이 축 밖이면 일반 규칙만 쓴다
     if axis["cur"] is not None:
         hour_now = axis["slots"][axis["cur"]]["trade_hour"]
@@ -3964,14 +4127,19 @@ def _html_smp_model(smp_data: Dict) -> str:
         # 카드 제목이 '예측 모델'이라 줄에는 API 이름만 그대로 쓴다('예측 모델 기준선 예측 …'처럼 겹치지 않게)
         # 칩은 경로(/smp-forecast) 대신 쉬운 말로 쓴다(1차 평가 멘토). 경로는 출처와 기준 시각 표가 그대로 보인다
         chip, line = _html_chip("plain", "API 서버 예측"), name
-        if any(token in raw for token in ("기준선", "전날 같은 시간", "naive", "어제 같은 시각", "baseline")):
+        baseline = any(token in raw for token in ("기준선", "전날 같은 시간", "naive", "어제 같은 시각", "baseline"))
+        # API 이름 끝의 '검증 MAPE'는 API 서버가 실행 중에 계산한 값이고 평가 기간을 주지 않는다. walk-forward 벤치마크
+        # 값과 숫자가 달라 어느 쪽이 기준인지 헷갈렸다(1·2차 평가) → 두 숫자를 나란히 놓고 출처·기간을 밝힌다(값은 그대로)
+        api_mape = re.search(r"MAPE\s*([0-9]+(?:\.[0-9]+)?)\s*%", raw)
+        api_part = (f"검증 MAPE {html_escape(api_mape.group(1))}%는 API 서버 계산값(평가 기간 미공개)" if api_mape
+                    else ("이름의 '검증 MAPE'는 API 서버 계산값(평가 기간 미공개)" if "MAPE" in raw else ""))
+        if baseline and api_part:
+            note = (f"{api_part}, 11.75%는 2026-11-06 walk-forward 벤치마크(2025-07-22~12-18)라 서로 다릅니다"
+                    " · R² 0.203 · 기준선 자체(학습한 모델 아님)")
+        elif baseline:
             note = "walk-forward 2025-07-22~12-18 · MAPE 11.75% · R² 0.203 · 기준선 자체(학습한 모델 아님)"
-        if "MAPE" in raw:
-            # API 이름 끝의 '검증 MAPE'는 API 서버가 실행 중에 계산한 값이고 평가 기간을 주지 않는다. 바로 아래 walk-forward
-            # 값과 숫자가 달라 어느 쪽이 기준인지 헷갈렸다(1차 평가) → 두 숫자의 출처·기간을 밝힌다(값은 바꾸지 않는다)
-            basis = ("이름의 '검증 MAPE'는 API 서버 계산값(평가 기간 미제공)"
-                     + (" · walk-forward 값은 2026-11-06 벤치마크라 숫자가 다릅니다" if note else ""))
-            note = f"{note}<br>{basis}" if note else basis
+        else:
+            note = api_part
     elif keys["pd_fc_kind"] == "api_fallback":
         chip, line = _html_chip("est", "API 대체값"), f"예측 모델 없음 · API 대체값 ({name})"
     else:
@@ -4038,19 +4206,27 @@ def _fmt_timeline_sub(plants_df: pd.DataFrame, registry: Optional[Dict]) -> str:
     return " · ".join(parts)
 
 
-def _html_timeline_legend() -> str:
+def _html_timeline_legend(fig: Optional[go.Figure] = None) -> str:
     """시간대별 발전량 범례(명세 6.1절: Plotly 범례 대신 HTML). 막대와 같은 색·같은 빗금 방향 견본과 현재 시각 상자.
 
     그림 안 범례를 지운 뒤 이 카드만 계열 이름이 툴팁에만 있어 막대 색을 읽을 수 없었다(1차 평가 멘토).
+    태양광은 등록부 4곳(5.3 MW)뿐이라 막대 위 1~2px 조각으로만 보여 최댓값을 범례에 쓴다. 풍력 막대는
+    설비 × 무작위 가정값이라 시간 사이 높낮이에 뜻이 없다는 것을 밝힌다(2차 평가: 일간 모양처럼 읽힘).
     """
     def item(kind: str, hatch: str, name: str) -> str:
         return (f'<span class="pd-maplegend__item" role="listitem"><span class="pd-swatch pd-swatch--bar '
                 f'pd-swatch--bar-{hatch}" style="--c:{SERIES[kind]}" aria-hidden="true"></span><b>{name}</b></span>')
+    solar_name = "태양광"
+    solar = next((t for t in (fig.data if fig is not None else ()) if t.name == "태양광"), None)
+    if solar is not None and solar.y is not None and len(solar.y):
+        peak = max(float(v) for v in solar.y)
+        solar_name = f"태양광 · 최대 {peak:,.1f} MW" if peak > 0 else "태양광 · 0 MW (야간)"
     return ('<div class="pd-maplegend" role="list" aria-label="시간대별 발전량 범례">'
-            + item("wind", "backslash", "풍력") + item("solar", "slash", "태양광")
+            + item("wind", "backslash", "풍력") + item("solar", "slash", solar_name)
             + '<span class="pd-maplegend__item" role="listitem"><span class="pd-swatch pd-swatch--now" aria-hidden="true">'
               '</span>점선 상자 = 지금 시각</span>'
-            + '<span class="pd-maplegend__item" role="listitem">빗금 막대 = 시뮬레이션 추정 · 실측 아님</span></div>')
+            + '<span class="pd-maplegend__item pd-maplegend__note" role="listitem">빗금 막대 = 시뮬레이션 추정 · 실측 아님. '
+              '풍력 높이는 설비 × 무작위 가정값이라 시간 사이 높낮이에 뜻이 없습니다 (다시 그릴 때마다 바뀜)</span></div>')
 
 
 def _chart_table_timeline(fig: go.Figure) -> pd.DataFrame:
@@ -4076,9 +4252,11 @@ def _chart_table_timeline(fig: go.Figure) -> pd.DataFrame:
 
 
 def _fmt_plant_table(plants_df: pd.DataFrame, type_filter: str) -> pd.DataFrame:
-    """발전소 등록부 표(명세 5.11절, N8): 발전소 · 유형 · 지역 · 설비 · 추정 출력 · 이용률(추정) · 상태.
+    """발전소 등록부 표(명세 5.11절, N8): 발전소 · 이용률(추정) · 유형 · 지역 · 설비 · 추정 출력.
 
-    상태 필터는 두지 않는다: get_jeju_power_plants가 운영중만 담으므로 선택지가 '운영중' 하나뿐이다.
+    상태 필터와 상태 열은 두지 않는다: get_jeju_power_plants가 운영중만 담아(예비 목록도 운영중) 열 값이 늘 '운영중'이고,
+    요약 줄이 '운영중만 표시'라고 밝힌다. 열 순서는 명세(등록부 사실 → 추정)에서 바꿨다: 390px 표 칸(약 334px)에는
+    고정한 이름 열과 두 열 남짓만 들어가 이용률 막대가 가로 스크롤 뒤로 숨었다(2차 평가 멘토 '모바일 숨은 내용').
     유형 이름에 이모지를 쓰지 않고 화력을 넣는다(옛 매핑에는 화력이 없어 화력 행 유형이 빈 칸이었다).
 
     Raises:
@@ -4087,7 +4265,7 @@ def _fmt_plant_table(plants_df: pd.DataFrame, type_filter: str) -> pd.DataFrame:
     names = {"wind": "풍력", "solar": "태양광", "ess": "ESS", "thermal": "화력"}
     if type_filter != "전체" and type_filter not in names.values():
         raise ValueError(f"알 수 없는 발전 유형: {type_filter!r}")
-    columns = ["발전소", "유형", "지역", "설비 (MW)", "추정 출력 (MW)", "이용률 (추정)", "상태"]
+    columns = ["발전소", "이용률 (추정)", "유형", "지역", "설비 (MW)", "추정 출력 (MW)"]
     df = plants_df if isinstance(plants_df, pd.DataFrame) else pd.DataFrame()
     if df.empty:
         return pd.DataFrame(columns=columns)
@@ -4097,12 +4275,11 @@ def _fmt_plant_table(plants_df: pd.DataFrame, type_filter: str) -> pd.DataFrame:
 
     out = pd.DataFrame({
         "발전소": col("name", "").fillna("").astype(str),
+        "이용률 (추정)": pd.to_numeric(col("utilization", np.nan), errors="coerce").round(1),
         "유형": col("type", "").map(names).fillna("기타"),
         "지역": col("address", None).map(_fmt_region),
         "설비 (MW)": pd.to_numeric(col("capacity", np.nan), errors="coerce").round(1),
         "추정 출력 (MW)": pd.to_numeric(col("generation", np.nan), errors="coerce").round(1),
-        "이용률 (추정)": pd.to_numeric(col("utilization", np.nan), errors="coerce").round(1),
-        "상태": col("status", "").fillna("").astype(str),
     }, columns=columns)
     if type_filter != "전체":
         out = out[out["유형"] == type_filter]
@@ -4114,12 +4291,18 @@ def _fmt_plant_columns() -> Dict:
 
     이용률 막대는 회색이다: 기본 primary 파랑 채움 막대는 이 앱 문법에서 '실측'처럼 읽혀 시뮬레이션 값과 맞지 않았다
     (1차 평가 멘토). 1.52.1 ProgressColumn의 color는 테마 기본 팔레트 이름(gray)을 받는다.
+    이름 열은 고정(pinned)하고 가장 긴 이름('동복-북촌풍력발전단지')이 잘리지 않는 폭을 준다: 390px에서 이름이 글자 중간에서
+    잘리고, 옆으로 밀면 이름 열이 사라졌다(2차 평가). 유형·지역은 짧은 글자라 small(75px)로 줄인다. 폭 합이 표보다 좁은
+    넓은 화면에서는 Streamlit이 남는 폭을 열마다 나눠 준다. 추정 출력은 도넛·구성 표처럼 ≈를 붙인다(추정 숫자 문법, 3.6절)
     """
     return {
-        "설비 (MW)": st.column_config.NumberColumn(format="%.1f"),
-        "추정 출력 (MW)": st.column_config.NumberColumn(format="%.1f", help="시뮬레이션 추정치 · 실측 아님"),
+        "발전소": st.column_config.TextColumn(pinned=True, width=172),
         "이용률 (추정)": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%", color="gray",
-                                                      help="추정 출력 ÷ 설비용량 · 실측 아님"),
+                                                      width=104, help="추정 출력 ÷ 설비용량 · 실측 아님"),
+        "유형": st.column_config.TextColumn(width="small"),
+        "지역": st.column_config.TextColumn(width="small"),
+        "설비 (MW)": st.column_config.NumberColumn(format="%.1f", help="발전소 등록부 설비용량"),
+        "추정 출력 (MW)": st.column_config.NumberColumn(format="≈%.1f", help="시뮬레이션 추정치 · 실측 아님"),
     }
 
 
@@ -4140,9 +4323,19 @@ def _html_plant_summary(display_df: pd.DataFrame, registry: Optional[Dict], type
         capacity = pd.to_numeric(display_df.get("설비 (MW)"), errors="coerce").sum() if len(display_df) else 0.0
         lines = [f"표시 {len(display_df)}곳 · 설비 {capacity:,.1f} MW · 운영중만 표시"
                  + (f" ({excluded} 제외)" if excluded else "") + " · 출력은 시뮬레이션 추정"]
+    sums = ""
     if len(display_df):
-        over = display_df[pd.to_numeric(display_df["추정 출력 (MW)"], errors="coerce")
-                          > pd.to_numeric(display_df["설비 (MW)"], errors="coerce")]
+        out_mw = pd.to_numeric(display_df["추정 출력 (MW)"], errors="coerce")
+        # 표 자체의 유형별 합계를 밝힌다: 도넛(시간대 공식)·막대(설비 × 가정)와 숫자가 다른 것을 보는 사람이 더해 보고
+        # 찾아내게 두지 않는다(2차 평가 멘토: 풍력 도넛 ≈158 · 10시 막대 ≈165 · 표 합 219.9 MW). 표에 보인 소수 1자리 값을 더한다
+        if out_mw.notna().any():
+            by_type = out_mw.groupby(display_df["유형"]).sum(min_count=1)
+            parts = [f"{name} {by_type[name]:,.1f}" for name in ("풍력", "태양광", "ESS", "화력")
+                     if name in by_type.index and pd.notna(by_type[name])]
+            detail = f" ({' · '.join(parts)})" if type_filter == "전체" and len(parts) > 1 else ""
+            sums = (f'<p class="pd-plant-summary__sums">이 표의 추정 출력 합계 ≈{out_mw.sum():,.1f} MW{detail} · '
+                    '도넛·막대와 계산 방식이 달라 같은 유형 합계가 다릅니다</p>')
+        over = display_df[out_mw > pd.to_numeric(display_df["설비 (MW)"], errors="coerce")]
         if len(over):
             names = [html_escape(str(n)) for n in over["발전소"]]
             listed = ", ".join(names[:3]) + (f" 외 {len(names) - 3}곳" if len(names) > 3 else "")
@@ -4150,7 +4343,10 @@ def _html_plant_summary(display_df: pd.DataFrame, registry: Optional[Dict], type
                          f'<span>추정 출력이 설비용량을 넘는 발전소 {len(over)}곳: {listed} — 모형 한계, 실측 아님</span>')
     first = f'<p>{lines[0]}</p>'
     rest = "".join(f'<p class="pd-plant-summary__warn">{line}</p>' for line in lines[1:])
-    return f'<div class="pd-plant-summary">{first}{rest}</div>'
+    # 390px 표 칸에는 이름·이용률·유형만 들어간다. 캔버스 가로 스크롤은 손잡이가 보이지 않아 좁은 폭에서만 길을 알린다
+    scroll = ('<p class="pd-plant-summary__scroll">표를 옆으로 밀면 지역·설비·추정 출력 열이 보입니다 '
+              '(발전소 이름 열은 고정)</p>')
+    return f'<div class="pd-plant-summary">{first}{sums}{rest}{scroll}</div>'
 
 
 def _html_section_head(title: str, subtitle: str = "") -> str:
@@ -4458,8 +4654,9 @@ def _html_data_status(power_status: Dict, smp_data: Dict, backend_predictions: O
             + '<table class="pd-sources__table"><thead><tr><th scope="col">항목</th><th scope="col">출처</th>'
             + '<th scope="col">기준 (KST)</th><th scope="col">상태</th></tr></thead>'
             + f'<tbody>{body}</tbody></table>'
-            + '<p class="pd-card__foot">실제로 잰 시간별 이력은 아직 연결되지 않아 수급 곡선은 일간 패턴으로 그린 추정입니다 · '
-            + '화면 테마: 오른쪽 위 ⋮ → Settings → Choose app theme (새로 고치면 시스템 설정으로 돌아갑니다)</p></section>')
+            # 테마 안내는 사이드바와 푸터(5.14 계약)에 있어 이 각주에서는 뺐다(명세 5.13 각주에서 바꿈: 한 화면에 세 번, 2차 평가)
+            + '<p class="pd-card__foot">실제로 잰 시간별 이력은 아직 연결되지 않아 수급 곡선은 일간 패턴으로 그린 추정입니다</p>'
+            + '</section>')
 
 
 # ============================================================================
@@ -4573,6 +4770,10 @@ def main():
             # 카드 문법(명세 5.5)에 '확인 불가' 칸이 없어 실측 칩을 피해 가장 가까운 '실측 아님' 칸을 쓰고 사유를 시각 줄에 적는다
             weather['pd_src'] = 'default'
             weather['pd_time'] = 'API 응답 없음 · 최대 5분 전 값이라 출처 확인 불가'
+        # 날씨 문구는 API 문자열이고 카드는 unsafe_allow_html이다. 다른 API·파일 문자열처럼 이스케이프한다(2차 평가).
+        # 사본 dict만 바꾸므로 카드 f-string은 그대로 weather만 참조한다(T1·ui_guard G-S2)
+        if weather.get('condition'):
+            weather['condition'] = html_escape(str(weather['condition']))
         smp_data = {**smp_data, **_fmt_smp_display_keys(smp_data, now)}
         reserve_rate = power_status['reserve_rate']
         level = _fmt_reserve_level(reserve_rate)
@@ -4610,9 +4811,14 @@ def main():
                     smp_flat = abs(smp_data['change']) < 0.05
                     smp_change_class = "" if smp_flat else ("is-up" if smp_data['change'] > 0 else "is-down")
                     smp_arrow = "–" if smp_flat else ("▲" if smp_data['change'] > 0 else "▼")
+                    # 변화율이 0.05% 미만이면 소수 1자리 반올림이 '(-0.0%)'가 되어 고장처럼 보였다(2차 평가). 표시만 바꾼다
+                    # (get_smp_data의 반올림은 그대로). 변화율이 없으면 괄호를 쓰지 않는다
+                    smp_pct = smp_data.get('change_pct')
+                    smp_pct_txt = ("" if not _finite_number(smp_pct) else
+                                   " (0.1% 미만)" if abs(smp_pct) < 0.05 else f" ({smp_pct:+.1f}%)")
                     smp_change_html = (
                         f'{smp_arrow} 0.0 원/kWh (변동 없음) · 전 거래시간 대비' if smp_flat else
-                        f'{smp_arrow} {abs(smp_data["change"]):.1f} 원/kWh ({smp_data["change_pct"]:+.1f}%) · 전 거래시간 대비'
+                        f'{smp_arrow} {abs(smp_data["change"]):.1f} 원/kWh{smp_pct_txt} · 전 거래시간 대비'
                     )
                 else:
                     smp_change_class = ""
@@ -4662,7 +4868,12 @@ def main():
                 with map_col:
                     with st.container(key="map_col"):
                         jeju_map = create_jeju_map(plants_df, show_heatmap)
-                        st_folium(jeju_map, height=480, use_container_width=True, returned_objects=[], key="jeju_map")
+                        # 인스펙터에서 고른 지역으로 지도를 맞춘다(명세 10장 L1, 2차 평가). 지역 위젯은 오른쪽 열에서 이 다음에
+                        # 그려지므로 이번 실행의 값은 session_state에서 읽는다(위젯을 누르면 그 값으로 다시 실행된다).
+                        # feature_group_to_add는 지도 해시에 들어가지 않아 지역을 바꿔도 iframe이 다시 마운트되지 않는다
+                        map_focus = _render_map_focus(plants_df, st.session_state.get("map_region") or "전체")
+                        st_folium(jeju_map, height=480, use_container_width=True, returned_objects=[], key="jeju_map",
+                                  feature_group_to_add=map_focus)
                         st.html(_html_map_legend(plants_df))
                         if show_heatmap:
                             st.html(_html_chip("est", "열지도 = 시뮬레이션 추정 출력 · 실측 아님"))
@@ -4708,7 +4919,8 @@ def main():
                         st.html(_html_card_head("수급 게이지", "", prov['demand_chips'], prov['demand_meta']))
                         g1, g2 = st.columns(2, gap="small")
                         with g1:
-                            st.html(_html_gauge_label("수요", "축 0–1,200 MW · 빨간 눈금 1,080 MW"))
+                            # 빨간 눈금(축 끝의 90%, 6.4 계약)이 계통 한계처럼 읽혔다(2차 평가 멘토). 운영 기준이 아님을 밝힌다
+                            st.html(_html_gauge_label("수요", "축 0–1,200 MW · 빨간 눈금 1,080 MW = 축 끝의 90% (운영 기준 아님)"))
                             demand_gauge = create_gauge_chart(
                                 value=power_status['demand'], title='', max_val=1200, color='#3B82F6', suffix=' MW'
                             )
@@ -4796,28 +5008,31 @@ def main():
     with tab2:
         live_smp()
 
-    # 도넛·타임라인 행만 fragment로: 타임라인의 현재 시각 상자가 정시를 따라간다. 등록부 표(필터 위젯)는 밖에 둔다
-    @st.fragment(run_every=run_every_slow)
-    def live_generation():
+    # 도넛·타임라인 행. 처음에는 300초 fragment였으나 2차 평가에서 G11 ③(임의의 60초 창 WebSocket 합계 ≤ 126 KB)이 타이머
+    # 어긋남으로 124.7~126.2 KB까지 올라가 명세 9.4절 E8 대체안 1단계대로 fragment를 없앴다. 이제 전체 실행(새로 고침·위젯
+    # 조작) 때만 다시 그리므로, 타임라인의 지금 시각 상자가 어느 시각 기준인지 카드 메타에 밝힌다(등록부 표와 같은 갱신 방식)
+    def generation_row():
         now = datetime.now()
-        with st.empty():  # live_smp와 같은 이유로 데이터 읽기를 한 칸 안에서 한다
+        with st.empty():  # 캐시 진행 표시가 요소 위치를 밀지 않게 데이터 읽기를 한 칸 안에서 한다(main 첫 읽기와 같은 이유)
             power_status = get_current_power_status()
             plants_df = get_jeju_power_plants()
         mix_col, tl_col = st.columns([5, 7], gap="medium")
         with mix_col:
             with st.container(border=True, key="card_mix"):
                 st.html(_html_card_head("전력 공급 구성 (시뮬레이션 추정)", "로컬 추정 · 상단 재생에너지 비율(섬 전체 ML 추정)과 산출 근거 다름",
-                                        _html_chip("est", "시뮬레이션 · 실측 아님"), _fmt_screen_meta("시뮬레이션", now, "60초 캐시")))
+                                        _html_chip("est", "시뮬레이션 · 실측 아님"),
+                                        _fmt_screen_meta("시뮬레이션", now, "새로 고칠 때 다시 계산")))
                 fig = create_supply_donut(power_status)
                 st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False}, key="chart_mix")
                 st.html(_html_mix_table(power_status))
         with tl_col:
             with st.container(border=True, key="card_timeline"):
                 st.html(_html_card_head("시간대별 발전량 (시뮬레이션)", _fmt_timeline_sub(plants_df, registry),
-                                        _html_chip("est", "시뮬레이션 · 실측 아님"), _fmt_screen_meta("시뮬레이션", now, "60초 캐시")))
+                                        _html_chip("est", "시뮬레이션 · 실측 아님"),
+                                        f"시뮬레이션 · 현재 시각 표시 = 화면 {now:%H:%M} KST 기준 (새로 고칠 때 다시 계산)"))
                 fig = create_generation_timeline(plants_df)
                 st.plotly_chart(fig, theme="streamlit", width="stretch", config={"displayModeBar": False}, key="chart_timeline")
-                st.html(_html_timeline_legend())
+                st.html(_html_timeline_legend(fig))
                 with st.expander("표로 보기", icon=":material/table_view:"):
                     timeline_table = _chart_table_timeline(fig)
                     st.dataframe(timeline_table, hide_index=True, width="stretch",
@@ -4825,7 +5040,14 @@ def main():
                                  column_config=_fmt_number_columns(list(timeline_table.columns[1:4])))
 
     with tab3:
-        live_generation()
+        # 세 화면(도넛·막대·등록부 표)은 서로 다른 모의 계산이라 같은 유형의 합계가 맞지 않는다. 숫자를 더해 보는 사람이
+        # 지어낸 숫자로 오해하지 않게 탭 맨 위에서 먼저 밝힌다(2차 평가 멘토 5초 시험: 풍력 158 · 165 · 219.9 MW)
+        st.html(_html_section_head(
+            "발전 출력은 모두 시뮬레이션 추정입니다 (실측 아님)",
+            "세 화면은 계산 방식이 달라 같은 유형의 합계가 서로 맞지 않습니다 — 도넛: 시간대 공식으로 나눈 섬 전체 공급 · "
+            "막대: 등록부 풍력·태양광 설비 × 시간 가정(분산형 태양광 제외) · 표: 발전소마다 따로 계산한 출력. "
+            "발전소 위치·설비용량은 등록부 값입니다"))
+        generation_row()
         with st.container(border=True, key="card_plants"):
             st.html(_html_card_head("발전소 등록부", "위치·설비는 등록부, 출력·이용률은 시뮬레이션 추정", "",
                                     _fmt_registry_ref(registry)))
@@ -4852,6 +5074,11 @@ def main():
 <section class="pd-model__cell"><p class="pd-model__name"><span class="pd-ico pd-ico--tag" aria-hidden="true"></span>SMP 예측 — 하루전 시장가격 (어제 같은 시각 가격)</p><dl><dt>MAPE</dt><dd class="pd-num">11.75%</dd><dt>R² Score</dt><dd class="pd-num">0.203</dd></dl><p class="pd-card__note">walk-forward 2025-07-22~12-18 · 기준선(naive) 자체, 학습한 모델 아님</p></section>
 </div>
 </div>""", unsafe_allow_html=True)
+            # 카드 글자는 계약(명세 5.6, T5)이라 그대로 두고, 비전문가가 막히는 낱말과 화면에 없는 '신뢰도 93%'를 아래 한 줄로
+            # 풀어 쓴다(2차 평가 멘토). API의 신뢰도는 renewable_ml_predictor가 시간대 규칙으로 붙이는 상수(0.7~0.95)다
+            st.html('<p class="pd-card__note pd-model__glossary">낱말 풀이: holdout = 학습에 쓰지 않은 기간으로 검증 · '
+                    'walk-forward = 기간을 옮겨 가며 여러 번 검증 · naive = 어제 같은 시각 값을 그대로 쓰는 기준선. '
+                    'API 응답의 신뢰도(예: 93%)는 API가 시간대 규칙으로 붙이는 자체 값이라 이 화면에 표시하지 않습니다</p>')
         # 예시 카드 3장은 접힌 expander 안에만 둔다(J11). 카드 문자열은 회귀 테스트가 찾는 일반 문자열 상수다
         with st.expander("예시 화면 3종 · 실데이터 아님", icon=":material/science:"):
             st.html(_html_example_ribbon())
@@ -4907,9 +5134,14 @@ def main():
             kpx_local = fetch_jeju_realtime()
             sources_plants = get_jeju_power_plants()
             sources_registry = load_power_plants_data()
-        st.html(_html_data_status(power_status, smp_data, backend_predictions, weather, api_kpis, kpx_local,
-                                  sources_registry, now, plants_df=sources_plants,
-                                  refresh_note="60초마다 갱신" if auto_refresh else "자동 갱신 꺼짐"))
+        # 같은 8행 표가 탭 네 개 끝마다 붙어(데스크톱 약 480px · 390px 약 900px) 훑어 읽기를 늦췄다(2차 평가 멘토). 접는 칸에
+        # 넣고, 641px 이상에서 실시간 현황 탭이 선택돼 있을 때만 CSS(14절)가 펼친 카드로 보인다. 펼침 상태는 Streamlit
+        # expander가 기억하므로 60초마다 표가 다시 그려져도 사용자가 연 칸이 닫히지 않는다
+        with st.container(key="sources_fold"):
+            with st.expander("출처와 기준 시각 · 8개 항목", icon=":material/fact_check:"):
+                st.html(_html_data_status(power_status, smp_data, backend_predictions, weather, api_kpis, kpx_local,
+                                          sources_registry, now, plants_df=sources_plants,
+                                          refresh_note="60초마다 갱신" if auto_refresh else "자동 갱신 꺼짐"))
 
     live_sources()
 
