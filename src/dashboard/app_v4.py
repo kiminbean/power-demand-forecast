@@ -1989,8 +1989,9 @@ def create_realtime_power_chart(demand_now: float, supply_now: float, demand_mea
         fig.add_annotation(x=now, y=(demand_now + boundary_now) / 2, text="예비력", showarrow=False,
                            xanchor="right", xshift=-8, yanchor="middle")
 
-    # 단위는 축 제목 대신 y 눈금 위에 둔다(와이어프레임 4.2절 'MW 1,600 ┤'). 축 제목은 회전 글자라 좁은 폭에서 자리를 먹는다
-    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4,
+    # 단위는 축 제목(회전 글자라 좁은 폭에서 자리를 먹는다) 대신 y 눈금 위에 둔다(와이어프레임 4.2절 'MW 1,600 ┤'). 축 끝이 눈금에
+    # 걸리면 그 눈금 글자와 붙어(7차 평가) 위 여백(32px) 안에서 8px 띄운다(13.1절 H2, 그림 영역 높이 그대로)
+    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4, yshift=8,
                        text="MW", showarrow=False)
     # 0 기준이 아니라는 것을 플롯 왼쪽 아래에 밝힌다(수요 선의 최솟값은 아래 끝보다 20% 위라 글자와 겹치지 않는다)
     fig.add_annotation(x=0, xref="paper", y=0, yref="paper", xanchor="left", yanchor="bottom", xshift=4, yshift=2,
@@ -2161,8 +2162,8 @@ def create_generation_timeline(plants_df: pd.DataFrame) -> go.Figure:
     fig.add_annotation(x=current_hour, y=1, yref="paper", xanchor=pill_anchor, yanchor="bottom", showarrow=False,
                        text=f"지금 {current_hour:02d}시", bgcolor="#475569", font=dict(color="#FFFFFF", size=12),
                        borderpad=4)
-    # 단위는 축 제목 대신 y 눈금 위에 둔다(수급 차트와 같은 자리). 축 제목은 회전 글자라 좁은 폭에서 자리를 먹는다
-    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4,
+    # 단위는 축 제목 대신 y 눈금 위에 둔다(수급 차트와 같은 자리·같은 8px 띄움, 13.1절 H2)
+    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="right", yanchor="bottom", xshift=-4, yshift=8,
                        text="MW", showarrow=False)
 
     _chart_base(fig, height=250)
@@ -2279,7 +2280,7 @@ PD_CSS_TOKENS = """
   --pd-danger-fg:#9A3412;--pd-danger-bg:#FFEDD5;--pd-crit-fg:#B91C1C;--pd-crit-bg:#FEE2E2;
   --pd-info-fg:#1D4ED8;--pd-info-bg:#DBEAFE;--pd-meas-border:#94A3B8;
   --pd-fc-fg:#1D4ED8;--pd-fc-bg:#EFF6FF;--pd-fc-border:#3B82F6;
-  --pd-est-fg:#334155;--pd-est-bg:#F1F5F9;--pd-est-stripe:rgba(100,116,139,.22);
+  --pd-est-fg:#334155;--pd-est-bg:#F1F5F9;--pd-est-stripe:rgba(100,116,139,.22);--pd-est-rule:#7B8798;--pd-hatch-reserve:rgba(22,163,74,.08);
   --pd-ex-fg:#92400E;--pd-ex-bg:#FFFBEB;--pd-ex-border:rgba(217,119,6,.55);
   --pd-s-demand:#3B82F6;--pd-s-supply:#64748B;--pd-s-reserve:#16A34A;--pd-s-solar:#B7791F;
   --pd-s-wind:#0891B2;--pd-s-ess:#8B5CF6;--pd-s-thermal:#8D6E63;--pd-s-hvdc:#7C8DB0;--pd-s-smp:#C026D3;
@@ -2301,7 +2302,9 @@ PD_CSS_TOKENS = """
     --pd-meas-border:light-dark(#94A3B8,#64748B);
     --pd-fc-fg:light-dark(#1D4ED8,#93C5FD);--pd-fc-bg:light-dark(#EFF6FF,rgba(96,165,250,.12));--pd-fc-border:light-dark(#3B82F6,#60A5FA);
     --pd-est-fg:light-dark(#334155,#CBD5E1);--pd-est-bg:light-dark(#F1F5F9,#1A2439);
-    --pd-est-stripe:light-dark(rgba(100,116,139,.22),rgba(148,163,184,.22));
+    /* 13.5절 H11(7차 평가): 다크 빗금 .22 → .14·추정 띠 알파 .82(3:1 유지), 라이트 예비력 빗금 .08 → .12(수요 점선 3.04:1, 부록 A-2) */
+    --pd-est-stripe:light-dark(rgba(100,116,139,.22),rgba(148,163,184,.14));--pd-est-rule:light-dark(#7B8798,rgba(107,122,147,.82));
+    --pd-hatch-reserve:light-dark(color-mix(in srgb,var(--pd-s-reserve) 12%,transparent),color-mix(in srgb,var(--pd-s-reserve) 8%,transparent));
     --pd-ex-fg:light-dark(#92400E,#FCD34D);--pd-ex-bg:light-dark(#FFFBEB,rgba(245,158,11,.12));
     --pd-ex-border:light-dark(rgba(217,119,6,.55),rgba(245,158,11,.45));
   }
@@ -2444,15 +2447,17 @@ PD_CSS_COMPONENTS = """
 .pd-kpi__value{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
 .pd-kpi__value .pd-num{font-size:30px;font-weight:700;line-height:1.15}
 .pd-kpi__unit{font-size:14px;font-weight:500;color:var(--pd-text-3)}
+/* SMP 풀이(13.3절 H7)는 값 줄 오른쪽 끝: 값 위에 줄을 더하면 같은 행 KPI 값 높이가 어긋난다(1차 평가). 640px 이하는 값 아래 줄 */
+.pd-kpi__gloss{margin-left:auto;font-size:12px;font-weight:600;color:var(--pd-text-3)}
 .pd-kpi__sub{font-size:13px;color:var(--pd-text-2)}
 .pd-kpi__meta{margin-top:auto;padding-top:8px;border-top:1px solid var(--pd-border);display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
 .pd-kpi.is-est .pd-kpi__value .pd-num{color:var(--pd-text-2)}
 .pd-kpi.is-stale .pd-kpi__meta{color:var(--pd-warn-fg)}
-.pd-kpi.is-est::before,.pd-card-sim::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;background:repeating-linear-gradient(180deg,var(--pd-border-strong) 0 3px,transparent 3px 6px)}
+.pd-kpi.is-est::before,.pd-card-sim::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;background:repeating-linear-gradient(180deg,var(--pd-est-rule) 0 3px,transparent 3px 6px)}
 .pd-card-sim{position:relative;padding-left:10px}
 /* 640px 이하 2×2에서는 칩을 늘 라벨 아래 줄로 내린다(명세 4.1절 390). 라벨이 긴 카드만 칩이 접히면 같은 행의 값 높이가
    27px 어긋났다(1차 평가: 현재 수요 244 · SMP 271) */
-@media (max-width:640px){.pd-kpi{padding:12px}.pd-kpi__value .pd-num{font-size:24px}.pd-kpi__head{flex-direction:column;align-items:flex-start;gap:4px}}
+@media (max-width:640px){.pd-kpi{padding:12px}.pd-kpi__value .pd-num{font-size:24px}.pd-kpi__head{flex-direction:column;align-items:flex-start;gap:4px}.pd-kpi__value{flex-wrap:wrap}.pd-kpi__gloss{flex-basis:100%;margin-left:0}}
 /* ---- 5. 칩·pill·글리프 ---- */
 .pd-chip{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:0 8px;border-radius:999px;border:1px solid var(--pd-meas-border);font-size:12px;font-weight:600;line-height:1.2;color:var(--pd-text-2);white-space:nowrap}
 .pd-chip--plain{border-color:var(--pd-border);color:var(--pd-text-2)}
@@ -2612,6 +2617,7 @@ PD_CSS_COMPONENTS = """
 .pd-stat__value small{margin-left:3px;font-size:13px;font-weight:500;color:var(--pd-text-3)}
 .pd-stat__value--text{font-size:13px;font-weight:600;line-height:1.45;white-space:normal}
 .pd-stat__src{font-size:12px;line-height:1.4;color:var(--pd-text-3)}
+@media (min-width:1181px){.pd-stat__more{display:none}}
 .pd-insp__table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--pd-text-2)}
 .pd-insp__table th{padding:6px 8px;font-size:12px;font-weight:600;text-align:left;white-space:nowrap;color:var(--pd-text-3);background:var(--pd-well)}
 .pd-insp__table th:first-child{border-radius:8px 0 0 8px}
@@ -2688,6 +2694,7 @@ PD_CSS_COMPONENTS = """
 .pd-swatch--line::after{content:"";position:absolute;left:8px;top:2px;width:10px;height:10px;box-sizing:border-box;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--pd-well)}
 .pd-swatch--line.is-open::after{background:var(--pd-well);border:2px solid var(--c)}
 .pd-swatch--hatch{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 55%,transparent) 0 2px,transparent 2px 5px);border:1px solid color-mix(in srgb,var(--c) 60%,transparent)}
+.st-key-card_supply [data-testid="stPlotlyChart"] pattern path{opacity:1;stroke:var(--pd-hatch-reserve)} /* 예비력 빗금(Plotly opacity 속성 .08)을 테마별로(H11) */
 /* 시간 띠: 차트 아래에서 지난·지금·다음 구간의 뜻을 글로 밝힌다(C·EM 스크러버 이식). 640px 이하는 3줄 */
 .pd-timestrip{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;font-size:12px;line-height:1.4}
 .pd-timestrip__seg{display:flex;align-items:center;justify-content:center;gap:6px;min-height:26px;padding:3px 10px;border-radius:8px;border:1.5px dotted var(--pd-border-strong);background:repeating-linear-gradient(135deg,var(--pd-est-stripe) 0 2px,transparent 2px 6px),var(--pd-est-bg);color:var(--pd-est-fg);text-align:center}
@@ -2900,6 +2907,8 @@ PD_CSS_COMPONENTS = """
 .pd-section-head p{margin:0}
 .pd-section-head__title{font-size:17px;font-weight:700;line-height:1.3;color:var(--pd-text-1)}
 .pd-section-head__sub{font-size:13px;line-height:1.45;color:var(--pd-text-3)}
+/* 분석 탭 낱말 풀이 목록(13.5절 H12): 72ch 안에서 두 칸, 좁은 폭은 한 칸 */
+.pd-glossary{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,16em),1fr));gap:2px 20px;margin:8px 0 0;padding:0;list-style:none;font-size:12px;line-height:1.45;color:var(--pd-text-3)}.pd-glossary b{font-weight:700;color:var(--pd-text-2)}
 .pd-example-ribbon{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 12px;border-radius:10px;border:1px dashed var(--pd-ex-border);background:var(--pd-ex-bg);font-size:13px;line-height:1.45;color:var(--pd-ex-fg)}
 .pd-example-ribbon b{font-weight:700}
 /* 분석 탭 모델 카드(st.markdown): 칸 제목은 h4가 아니라 p라 Streamlit 제목 앵커가 붙지 않는다. st.markdown 안의
@@ -3006,6 +3015,7 @@ PD_CSS_COMPONENTS = """
 .pd-footer b{font-weight:700;color:var(--pd-text-2)}
 /* 마지막 낱말이 홀로 한 줄에 남지 않게 한다(2차 평가 1024: 'Team'만 둘째 줄). 계약 글자(5.14)는 그대로다 */
 .pd-footer p{text-wrap:pretty}
+.pd-card__note,.pd-card__foot,.pd-footer p,.pd-glossary{max-width:72ch} /* 13.5절 H12: 1440에서 12.5px 회색 165자가 1,334px 한 줄 */
 /* ---- 14. 2차 평가 반영 (3장 토큰만 쓴다) ---- */
 /* 등록부 표 가로 스크롤 안내: 640px 이하 표 칸(약 334px)에는 이름·설비·유형만 들어가고 캔버스 스크롤 손잡이가 보이지 않는다 */
 .pd-plant-summary .pd-plant-summary__scroll{display:none;font-size:12px;color:var(--pd-text-3)}
@@ -3050,7 +3060,7 @@ PD_CSS_COMPONENTS = """
   .pd-kpi__meta,.pd-card__meta{font-size:13px}
   .pd-card__note,[data-testid="stMarkdownContainer"] .pd-card__note,.pd-card__foot,.pd-legend-table__desc,
   .pd-legend-table__val small,.pd-gauge-label__how,.pd-stat__src,.pd-sources__sub,.pd-insp__note,.pd-insp__ref,
-  .pd-maplegend,.pd-legend,.pd-timestrip,.pd-scroll-hint{font-size:12.5px}
+  .pd-maplegend,.pd-legend,.pd-timestrip,.pd-scroll-hint,.pd-glossary{font-size:12.5px}
 }
 /* 출처와 기준 시각(명세 5.13에서 바꿈): 접는 칸(st.expander)이 카드 면이 되고 안쪽 표 카드는 테두리를 뺀다. 접힘 제목 줄이
    같은 이름을 보이므로 안쪽 제목은 숨긴다. 641px 이상에서 실시간 현황 탭(첫 탭)이 선택돼 있으면 접힘과 상관없이 내용을 보이고
@@ -3128,9 +3138,9 @@ html:not(.pd-mouse) .leaflet-container:focus-visible::after{content:"";position:
 .leaflet-marker-icon{transition:opacity .2s}
 @media (prefers-reduced-motion:reduce){.leaflet-marker-icon{transition:none}}
 /* 좁은 지도(iframe 640px 이하, 바깥 화면 약 700px 이하)에서는 기호 그림만 22% 줄여 타일 지명(서귀포시·대정 등)을 덜 가린다.
-   누르기 상자(최소 24px)는 그대로 둔다(2차 평가 390). 타일도 조금 흐리게 해 기호가 지명 위에 서게 한다(12.3절 E11,
-   다크 지명 글자 대비는 흐린 뒤에도 4.5:1 이상 — build/f5 실측) */
-@media (max-width:640px){.leaflet-marker-icon.pd-mk svg{transform:scale(.78)}.leaflet-tile-pane{opacity:.75}}
+   누르기 상자(최소 24px)는 그대로 둔다(2차 평가 390). 타일도 흐리게 해 기호가 지명 위에 서게 한다(12.3절 E11 .75 →
+   13.5절 H11 .65: 7차 평가 390에서 '▲귀포시'로 읽혔다. 지명 없는 타일 P4 전까지의 완화) */
+@media (max-width:640px){.leaflet-marker-icon.pd-mk svg{transform:scale(.78)}.leaflet-tile-pane{opacity:.65}}
 .pd-callout-mk{background:none;border:0}
 .pd-callout{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--background-color);color:var(--text-color);border:1px solid var(--secondary-background-color);font-size:12px;line-height:1.35;white-space:nowrap}
 .pd-callout b{font-weight:700}
@@ -3471,8 +3481,9 @@ def _fmt_provenance(power_status: Dict, api_kpis: Optional[Dict], kpx_local: Opt
         # 640px 이하 KPI 메타 한 줄(11.2절 D5): 출처·관측 두 줄은 '출처·시각' 펼침 안에 두고 이 짧은 줄만 늘 보인다
         "pd_basis": pd_basis,
         # 재생 비율 KPI 덧말: API ML 값이 0.5% 미만인데 발전 현황 탭 모형(도넛)의 풍력이 0보다 크면 다른 모형이라는 것을 밝힌다
-        # (6차 평가: 첫 화면 '0.0 %'가 고장처럼 읽혔다. 값을 맞추는 일은 승인 항목 P7)
-        "pd_renew_sub": ("API ML 추정 · 발전 현황 탭 모형과 다름"
+        # (6차 평가: '0.0 %'가 고장처럼 읽혔다. 값 맞추기는 P7). 둘 다 실측이 아니라는 것도 쓴다(13.3절 H6). 그 탭 모형 비율 N은
+        # 쓰지 않는다: KPI(60초 fragment)와 '모형 추정 보기' 리본(전체 실행)은 같은 실행 값이 아니고, 리본은 비율이 아닌 MW다
+        "pd_renew_sub": ("발전 현황 탭 모형과 크게 다름 · 둘 다 실측 아님"
                          if "renewable_source" in power_status and _finite_number(ratio) and ratio < 0.5
                          and _finite_number(mix_wind) and mix_wind > 0 else "태양광·풍력이 지금 수요를 채우는 비율"),
     }
@@ -3997,7 +4008,8 @@ class _MapThemeSync(MacroElement):
   try { if (window.frameElement) { window.frameElement.title = "제주 발전소 지도 (등록부 위치·설비, 기호 = 발전 유형)"; } } catch (e) {}
   // 기호에서 Enter로 연 팝업이 Tab으로 다른 기호에 가도 열린 채 남았다. Leaflet이 초점 기호로 지도를 옮기면(autoPanOnFocus)
   // 팝업이 지도 밖으로 밀려 × 초점이 화면 밖(y −113)이 되고, 다른 기호의 초점 고리를 덮었다(4차 평가 KBD, 390 두 테마 7곳).
-  // 팝업을 연 기호를 표시해 두고, 초점이 다른 기호로 가면 × 링크를 눌러 Leaflet 경로로 닫는다. Esc 닫기는 그대로다
+  // 팝업을 연 기호를 표시해 두고, 초점이 다른 기호로 가면 × 링크를 눌러 Leaflet 경로로 닫는다. Esc도 × 링크로 닫고 초점을
+  // 그 기호로 돌린다: Leaflet 1.9.3의 Esc는 지도 칸에 초점이 있을 때만 걸려 기호에서 Enter로 연 팝업이 안 닫혔다(7차 평가, H13)
   function markSource(el) {
     document.querySelectorAll(".pd-popup-src").forEach(function (x) { x.classList.remove("pd-popup-src"); });
     el.classList.add("pd-popup-src");
@@ -4007,14 +4019,17 @@ class _MapThemeSync(MacroElement):
     if (m) { markSource(m); }
   }, true);
   // 마우스로 누르면 html.pd-mouse를 달아 지도 칸 테두리 고리를 끄고, 키를 누르거나 초점이 iframe 밖으로 나가면 뗀다(PD_CSS_MAP).
-  // Tab으로 바깥에서 들어오는 키 입력은 iframe이 받지 못하므로 처음 상태(고리 보임)를 키보드 쪽으로 둔다
+  // Tab으로 바깥에서 들어오는 키 입력은 iframe이 받지 못하므로 처음 상태(고리 보임)를 키보드 쪽으로 둔다.
+  // 누르거나 키를 쓰면 숨은 탭 마운트 뒤 미뤄 둔 시점 맞춤(_render_map_focus, H1)을 그만둔다(사용자 시점 우선)
   var root = document.documentElement;
-  document.addEventListener("pointerdown", function () { root.classList.add("pd-mouse"); }, true);
+  function userMoved() { if (window.__pdHome) { window.__pdHome.wait = false; } }
+  document.addEventListener("pointerdown", function () { root.classList.add("pd-mouse"); userMoved(); }, true);
   window.addEventListener("blur", function () { root.classList.remove("pd-mouse"); });
   document.addEventListener("keydown", function (e) {
-    root.classList.remove("pd-mouse");
-    var t = document.activeElement;
+    root.classList.remove("pd-mouse"); userMoved();
+    var t = document.activeElement, x = document.querySelector(".leaflet-popup-close-button"), src = document.querySelector(".pd-popup-src");
     if ((e.key === "Enter" || e.key === " ") && t && t.classList && t.classList.contains("leaflet-marker-icon")) { markSource(t); }
+    if (e.key === "Escape" && x) { x.click(); if (src) { src.focus(); } }
   }, true);
   document.addEventListener("focusin", function (e) {
     var t = e.target;
@@ -4106,8 +4121,9 @@ def _html_marker(kind: str, capacity_mw: float, label: str = "") -> Tuple[str, i
         return shapes[kind].replace("/>", f' style="fill:none;stroke:{color};stroke-width:{1.25 + 2 * outside:g};'
                                           'stroke-linejoin:round;vector-effect:non-scaling-stroke"/>')
 
-    # 바깥에 바탕색 2px 후광을 둘러 타일 지명 글자가 기호 밑을 지날 때 기호 둘레가 글자와 붙어 읽히지 않게 한다(12.3절 E11)
-    halo = stroke("var(--background-color)", ring + 2) + (stroke("#FFFFFF", ring) if ring else "")
+    # 바깥에 바탕색 후광을 둘러 지명 글자가 기호 밑을 지날 때 기호 둘레가 글자와 붙어 읽히지 않게 한다(12.3절 E11 2px →
+    # 13.5절 H11 3px: 7차 평가에서 화력 ▲가 '서귀포시' 첫 글자를 덮었다)
+    halo = stroke("var(--background-color)", ring + 3) + (stroke("#FFFFFF", ring) if ring else "")
     box = max(24, size)
     # CSS 변수는 SVG 표현 속성에 쓸 수 없고 style에서만 풀리므로 채움·외곽선을 style로 준다
     style = (f"fill:{SERIES[kind]};stroke:var(--text-color);stroke-width:1.25;stroke-opacity:.8;"
@@ -4148,6 +4164,9 @@ def _render_map_focus(plants_df: pd.DataFrame, region: str) -> folium.FeatureGro
     streamlit_folium 0.25.3 finalizeOnRender의 eval). 고른 지역의 발전소 범위로 fitBounds하고, 다른 지역 기호·callout을
     흐리게(.pd-dim) 한다. 지역이 같으면 묶음 문자열이 같아 다시 실행하지 않으므로 사용자가 끌어 옮긴 시점을 덮지 않는다.
     처음 마운트에서 '전체'이면 이미 기본 시점이라 맞추지 않는다(과도기 iframe 높이에서 다시 계산하지 않게, 0단계 E3).
+    다른 탭에서 시작된 실행이 새 지도 JS(발전소 출력 60초 캐시 → 새 컴포넌트 키)로 숨은 탭에 iframe을 새로 만들면 크기 0인 칸에
+    맞춰 줌 8로 열렸다(7차 평가 MAP-STATE). 그때는 칸이 240px 이상으로 보일 때 invalidateSize() 뒤 다시 맞춘다(13.1절 H1). 보이는
+    첫 프레임은 iframe 기본 폭 300px이라(F8 실측) 크기가 바뀔 때마다 맞추고 300ms 그대로면 그만둔다(누르거나 키를 쓰면 바로).
     움직임 줄이기 설정이면 확대 애니메이션을 끈다. 지도 시점만 바꾸며 값·경보와 무관하다(표시 계층).
     """
     slug = "" if region == "전체" else _fmt_region_slug(region)
@@ -4166,11 +4185,17 @@ def _render_map_focus(plants_df: pd.DataFrame, region: str) -> folium.FeatureGro
     script = (
         "(function () {\n"
         "  var map = window.map; if (!map) { return; }\n"
-        f'  var slug = "{slug}", first = window.__pdFocus === undefined;\n'
+        f'  var slug = "{slug}", first = window.__pdFocus === undefined, box = map.getContainer();\n'
         "  window.__pdFocus = slug;\n"
         "  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n"
-        f"  if (slug || !first) {{ map.fitBounds({json.dumps(bounds)}, "
-        f"{{animate: !still, maxZoom: {_fmt_MAP_FOCUS_MAX_ZOOM if slug else _fmt_MAP_HOME_MAX_ZOOM}}}); }}\n"
+        f"  var home = window.__pdHome = {{b: {json.dumps(bounds)}, z: "
+        f"{_fmt_MAP_FOCUS_MAX_ZOOM if slug else _fmt_MAP_HOME_MAX_ZOOM}, wait: box.clientHeight < 240}};\n"
+        "  if (slug || !first) { map.fitBounds(home.b, {animate: !still, maxZoom: home.z}); }\n"
+        "  if (first && window.ResizeObserver) { new ResizeObserver(function () {\n"
+        "    var h = window.__pdHome; if (!h.wait || box.clientHeight < 240) { return; }\n"
+        "    map.invalidateSize(); map.fitBounds(h.b, {animate: false, maxZoom: h.z});\n"
+        "    clearTimeout(h.quiet); h.quiet = setTimeout(function () { h.wait = false; }, 300);\n"
+        "  }).observe(box); }\n"
         "  var els = document.querySelectorAll('.leaflet-marker-icon[class*=\"pd-rg--\"]');\n"
         "  for (var i = 0; i < els.length; i++) {\n"
         "    els[i].classList.toggle('pd-dim', !!slug && !els[i].classList.contains('pd-rg--' + slug));\n"
@@ -4395,12 +4420,13 @@ def _html_inspector(plants_df: pd.DataFrame, registry: Optional[Dict], region: s
 
     if region == "전체":
         unit = "<small>MW</small>" if dist_mw is not None else ""
-        # 이름은 한 줄에 드는 길이로 두고 '분산형'은 아래 줄로 옮긴다(6차 평가: 1181~1280px에서 이름이 두 줄로 접혀 이 칸 값만 약
-        # 17px 아래에 놓였다). '위치 없음'은 한 토막이다('위치 / 없음'으로 갈라졌다)
+        # 이름은 한 줄에 드는 길이로 두고 '분산형'은 아래 줄로 옮긴다(6차 평가: 1181~1280px에서 이름이 두 줄로 접혀 값이 내려앉았다).
+        # 1181px 이상 칸(86~114px)은 아래 줄이 2~3줄로 접혀(7차) 개소 수만 보인다(H10) — 분산형·위치 없음은 바로 아래 표 행에 있다
         third = (f'<div class="pd-stat"><span class="pd-stat__label">지도 밖 태양광</span>'
                  f'<span class="pd-stat__value pd-num">{dist_mw_text}{unit}</span>'
-                 f'<span class="pd-stat__src">분산형 {dist_sites_cell if dist_sites is not None else "· 개소 수 미제공"} · '
-                 f'{_html_nowrap("위치 없음")}</span></div>')
+                 f'<span class="pd-stat__src"><span class="pd-stat__more">분산형 </span>'
+                 f'{dist_sites_cell if dist_sites is not None else "개소 수 미제공"}'
+                 f'<span class="pd-stat__more"> · {_html_nowrap("위치 없음")}</span></span></div>')
     else:
         mix = " · ".join(f'{name} {selected["by_type"][kind]["count"]}' for kind, name in kinds)
         third = (f'<div class="pd-stat"><span class="pd-stat__label">유형 구성 (곳)</span>'
@@ -4613,11 +4639,11 @@ def _html_time_strip(prov: Dict) -> str:
 
 
 def _chart_table_supply(fig: go.Figure, now_label: str = "지금") -> pd.DataFrame:
-    """수급 차트의 '표로 보기'(명세 6.2절, J10): 30분 점을 하나씩 건너뛴 1시간 간격 표.
+    """수급 차트의 '표로 보기'(명세 6.2절, J10): 30분 점 가운데 정시에 가장 가까운 점 + 지금 점의 1시간 간격 표.
 
-    차트에 실제로 그린 값을 옮긴다(차트와 표가 어긋나지 않게). 지금 점을 기준으로 앞뒤 1시간마다 한 행씩 고르므로
-    과거 24점(지금 − 11.5시간부터)에서는 지금 − 11시간이 첫 행이다. 지금 행의 구분 칸에만 출처 상태 문구
-    (prov['strip_now'])를 쓴다.
+    차트에 실제로 그린 값을 옮긴다(차트와 표가 어긋나지 않게). 패턴 행은 정시에서 15분 안의 점(30분 간격이라 시마다 하나)을
+    골라 'MM-DD HH시'로 쓰고, 지금 행만 분까지 쓴다(13.5절 H13: 지금 분에 묶인 '18:29' 같은 시각이 정밀 측정값처럼 읽혔다).
+    지금 행의 구분 칸에만 출처 상태 문구(prov['strip_now'])를 쓴다.
 
     Args:
         fig: create_realtime_power_chart가 만든 그림.
@@ -4636,9 +4662,11 @@ def _chart_table_supply(fig: go.Figure, now_label: str = "지금") -> pd.DataFra
     now_x = pd.to_datetime(point.x[0])
     now_i = int(np.argmin(np.abs((xs - now_x).total_seconds())))
     rows = []
-    for i in range(now_i % 2, len(xs), 2):
+    near = xs[now_i].minute % 30 + (0 if xs[now_i].minute % 30 < 15 else 30)  # 정시에서 15분 안인 점들의 분
+    for i in [k for k, x in enumerate(xs) if k == now_i or x.minute == near]:
         kind = now_label if i == now_i else ("지난 추정 패턴" if i < now_i else "다음 추정 패턴")
-        rows.append([f"{xs[i]:%m-%d %H:%M}", int(f"{demand.y[i]:.0f}"), int(f"{supply.y[i]:.0f}"), kind])
+        label = f"{xs[i]:%m-%d %H:%M}" if i == now_i else f"{xs[i].round('h'):%m-%d %H}시"
+        rows.append([label, int(f"{demand.y[i]:.0f}"), int(f"{supply.y[i]:.0f}"), kind])
     return pd.DataFrame(rows, columns=columns)
 
 
@@ -6155,9 +6183,9 @@ def _html_connection_status() -> str:
         ("시간별 실측 이력", "미연결", "수급 추이 곡선은 앱 내장 일간 패턴으로 그린 추정입니다"),
         ("수요 예측 곡선", "미연결", "수급 추이의 다음 12시간은 패턴을 이어 그린 것이라 예측이 아닙니다"),
         ("관측 시각", "원천 미제공", "KPX·기상 값은 관측 시각 대신 앱이 받아 온 조회 시각을 씁니다"),
-        ("HVDC 송전량", "미연동", "지도·인스펙터는 육지 연계 설비(회선·MW)만 보입니다"),
-        ("계통 주파수 실측", "미연동", "주파수는 API 서버 시뮬레이션 값입니다"),
-        ("발전소별 출력 실측", "미연동", "발전 현황의 출력·이용률·구성비는 시뮬레이션 추정입니다"),
+        ("HVDC 송전량", "미연결", "지도·인스펙터는 육지 연계 설비(회선·MW)만 보입니다"),
+        ("계통 주파수 실측", "미연결", "주파수는 API 서버 시뮬레이션 값입니다"),
+        ("발전소별 출력 실측", "미연결", "발전 현황의 출력·이용률·구성비는 시뮬레이션 추정입니다"),
     )
     rows = "".join(f'<li class="pd-conn__item"><span class="pd-conn__name">{name}</span>'
                    f'{_html_chip("plain", state)}<span class="pd-conn__note">{note}</span></li>'
@@ -6273,8 +6301,8 @@ def main():
         # 기상 값이 앱 시뮬레이션이면(캐시 5분 동안 API 실패 시점의 값) API 출처 판정을 붙이지 않는다.
         # 붙이면 앱이 만든 값에 "API 기본값" 칩이 붙는다
         weather['pd_src'] = _fmt_weather_provenance(api_kpis) if weather.get('source') == 'kma' else None
-        # 관측 시각을 주는 원천이 없다. API 값이면 앱 캐시 길이만 밝히고, 앱 시뮬레이션이면 화면 시각을 쓴다
-        weather['pd_time'] = ('관측 시각 미제공 · 최대 5분 캐시' if weather.get('source') == 'kma'
+        # 관측 시각을 주는 원천이 없다. API 값이면 다시 읽는 간격을 390 줄과 같은 말로(H12: '캐시'는 개발자 어휘), 아니면 화면 시각
+        weather['pd_time'] = ('관측 시각 미제공 · 최대 5분 전 값' if weather.get('source') == 'kma'
                               else f'화면 {now:%H:%M} KST (앱 시뮬레이션)')
         # 640px 이하 KPI 메타 한 줄(11.2절 D5). 출처·시각 두 줄은 카드의 '출처·시각' 펼침 안에 있다
         weather['pd_basis'] = '최대 5분 전 값' if weather.get('source') == 'kma' else f'화면 {now:%H:%M} (앱 시뮬레이션)'
@@ -6348,7 +6376,7 @@ def main():
                 # 키가 없으면 확정이라 부르지 않도록 추정 카드(빗금)로 둔다
                 st.markdown(f"""<div class="pd-kpi{smp_data.get('pd_smp_kpi_class', ' is-est')}">
 <div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--tag" aria-hidden="true"></span>제주 하루전 SMP</span>{smp_data.get('pd_smp_chip', '')}{smp_data.get('pd_stale_chip', '')}</div>
-<div class="pd-kpi__value"><span class="pd-num">{smp_data['current']:,.1f}</span><span class="pd-kpi__unit">원/kWh</span></div>
+<div class="pd-kpi__value"><span class="pd-num">{smp_data['current']:,.1f}</span><span class="pd-kpi__unit">원/kWh</span><span class="pd-kpi__gloss">도매 전력 가격</span></div>
 <div class="pd-kpi__sub"><span class="pd-delta {smp_change_class}">{smp_change_html}</span></div>
 <div class="pd-kpi__meta"><span class="pd-kpi__basis">{smp_data.get('pd_basis', '')}</span><details class="pd-more"><summary><span class="pd-ico pd-ico--chev" aria-hidden="true"></span>출처·거래시간</summary><span>출처 {smp_data.get('pd_src_label', '확인 불가')}</span><span>거래시간 {smp_data.get('pd_trade_text') or smp_data.get('trade_label') or '확인 불가'}</span></details></div>
 </div>""", unsafe_allow_html=True)
@@ -6364,7 +6392,7 @@ def main():
 <div class="pd-kpi__head"><span class="pd-kpi__label"><span class="pd-ico pd-ico--thermo" aria-hidden="true"></span>기상 현황</span>{'<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · 과거 자료 평균</span>' if weather.get('pd_src') == 'file' else ('<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>추정 · API 기본값 (실측 아님)</span>' if weather.get('pd_src') == 'default' else ('<span class="pd-chip pd-chip--measured"><span class="pd-chip__glyph" aria-hidden="true"></span>실측</span>' if weather.get('source') == 'kma' else '<span class="pd-chip pd-chip--est"><span class="pd-chip__glyph" aria-hidden="true"></span>시뮬레이션 · 실측 아님</span>'))}</div>
 <div class="pd-kpi__value"><span class="pd-num">{weather['temperature']:.1f}</span><span class="pd-kpi__unit">°C</span></div>
 <div class="pd-kpi__sub">풍속 {weather['wind_speed']:.1f} m/s{(' · ' + str(weather.get('condition'))) if weather.get('condition') else ''}</div>
-<div class="pd-kpi__meta"><span class="pd-kpi__basis">{weather.get('pd_basis', '')}</span><details class="pd-more"><summary><span class="pd-ico pd-ico--chev" aria-hidden="true"></span>출처·시각</summary><span>{'기상청 과거 자료 24시간 평균 (API 서버) · 실시간 아님' if weather.get('pd_src') == 'file' else ('API 서버 기본값 (실측 아님)' if weather.get('pd_src') == 'default' else ('기상청 초단기실황 (API 서버)' if weather.get('source') == 'kma' else '시뮬레이션 값 (실측 아님)'))}</span><span>{weather.get('pd_time', '관측 시각 미제공 · 최대 5분 캐시')}</span></details></div>
+<div class="pd-kpi__meta"><span class="pd-kpi__basis">{weather.get('pd_basis', '')}</span><details class="pd-more"><summary><span class="pd-ico pd-ico--chev" aria-hidden="true"></span>출처·시각</summary><span>{'기상청 과거 자료 24시간 평균 (API 서버) · 실시간 아님' if weather.get('pd_src') == 'file' else ('API 서버 기본값 (실측 아님)' if weather.get('pd_src') == 'default' else ('기상청 초단기실황 (API 서버)' if weather.get('source') == 'kma' else '시뮬레이션 값 (실측 아님)'))}</span><span>{weather.get('pd_time', '관측 시각 미제공 · 최대 5분 전 값')}</span></details></div>
 </div>""", unsafe_allow_html=True)
 
     live_header()
@@ -6679,12 +6707,16 @@ def main():
         with st.empty():
             bench = load_demand_benchmark()
             smp_forecast = get_backend_smp_predictions()
-        # 머리 문장(11.2절 D7): 실시간 예측 곡선이 아직 없다는 사실을 먼저 쓰고, 아래 숫자가 과거 검증 결과임을 밝힌다.
-        # 모델 카드 글자는 계약(명세 5.6)이라 바꾸지 않고 MAPE·R² 풀이는 여기 둔다. '승인 항목 P3'은 개발 메모 어휘라(4차 평가
-        # 멘토: 화면이 개발 메모처럼 읽힘) 비전문 독자가 아는 말로 바꿨다(D7 글자에서 바꿈)
+        # 머리 문장(11.2절 D7): 실시간 예측 곡선이 아직 없다는 사실을 먼저 쓰고, 아래 숫자가 과거 검증 결과임을 밝힌다('승인 항목 P3'은
+        # 개발 메모 어휘라 바꿨다, 4차 평가). 낱말 풀이는 바로 아래 항목 목록이다(13.5절 H12: 모델 카드 밑 한 줄이라 낱말이 풀이보다
+        # 먼저 나왔고 1440에서 1,334px 한 줄이었다. 모델 카드 글자는 계약이라 그대로). 머리 문장 꼬리의 MAPE·R² 풀이도 옮겼다
+        glossary = (("MAPE", "평균 오차율 (낮을수록 정확)"), ("R²", "설명력 (1에 가까울수록 정확)"),
+                    ("holdout", "학습에 쓰지 않은 기간으로 검증"), ("walk-forward", "기간을 옮겨 가며 여러 번 검증"),
+                    ("naive", "어제 같은 시각 값을 그대로 쓰는 기준선"), ("API 신뢰도", "API가 시간대 규칙으로 붙이는 자체 값(예: 93%)이라 이 화면에 표시하지 않음"))
         st.html(_html_section_head("모델 정확도와 예시 화면",
-                                   "실시간 예측 곡선은 준비 중입니다(연결 승인 대기). 아래는 과거 검증 결과입니다 · "
-                                   "MAPE = 평균 오차율(낮을수록 정확) · R² = 설명력(1에 가까울수록 정확)"))
+                                   "실시간 예측 곡선은 준비 중입니다(연결 승인 대기). 아래는 과거 검증 결과입니다")
+                + '<ul class="pd-glossary" aria-label="낱말 풀이">'
+                + "".join(f"<li><b>{_html_nowrap(term)}</b> {text}</li>" for term, text in glossary) + "</ul>")
         with st.container(border=True, key="card_model"):
             # 보이는 부제는 기록의 이름·날짜만 쓰고, 근거 문서 이름(README 운영 모델 성능 표 — 회귀 테스트가 찾는 글자)은 같은 카드의
             # '산출 방식' 펼침 안으로 옮겼다(4차 평가: README·저장소 경로는 비전문 독자에게 출처가 되지 못하는 개발자 어휘)
@@ -6698,14 +6730,11 @@ def main():
 <section class="pd-model__cell"><p class="pd-model__name"><span class="pd-ico pd-ico--tag" aria-hidden="true"></span>SMP 예측 — 하루전 시장가격 (어제 같은 시각 가격)</p><dl><dt>MAPE</dt><dd class="pd-num">11.75%</dd><dt>R² Score</dt><dd class="pd-num">0.203</dd></dl><p class="pd-card__note"><span class="pd-nowrap">walk-forward 2025-07-22~12-18</span> · 기준선(naive) 자체, 학습한 모델 아님</p></section>
 </div>
 </div>""", unsafe_allow_html=True)
-            # 카드 글자는 계약(명세 5.6, T5)이라 그대로 두고, 비전문가가 막히는 낱말과 화면에 없는 '신뢰도 93%'를 아래 한 줄로
-            # 풀어 쓴다(2차 평가 멘토). API의 신뢰도는 renewable_ml_predictor가 시간대 규칙으로 붙이는 상수(0.7~0.95)다.
-            # SMP 정확도 회색 둘째 줄(11.2절 D6): 카드의 굵은 11.75%(재현 값) 다음에 API 표기 값을 SMP 탭·출처 표와 같은 순서로 둔다
-            st.html(_html_smp_api_note(smp_forecast)
-                    + '<p class="pd-card__note pd-model__glossary">낱말 풀이: holdout = 학습에 쓰지 않은 기간으로 검증 · '
-                    '<span class="pd-nowrap">walk-forward</span> = 기간을 옮겨 가며 여러 번 검증 · '
-                    'naive = 어제 같은 시각 값을 그대로 쓰는 기준선. '
-                    'API 응답의 신뢰도(예: 93%)는 API가 시간대 규칙으로 붙이는 자체 값이라 이 화면에 표시하지 않습니다</p>')
+            # SMP 정확도 회색 둘째 줄(11.2절 D6): 카드의 굵은 11.75%(재현 값) 다음에 API 표기 값을 SMP 탭·출처 표와 같은 순서로 둔다.
+            # API 예측을 못 받으면 줄이 없다(빈 st.html은 빈 칸을 만든다, G16). 카드의 마지막 요소라 뒤 요소가 밀리지 않는다
+            api_note = _html_smp_api_note(smp_forecast)
+            if api_note:
+                st.html(api_note)
         # 수요 예측 월별 오차(11.2절 D7, 3차 평가: 분석 탭에 차트가 없어 예측 역량이 숫자 3개로만 보였다). 원천은 저장 출력 한 파일
         with st.container(border=True, key="card_bench"):
             if bench is None:
