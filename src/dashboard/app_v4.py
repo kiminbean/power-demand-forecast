@@ -2738,6 +2738,7 @@ PD_CSS_COMPONENTS = """
 /* 게이지 그림 폭 상한 340px(가운데 정렬): 높이가 190px로 고정이라(명세 6.4절) 폭이 약 350px를 넘으면 호가 높이에
    맞춰 커져 꼭대기 눈금 글자가 그림 위로 잘린다(S4 실측: 1024px에서 451px 폭일 때 '60'이 svg 밖). 폭으로 크기가 정해지게 둔다 */
 .st-key-card_gauges [data-testid="stElementContainer"]:has([data-testid="stPlotlyChart"]){width:100%;max-width:340px;margin-inline:auto}
+/* 휴대폰 폭에서 두 게이지가 세로로 쌓이면 열 행 간격 32px가 그림 아래 여백과 겹쳐 빈 띠가 된다(10차 PAR-13: 360px 67px) */ @media (max-width:640px){.st-key-card_gauges [data-testid="stHorizontalBlock"]{row-gap:0}}
 /* 게이지 이름표: 그림 안 제목 대신 이름과 읽는 법을 HTML로 둔다(명세 6.4절 title='') */
 .pd-gauge-label{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}
 .pd-gauge-label__name{font-size:13px;font-weight:600;line-height:1.35;color:var(--pd-text-2)}
