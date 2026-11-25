@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-07 (CI/CD ran green during a 9-minute public window; docs refreshed; session memory saved; 2026-11-06: default model ar_gbm, competitor comparison)
+> Last Updated: 2026-11-25 (dashboard app_v4 UI TOP1 redesign merged·deployed·pushed as 15b49880; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -10,7 +10,22 @@
 
 ---
 
-## Current Session (2026-11-06 ~ 11-07)
+## Current Session (2026-11-23 ~ 11-25)
+
+### Task: 웹 대시보드(app_v4) UI/UX TOP1 개편 ✅ 병합·운영 반영·푸시 완료 (공식 판정은 1개 항목 미달)
+- 사용자 목표: "웹 대시보드의 GUI를(UI/UX) 경쟁 업체 TOP1 수준으로 업그레이드". TOP1 = UI 품질 기준(60Hertz 8.7 / Electricity Maps 9.2). 합격선 = R1~R8 모두 8.0 이상 · 평균 8.5 이상 + 화면 배치·무결성 관문 통과
+- 진행: 워크트리 `.claude/worktrees/dashboard-top1`(브랜치 `ui/dashboard-top1`, 지우기 전에 사용자에게 묻는다)에서 설계 명세 1~14장 → 빌드·수정 F1~F12 → 평가 10차(평가자 4: 동등성·멘토·화면 배치·무결성). 평균 8.09 → 8.24 → 8.18 → 8.41 → 8.38 → 8.28 → 8.42 → 8.51 → 8.49 → 8.57
+- 10차(최종, `b84f9be3`): 루브릭 평균 8.57 통과(R8 8.05가 가장 낮음), 무결성 27/27 통과, 화면 배치 21/22. 360px '게이지로 보기' 펼침 빈 띠 67~68px(기준 60)로 불합격했다. 이 결함은 개편 전부터 있었고, 마무리 커밋 `778a3974`(CSS 한 줄)로 고친 뒤 평가자 탐침상 49px이다. 11차 재평가는 사용자 결정(1~2시간 안 마무리)으로 하지 않았다
+- 병합·배포: main fast-forward `15b49880` → `launchctl kickstart -k gui/$(id -u)/com.powerdemand.dashboard`. 운영 8504에서 두 테마 × 1440·390 × 4탭 모두 넘침·깨진 글자·콘솔 오류 0. origin 푸시 `bca36f30..15b49880`(이전부터 올리지 않았던 main 커밋 5개 포함)
+- 문서: `docs/2026-11-23-dashboard-ui-top1-design.md`(명세), `docs/2026-11-23-dashboard-ui-top1-report.md`(전후 보고서: 남은 결함 22건 5.3절, 승인 대기 P1~P11 5.1절), `docs/2026-11-23-dashboard-ui-top1/`(ui_guard·logic_guard·촬영 도구, 스크린샷)
+- 남은 일:
+  - Tailscale이 로그아웃 상태(NeedsLogin, 2026-11-25 21:45 확인)라 공개 주소 :8443이 외부에서 열리지 않는다. 사용자가 Tailscale에 다시 로그인해야 한다
+  - SMP 수집기가 `data/smp/smp_real_epsis.csv`를 쓰는 도중 앱이 읽으면 부분 표가 1시간 캐시돼 'SMP 지연 · 1023일 전 가격'이 보인다(21:15 개발 서버에서 관찰, 운영은 재시작으로 정상). 원자적 쓰기(os.replace) 또는 오래된 표 거부가 필요하다(데이터 로직, 승인 필요)
+  - 보고서 5.3절 결함(사이드바를 연 1181~1320px 넘침, SMP CSV 내보내기의 0.00 입력 원값 등)과 P1~P11(P11 = app_v4.py 구조 분리, R8 바닥 원인)
+
+---
+
+## Previous Session (2026-11-06 ~ 11-07)
 
 ### Task: CI/CD run via temporary public visibility (2026-11-07) ✅ COMPLETE
 - 사용자 방식: GitHub Actions 결제 한도 문제를 피해, 저장소를 잠시 공개로 바꿔 CI/CD를 돌린 뒤 다시 비공개로 돌린다. 키 노출을 알리자 사용자는 "지금 바로 진행"을 골랐다.
