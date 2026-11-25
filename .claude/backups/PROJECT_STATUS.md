@@ -19,7 +19,7 @@
 - 병합·배포: main fast-forward `15b49880` → `launchctl kickstart -k gui/$(id -u)/com.powerdemand.dashboard`. 운영 8504에서 두 테마 × 1440·390 × 4탭 모두 넘침·깨진 글자·콘솔 오류 0. origin 푸시 `bca36f30..15b49880`(이전부터 올리지 않았던 main 커밋 5개 포함)
 - 문서: `docs/2026-11-23-dashboard-ui-top1-design.md`(명세), `docs/2026-11-23-dashboard-ui-top1-report.md`(전후 보고서: 남은 결함 22건 5.3절, 승인 대기 P1~P11 5.1절), `docs/2026-11-23-dashboard-ui-top1/`(ui_guard·logic_guard·촬영 도구, 스크린샷)
 - 남은 일:
-  - Tailscale이 로그아웃 상태(NeedsLogin, 2026-11-25 21:45 확인)라 공개 주소 :8443이 외부에서 열리지 않는다. 사용자가 Tailscale에 다시 로그인해야 한다
+  - 공개 주소 :8443은 2026-11-25 21:45~22:33에 응답하지 않았다(Tailscale CLI 상태 NeedsLogin, Tokyo 중계 연결 실패). 2026-11-26 04:13~04:15에 다시 확인하니 HTTP 200·상태 검사 ok였고, 두 테마 × 1440·390px에서 새 화면이 그려졌다(넘침·오류 0). 그때도 CLI(1.96.4)는 NeedsLogin을 보고했는데 실제 Tailscale은 1.104.7이라, CLI 상태보다 주소에 직접 요청해 확인하는 편이 정확하다
   - SMP 수집기가 `data/smp/smp_real_epsis.csv`를 쓰는 도중 앱이 읽으면 부분 표가 1시간 캐시돼 'SMP 지연 · 1023일 전 가격'이 보인다(21:15 개발 서버에서 관찰, 운영은 재시작으로 정상). 원자적 쓰기(os.replace) 또는 오래된 표 거부가 필요하다(데이터 로직, 승인 필요)
   - 보고서 5.3절 결함(사이드바를 연 1181~1320px 넘침, SMP CSV 내보내기의 0.00 입력 원값 등)과 P1~P11(P11 = app_v4.py 구조 분리, R8 바닥 원인)
 
