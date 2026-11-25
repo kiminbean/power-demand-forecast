@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "node --test $(ls tests/*.test.cjs | grep -v '\\.browser\\.')",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",

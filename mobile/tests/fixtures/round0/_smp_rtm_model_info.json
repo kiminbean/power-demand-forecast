@@ -1,0 +1,1 @@
+{"status":"ready","model":"CatBoost v3.19","purpose":"RTM (Real-Time Market)","prediction_type":"single-step (1 hour)","mape":5.27601404592515,"r2":0.8270385354141507,"features":68,"comparison":{"vs_bilstm":{"mape_improvement":"1.89%p better (5.28% vs 7.17%)","r2_improvement":"0.057 better (0.827 vs 0.77)"}},"timestamp":"2026-11-26T06:04:04.676797"}

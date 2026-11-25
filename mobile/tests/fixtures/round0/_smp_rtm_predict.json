@@ -1,0 +1,1 @@
+{"status":"success","prediction":{"time":"2026-11-26T07:00:00","smp":102.58,"confidence_low":90.27,"confidence_high":114.89},"model":{"name":"CatBoost v3.19","mape":5.28,"r2":0.827,"type":"single-step","purpose":"RTM"},"timestamp":"2026-11-26T06:04:04.634710"}

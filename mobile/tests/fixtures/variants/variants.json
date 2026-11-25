@@ -1,0 +1,962 @@
+{
+  "$doc": [
+    "F0 상태 변형 픽스처. 기준 본문은 routes의 파일(round 0 = 2026-11-26 06:03:57 KST 스냅숏, realtime-status = F0 실측)이다.",
+    "변형마다 inject를 경로별로 적용한다. route는 쿼리 없는 경로(앱 기준 경로 아래 정적 파일은 상대 경로, '*'는 모든 API 요청).",
+    "inject 키: status(HTTP 상태, 기본 200) · delay_ms(응답 지연) · abort(네트워크 실패) · body(본문 전체 교체, null 허용) ·",
+    "set(JSON Pointer → 값, 기준 본문 위에 덮어쓰기, 배열 원소와 중첩 경로 가능) · status_sequence(같은 경로 n번째 요청의 상태; 다 쓰면 기준 200).",
+    "clock.kst는 기기 시계(오프셋 없는 KST)다. 없으면 default_clock. after_load는 첫 로드가 끝난 뒤의 동작이다:",
+    "advance_ms(시계 앞당김) · inject(그 뒤 요청에 적용) · offline(true면 브라우저를 오프라인으로).",
+    "sweep은 설계 명세 11.5절 ID, spec은 근거 절이다. 이 파일은 build/f0/make_variants.py(스크래치)가 만들었다."
+  ],
+  "schema": 1,
+  "default_clock": {
+    "kst": "2026-11-26T06:03:57"
+  },
+  "routes": {
+    "/api/v1/smp/day-ahead": "../round0/_api_v1_smp_day-ahead.json",
+    "/api/v1/smp-forecast": "../round0/_api_v1_smp-forecast.json",
+    "/api/v1/model/info": "../round0/_api_v1_model_info.json",
+    "/api/v1/dashboard/kpis": "../round0/_api_v1_dashboard_kpis.json",
+    "/api/v1/power-supply": "../round0/_api_v1_power-supply.json",
+    "/api/v1/market-status": "../round0/_api_v1_market-status.json",
+    "/api/v1/bidding/optimized-segments": "../round0/_api_v1_bidding_optimized-segments_capacity_mw_50_risk_level_moderate.json",
+    "/api/v1/realtime-status": "../f0-live/_api_v1_realtime-status.json"
+  },
+  "variants": [
+    {
+      "id": "today-base",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "기준(round 0 그대로)",
+      "spec": "4.1",
+      "inject": []
+    },
+    {
+      "id": "today-loading-8s",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "불러오는 중(8초 지연)",
+      "spec": "4.1 상태표",
+      "inject": [
+        {
+          "route": "/api/v1/smp/day-ahead",
+          "delay_ms": 8000
+        },
+        {
+          "route": "/api/v1/smp-forecast",
+          "delay_ms": 8000
+        },
+        {
+          "route": "/api/v1/model/info",
+          "delay_ms": 8000
+        },
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "delay_ms": 8000
+        },
+        {
+          "route": "/api/v1/power-supply",
+          "delay_ms": 8000
+        },
+        {
+          "route": "/api/v1/market-status",
+          "delay_ms": 8000
+        }
+      ]
+    },
+    {
+      "id": "today-price-no-data",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "확정 가격 없음",
+      "spec": "4.1 상태표 · day_ahead_routes.py no_data",
+      "inject": [
+        {
+          "route": "/api/v1/smp/day-ahead",
+          "body": {
+            "status": "no_data",
+            "current_smp": null,
+            "trade_day": null,
+            "trade_hour": null,
+            "market_type": "day_ahead",
+            "data_source": null,
+            "source_url": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-hour-boundary-grace",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "정시 경계 유예(HH:01, 가격은 07h 그대로)",
+      "spec": "4.1 상태표 거래시간 경계",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/current_time": "2026-11-26T07:01:00",
+            "/dam/status": "open",
+            "/dam/hours_remaining": 3.0,
+            "/rtm/next_interval": "15분"
+          }
+        }
+      ],
+      "clock": {
+        "kst": "2026-11-26T07:01:00"
+      }
+    },
+    {
+      "id": "today-hour-boundary-stale",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "가격 지연(HH:06, 가격은 07h 그대로)",
+      "spec": "4.1 상태표 가격 지연",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/current_time": "2026-11-26T07:06:00",
+            "/dam/status": "open",
+            "/dam/hours_remaining": 2.9,
+            "/rtm/next_interval": "15분"
+          }
+        }
+      ],
+      "clock": {
+        "kst": "2026-11-26T07:06:00"
+      }
+    },
+    {
+      "id": "today-kpi-age-12m",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "KPI 조회 12분 전(지연)",
+      "spec": "7.6",
+      "inject": [],
+      "after_load": {
+        "advance_ms": 720000,
+        "inject": [
+          {
+            "route": "*",
+            "abort": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "today-kpi-age-61m",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "KPI 조회 61분 전(끊김)",
+      "spec": "7.6",
+      "inject": [],
+      "after_load": {
+        "advance_ms": 3660000,
+        "inject": [
+          {
+            "route": "*",
+            "abort": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "today-partial-kpis-error",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "일부 실패(KPI만 502)",
+      "spec": "4.1 상태표 일부 실패",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "status": 502
+        }
+      ]
+    },
+    {
+      "id": "today-all-error-server",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "전부 실패(서버 502)",
+      "spec": "4.1 상태표 전부 실패",
+      "inject": [
+        {
+          "route": "/api/v1/smp/day-ahead",
+          "status": 502
+        },
+        {
+          "route": "/api/v1/smp-forecast",
+          "status": 502
+        },
+        {
+          "route": "/api/v1/model/info",
+          "status": 502
+        },
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "status": 502
+        },
+        {
+          "route": "/api/v1/power-supply",
+          "status": 502
+        },
+        {
+          "route": "/api/v1/market-status",
+          "status": 502
+        }
+      ]
+    },
+    {
+      "id": "today-all-error-network",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "전부 실패(네트워크 끊김)",
+      "spec": "4.1 상태표 전부 실패",
+      "inject": [
+        {
+          "route": "/api/v1/smp/day-ahead",
+          "abort": true
+        },
+        {
+          "route": "/api/v1/smp-forecast",
+          "abort": true
+        },
+        {
+          "route": "/api/v1/model/info",
+          "abort": true
+        },
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "abort": true
+        },
+        {
+          "route": "/api/v1/power-supply",
+          "abort": true
+        },
+        {
+          "route": "/api/v1/market-status",
+          "abort": true
+        }
+      ]
+    },
+    {
+      "id": "today-demand-src-2",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "수요 출처 ② 출처 없음",
+      "spec": "7.4 demandProvenance ②",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-demand-src-4",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "수요 출처 ④ EPSIS 대체값·기본 예비율",
+      "spec": "7.4 demandProvenance ④",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": "EPSIS Demand (파일) + KMA Real-time API (기상청 단기예보)",
+            "/supply_reserve_rate": 25.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-demand-src-5",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "수요 출처 ⑤ 전국 값 비례 추정",
+      "spec": "7.4 demandProvenance ⑤",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": "KPX Realtime API (전국) + KMA Real-time API (기상청 단기예보)",
+            "/current_demand_mw": 1144.4,
+            "/supply_reserve_rate": 11.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-demand-src-6",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "수요 출처 ⑥ 시뮬레이션 기본값",
+      "spec": "7.4 demandProvenance ⑥",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": "Simulated",
+            "/current_demand_mw": 650.0,
+            "/supply_reserve_rate": 25.0,
+            "/weather": {
+              "temperature": 5.0,
+              "wind_speed": 3.0,
+              "humidity": 60.0,
+              "condition": "맑음"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-supply-pair-mismatch",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "공급능력 짝 불일치(지금 행 수요 ±1 MW 밖)",
+      "spec": "7.4 supplyPair",
+      "inject": [
+        {
+          "route": "/api/v1/power-supply",
+          "set": {
+            "/data/6/demand": 700.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-weather-file",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "기상 file(과거 자료 평균)",
+      "spec": "7.4 weatherProvenance file",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": "KPX Jeju Crawler (실시간) + KMA Weather (파일)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-weather-default",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "기상 default(출처 없는 기본값)",
+      "spec": "7.4 weatherProvenance default",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/data_source": "KPX Jeju Crawler (실시간)",
+            "/weather": {
+              "temperature": 5.0,
+              "wind_speed": 3.0,
+              "humidity": 60.0,
+              "condition": "맑음"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-weather-none",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "기상 none(KPI 응답이 객체 아님)",
+      "spec": "7.4 weatherProvenance none",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "body": null
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-fallback",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "예측 대체값(패턴 기반)",
+      "spec": "7.4 smpForecastKind fallback · v6_routes.py",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/model_used": "패턴 기반 대체값 (모델 예측 실패)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-fallback-epsis",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "예측 대체값(EPSIS)",
+      "spec": "7.4 smpForecastKind fallback · v6_routes.py",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/model_used": "EPSIS Fallback (Model Unavailable)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-unknown-model",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "모르는 모델 이름(닫힌 쪽 = 추정)",
+      "spec": "7.4 smpForecastKind",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/model_used": "UnknownNet v0 (미등록)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-date-yesterday",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "예측일 어제(예측일 지연)",
+      "spec": "4.1 상태표 예측일 불일치",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/forecast_date": "2026-11-25"
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-zero-12-14h",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "0.00 입력(12–14h)",
+      "spec": "7.8",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/q10/11": 0.0,
+            "/q10/12": 0.0,
+            "/q10/13": 0.0,
+            "/q50/11": 0.0,
+            "/q50/12": 0.0,
+            "/q50/13": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-forecast-empty",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "빈 값(예측 배열 비어 있음)",
+      "spec": "1.2 M8",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "set": {
+            "/q10": [],
+            "/q50": [],
+            "/q90": [],
+            "/hours": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-kpis-nulls",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "빈 값(KPI 수요·예비율·기상 null)",
+      "spec": "1.2 M8",
+      "inject": [
+        {
+          "route": "/api/v1/dashboard/kpis",
+          "set": {
+            "/current_demand_mw": null,
+            "/supply_reserve_rate": null,
+            "/weather": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "today-clock-skew-plus3m",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "시계 차이 +3분(기기가 빠름)",
+      "spec": "7.6",
+      "inject": [],
+      "clock": {
+        "kst": "2026-11-26T06:06:57"
+      }
+    },
+    {
+      "id": "today-clock-skew-plus13h",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "시계 차이 +13시간(서버 시각 불신)",
+      "spec": "7.6",
+      "inject": [],
+      "clock": {
+        "kst": "2026-11-26T19:03:57"
+      }
+    },
+    {
+      "id": "today-offline-after-load",
+      "screen": "today",
+      "sweep": "G10",
+      "state": "로드 뒤 오프라인",
+      "spec": "7.6",
+      "inject": [],
+      "after_load": {
+        "offline": true
+      }
+    },
+    {
+      "id": "bidding-base",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "접수 중(06:03:57, 3.9시간)",
+      "spec": "4.2 상태표",
+      "inject": []
+    },
+    {
+      "id": "bidding-checking",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "확인 중(시장 상태 8초 지연)",
+      "spec": "4.2 상태표",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "delay_ms": 8000
+        }
+      ]
+    },
+    {
+      "id": "bidding-imminent-0920",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "마감 임박(09:20)",
+      "spec": "4.2 상태표",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/current_time": "2026-11-26T09:20:00",
+            "/dam/status": "open",
+            "/dam/hours_remaining": 0.7,
+            "/rtm/next_interval": "30분"
+          }
+        }
+      ],
+      "clock": {
+        "kst": "2026-11-26T09:20:00"
+      }
+    },
+    {
+      "id": "bidding-closed-1001",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "마감(10:01)",
+      "spec": "4.2 상태표",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/current_time": "2026-11-26T10:01:00",
+            "/dam/status": "closed",
+            "/dam/hours_remaining": 24.0,
+            "/rtm/next_interval": "15분"
+          }
+        }
+      ],
+      "clock": {
+        "kst": "2026-11-26T10:01:00"
+      }
+    },
+    {
+      "id": "bidding-mismatch-hours",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "불일치(hours_remaining 1.0 대 계산 3.9)",
+      "spec": "4.2 상태표 불일치",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/dam/hours_remaining": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "bidding-mismatch-open-after-deadline",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "불일치(10:00:30인데 서버 open)",
+      "spec": "4.2 상태표 불일치",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "set": {
+            "/current_time": "2026-11-26T10:00:30",
+            "/dam/status": "open",
+            "/dam/hours_remaining": 0.0,
+            "/rtm/next_interval": "15분"
+          }
+        }
+      ],
+      "clock": {
+        "kst": "2026-11-26T10:00:30"
+      }
+    },
+    {
+      "id": "bidding-market-error",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "오류(시장 상태 502)",
+      "spec": "4.2 상태표 오류",
+      "inject": [
+        {
+          "route": "/api/v1/market-status",
+          "status": 502
+        }
+      ]
+    },
+    {
+      "id": "bidding-stale-11m",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "지연(마지막 조회 11분 전)",
+      "spec": "4.2 상태표 지연",
+      "inject": [],
+      "after_load": {
+        "advance_ms": 660000,
+        "inject": [
+          {
+            "route": "*",
+            "abort": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "bidding-calc-503-once",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "계산기 503 1회(자동 재시도 성공)",
+      "spec": "4.2 · 6.3",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "status_sequence": [
+            503
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bidding-calc-503-twice",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "계산기 503 2회(수동 다시 계산)",
+      "spec": "4.2 · 6.3",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "status_sequence": [
+            503,
+            503
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bidding-calc-500",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "계산기 500",
+      "spec": "4.2",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "id": "bidding-calc-delay-8s",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "계산기 8초 지연",
+      "spec": "4.2",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "delay_ms": 8000
+        }
+      ]
+    },
+    {
+      "id": "bidding-price-basis-present",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "가격 근거 줄 있음(입찰일 11-27, 기준선 11-26)",
+      "spec": "7.8 2",
+      "inject": []
+    },
+    {
+      "id": "bidding-price-basis-absent",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "가격 근거 줄 없음(D+1 기준선, P5)",
+      "spec": "7.8 2",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "set": {
+            "/hourly_bids/0/smp_forecast/q50": 149.3,
+            "/hourly_bids/1/smp_forecast/q50": 131.6,
+            "/hourly_bids/2/smp_forecast/q50": 112.3,
+            "/hourly_bids/3/smp_forecast/q50": 112.3,
+            "/hourly_bids/4/smp_forecast/q50": 112.3,
+            "/hourly_bids/5/smp_forecast/q50": 129.1,
+            "/hourly_bids/6/smp_forecast/q50": 155.2,
+            "/hourly_bids/7/smp_forecast/q50": 222.3,
+            "/hourly_bids/8/smp_forecast/q50": 186.6,
+            "/hourly_bids/9/smp_forecast/q50": 186.6,
+            "/hourly_bids/10/smp_forecast/q50": 188.7,
+            "/hourly_bids/11/smp_forecast/q50": 187.5,
+            "/hourly_bids/12/smp_forecast/q50": 186.5,
+            "/hourly_bids/13/smp_forecast/q50": 186.5,
+            "/hourly_bids/14/smp_forecast/q50": 186.5,
+            "/hourly_bids/15/smp_forecast/q50": 186.5,
+            "/hourly_bids/16/smp_forecast/q50": 188.2,
+            "/hourly_bids/17/smp_forecast/q50": 215.9,
+            "/hourly_bids/18/smp_forecast/q50": 215.9,
+            "/hourly_bids/19/smp_forecast/q50": 215.9,
+            "/hourly_bids/20/smp_forecast/q50": 211.3,
+            "/hourly_bids/21/smp_forecast/q50": 211.3,
+            "/hourly_bids/22/smp_forecast/q50": 211.3,
+            "/hourly_bids/23/smp_forecast/q50": 211.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "bidding-calc-empty",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "빈 값(hourly_bids 없음)",
+      "spec": "1.2 M8",
+      "inject": [
+        {
+          "route": "/api/v1/bidding/optimized-segments",
+          "set": {
+            "/hourly_bids": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-base",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "응답 상태 기준(F0 실측 그대로)",
+      "spec": "4.4",
+      "inject": []
+    },
+    {
+      "id": "guide-rs-all-current",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "모두 응답 · 오늘 자료",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "all_connected",
+            "smp_api": {
+              "status": "connected",
+              "data_date_status": "current_date"
+            },
+            "power_supply_api": {
+              "status": "connected"
+            },
+            "weather_api": {
+              "status": "connected"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-partial",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "일부 응답(자료 없음·오류 섞임)",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "partial",
+            "smp_api": {
+              "status": "connected",
+              "data_date_status": "historical"
+            },
+            "power_supply_api": {
+              "status": "no_data"
+            },
+            "weather_api": {
+              "status": "error"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-disconnected",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "응답 없음(모두 오류)",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "disconnected",
+            "smp_api": {
+              "status": "error"
+            },
+            "power_supply_api": {
+              "status": "error"
+            },
+            "weather_api": {
+              "status": "error"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-unknown",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "알 수 없음 · 날짜 미상",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "partial",
+            "smp_api": {
+              "status": "unknown",
+              "data_date_status": "unknown"
+            },
+            "power_supply_api": {
+              "status": "unknown"
+            },
+            "weather_api": {
+              "status": "unknown"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-future-date",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "미래 날짜 자료",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "all_connected",
+            "smp_api": {
+              "status": "connected",
+              "data_date_status": "future"
+            },
+            "power_supply_api": {
+              "status": "connected"
+            },
+            "weather_api": {
+              "status": "connected"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-no-date-status",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "날짜 상태 없음(선택 필드 빠짐)",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "body": {
+            "timestamp": "2026-11-26T07:43:21.732618",
+            "overall_status": "all_connected",
+            "smp_api": {
+              "status": "connected"
+            },
+            "power_supply_api": {
+              "status": "no_data"
+            },
+            "weather_api": {
+              "status": "connected"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "guide-rs-error",
+      "screen": "guide",
+      "sweep": "A",
+      "state": "응답 상태 조회 실패(502)",
+      "spec": "4.4",
+      "inject": [
+        {
+          "route": "/api/v1/realtime-status",
+          "status": 502
+        }
+      ]
+    },
+    {
+      "id": "guide-content-404",
+      "screen": "guide",
+      "sweep": "A6",
+      "state": "문구 JSON 404",
+      "spec": "4.4 · 11.5 A1–A6",
+      "inject": [
+        {
+          "route": "content/guide.ko.json",
+          "status": 404
+        }
+      ]
+    }
+  ]
+}
