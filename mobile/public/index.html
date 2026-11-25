@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F6F8FB" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B1220" />
+  <meta name="description" content="제주 전기 도매가격(SMP)과 전력 수급을 쉬운 말로 보여 주는 공개 데모" />
+  <title>%WEB_TITLE%</title>
+  <script>
+    try { var t = localStorage.getItem('pd-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+  <style id="expo-reset">
+    :root { --pd-canvas:#F6F8FB; --pd-surface:#FFFFFF; --pd-border:#E2E8F0; --pd-text:#0F172A; --pd-text3:#56657A; --pd-focus:#2563EB; --pd-hatch:rgba(100,116,139,.22); color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pd-canvas:#0B1220; --pd-surface:#121B31; --pd-border:#24324D; --pd-text:#F1F5F9; --pd-text3:#94A3B8; --pd-focus:#60A5FA; --pd-hatch:rgba(148,163,184,.22); color-scheme: dark; } }
+    :root[data-theme="dark"] { --pd-canvas:#0B1220; --pd-surface:#121B31; --pd-border:#24324D; --pd-text:#F1F5F9; --pd-text3:#94A3B8; --pd-focus:#60A5FA; --pd-hatch:rgba(148,163,184,.22); color-scheme: dark; }
+    html, body { height: 100%; }
+    body { margin: 0; overflow: hidden; background: var(--pd-canvas); color: var(--pd-text); -webkit-text-size-adjust: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; }
+    #root { display: flex; height: 100%; flex: 1; }
+    @supports (height: 100dvh) { #root { height: 100dvh; } }
+    #root div, #root span { word-break: keep-all; overflow-wrap: anywhere; }
+    #root [data-pd-nowrap] { white-space: nowrap; }
+    :focus-visible { outline: 2px solid var(--pd-focus); outline-offset: 2px; }
+    #root [data-pd-safe~="bottom"] { padding-bottom: env(safe-area-inset-bottom) !important; }
+    #root [data-pd-safe~="x"] { padding-left: env(safe-area-inset-left) !important; padding-right: env(safe-area-inset-right) !important; }
+    #root [data-pd-safe~="top"] { padding-top: env(safe-area-inset-top) !important; }
+    #root [data-pd-hatch] { background-image: repeating-linear-gradient(45deg, var(--pd-hatch) 0 2px, transparent 2px 6px); }
+    .pd-boot { display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--pd-canvas); }
+    .pd-boot-bar { height: 56px; background: var(--pd-surface); border-bottom: 1px solid var(--pd-border); }
+    .pd-boot-card { margin: 12px 16px 0; height: 132px; border-radius: 14px; background: var(--pd-surface); }
+    .pd-boot-msg, .pd-boot-slow { margin: 12px 16px 0; font-size: 13px; color: var(--pd-text3); }
+    .pd-boot-tabs { margin-top: auto; height: 56px; padding-bottom: env(safe-area-inset-bottom); background: var(--pd-surface); border-top: 1px solid var(--pd-border); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    .pd-boot-slow { opacity: 0; animation: pd-show 0s linear 12s forwards !important; }
+    @keyframes pd-show { to { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <noscript>이 화면은 JavaScript가 켜져 있어야 보입니다.</noscript>
+  <div id="root"><div class="pd-boot" aria-busy="true">
+    <div class="pd-boot-bar"></div><div class="pd-boot-card"></div><div class="pd-boot-card"></div>
+    <p class="pd-boot-msg">불러오는 중입니다</p>
+    <p class="pd-boot-slow">연결이 느립니다. 잠시 기다리거나 새로고침해 주세요.</p>
+    <div class="pd-boot-tabs"></div>
+  </div></div>
+</body>
+</html>

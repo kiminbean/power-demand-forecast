@@ -5,7 +5,7 @@
     "version": "5.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./src/assets/splash.png",
       "resizeMode": "contain",
@@ -26,7 +26,10 @@
       "package": "com.rebms.mobile"
     },
     "web": {
-      "favicon": "./src/assets/favicon.png"
+      "favicon": "./src/assets/favicon.png",
+      "name": "eXeco 제주 전력시장",
+      "shortName": "eXeco",
+      "lang": "ko"
     }
   }
 }
