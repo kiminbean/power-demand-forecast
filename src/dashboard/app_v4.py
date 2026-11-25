@@ -1633,7 +1633,7 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
         now: 화면 기준 시각(기본: 지금). fragment가 머리·표와 같은 시각을 넘겨 현재 거래시간이 어긋나지 않게 한다.
 
     Returns:
-        _chart_base(높이 440)를 적용한 그림. 예측 값이 없으면 안내 문장만 있는 빈 그림.
+        _chart_base(높이 468)를 적용한 그림. 예측 값이 없으면 안내 문장만 있는 빈 그림.
     """
     now = (now or datetime.now()).replace(second=0, microsecond=0)
     keys = _fmt_smp_with_keys(smp_data, now)
@@ -1698,18 +1698,18 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
                            text=f"거래시간 {_fmt_trade_hour(slot['trade_hour'])}", bgcolor="#475569",
                            font=dict(color="#FFFFFF", size=12), borderpad=4)
 
-    # 기준선: 중앙값 일평균 점선. 값 이름표('예측 평균 150.3')는 그림 밖 HTML 범례(_html_smp_legend)로 옮겼다(명세 6.3 '플롯 안
-    # 오른쪽 위 라벨'에서 바꿈): 확정 가격 점을 거래시간마다 그린 뒤(D6) 오른쪽 끝 이름표 상자가 23h·24h 확정 점을 가렸다(F3
-    # 1440 실측). 이름표 폭은 px로 고정이라 390px에서는 약 8시간 폭을 덮어 어느 자리에 두어도 점과 겹친다
-    mean = sum(q50) / len(q50)
-    fig.add_hline(y=mean, line=dict(dash="dot", color="#000036", width=1))
+    # 기준선: 예측 시간(0.00 입력 칸 뺌) 중앙값 평균 점선(14.2절 J3: 0.00 입력을 넣으면 거의 모든 예측 계단 아래였고 많으면 세로축
+    # 밖으로 빠졌다). 값은 _fmt_smp_display_keys 한 곳에서 구해 범례·화면 읽기 글과 같고, 예측 칸이 없으면 그리지 않는다. 값 이름표는
+    # 그림 밖 HTML 범례에 둔다(명세 6.3에서 바꿈): 플롯 안 이름표 상자가 23h·24h 확정 점을 가렸다(F3 1440 실측)
+    mean = keys.get("pd_fc_mean")
+    if mean is not None:
+        fig.add_hline(y=mean, line=dict(dash="dot", color="#000036", width=1))
 
-    # 툴팁 전용 점(보이지 않음)은 계단 가운데에 둬서 커서가 놓인 계단의 값이 잡힌다. 통합 툴팁 머리는 칸 시작 시각.
-    # 통합 툴팁은 trace를 거꾸로 나열하므로(띠의 fill="tonexty"가 있어 범례 순서가 거꾸로) 가격 점 → 중앙값 순서로 넣어 중앙값이
-    # 머리 바로 아래 온다
-    hover_x = [s["start"] + timedelta(minutes=30) for s in slots]
-    hover_fmt = "%H:00부터 1시간"
-    custom = [[f"{s['trade_hour']:02d}h", s["q10"], s["q90"]] for s in slots]
+    # 툴팁 전용 점(보이지 않음)은 계단 가운데에 둬서 커서가 놓인 계단의 값이 잡힌다. 통합 툴팁은 trace를 거꾸로 나열하므로(띠의
+    # fill="tonexty") 가격 점 → 중앙값 순서로 넣어 중앙값이 머리 바로 아래 온다. 머리는 띠 이름표·표와 같은 '거래시간 11h (10–11시)'다
+    # (14.3절 J6). 머리 틀(xaxis.unifiedhovertitle)은 x 값만 읽으므로 거래시간 H를 점 시각의 초에 넣는다(칸 가운데 + H초 ≤ 24초라 위치 그대로)
+    hover_x = [s["start"] + timedelta(minutes=30, seconds=s["trade_hour"]) for s in slots]
+    custom = [[s["q10"], s["q90"]] for s in slots]
 
     # EPSIS 제주 하루전 가격 점(D6): 확정 가격은 실측 잉크(글자색 '#000037') 채운 점 + 테두리 '#000038'(카드 면, 1.5px)이라 계단선
     # 위에 떠 보인다. 자홍(SMP 계열색) 점은 읽는 법 띠의 실측 견본(진한 점)과 달라 예측의 한 점처럼 읽혔다(D8). 육지 SMP로 대체한
@@ -1738,7 +1738,6 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
                         color=["#000038" if p["sub"] else "#000037" for _, p in points],
                         line=dict(color=["#000037" if p["sub"] else "#000038" for _, p in points],
                                   width=[2 if p["sub"] else 1.5 for _, p in points])),
-            xhoverformat=hover_fmt,
             hovertemplate="%{y:,.1f} 원/kWh<extra>%{customdata}</extra>"))
 
     # 세로축 위 끝(D6): '두 번째로 큰 q90의 1.1배'와 확정 최댓값 중 큰 값. 확정 점·평균선이 위 테두리에 붙지 않게 그 둘에는
@@ -1757,7 +1756,7 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
     if is_model:
         ranked = sorted((upper[i] for i in kept), reverse=True) or [max(shown)]
         second = ranked[1] if len(ranked) > 1 else ranked[0]
-        top = max(second * 1.1 if second > 0 else ranked[0], max(shown, default=low) + pad, mean + pad)
+        top = max(second * 1.1 if second > 0 else ranked[0], max(shown, default=low) + pad, (low if mean is None else mean) + pad)
     else:
         top = max(upper + shown) + pad
     bottom = low - span * 0.12 if low < 0 else max(0.0, low - span * 0.12)
@@ -1768,19 +1767,20 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
                                  customdata=[upper[i] for i in clipped],
                                  marker=dict(symbol="triangle-up", size=10, color=SERIES["smp"],
                                              line=dict(color="#000038", width=1)),
-                                 xhoverformat=hover_fmt,
                                  hovertemplate="%{customdata:,.1f} 원/kWh<extra>80% 구간 위 끝 · 세로축 밖</extra>"))
     if zero:
         # 칸 전체 높이의 중립 빗금 열과 이름표 하나(H4). 막대는 Plotly가 점·선 아래 층에 그려 그 칸 확정 가격 점이 빗금 위에 남는다.
-        # 빗금 색은 CSS(12절)가 테마 토큰으로 다시 칠한다. 이름표는 비어 있는 열 아래쪽에 두고, 640px 이하에서는 숨긴다(범례 견본이 맡음)
+        # 빗금 색은 CSS(12절)가 테마 토큰으로 다시 칠한다. 이름표는 비어 있는 열 아래쪽에 두고, 640px 이하에서는 숨긴다(범례 견본이 맡음).
+        # 가운데 칸이 왼쪽 여섯 칸 안이면 '세로축 0 기준 아님'(아래 J10)과 겹치지 않게 한 줄 올린다(641px 그림에서 그 글자 폭 약 4.3칸)
+        mid = sorted(zero)[len(zero) // 2]
         fig.add_trace(go.Bar(x=[hover_x[i] for i in sorted(zero)], y=[top - bottom] * len(zero), base=bottom,
                              width=3600 * 1000, name="기준선 입력 0.00", uid="pdzero", hoverinfo="skip",
                              marker=dict(color="#64748B", line_width=0, pattern=dict(
                                  shape="/", bgcolor="rgba(100,116,139,0.06)", fgopacity=0.45, size=8, solidity=0.15))))
-        fig.add_annotation(x=hover_x[sorted(zero)[len(zero) // 2]], y=bottom, yanchor="bottom", yshift=4, showarrow=False,
-                           text="기준선 입력 0.00", font=dict(size=12), name="pdzero")
+        fig.add_annotation(x=hover_x[mid], y=bottom, yanchor="bottom", yshift=18 if bottom > 0 and mid < 6 else 4,
+                           showarrow=False, text="기준선 입력 0.00", font=dict(size=12), name="pdzero")
     # 가장 넓은 80% 구간에 폭을 적는다(D6). 그날 보통 폭(중앙값)의 2배 이상일 때만: 모두 좁은 날에 '불확실성 큼'은 틀린 말이다
-    margin_top, chart_h = 32, 440
+    margin_top, chart_h = 32, 468
     if is_model and kept:
         widths = [s["q90"] - s["q10"] for s in slots]
         k = max(kept, key=widths.__getitem__)
@@ -1791,6 +1791,8 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
             band_price = prices.get(f"{slots[k]['end']:%Y-%m-%d %H:%M}")
             if band_price is not None and band_price["sub"]:
                 label += f"<br>같은 시간 EPSIS 제주 {band_price['raw']} (육지 대체)"
+            # 메모 줄은 띠 위가 아닌 범례 아래라 어느 거래시간인지 적어 주석 이름(name)으로 넘긴다(14.3절 J5, 9차 멘토). 시간 토막은 묶는다(E8)
+            memo = label.replace(" · ", f" · 가장 넓은 거래시간 {_html_nowrap(_fmt_trade_hour(slots[k]['trade_hour']))} · ", 1)
             # 그림 영역 위(위 여백)에 적는다(13.4절 H8: 띠 안에서는 768~1200px에서 띠와 겹치고 툴팁 세로선이 글자를 지났다). 자리는
             # 주석이 보이는 가장 좁은 641px 그림(한 칸 약 20px, 주석 8.4칸 · pill 6.6칸)에서 그림 안에 들고 pill과 겹치지 않는 첫
             # 맞춤(바깥 4분의 1이면 바깥쪽 끝 먼저 → 가운데 → 띠 시작 → 띠 끝)이다. 모두 pill과 겹치면 그리지 않고(visible False) 범례 아래
@@ -1806,31 +1808,39 @@ def create_smp_chart(smp_data: Dict, *, now: Optional[datetime] = None) -> go.Fi
             chart_h -= 0 if free else 26
             fig.add_annotation(x={"left": slots[k]["start"], "right": slots[k]["end"], "center": hover_x[k]}[(free or [first])[0]],
                                y=1, yref="paper", yanchor="bottom", xanchor=(free or [first])[0], text=label, showarrow=False,
-                               font=dict(size=12), visible=bool(free))
+                               font=dict(size=12), visible=bool(free), name=memo)
 
     # 중앙값·80% 구간은 툴팁 한 줄(두 줄 글자)로 합친다. 툴팁 전용 점은 투명색(불투명도 1)이다: 불투명도 0으로 숨기면 통합 툴팁
     # 견본이 Plotly 범례 규칙(불투명도 최소 0.2)으로 옅은 분홍·자주가 돼 흰·남색 바탕에서 안 보였다(4차 평가 parity). 투명색이면
     # 견본 자체가 그려지지 않고, 견본은 실제 점이 있는 가격 줄에만 남는다. 0.00 입력 칸은 모형 출력을 한 번만 밝힌다(13.2절 H5)
     if is_model:
-        median_tip = ("%{y:,.1f} 원/kWh<br>80% 구간 %{customdata[1]:,.1f}–%{customdata[2]:,.1f}"
-                      "<extra>예측 중앙값 %{customdata[0]}</extra>")
+        median_tip = "%{y:,.1f} 원/kWh<br>80% 구간 %{customdata[0]:,.1f}–%{customdata[1]:,.1f}<extra>예측 중앙값</extra>"
     else:
         median_tip = "%{y:,.1f} 원/kWh<extra>추정 패턴 · 예측 모델 아님</extra>"
-    zero_tip = ("(모형 출력 중앙값 %{y:,.1f} · 80% 구간 %{customdata[1]:,.1f}–%{customdata[2]:,.1f})"
-                "<extra>기준선 입력 0.00 · 예측 아님</extra>")
+    # 0.00 입력 칸은 세 줄로 나눈다(F12 실측: 한 줄 약 420px 상자가 390px 그림 왼쪽 밖으로 88px 잘렸다)
+    zero_tip = ("기준선 입력 0.00 · 예측 아님<br>모형 출력 중앙값 %{y:,.1f}<br>80% 구간 %{customdata[0]:,.1f}–%{customdata[1]:,.1f}"
+                "<extra></extra>")
     fig.add_trace(go.Scatter(x=hover_x, y=q50, mode="markers", name=median_name, customdata=custom,
-                             marker=dict(size=10, color="rgba(192,38,211,0)", line=dict(width=0)), xhoverformat=hover_fmt,
+                             marker=dict(size=10, color="rgba(192,38,211,0)", line=dict(width=0)),
                              hovertemplate=[zero_tip if i in zero else median_tip for i in range(len(slots))] if zero
                              else median_tip))
 
-    # 높이 440(명세 6.3 기본값 360에서 조정): 확정 가격 점 24개와 예측 계단·띠를 한 축에서 거래시간별로 비교할 세로 해상도.
-    # 1181px 이상에서 카드를 오른쪽 열 높이에 맞춰 늘리지는 않는다(D10, 늘림 CSS는 F2에서 지움)
-    _chart_base(fig, height=chart_h, margin=dict(l=8, r=8, t=margin_top, b=8))
-    # 축 제목은 두지 않는다(단위는 카드 머리). x 범위 끝을 1초 당겨 24:00 눈금이 '00:00'으로 찍히지 않게 한다.
-    # 눈금 수는 축 길이에 맡긴다(명세 6.1절)
+    # 단위 '원/kWh'는 수급 차트 'MW'와 같은 자리·꼴(y 눈금 위, 위 여백 안 8px 위, 13.1절 H2)이고, 0 기준이 아니면 왼쪽 아래에 밝힌다
+    # (14.5절 J10). 왼쪽 여백은 46px로 고정한다: 눈금 글자에 맞춘 자동 여백(3자리 39px · 2자리 32px)에서는 38px 단위 글자가 그림
+    # 왼쪽 밖으로 잘렸다. 바탕을 거의 투명(0.001)하게 둔다: 바탕 없는 주석은 640px 이하 CSS가 숨겨 메모 줄로 옮기는 대상이다
+    axis_note = dict(xref="paper", yref="paper", x=0, showarrow=False, bgcolor="rgba(0,0,0,0.001)")
+    fig.add_annotation(y=1, xanchor="right", yanchor="bottom", xshift=-4, yshift=8, text="원/kWh", **axis_note)
+    if bottom > 0:
+        fig.add_annotation(y=0, xanchor="left", yanchor="bottom", xshift=4, yshift=2, text="세로축 0 기준 아님",
+                           font=dict(size=11), **axis_note)
+    # 높이 468(명세 6.3 기본값 360에서 조정): 확정 가격 점 24개와 예측 계단·띠를 한 축에서 거래시간별로 비교할 세로 해상도. 카드를 오른쪽
+    # 열 높이에 맞춰 늘리지는 않는다(D10). 14.1절 J2로 머리·메모 글자가 빠진 만큼 그림을 28px 키워 두 열 끝(13.4절 H8, ≤ 24px)을 지킨다
+    _chart_base(fig, height=chart_h, margin=dict(l=46, r=8, t=margin_top, b=8))
+    # x 범위 끝을 1초 당겨 24:00 눈금이 '00:00'으로 찍히지 않게 한다. 눈금 수는 축 길이에 맡긴다(명세 6.1절)
     fig.update_layout(
-        yaxis=dict(tickformat=",", ticksuffix="", range=[bottom, top]),
-        xaxis=dict(tickformat="%H:%M", range=[xs[0], xs[-1] - timedelta(seconds=1)]),
+        yaxis=dict(tickformat=",", ticksuffix="", range=[bottom, top], automargin=False),
+        xaxis=dict(tickformat="%H:%M", range=[xs[0], xs[-1] - timedelta(seconds=1)],
+                   unifiedhovertitle=dict(text="거래시간 %{x|%S}h (%{x|%H}–%{x|%S}시)")),
     )
     return fig
 
@@ -2596,7 +2606,6 @@ PD_CSS_COMPONENTS = """
 /* 3칸 카드 머리(제목·부제·칩, 명세 5.7절). 칩 묶음의 자동 여백이 남는 공간을 먼저 가져가므로 제목·부제는 붙어 있고,
    2칸 머리(제목|칩)는 space-between 그대로 양 끝에 놓인다 */
 .pd-card__sub{font-size:13px;font-weight:500;line-height:1.35;color:var(--pd-text-3)}
-.pd-card__lede{margin:4px 0 0;font-size:13px;font-weight:500;line-height:1.45;color:var(--pd-text-2)}
 .pd-card__head:has(> .pd-card__sub){justify-content:flex-start}
 .pd-card__chips{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto}
 .pd-card__meta{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;line-height:1.45;color:var(--pd-text-3)}
@@ -2688,7 +2697,7 @@ PD_CSS_COMPONENTS = """
 [data-testid="stPlotlyChart"] .indicatorlayer text.title{fill:var(--pd-text-2)!important}
 [data-testid="stPlotlyChart"] .hoverlayer text,
 [data-testid="stPlotlyChart"] .indicatorlayer text.number,
-[data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0;"]) text.annotation-text{fill:var(--pd-text-1)!important}
+[data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0"]) text.annotation-text{fill:var(--pd-text-1)!important}
 /* ---- 11. 수급 추이 카드 · 상태 줄 (5단계, 명세 5.7·5.9절. 3장 토큰과 인라인 --c 계열 색만 쓴다) ---- */
 /* 범례 겸 표: 칸마다 견본 · 이름 · 읽는 법 | 현재값 · 값 출처. 1180px 이하 2칸, 640px 이하 1칸.
    글자 칸 최소 6.5em · 값 칸 작은 글자 줄바꿈 허용(12.1절 E1 안전망, 5차 배치 평가가 dev 브라우저에서 확인한 값): 값 칸이 줄바꿈 없이
@@ -2790,8 +2799,9 @@ PD_CSS_COMPONENTS = """
 /* ---- 12. SMP 예측 · 발전 현황 · 분석 탭 (6단계, 명세 4.3~4.5·5.10·5.11절. 3장 토큰과 인라인 --c만 쓴다) ---- */
 /* 카드 머리 칩도 좁은 칸에서 긴 출처 문구가 칸 밖으로 넘치지 않게 줄바꿈을 허용한다(8절 앱 바·KPI와 같은 처리) */
 .pd-card__chips .pd-chip{white-space:normal;padding-top:2px;padding-bottom:2px;line-height:1.3;border-radius:12px}
-/* 바탕 없는 차트 주석('80% 구간 폭'·단위)에 카드 면 색 테두리를 둘러 계단선·막대가 지나가도 읽히게 한다(11절과 같은 처리) */
-:is(.st-key-card_smp,.st-key-card_timeline) [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0;"]) text.annotation-text{paint-order:stroke;stroke:var(--pd-surface);stroke-width:4px;stroke-linejoin:round}
+/* 바탕 없는 차트 주석('80% 구간 폭'·단위)에 카드 면 색 테두리를 둘러 계단선·막대가 지나가도 읽히게 한다(11절과 같은 처리). 'fill-opacity: 0'
+   앞부분만 맞춰 SMP 단위·0 기준 주석(바탕 0.001, 640px 이하에서도 남김)도 이 테두리와 위 10절 글자색 규칙을 받는다(J10) */
+:is(.st-key-card_smp,.st-key-card_timeline) [data-testid="stPlotlyChart"] .annotation-text-g:has(rect.bg[style*="fill-opacity: 0"]) text.annotation-text{paint-order:stroke;stroke:var(--pd-surface);stroke-width:4px;stroke-linejoin:round}
 /* 테마 전환: 1.52.1은 '#000036'·'#000037'·'#000038' 자리표시자를 그림을 처음 그릴 때만 바꾼다(S3 실측). SMP 그림은 한 시간
    안에서, 도넛·타임라인은 5분 안에서 그림이 같아 다시 그려지지 않으므로 음영·평균선·현재 상자·점 테두리·조각 경계를
    페이지 토큰으로 칠해 전환을 바로 따라가게 한다(text-3·text-1은 두 테마 카드 위 그래픽 3:1 이상) */
@@ -2858,6 +2868,7 @@ PD_CSS_COMPONENTS = """
 /* 정확도 굵은 줄(11.2절 D6): 재현 가능한 walk-forward 값이 먼저, API 표기 값은 그 아래 회색 각주 */
 [data-testid="stMarkdownContainer"] .pd-smp-model__acc,.pd-smp-model__acc{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin:0 0 4px;font-size:13px;line-height:1.45;color:var(--pd-text-2)}
 .pd-smp-model__acc b{font-size:14px;font-weight:700;color:var(--pd-text-1)}
+@media (min-width:1181px) and (max-width:1279px){.pd-smp-model__acc b{font-size:13px}} /* 좁은 오른쪽 열에서도 한 줄(13.4절 H8 두 열 끝, F12) */
 /* 공급 구성 표 견본: 도넛 조각과 같은 색 + 같은 방향 빗금(흰 28%는 도넛 pattern.fgcolor와 같은 값이다. 2차 평가에서
    모든 조각·막대가 빗금이라 무늬가 대비 없이 카드를 덮는다는 지적으로 45% → 28%, 추정 표시는 카드 칩이 맡는다) */
 .pd-mix-name{display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap;color:var(--pd-text-1)}
@@ -3604,6 +3615,16 @@ def _fmt_trade_hour(hour: int) -> str:
     return f"{hour:02d}h ({hour - 1:02d}–{hour:02d}시)"
 
 
+def _fmt_trade_hours(hours: List[int]) -> str:
+    """거래시간 목록 '03h·12–14h'(14.1절 J2-3): 세 시간 이상 이어지면 범위로 줄인다. SMP 범례·각주·산출 방식·통계 메모·화면 읽기 글이
+    함께 쓴다(9차 평가 뒤: 곳마다 풀어 써서 0.00 입력이 14시간인 날은 '05h·06h·…·18h' 열네 토막이 범례를 채웠다). 범위는 '–' 뒤에서
+    줄이 갈라지지 않게 한 토막으로 묶는다(12.2절 E8).
+    """
+    arr = np.array(sorted({int(h) for h in hours}), dtype=int)
+    runs = np.split(arr, np.where(np.diff(arr) != 1)[0] + 1) if len(arr) else []
+    return "·".join(_html_nowrap(f"{r[0]:02d}–{r[-1]:02d}h") if len(r) > 2 else "·".join(f"{h:02d}h" for h in r) for r in runs)
+
+
 def _fmt_smp_substitution(smp_data: Dict, history: Optional[pd.DataFrame] = None) -> Dict:
     """제주 SMP 대체값 판정(명세 11.1절 D1). 표시 전용이며 값은 바꾸지 않는다(F7).
 
@@ -3742,6 +3763,7 @@ def _fmt_smp_display_keys(smp_data: Dict, now: datetime, *, history: Optional[pd
         pd_fc_zero_hours·pd_fc_zero_raw('기준선 입력 0.00' 거래시간·원본 글자, 13.2절 H3: 화면 모든 곳이 이 판정만 본다. 기준선 예측일
         축에서 전날 원본 제주 값이 0·결측이고 그린 중앙값도 0인 시간만 — API 이력이 제주시범사업 값을 먼저 쓰면 원본이 0.00이어도
         입력이 0이 아닐 수 있다), pd_fc_zero_sub(그중 그날 화면이 육지 SMP로 바꾼 시간, _fmt_smp_substitution 규칙),
+        pd_fc_mean·pd_fc_n(그 시간을 뺀 예측 칸 중앙값 평균과 칸 수, 예측 칸이 없으면 None·0),
         pd_day_prices(차트 축 거래시간마다의 EPSIS 가격, _fmt_smp_day_prices), pd_conf_n(그중 확정 가격 거래시간 수),
         pd_conf_sub_hours·pd_conf_sub_raw(그중 육지 SMP로 대체된 거래시간과 원본 제주 값 글자).
     """
@@ -3837,7 +3859,9 @@ def _fmt_smp_display_keys(smp_data: Dict, now: datetime, *, history: Optional[pd
     # 기준선(전날 같은 시간 제주 가격)만 전날 값을 입력으로 쓴다. 다른 모델이면 전날 0.00이 그 예측과 무관하다
     drawn_zero = {s["trade_hour"] for s in axis["slots"] if s["q50"] == 0} if axis["date_axis"] else set()
     zero = [h for h in sub.get("prev_hours", []) if h in drawn_zero] if fc_kind == "model" and fc_short == "기준선" else []
+    fc_q50 = [s["q50"] for s in axis["slots"] if s["trade_hour"] not in zero]  # 예측 칸(14.2절 J3: 평균선·범례·화면 읽기 글이 함께 씀)
     return {"pd_src_label": src_label, "pd_stale_chip": stale_chip, "pd_fc_kind": fc_kind, "pd_basis": basis,
+            "pd_fc_mean": sum(fc_q50) / len(fc_q50) if fc_q50 else None, "pd_fc_n": len(fc_q50),
             "pd_trade_text": trade_text, **change_keys,
             "pd_day_prices": day_prices, "pd_conf_n": len(day_prices) - len(sub_prices),
             "pd_conf_sub_hours": [p["hour"] for p in sub_prices], "pd_conf_sub_raw": sub_raw,
@@ -3981,20 +4005,17 @@ def _html_legend_strip() -> str:
     )
 
 
-def _html_card_head(title: str, subtitle: str, chips_html: str, meta_html: str, *, lede: str = "") -> str:
-    """카드·무대 머리(명세 5.7절): 제목 · 부제 · 칩 한 줄 + (부제 문장 줄) + 메타 줄(출처 · HH:MM KST · 경과 | 해석).
+def _html_card_head(title: str, subtitle: str, chips_html: str, meta_html: str) -> str:
+    """카드·무대 머리(명세 5.7절): 제목 · 부제 · 칩 한 줄 + 메타 줄(출처 · HH:MM KST · 경과 | 해석).
 
     차트 제목은 여기에만 둔다(Plotly title 키를 쓰지 않는다). 부제·칩·메타가 비면 그 칸을 만들지 않는다:
-    빈 칸에도 flex gap이 끼어 제목 옆이 벌어지고, 메타가 비면 시계 아이콘만 남는다.
-    lede는 제목 줄 아래 한 줄을 따로 차지하는 부제 문장이다(12.1절 E4): 제목 줄에 넣으면 긴 문장이 칩을 셋째 줄로 밀었다.
+    빈 칸에도 flex gap이 끼어 제목 옆이 벌어지고, 메타가 비면 시계 아이콘만 남는다. 둘째 설명 문장은 카드의 '산출 방식'에 둔다(14.1절 J2-2).
     인자 모두 호출부가 만든 HTML이다(API·파일에서 온 문자열은 호출부가 html_escape로 넘긴다).
     """
     sub = f'<span class="pd-card__sub">{subtitle}</span>' if subtitle else ""
     chips = f'<span class="pd-card__chips">{chips_html}</span>' if chips_html else ""
     head = (f'<div class="pd-card__head"><span class="pd-card__title" role="heading" aria-level="2">{title}</span>'
             f'{sub}{chips}</div>')
-    if lede:
-        head += f'<p class="pd-card__lede">{lede}</p>'
     if meta_html:
         head += (f'<div class="pd-card__meta"><span class="pd-ico pd-ico--clock" aria-hidden="true"></span>'
                  f'<span>{meta_html}</span></div>')
@@ -4532,22 +4553,21 @@ def _fmt_sr_smp(smp_data: Dict, now: datetime) -> str:
     axis = _fmt_smp_slots(smp_data, now)
     if not axis["slots"]:
         return "제주 SMP 24시간: 예측 값이 없어 그리지 않았습니다"
-    q50 = [s["q50"] for s in axis["slots"]]
     zero = keys.get("pd_fc_zero_hours") or []
-    fc = [s["q50"] for s in axis["slots"] if s["trade_hour"] not in zero]  # 범위는 예측 칸만(0.00 입력은 예측 아님, H3)
+    fc = [s["q50"] for s in axis["slots"] if s["trade_hour"] not in zero]  # 범위·평균은 예측 칸만(0.00 입력은 예측 아님, H3·J3)
     kind = f"{_fmt_smp_fc_word(keys)} 중앙값" if keys["pd_fc_kind"] == "model" else "추정 패턴(예측 모델 아님)"
     scope = f"예측일 {axis['forecast_date']}" if axis["date_axis"] else "지금부터 24시간"
-    parts = [f"제주 SMP 차트 요약: {scope}, {kind} " + (f"{min(fc):,.1f}–{max(fc):,.1f} 원/kWh(평균 {sum(q50) / len(q50):,.1f}"
-                                                     + (f", 0.00 입력 {len(zero)}시간 포함)" if zero else ")") if fc else "예측 칸 없음")]
+    parts = [f"제주 SMP 차트 요약: {scope}, {kind} " + (f"{min(fc):,.1f}–{max(fc):,.1f} 원/kWh(평균 {keys['pd_fc_mean']:,.1f}"
+                                                     + (f", 예측 {len(fc)}시간)" if zero else ")") if fc else "예측 칸 없음")]
     prices = keys.get("pd_day_prices") or {}
     conf = [p["value"] for p in prices.values() if not p["sub"]]
     if conf:
         parts.append(f"확정 가격 {len(conf)}시간 {min(conf):,.1f}–{max(conf):,.1f} 원/kWh")
     sub_hours = keys.get("pd_conf_sub_hours") or []
     if sub_hours:
-        parts.append(f"육지 SMP 대체 {len(sub_hours)}시간({'·'.join(f'{h:02d}h' for h in sub_hours)}, 확정 가격 아님)")
+        parts.append(f"육지 SMP 대체 {len(sub_hours)}시간({_fmt_trade_hours(sub_hours)}, 확정 가격 아님)")
     if zero:
-        parts.append(f"{'·'.join(f'{h:02d}h' for h in zero)}는 기준선 입력이 전날 EPSIS 제주 "
+        parts.append(f"{_fmt_trade_hours(zero)}는 기준선 입력이 전날 EPSIS 제주 "
                      f"{keys.get('pd_fc_zero_raw') or '0.00'}이라 예측으로 그리지 않음(빗금 열)")
     if axis["cur"] is not None:
         slot = axis["slots"][axis["cur"]]
@@ -4887,13 +4907,13 @@ def _fmt_smp_fc_word(keys: Dict) -> str:
     return "API 대체값" if keys["pd_fc_kind"] == "api_fallback" else "추정 패턴"
 
 
-def _html_smp_head(smp_data: Dict, now: datetime, *,
-                   refresh_note: str = "SMP 예측 5분마다 · EPSIS 파일은 1시간마다 다시 읽음") -> str:
-    """SMP 차트 카드 머리(명세 5.10절·11.2절 D6): 제목 · 날짜 · 예측/추정 칩 · 확정 가격 칩 · 지연 칩 + 메타.
+def _html_smp_head(smp_data: Dict, now: datetime) -> str:
+    """SMP 차트 카드 머리(명세 5.10절·11.2절 D6): 제목 · 날짜 · 예측/추정 칩 · 확정 가격 칩 · 지연 칩 + 출처·시각 한 줄.
 
     제목·부제는 5초 안에 '오늘 확정 가격과 기준선 예측 비교'로 읽히게 쓴다(D6, 3차 평가: '제주 SMP 24시간'만으로는 이미 확정된
     날을 왜 예측하는지 알 수 없었다). 확정 가격 칩은 차트에 그린 확정 점 수('확정 가격 N시간')이고 육지 SMP 대체 시간은 세지
-    않는다(D1). 입력 지연은 그림 안 빨간 주석이 아니라 '예측일 지연' 칩으로 밝힌다. 단위는 축 제목 대신 부제에 둔다.
+    않는다(D1). 입력 지연은 그림 안 빨간 주석이 아니라 '예측일 지연' 칩으로 밝힌다. 부제의 단위는 표 보기(좁은 표 머리에 단위 없음)도 맡는다.
+    하루전 시장 문장과 갱신 주기는 '산출 방식'(_fmt_smp_method)에 둔다(14.1절 J2-2: 머리에 메타가 세 줄 쌓였다, 9차 동등성).
     """
     keys = _fmt_smp_with_keys(smp_data, now)
     axis = _fmt_smp_slots(smp_data, now)
@@ -4916,20 +4936,7 @@ def _html_smp_head(smp_data: Dict, now: datetime, *,
         chips += _html_chip("stale", "예측일 지연")
     # 출처는 차트 아래 '출처:' 줄 대신 메타 한 줄에 둔다(4차 평가 parity). 예측일은 날짜 축이면 부제가 이미 말한다
     when_note = "" if axis["date_axis"] or keys["pd_fc_kind"] == "local" else f" · 예측일 {fdate or '미제공'}"
-    meta = f"{_fmt_smp_source(keys)}{when_note} · 화면 {now:%H:%M} KST ({refresh_note})"
-    # 차트 읽는 법(계단·띠·점·거래시간)은 카드 머리 아래 '산출 방식' 펼침(_fmt_smp_method)으로 옮겼다(11.2절 D5): 1440에서
-    # 세 줄짜리 회색 문단이 차트 위에 놓여 있었다(3차 평가 parity '글자 벽'). 그 첫 줄(하루전 시장이라 그날 가격은 전날 확정)만
-    # 부제 문장으로 올린다(12.1절 E4, 5차 평가 멘토: '이미 아는 가격을 왜 예측하나'). 확정 가격이 없으면 비교할 수 없다고 쓴다
-    day = when if axis["date_axis"] else "그날"
-    if n_conf:
-        tail = f"{fc_word}이 얼마나 맞았는지 비교"
-    elif str(smp_data.get("data_source", "")).startswith("EPSIS"):
-        # EPSIS 값은 1시간 캐시(load_smp_history)라 파일에 막 들어온 날도 잠시 없을 수 있다(6차 평가 무결성)
-        tail = f"그 값이 아직 화면 자료(EPSIS 파일, 최대 1시간 전 읽음)에 없어 {fc_word}만 표시"
-    else:
-        tail = f"SMP 파일을 읽지 못해 {fc_word}만 표시"
-    lede = f"하루전 시장이라 {day} 가격은 {({'오늘': '어제', '내일': '오늘'}).get(day, '전날')} 확정 · {tail}"
-    return _html_card_head(title, subtitle, chips, meta, lede=lede)
+    return _html_card_head(title, subtitle, chips, f"{_fmt_smp_source(keys)}{when_note} · 화면 {now:%H:%M} KST")
 
 
 def _fmt_smp_source(keys: Dict) -> str:
@@ -4943,19 +4950,32 @@ def _fmt_smp_source(keys: Dict) -> str:
     return first + (" · 확정 = EPSIS 제주 하루전 (파일)" if keys.get("pd_conf_n") else "")
 
 
-def _fmt_smp_method(smp_data: Dict, now: datetime) -> List[str]:
+def _fmt_smp_method(smp_data: Dict, now: datetime, *,
+                    refresh_note: str = "SMP 예측 5분마다 · EPSIS 파일은 1시간마다 다시 읽음") -> List[str]:
     """SMP 차트 카드의 '산출 방식' 줄(11.2절 D5·D6). 옛 머리 설명 문단(1·2차 평가 반영 문구)을 줄로 나눴다.
 
-    점(확정 가격)·속 빈 점(육지 SMP 대체)·▲(축 밖 띠)·세로축 위 끝 규칙과 거래시간 읽는 법을 밝힌다. '거래시간 10h'가 몇
-    시인지 풀어 쓴 곳이 없었다(1차 평가). 값·시각은 시간 단위로만 바뀌어 300초 fragment가 다시 그려도 펼친 상태가 대개 남는다.
+    하루전 시장 문장(12.1절 E4의 카드 부제 문장) · 점(확정 가격)·속 빈 점(육지 SMP 대체)·▲(축 밖 띠)·세로축 위 끝 규칙 · 거래시간
+    읽는 법 · 갱신 주기(14.1절 J2-2: 머리에서 옮김)를 밝힌다. '거래시간 10h'가 몇 시인지 풀어 쓴 곳이 없었다(1차 평가). 값·시각은
+    시간 단위로만 바뀌어 300초 fragment가 다시 그려도 펼친 상태가 대개 남는다. refresh_note는 화면 갱신(60초)과 다른 주기(E5)다.
     """
     keys = _fmt_smp_with_keys(smp_data, now)
     axis = _fmt_smp_slots(smp_data, now)
     is_model = keys["pd_fc_kind"] == "model"
-    # '하루전 시장이라 그날 가격은 전날 확정'은 카드 부제 문장으로 올렸다(12.1절 E4, _html_smp_head)
-    items = ["SMP(계통한계가격) = 시간대별 도매 전력 가격"]
+    fc_word = _fmt_smp_fc_word(keys)
+    # 하루전 시장이라 그날 가격은 전날 확정(5차 평가 멘토: '이미 아는 가격을 왜 예측하나'). 확정 가격이 없으면 비교할 수 없다고 쓴다
+    day = ({f"{now:%Y-%m-%d}": "오늘", f"{now + timedelta(days=1):%Y-%m-%d}": "내일"}.get(axis["forecast_date"], "예측일")
+           if axis["date_axis"] else "그날")
+    if keys.get("pd_conf_n"):
+        tail = f"{fc_word}이 얼마나 맞았는지 비교"
+    elif str(smp_data.get("data_source", "")).startswith("EPSIS"):
+        # EPSIS 값은 1시간 캐시(load_smp_history)라 파일에 막 들어온 날도 잠시 없을 수 있다(6차 평가 무결성)
+        tail = f"그 값이 아직 화면 자료(EPSIS 파일, 최대 1시간 전 읽음)에 없어 {fc_word}만 표시"
+    else:
+        tail = f"SMP 파일을 읽지 못해 {fc_word}만 표시"
+    items = [f"하루전 시장이라 {day} 가격은 {({'오늘': '어제', '내일': '오늘'}).get(day, '전날')} 확정 · {tail}",
+             "SMP(계통한계가격) = 시간대별 도매 전력 가격"]
     if is_model:
-        items.append(f"대시 계단 = {_fmt_smp_fc_word(keys)} 중앙값 · 띠 = 80% 범위 (q10–q90, API 분위수)")
+        items.append(f"대시 계단 = {fc_word} 중앙값 · 띠 = 80% 범위 (q10–q90, API 분위수)")
     else:
         items.append("점선 계단 = 추정 패턴 (예측 모델 아님)")
     sub_hours = keys.get("pd_conf_sub_hours") or []
@@ -4974,14 +4994,14 @@ def _fmt_smp_method(smp_data: Dict, now: datetime) -> List[str]:
     if sub_hours:
         # EPSIS 제주 값이 0·결측인 거래시간은 get_smp_data가 육지 SMP로 바꾼다(11.1절 D1). 그 값은 확정 가격이 아니다
         items.append(f"속 빈 점 = EPSIS 제주 값이 {keys.get('pd_conf_sub_raw') or '0.00'}인 거래시간"
-                     f"({'·'.join(f'{h:02d}h' for h in sub_hours)})이라 육지 SMP로 바꾼 값 (확정 가격 아님)")
+                     f"({_fmt_trade_hours(sub_hours)})이라 육지 SMP로 바꾼 값 (확정 가격 아님)")
     zero, zero_sub = keys.get("pd_fc_zero_hours") or [], keys.get("pd_fc_zero_sub") or []
     if zero:
         # 입력 사실만 쓰고 원인은 주장하지 않는다(6차 평가). 대체 괄호는 그날 화면이 실제로 육지 SMP로 바꾼 시간에만 붙인다(13.2절
         # H3, 7차 평가 무결성: 육지 값도 0이면 get_smp_data가 바꾸지 않는다)
-        sub_note = ("" if not zero_sub else f" ({'' if zero_sub == zero else '·'.join(f'{h:02d}h' for h in zero_sub) + ' '}"
+        sub_note = ("" if not zero_sub else f" ({'' if zero_sub == zero else _fmt_trade_hours(zero_sub) + ' '}"
                     "그날 화면은 육지 SMP로 대체 · 0원을 가격으로 볼지는 결정 전)")
-        items.append(f"빗금 열 = {'·'.join(f'{h:02d}h' for h in zero)} 기준선 입력 0.00 (전날 같은 시간 EPSIS 제주 값 "
+        items.append(f"빗금 열 = {_fmt_trade_hours(zero)} 기준선 입력 0.00 (전날 같은 시간 EPSIS 제주 값 "
                      f"{keys.get('pd_fc_zero_raw') or '0.00'}) · 예측 아님{sub_note}")
     if is_model:
         items.append("세로축은 두 번째로 높은 띠 위 끝의 1.1배까지 (확정 가격은 모두 보이게, 더 높은 띠 끝은 ▲ · "
@@ -4992,20 +5012,20 @@ def _fmt_smp_method(smp_data: Dict, now: datetime) -> List[str]:
         items.append(f"거래시간 {hour_now:02d}h = {hour_now - 1:02d}–{hour_now:02d}시")
     else:
         items.append("거래시간 Nh = (N-1)시–N시")
-    return items
+    return items + [f"갱신: {refresh_note}"]
 
 
-def _chart_table_smp(smp_data: Dict, *, now: Optional[datetime] = None, narrow: bool = False) -> pd.DataFrame:
+def _chart_table_smp(smp_data: Dict, *, now: Optional[datetime] = None, narrow: bool = False) -> "pd.io.formats.style.Styler":
     """SMP '표' 보기(명세 5.10절·11.2절 D6, J10): 차트와 같은 24칸을 거래시간 · 구간 · 중앙값 · 확정 가격 · (q10 · q90)으로.
 
     q10·q90 열은 모델 예측일 때만 넣는다: 로컬 대체의 ±15%는 가정값이고 API 대체값의 분위수도 모델 구간이 아니다.
-    확정 가격 열은 차트의 확정 점과 같은 값(pd_day_prices)이다. 값이 없는 칸이 'None'으로 보이지 않게 글자 열('—')로 둔다.
-    육지 SMP로 대체한 거래시간은 확정 가격 칸을 비우고('—', 11.1절 D1) 그 값을 '비고' 열에 쓴다(원본 제주 값은 범례·출처 줄).
-    대체가 없으면 비고 열을 만들지 않는다. 단위는 첫 숫자 열 머리에만 둔다: 열 머리마다 '(원/kWh)'를 붙이면 1440px 카드(약
-    860px)에서도 마지막 열이 잘려 가로로 밀어야 보였다(F3 실측, 머리 글자가 열 폭을 정한다).
-    '기준선 입력 0.00' 칸(13.2절 H5)의 중앙값·q10·q90은 '— (입력 0.00)'으로 쓴다. 그날은 숫자·글자가 한 열에 섞이므로(Arrow가
-    섞인 열을 글자로 바꾼다) 같은 열의 다른 칸도 소수 1자리 글자로 맞춘다. narrow(640px 이하 표, 13.4절 H9)는 '구간' 열을 빼고
-    거래시간 칸을 '06h · 05–06시'로 합쳐 중앙값·확정 가격이 390px 첫 화면에 든다.
+    확정 가격 열은 차트의 확정 점과 같은 값(pd_day_prices)이다. 육지 SMP로 대체한 거래시간은 확정 가격 칸을 비우고(11.1절 D1)
+    그 값을 '비고' 열에 쓴다(원본 제주 값은 범례·산출 방식). 대체가 없으면 비고 열을 만들지 않는다. 단위는 첫 숫자 열 머리에만
+    둔다: 열 머리마다 '(원/kWh)'를 붙이면 1440px 카드(약 860px)에서도 마지막 열이 잘렸다(F3 실측, 머리 글자가 열 폭을 정한다).
+    숫자 열은 숫자 자료형 그대로 두고 표시 글자만 pandas Styler로 쓴다(14.4절 J8, 9차 멘토: 글자 열이라 왼쪽 정렬이어서 수급·월별
+    MAPE 표와 달랐다). '기준선 입력 0.00' 칸(13.2절 H5)은 값(모형 출력)을 두고 '— (입력 0.00)'으로 보인다. 없는 확정 가격은 결측값이고
+    st.dataframe placeholder가 '—'로 그린다(1.52.1은 결측 칸에 Styler 표시값을 쓰지 않고 'None'을 그렸다, F12 실측). narrow(640px
+    이하 표, 13.4절 H9)는 '구간' 열을 빼고 거래시간 칸을 '06h · 05–06시'로 합쳐 중앙값·확정 가격이 390px 첫 화면에 든다.
     """
     now = (now or datetime.now()).replace(second=0, microsecond=0)
     keys = _fmt_smp_with_keys(smp_data, now)
@@ -5027,18 +5047,18 @@ def _chart_table_smp(smp_data: Dict, *, now: Optional[datetime] = None, narrow: 
         if is_model:
             row["q10"] = slot["q10"]
             row["q90"] = slot["q90"]
-        if zero:
-            row.update({c: "— (입력 0.00)" if slot["trade_hour"] in zero else f"{row[c]:.1f}"
-                        for c in (median_col, "q10", "q90") if c in row})
         price = prices.get(f"{slot['end']:%Y-%m-%d %H:%M}")
-        row["확정 가격"] = f"{price['value']:,.1f}" if price is not None and not price["sub"] else "—"
+        row["확정 가격"] = price["value"] if price is not None and not price["sub"] else np.nan
         if has_sub:
             row["비고"] = f"육지 대체 {price['value']:,.1f}" if price is not None and price["sub"] else ""
         rows.append(row)
     # 확정 가격은 중앙값 바로 뒤에 둔다(6차 평가: q10·q90 뒤 여섯째 열이라 390에서 화면 밖이었다. 비교의 핵심 열)
     columns = (["거래시간"] + ([] if narrow else ["구간"]) + [median_col, "확정 가격"] + (["q10", "q90"] if is_model else [])
                + (["비고"] if has_sub else []))
-    return pd.DataFrame(rows, columns=columns)
+    nums = [c for c in (median_col, "q10", "q90") if c in columns]
+    zero_rows = [i for i, s in enumerate(axis["slots"]) if s["trade_hour"] in zero]
+    return (pd.DataFrame(rows, columns=columns).style.format("{:,.1f}", na_rep="—", subset=nums + ["확정 가격"])
+            .format(lambda _: "— (입력 0.00)", subset=(zero_rows, nums)))
 
 
 def _fmt_number_columns(names: List[str], fmt: str = "%.1f") -> Dict:
@@ -5046,42 +5066,20 @@ def _fmt_number_columns(names: List[str], fmt: str = "%.1f") -> Dict:
     return {name: st.column_config.NumberColumn(format=fmt) for name in names}
 
 
-def _fmt_smp_table_columns(table: pd.DataFrame) -> Dict:
-    """SMP 표 열 설정(11.2절 D6·D12): 거래시간 고정(84px, 640px 이하 합친 칸 136px) + 숫자 열(중앙값·q10·q90) 소수 1자리.
+def _fmt_smp_table_columns(table: "pd.io.formats.style.Styler", zero: bool) -> Dict:
+    """SMP 표 열 설정(11.2절 D6·D12): 거래시간 고정(84px, 640px 이하 합친 칸 136px) + 늦은 행에만 긴 글자가 있는 열의 폭.
 
-    거래시간 84px는 '17h · 지금'의 끝 글자가 잘리지 않는 폭이다(자동 폭은 머리 글자 기준이라 잘렸다). 비고 110px: 자동 폭은
-    앞쪽 행만 재는지 12~14h에만 있는 '육지 대체 165.6'을 보지 못해 머리('비고') 폭 + 늘림 몫(약 80px)만 받아 끝이 잘렸다
-    (F3 실측). 너비를 늘린 표(width='stretch')는 남는 폭을 모든 열에 나눠 주므로 다른 열은 자동 폭에 맡긴다.
-    확정 가격·비고는 '—'·설명이 섞인 글자 열이라 숫자 형식을 주지 않는다.
+    거래시간 84px는 '17h · 지금'의 끝 글자가 잘리지 않는 폭이다(자동 폭은 머리 글자 기준이라 잘렸다). 자동 폭은 앞쪽 행만 재는지
+    12~14h에만 있는 '육지 대체 165.6'·'— (입력 0.00)'(zero: 0.00 입력 칸이 있는 날, H5)을 보지 못해 끝이 잘렸으므로(F3 실측) 비고 110px ·
+    q10·q90·좁은 표 중앙값 104px를 준다. 너비를 늘린 표(width='stretch')는 남는 폭을 모든 열에 나눠 주므로 다른 열은 자동 폭에 맡긴다.
+    숫자 열에 형식(format)을 주지 않는다: column_config 형식이 Styler 표시값을 덮는다(Streamlit 문서, _chart_table_smp).
     """
-    config = {"거래시간": st.column_config.TextColumn(pinned=True, width=84 if "구간" in table.columns else 136),
-              **_fmt_number_columns(list(table.select_dtypes("number").columns))}
-    # 앞쪽 행에 없는 긴 글자('— (입력 0.00)'은 12~14h에만)는 자동 폭이 못 봐 잘리므로 폭을 준다(비고와 같은 이유, H5). 좁은 표는
-    # 중앙값 머리가 짧아(단위 없음) 그 열도 넓힌다
-    for name, width in (("q10", 104), ("q90", 104), ("비고", 110), ("예측 중앙값", 104)):
-        if name in table.columns and table[name].dtype == object:
-            config[name] = st.column_config.TextColumn(width=width)
+    config = {"거래시간": st.column_config.TextColumn(pinned=True, width=84 if "구간" in table.columns else 136)}
+    if "비고" in table.columns:
+        config["비고"] = st.column_config.TextColumn(width=110)
+    config.update({name: st.column_config.NumberColumn(width=104) for name in ("q10", "q90", "예측 중앙값")
+                   if zero and name in table.columns})
     return config
-
-
-def _fmt_smp_foot(smp_data: Dict, now: datetime) -> str:
-    """SMP 카드 각주(명세 5.10절·11.2절 D6 → 4차 평가): 육지 SMP로 대체한 거래시간과 기준선 입력이 전날 제주 0.00인 거래시간만
-    밝힌다(둘 다 없으면 빈 글자).
-
-    예측·확정 가격 원천과 화면 시각은 카드 메타 한 줄(_fmt_smp_source)로 옮겼다(4차 평가 parity: 머리 칩·범례·'출처:' 두 줄·
-    주석이 같은 부호를 네 번 풀었다). 대체값은 확정 가격이 아니므로(11.1절 D1) 어느 거래시간인지는 차트 바로 아래에 남긴다.
-    """
-    keys = _fmt_smp_with_keys(smp_data, now)
-    sub_hours, zero = keys.get("pd_conf_sub_hours") or [], keys.get("pd_fc_zero_hours") or []
-    lines = []
-    if sub_hours:
-        lines.append(f"육지 SMP 대체 = {'·'.join(f'{h:02d}h' for h in sub_hours)} "
-                     f"(EPSIS 제주 값 {keys.get('pd_conf_sub_raw') or '0.00'}) · 확정 가격 아님")
-    if zero:
-        # 빗금 열의 입력(6차 평가). 가장 넓은 띠 주석에서는 이 시간을 뺐으므로(create_smp_chart) 차트 바로 아래에서 밝힌다
-        lines.append(f"{'·'.join(f'{h:02d}h' for h in zero)} 기준선 입력(전날 같은 시간 EPSIS 제주 값)이 "
-                     f"{keys.get('pd_fc_zero_raw') or '0.00'} · 예측 아님 (빗금 열)")
-    return "<br>".join(lines)
 
 
 def _html_smp_legend(smp_data: Dict, now: datetime, fig: go.Figure) -> str:
@@ -5093,41 +5091,39 @@ def _html_smp_legend(smp_data: Dict, now: datetime, fig: go.Figure) -> str:
     keys = _fmt_smp_with_keys(smp_data, now)
     # 확정·대체 점은 trace 하나에 함께 그린다(uid 'pdconfirmed+pdsub', create_smp_chart). 그래서 uid 글자 안에 이름이 있는지로 본다
     uids = " ".join(str(getattr(t, "uid", None) or "") for t in fig.data)
-    q50 = [s["q50"] for s in _fmt_smp_slots(smp_data, now)["slots"]]
 
     def item(swatch: str, label: str, color: str = SERIES["smp"]) -> str:
         return (f'<span class="pd-maplegend__item" role="listitem"><span class="pd-swatch {swatch}" '
                 f'style="--c:{color}" aria-hidden="true"></span>{label}</span>')
 
-    if keys["pd_fc_kind"] == "model":
+    if keys["pd_fc_kind"] == "model":  # 모든 칸이 0.00 입력이면 계단·띠를 그리지 않으므로 견본도 두지 않는다(14.2절 J3)
         items = [item("pd-swatch--dash", f"<b>{_fmt_smp_fc_word(keys)} 중앙값</b>"),
-                 item("pd-swatch--band", "<b>80% 구간</b> (q10–q90)")]
+                 item("pd-swatch--band", "<b>80% 구간</b> (q10–q90)")] if keys.get("pd_fc_n") else []
     else:
         items = [item("pd-swatch--dotline", f"<b>{_fmt_smp_fc_word(keys)}</b> (예측 모델 아님)")]
-    zero = keys.get("pd_fc_zero_hours") or []
-    if q50:
-        # 그림 안 평균 이름표를 옮겨 온 자리(차트 주석 참고). 값은 그림의 점선과 같은 중앙값 일평균이고, 0.00 입력 칸을 넣어 낮아진
-        # 값이라는 것을 밝힌다(13.2절 H5, 7차 평가: 거의 모든 중앙값·확정 가격보다 아래라 보통 수준처럼 읽혔다)
+    zero, mean = keys.get("pd_fc_zero_hours") or [], keys.get("pd_fc_mean")
+    if mean is not None:
+        # 그림 안 평균 이름표를 옮겨 온 자리(차트 주석 참고). 값은 그림의 점선과 같은 예측 칸 중앙값 평균이고(14.2절 J3: 0.00 입력 칸을
+        # 넣으면 거의 모든 계단·확정 가격보다 아래였다) 그런 칸이 있으면 평균에 쓴 칸 수를 적는다. 예측 칸이 없으면 점선도 이 칸도 없다
         items.append(item("pd-swatch--meanline", f"<b>{'예측' if keys['pd_fc_kind'] == 'model' else '패턴'} 평균</b> "
-                                                 f"{sum(q50) / len(q50):,.1f}"
-                                                 + (f" (0.00 입력 {len(zero)}시간 포함)" if zero else "")))
-    if "pdzero" in uids:  # 빗금 열(H4). 견본은 그림과 같은 중립 빗금
-        items.append(item("pd-swatch--hatch", "<b>기준선 입력 0.00</b> (예측 아님)", "var(--pd-text-3)"))
-    if "pdconfirmed" in uids:
-        items.append(item("pd-swatch--pt", f"<b>확정 가격</b> · EPSIS 제주 하루전 {int(keys.get('pd_conf_n') or 0)}시간"))
-    if "pdsub" in uids:
-        sub_hours = keys.get("pd_conf_sub_hours") or []
+                                                 f"{mean:,.1f}" + (f" ({keys['pd_fc_n']}시간)" if zero else "")))
+    if "pdzero" in uids:  # 빗금 열(H4). 견본은 그림과 같은 중립 빗금이고 시간은 옛 메모 둘째 줄에서 옮겼다(14.1절 J2-3)
+        items.append(item("pd-swatch--hatch", f"<b>기준선 입력 0.00</b> · {_fmt_trade_hours(zero)} (예측 아님)",
+                          "var(--pd-text-3)"))
+    if "pdconfirmed" in uids:  # 원천·시간 수는 바로 위 머리 칩('확정 가격 N시간')·출처 줄이 말한다(14.1절 J2-6: 한 카드에 세 번)
+        items.append(item("pd-swatch--pt", "<b>확정 가격</b>"))
+    if "pdsub" in uids:  # 옛 차트 각주(육지 SMP 대체 시간)를 합쳤다(14.1절 J2-6: 같은 단서가 범례·각주·통계 메모에 세 번)
         items.append(item("pd-swatch--pt is-open", f"<b>육지 SMP로 대체</b> (제주 값 {keys.get('pd_conf_sub_raw') or '0.00'})"
-                                                   f" · {len(sub_hours)}시간"))
+                                                   f" · {_fmt_trade_hours(keys.get('pd_conf_sub_hours') or [])} · 확정 가격 아님"))
     if "pdcaret" in uids:
         items.append(item("pd-swatch--caret", "<b>80% 구간 위 끝</b> 세로축 밖"))
     # 바탕 없는 그림 주석(가장 넓은 띠 폭·값 없음 안내)은 640px 이하에서 CSS(12절)가 그림에서 숨기고 이 메모 줄이 같은 문장을
-    # 보인다(12.1절 E4, 5차 평가 parity: 390에서 거래시간 pill 바로 아래 쌓여 지금 띠를 가로질렀다). 글자는 그림 주석을 그대로 읽는다.
-    # 그림에 그리지 않은 주석(visible False: pill과 겹칠 자리뿐인 띠 폭)이 있으면 모든 폭에서 보인다(is-all, 8차 평가).
-    # 빗금 열 이름표는 바로 위 범례 견본이 같은 말이라 옮기지 않는다
+    # 보인다(12.1절 E4, 5차 평가 parity: 390에서 거래시간 pill 바로 아래 쌓여 지금 띠를 가로질렀다). 글자는 그림 주석의 이름(name, 띠의
+    # 거래시간을 더한 메모 글자, J5)이나 글자를 읽는다. 그림에 그리지 않은 주석(visible False: pill과 겹칠 자리뿐인 띠 폭)이 있으면
+    # 모든 폭에서 보인다(is-all, 8차 평가). 빗금 열 이름표는 바로 위 범례 견본이 같은 말이라 옮기지 않는다
     notes = [a for a in fig.layout.annotations if a.text and not a.bgcolor and a.name != "pdzero"]
     memo = (f'<p class="pd-card__foot pd-smp-memo{" is-all" if any(a.visible is False for a in notes) else ""}">'
-            f'{" · ".join(str(a.text).replace("<br>", " · ") for a in notes)}</p>' if notes else "")
+            f'{" · ".join(str(a.name or a.text).replace("<br>", " · ") for a in notes)}</p>' if notes else "")
     return f'<div class="pd-maplegend pd-smp-legend" role="list" aria-label="SMP 차트 범례">{"".join(items)}</div>{memo}'
 
 
@@ -5157,7 +5153,7 @@ def _html_smp_stats(smp_data: Dict, now: Optional[datetime] = None) -> str:
                      else html_escape(label.split(" ")[-1]))
         # '24h (23–24시)'와 '확정' 칩을 한 토막으로 묶는다(12.2절 E8: 768에서 줄 끝에서 갈라졌다 · 13.4절 H8: 칩이 따로 한 줄을
         # 차지해 값이 옆 칸보다 26~44px 내려갔다). 칩은 라벨 마지막 줄 끝에 선다
-        current_name, current_chip = f"<span>현재가 · 거래시간 {_html_nowrap(hour_text + current_chip)}</span>", ""
+        current_name, current_chip = f"<span>현재가 · {_html_nowrap(hour_text + current_chip)}</span>", ""  # '거래시간'은 앱 바·KPI(J2-6)
     elif is_epsis:
         current_name, current_chip = "현재가 (최근 48시간 평균)", _html_chip("est", "추정 · 최근 48시간 평균")
     else:
@@ -5187,7 +5183,7 @@ def _html_smp_stats(smp_data: Dict, now: Optional[datetime] = None) -> str:
         hours = smp_data.get("pd_sub_day_hours") or []
         memo = (f"일 통계에 육지 SMP로 대체한 {day_count}시간 포함 "
                 f"(EPSIS 제주 값 {html_escape(str(smp_data.get('pd_sub_day_raw') or '0.00'))})"
-                + (f' · <span class="pd-nowrap">거래시간 {"·".join(f"{int(h):02d}h" for h in hours)}</span>'
+                + (f' · <span class="pd-nowrap">거래시간 {_fmt_trade_hours(hours)}</span>'
                    if hours else ""))
     elif is_epsis:
         chips = _html_chip("measured", "확정 가격") + str(smp_data.get("pd_stale_chip", ""))
@@ -5203,10 +5199,10 @@ def _html_smp_stats(smp_data: Dict, now: Optional[datetime] = None) -> str:
 
 
 def _fmt_smp_blocks(smp_data: Dict, *, now: Optional[datetime] = None) -> List[Dict]:
-    """시간대 블록 3행(명세 5.10절): 심야 00–08 · 주간 08–17 · 저녁 17–24의 중앙값 평균·최고·최저(소수 1자리).
+    """시간대 블록 3행(명세 5.10절): 심야 00–08 · 주간 08–17 · 저녁 17–24의 예측 칸 중앙값 평균·최고·최저(소수 1자리).
 
     칸은 시작 시각의 시(hour)로 나눈다. 예측일 축이면 인덱스 0–7 · 8–16 · 17–23과 같고, 지금부터 그린 축(대체값)도
-    같은 시간대끼리 묶인다.
+    같은 시간대끼리 묶인다. '기준선 입력 0.00' 칸은 예측이 아니라 값에서 뺀다(14.2절 J3, 차트·평균선과 같은 칸).
     """
     now = (now or datetime.now()).replace(second=0, microsecond=0)
     axis = _fmt_smp_slots(smp_data, now)
@@ -5226,9 +5222,10 @@ def _fmt_smp_blocks(smp_data: Dict, *, now: Optional[datetime] = None) -> List[D
         conf = [p["value"] for p in (prices.get(f"{s['end']:%Y-%m-%d %H:%M}") for s in picked)
                 if p is not None and not p["sub"]]
         shown = stats(vals)
-        # 0.00 입력 칸을 빼면 값이 달라지는 칸에 '*'를 단다(13.2절 H5: 값 자체는 그대로). 최고처럼 그 칸이 바꾸지 않는 값에는 달지 않는다
+        # 보이는 값은 0.00 입력 칸을 뺀 값이다(14.2절 J3: 넣으면 주간 113.5*·0.0*이 '예측 아님' 시간을 예측으로 셌다). 모든 칸으로 낸
+        # 값과 달라진 칸에만 '*'를 단다(최고처럼 그 칸이 바꾸지 않는 값에는 달지 않는다). 0.00 입력 칸이 없으면 전과 같다
         rest = stats([s["q50"] for s in picked if s["trade_hour"] not in zero])
-        out.append({"name": name, "hours": hours, "count": len(vals), "avg": shown[0], "max": shown[1], "min": shown[2],
+        out.append({"name": name, "hours": hours, "count": len(vals), "avg": rest[0], "max": rest[1], "min": rest[2],
                     "mark": {k for k, a, b in zip(("avg", "max", "min"), shown, rest) if a != b},
                     "conf_avg": round(sum(conf) / len(conf), 1) if conf else None, "conf_n": len(conf)})
     return out
@@ -5271,7 +5268,7 @@ def _html_smp_blocks(smp_data: Dict, now: datetime) -> str:
     has_conf = any(b["conf_n"] for b in blocks)
 
     def num(v: Optional[float], star: bool = False) -> str:
-        return "—" if v is None else f"{v:,.1f}" + ("*" if star else "")
+        return ("—" if v is None else f"{v:,.1f}") + ("*" if star else "")  # 예측 칸이 하나도 없는 시간대는 '—*'
 
     body = "".join(
         f'<tr><td><b>{b["name"]}</b><small>{b["hours"]}</small></td>'
@@ -5283,28 +5280,30 @@ def _html_smp_blocks(smp_data: Dict, now: datetime) -> str:
     word = "예측" if is_model else "패턴"
     head = (f'<th scope="col">{word} 평균</th><th scope="col">최고</th><th scope="col">최저</th>'
             + ('<th scope="col">확정 평균</th>' if has_conf else ""))
-    basis = (f"최고·최저도 {_fmt_smp_fc_word(keys)} 중앙값" if is_model else "최고·최저도 추정 패턴")
-    # 표의 '*' 칸(0.0 최저 등)이 어디서 왔는지 각주 첫머리에 둔다(13.2절 H5, 7차 평가 멘토: 오늘 가격이 0원까지 내려가는 것처럼 읽혔다)
+    # 표 아래에는 '*' 각주 한 줄만 보인다(14.1절 J2-4). 단위·최고 최저 기준·확정 평균 풀이는 이 카드의 '산출 방식'으로 옮겼다
     zero, zero_raw = keys.get("pd_fc_zero_hours") or [], keys.get("pd_fc_zero_raw") or "0.00"
-    notes = ([f"* 전날 같은 시간 제주 {zero_raw} 입력으로 만든 예측 포함 ({'·'.join(f'{h:02d}h' for h in zero)})"]
-             if any(b["mark"] for b in blocks) else []) + [f"단위 원/kWh · {basis}"]
+    star = (f'<p class="pd-card__note">* {zero_raw} 입력 {len(zero)}시간({_fmt_trade_hours(zero)}) 제외</p>'
+            if any(b["mark"] for b in blocks) else "")
+    method = [f"단위 원/kWh · 최고·최저도 {_fmt_smp_fc_word(keys) + ' 중앙값' if is_model else '추정 패턴'}"]
     if has_conf:
         sub_n = len(keys.get("pd_conf_sub_hours") or [])
-        notes.append("확정 평균 = EPSIS 제주 하루전 확정 가격" + (f" (육지 SMP 대체 {sub_n}시간 제외)" if sub_n else ""))
+        method.append("확정 평균 = EPSIS 제주 하루전 확정 가격" + (f" (육지 SMP 대체 {sub_n}시간 제외)" if sub_n else ""))
     err = _fmt_smp_day_error(smp_data, now)
     error_html = ""
     if err:
         day = "오늘" if axis["forecast_date"] == f"{now:%Y-%m-%d}" else "예측일"
-        # 숫자와 단위는 한 토막(12.2절 E8: 390에서 '14.5 / 원/kWh'로 갈라졌다. 이 줄은 flex라 두 요소가 따로 줄을 바꿨다)
-        mae = f'<b class="pd-num">{err["mae"]:,.1f}</b> <small>원/kWh</small>'
-        rest = (f' · 전날 제주 {zero_raw} 입력 {err["n_zero"]}시간 포함 (빼면 {err["mae_rest"]:,.1f})'
-                if err["n_zero"] and err["mae_rest"] is not None else "")
-        error_html = (f'<p class="pd-smp-err">{day} {err["word"]} 평균 절대오차 {_html_nowrap(mae)}'
-                      f'<small>· 확정 {err["n"]}시간 비교{rest}</small></p>')
+        # 굵은 숫자는 0.00 입력(예측 아님) 시간을 뺀 오차이고 비교한 시간 수를 옆에 둔다. 모든 시간 값은 같은 줄 회색 글자로 남긴다(14.2절
+        # J3, 9차 멘토: 굵은 40.8이 차트의 '예측 아님' 시간까지 세 21.4와 어긋나 보였다). 그런 시간이 없으면 전과 같다. 숫자와 단위는 한
+        # 토막(12.2절 E8: 390에서 '14.5 / 원/kWh'로 갈라졌다. 이 줄은 flex라 두 요소가 따로 줄을 바꿨다)
+        mae, n = (err["mae_rest"], err["n"] - err["n_zero"]) if err["n_zero"] else (err["mae"], err["n"])
+        value = f'<b class="pd-num">{"—" if mae is None else f"{mae:,.1f}"}</b> <small>원/kWh</small>'
+        whole = (f'<small>· 확정 {err["n"]}시간 기준 {err["mae"]:,.1f} ({zero_raw} 입력 {err["n_zero"]}시간 포함)</small>'
+                 if err["n_zero"] else "")
+        error_html = (f'<p class="pd-smp-err">{day} {err["word"]} 평균 절대오차 {_html_nowrap(value)}'
+                      f'<small>· {"예측" if err["n_zero"] else "확정"} {n}시간 비교</small>{whole}</p>')
     return (_html_card_head("시간대별 요약", "", _html_smp_kind_chip(keys), f"{scope} · 화면 {now:%H:%M} KST")
             + '<table class="pd-mini-table" aria-label="시간대별 SMP 요약"><thead><tr><th scope="col">시간대</th>'
-            + head + '</tr></thead>'
-            + f'<tbody>{body}</tbody></table>{error_html}<p class="pd-card__note">{" · ".join(notes)}</p>')
+            + head + '</tr></thead>' + f'<tbody>{body}</tbody></table>{error_html}{star}' + _html_method(method))
 
 
 def _fmt_smp_accuracy(model: object) -> Dict:
@@ -6609,37 +6608,33 @@ def main():
         smp_l, smp_r = st.columns([8, 4], gap="medium")
         with smp_l:
             with st.container(border=True, key="card_smp"):
-                # 앱 바의 화면 갱신(60초)과 다른 주기라 무엇을 다시 읽는지 밝힌다(12.1절 E5). EPSIS 쪽(확정 점·통계·대체 판정)은
+                st.html(_html_smp_head(smp_data, now) + _html_sr_summary(_fmt_sr_smp(smp_data, now)))
+                # '산출 방식'은 머리와 따로 둔다: 머리 메타의 화면 시각이 5분마다 바뀌어 다시 그려지면 펼친 칸이 닫힌다(수급 카드와 같은 이유).
+                # 갱신 주기는 앱 바의 화면 갱신(60초)과 달라 무엇을 다시 읽는지 밝힌다(12.1절 E5 · 14.1절 J2-2로 머리에서 옮김). EPSIS 쪽은
                 # load_smp_history 1시간 캐시라 '5분마다 다시 읽음'은 예측에만 맞는 말이었다(6차 평가 무결성)
-                st.html(_html_smp_head(smp_data, now,
-                                       refresh_note="SMP 예측 5분마다 · EPSIS 파일은 1시간마다 다시 읽음" if auto_refresh
-                                       else "자동 갱신 꺼짐")
-                        + _html_sr_summary(_fmt_sr_smp(smp_data, now)))
-                # '산출 방식'은 머리와 따로 둔다: 머리 메타의 화면 시각이 5분마다 바뀌어 다시 그려지면 펼친 칸이 닫힌다(수급 카드와 같은 이유)
-                st.html(_html_method(_fmt_smp_method(smp_data, now)))
+                st.html(_html_method(_fmt_smp_method(smp_data, now, refresh_note="SMP 예측 5분마다 · EPSIS 파일은 1시간마다 다시 읽음"
+                                                     if auto_refresh else "자동 갱신 꺼짐")))
                 # 차트의 비시각 대체 수단(J10). 차트·표는 같은 한 자리를 번갈아 쓰므로 요소 개수가 바뀌지 않는다
                 smp_view = st.segmented_control("보기", ["차트", "표"], default="차트", key="smp_view",
                                                 label_visibility="collapsed") or "차트"
-                # 차트 보기 = 그림 → 범례·각주, 표 보기 = 좁은 폭 스크롤 안내·각주 → 표(요소 개수는 두 보기에서 같다). 표 보기의 안내는
-                # 수급 표처럼 표 위에 둔다(6차 평가: 24행 표 아래라 끝까지 내려야 보였다)
-                smp_foot = _fmt_smp_foot(smp_data, now)  # 육지 SMP 대체·기준선 입력 0.00이 있을 때만(출처는 머리 메타 한 줄)
-                smp_foot = _html_card_foot(smp_foot) if smp_foot else ""
+                # 차트 보기 = 그림 → 범례, 표 보기 = 좁은 폭 스크롤 안내 → 표(요소 개수는 두 보기에서 같다). 표 보기의 안내는 수급 표처럼
+                # 표 위에 둔다(6차 평가: 24행 표 아래라 끝까지 내려야 보였다). 옛 차트 각주(0.00 입력·육지 대체 시간)는 범례로 합쳤다(J2-3·J2-6)
                 if smp_view == "차트":
                     smp_fig = create_smp_chart(smp_data, now=now)
                     st.plotly_chart(smp_fig, theme="streamlit", width="stretch",
                                     config={"displayModeBar": False}, key="chart_smp")
-                    st.html(_html_smp_legend(smp_data, now, smp_fig) + smp_foot)
+                    st.html(_html_smp_legend(smp_data, now, smp_fig))
                 else:
                     tables = [_chart_table_smp(smp_data, now=now, narrow=narrow) for narrow in (True, False)]
-                    # 390px에서 밀리는 열 안내는 늘 비지 않아 빈 요소가 없다. 각주 → 안내 → 표(표 도구 막대가 바로 위 줄 끝을 덮는다)
-                    st.html(smp_foot + _html_scroll_hint(list(tables[0].columns[3:]), "거래시간"))
+                    # 390px에서 밀리는 열 안내는 늘 비지 않아 빈 요소가 없다. 안내 → 표(표 도구 막대가 바로 위 줄 끝을 덮는다)
+                    st.html(_html_scroll_hint(list(tables[0].columns[3:]), "거래시간"))
                     # 640px 이하 표(거래시간·구간 한 칸, 13.4절 H9)와 넓은 표를 한 칸에 두고 CSS(14절)가 폭마다 하나만 보인다(요소 수는
-                    # 차트 보기와 같다). 거래시간 열 고정(D12)
+                    # 차트 보기와 같다). 거래시간 열 고정(D12). 표는 Styler(숫자 열 오른쪽 정렬, J8)이고 없는 확정 가격은 '—'다
                     with st.container(key="smp_tables"):
                         for table in tables:
-                            st.dataframe(table, hide_index=True, width="stretch",
-                                         height=(len(table) + 1) * 35 + 3,  # 표 안 세로 스크롤 없음(N17)
-                                         column_config=_fmt_smp_table_columns(table))
+                            st.dataframe(table, hide_index=True, width="stretch", placeholder="—",
+                                         height=(len(table.index) + 1) * 35 + 3,  # 표 안 세로 스크롤 없음(N17)
+                                         column_config=_fmt_smp_table_columns(table, bool(smp_data.get("pd_fc_zero_hours"))))
             # 지어낸 숫자는 접힌 expander 안에만 둔다(J11). 1181px 이상은 왼쪽 열 차트 아래라 두 열 끝이 맞고(13.4절 H8: 두 열 아래일 때
             # 오른쪽 열이 42~67px 길었다), 1180px 이하는 CSS(6절)가 명세 4.3절 쌓인 순서(차트 → 통계 → 블록 → 모델 → 예시)로 둔다
             with st.expander("예시 화면 · 입찰 예시 (실데이터 아님)"):
