@@ -31,7 +31,9 @@
 **Tech Stack**:
 - Backend: Python 3.13, PyTorch, FastAPI
 - ML Models: LSTM, BiLSTM, TFT, Ensemble
-- Frontend: Streamlit (in progress)
+- Frontend: Streamlit 대시보드 `src/dashboard/app_v4.py`(운영 8504 = launchd `com.powerdemand.dashboard`, 공개 Tailscale Funnel :8443). 2026-11-25 UI 개편 → 명세 `docs/2026-11-23-dashboard-ui-top1-design.md`, 보고서 `docs/2026-11-23-dashboard-ui-top1-report.md`(남은 결함 5.3절, 승인 대기 P1~P11 5.1절)
+  - 화면을 고친 뒤 관문: `.venv/bin/python -B -m pytest tests/test_v4_*.py -q -p no:cacheprovider`(35 passed, 추적 중인 .pyc를 건드리지 않음), `.venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/ui_guard.py --app src/dashboard/app_v4.py`(29/29), `.venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/logic_guard.py --before <git show 9166104c:src/dashboard/app_v4.py 사본> --after src/dashboard/app_v4.py`(changed_logic_REVIEW [] · removed [])
+  - 개발 서버는 운영 `.env`의 경보가 켜져 있어 `SLACK_ALERTS_ENABLED=false EMAIL_ALERTS_ENABLED=false`를 붙여 다른 포트(예: 8514)에서 띄운다. 8504는 운영 전용
 - Database: File-based (CSV, Parquet)
 
 **Key Directories**:

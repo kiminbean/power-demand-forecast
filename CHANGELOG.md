@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-11-07
+## [Unreleased] - 2026-11-26
+
+### Changed (2026-11-23~26) — Streamlit 대시보드(app_v4) UI 개편
+- **화면 전면 개편**(`src/dashboard/app_v4.py`, `.streamlit/config.toml`, 2026-11-25 운영 반영): 라이트·다크 테마(시스템 설정), 앱 바·상태 문장·KPI 4장, 값마다 실측·예측·추정·예시 칩과 출처·기준 시각, 발전소 지도와 지역 인스펙터, 수급 추이를 '추정 패턴'으로 표기, 360~1920px 대응. 데이터 로직은 바꾸지 않았다(`logic_guard` changed_logic_REVIEW [] · removed []).
+- **SMP 머리 숫자 기준**: 오늘 오차·예측 평균선·시간대별 요약은 기준선 입력이 0.00인('예측 아님') 시간을 뺀 예측 시간으로 계산한다(예: 40.8 → 21.4 원/kWh). 24시간 전체 값은 같은 줄에 회색으로 남긴다.
+- **평가와 판정**: 경쟁사 UI 기준(60Hertz 8.7 / Electricity Maps 9.2) 루브릭으로 10차까지 평가했다. 10차 평균 8.57(R1~R8 모두 8.0 이상)·무결성 27/27이고, 화면 배치는 마무리 수정(`778a3974`) 뒤 독립 재평가(10b) 22/22다. 합격선(평균 8.5 이상과 관문)을 충족했다. 공개 주소 :8443에서 두 테마 × 1440·390px로 확인했다(2026-11-26).
+- **설명 페이지**(`docs/mentor-tech-explainer.html`): '한계' 칸을 개편된 메인 대시보드에 맞게 고쳤다(2026-11-26). 이전부터 커밋하지 않았던 11-10 수정(J-REF 태양광 링크, 자료 행 수, 검증 MAPE 문장)도 사용자 승인으로 함께 커밋했다.
+
+### Added (2026-11-23~26)
+- 설계 명세 `docs/2026-11-23-dashboard-ui-top1-design.md`(1~14장), 전후 보고서 `docs/2026-11-23-dashboard-ui-top1-report.md`, 검증 도구 `docs/2026-11-23-dashboard-ui-top1/`(`ui_guard.py`·`logic_guard.py`·`shoot.py`·대비·지도 시점·터치 탐침), 개편 전후 스크린샷.
+
+### Known issues (2026-11-26)
+- 대시보드 남은 결함(보고서 5.3절, 높음 0건): 사이드바를 연 1181\~1320px 넘침, SMP 표 CSV 내보내기의 0.00 입력 시간 모형 원값, 게이지 설명 '아님)' 줄 끊김 등. 승인 대기 P1\~P11은 5.1절에 있다.
+- SMP 수집기가 `data/smp/smp_real_epsis.csv`를 원자적으로 쓰지 않아, 쓰는 도중 읽으면 부분 표가 1시간 캐시될 수 있다('1023일 전 가격'). 데이터 로직이라 승인 뒤 고친다.
 
 ### Added (2026-11-06~07)
 - **AR + GBM 수요 모델(`ar_gbm`)**: 시간대별 선형 AR에 HistGradientBoosting 잔차 보정을 더한 모델이다. 학습(`src/training/train_demand_ar_gbm.py`), 추론(`src/inference/ar_gbm_predictor.py`), 산출물(`models/demand_ar_gbm/`, 학습 ~2024-06)을 갖췄다. 고정 test(2023-07~2024-12)에서 MAPE 3.63%·R² 0.954로 시간대별 AR(3.78%)과 LSTM(4.16%)을 이겼다. walk-forward 평균은 3.35%다.

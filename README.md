@@ -108,16 +108,21 @@ python3 -m http.server 8799 --bind 0.0.0.0 -d docs
 | **EPSIS Crawler** | 전력통계정보시스템 | 전국 실시간 전력수급 (5분 간격) |
 | **Jeju Power Crawler** | 공공데이터포털 | 제주 전력수급현황 (시간별 실측) |
 
-### 📊 Streamlit 대시보드 (v4.0.7)
+### 📊 Streamlit 대시보드 "제주 전력 지도" (v4.1, 2026-11-25 UI 개편)
 | 기능 | 설명 |
 |------|------|
-| **60hz.io 스타일** | GE Inertia 레이아웃 다크 테마 |
-| **KPX 실시간 연동** | 한국전력거래소 실시간 데이터 |
-| **예비율 경보 시스템** | KPX 기준 3단계 경보 (관심/주의/위험) |
-| **Email/Slack 알림** | 위험 단계 이메일, 전체 단계 Slack 알림 |
-| **SMP 예측** | BiLSTM + Attention 모델 기반 가격 예측 |
-| **24시간 예측** | 신뢰구간 포함 전력 수요 예측 |
-| **XAI 분석** | SHAP/Attention 기반 모델 설명 |
+| **라이트·다크 테마** | 시스템 설정을 따르고 ⋮ → Settings에서 바꾼다. 360~1920px 화면 폭 대응 |
+| **첫 화면 요약** | 상태 문장과 KPI 4장(현재 수요·제주 하루전 SMP·재생에너지 비율·기상), 값마다 출처와 기준 시각 |
+| **데이터 상태 표기** | 값마다 실측·예측·추정·예시 가운데 하나를 칩으로 표시한다(예: '추정 패턴', '예측 아님') |
+| **발전소 지도** | 발전소 등록부 27곳 지도, 지역 인스펙터(제주시·서귀포시), 추정 출력 열지도 |
+| **KPX 실시간 연동** | 수요·공급능력·예비율(KPX 제주, 5분) |
+| **계통 상태** | 예비율 단계 표시(앱 자체 기준, KPX 공식 경보 단계 아님)와 경보 이력 |
+| **Email/Slack 알림** | 위험 단계 이메일, 전체 단계 Slack 알림(운영 `.env`에서 켬) |
+| **SMP 예측** | 기준선 예측(전날 같은 시간 제주 하루전 가격)의 중앙값·80% 구간과 EPSIS 확정 가격. 기준선 입력이 0.00인 시간은 '예측 아님'으로 따로 표시 |
+| **분석 탭** | 수요·SMP 모델의 과거 검증 수치(walk-forward 등)와 용어 풀이 |
+| **예시 화면** | 입찰·XAI 화면 예시는 '실데이터 아님' 접는 칸 안에 둔다 |
+
+설계와 평가 기록: `docs/2026-11-23-dashboard-ui-top1-design.md`(명세), `docs/2026-11-23-dashboard-ui-top1-report.md`(전후 비교, 평가 10차, 남은 결함)
 
 ### 🖥️ RE-BMS v6.0 React Desktop Web Application (NEW)
 
@@ -162,17 +167,18 @@ cd mobile && npm install && npm start
 
 ## 📸 스크린샷
 
-### 메인 대시보드
-![Main Dashboard](docs/screenshots/01_main_dashboard.png)
-*60hz.io 스타일 다크 테마 대시보드 - 제주도 전력 발전소 위치 및 실시간 전력수급 현황*
+### 메인 대시보드 (2026-11-25 개편)
+![Main Dashboard - light](docs/2026-11-23-dashboard-ui-top1/screenshots/after_light_1440_tab0_realtime.png)
+*실시간 현황 탭(라이트, 1440px) - 상태 문장, KPI 4장, 발전소 지도와 지역 인스펙터, 수급 추이(추정 패턴), 계통 상태, 출처와 기준 시각*
 
-### 전력수급 차트 (v4.0.7)
-![Power Chart](docs/screenshots/dashboard_v4.0.7_chart.png)
-*예비전력(초록), 태양광(노란), 풍력(파란) 시각화 - 실시간 전력수급 현황 및 24시간 예측*
+![Main Dashboard - dark](docs/2026-11-23-dashboard-ui-top1/screenshots/after_dark_1440_tab0_realtime.png)
+*같은 화면의 다크 테마*
 
 ### SMP 예측
-![SMP Prediction](docs/screenshots/02_smp_prediction.png)
-*BiLSTM + Attention 모델 기반 24시간 SMP(계통한계가격) 예측 및 신뢰구간*
+![SMP Prediction](docs/2026-11-23-dashboard-ui-top1/screenshots/after_dark_1440_tab1_smp.png)
+*기준선 예측(전날 같은 시간 제주 하루전 가격)의 중앙값·80% 구간과 EPSIS 확정 가격. 기준선 입력이 0.00인 시간은 빗금 열로 '예측 아님'을 표시한다*
+
+개편 전 화면과의 비교는 `docs/2026-11-23-dashboard-ui-top1-report.md` 2절에 있다.
 
 ### KPX 실시간 연동
 ![KPX Realtime](docs/screenshots/04_kpx_realtime.png)
@@ -187,7 +193,7 @@ cd mobile && npm install && npm start
 |:---:|:---:|:---:|
 | ![Caution](docs/screenshots/07_alert_caution.png) | ![Warning](docs/screenshots/08_alert_warning.png) | ![Critical](docs/screenshots/09_alert_critical.png) |
 
-*KPX 기준 예비율 단계별 경보 시스템 - 15% 미만 시 관심, 10% 미만 시 주의, 5% 미만 시 위험 경보 발령*
+*예비율 단계별 경보(개편 전 화면, 단계는 앱 자체 기준이며 KPX 공식 경보 단계 아님) - 15% 미만 시 관심, 10% 미만 시 주의, 5% 미만 시 위험 경보 발령*
 
 ### 경보 이력 사이드바
 ![Alert History](docs/screenshots/10_alert_history_sidebar.png)
@@ -262,8 +268,8 @@ predictions = response.json()["predictions"]
 ### 대시보드 실행
 
 ```bash
-# v4 대시보드 (권장) - KPX 실시간 + 경보 시스템
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
+# v4 대시보드 (권장) - 개발용 실행. 운영 8504는 launchd가 띄운다(아래)
+SLACK_ALERTS_ENABLED=false EMAIL_ALERTS_ENABLED=false PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8514
 
 # EPSIS 실시간 대시보드
 streamlit run src/dashboard/app_v1.py
@@ -271,6 +277,10 @@ streamlit run src/dashboard/app_v1.py
 # API 연동 대시보드
 streamlit run src/dashboard/app.py
 ```
+
+- 운영: launchd `com.powerdemand.dashboard`가 8504에서 띄우고, 공개 주소는 Tailscale Funnel :8443이다. 코드를 바꾼 뒤에는 `launchctl kickstart -k gui/$(id -u)/com.powerdemand.dashboard`로 다시 띄운다.
+- 개발 서버: 운영 `.env`는 경보가 켜져 있다. `SLACK_ALERTS_ENABLED=false EMAIL_ALERTS_ENABLED=false`를 앞에 붙여 8504가 아닌 포트(예: 8514)에서 띄운다. 경보 조건이 되면 추적 중인 `data/alerts/alert_history.json`에 기록이 더해질 수 있으니 끝나면 `git status`로 확인한다.
+- 화면을 고친 뒤 관문(명세 9.2·14.7절): `.venv/bin/python -B -m pytest tests/test_v4_*.py -q -p no:cacheprovider`(35 passed, 추적 중인 .pyc를 바꾸지 않게 바이트코드·캐시 쓰기를 끔), `.venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/ui_guard.py --app src/dashboard/app_v4.py`(29/29), `.venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/logic_guard.py --before <개편 전 app_v4.py> --after src/dashboard/app_v4.py`(데이터 로직 변경 없음).
 
 ### 제주 전력수급 크롤러 사용
 

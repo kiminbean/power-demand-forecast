@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-25 (dashboard app_v4 UI TOP1 redesign merged·deployed·pushed as 15b49880; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
+> Last Updated: 2026-11-26 (session memory + docs refresh; 2026-11-25: dashboard app_v4 UI TOP1 redesign merged·deployed·pushed; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -10,7 +10,20 @@
 
 ---
 
-## Current Session (2026-11-23 ~ 11-25)
+## Current Session (2026-11-23 ~ 11-26)
+
+### Task: 세션 메모리 + 문서 갱신 (2026-11-26) ✅ COMPLETE
+- 사용자 요청: "지금까지 대화내용과 작업내용 메모리에 기억", "업데이트된 내용 관련해서 모든 문서 최신 업데이트", "커밋, 푸시"
+- 메모리: 대시보드 개편 결과, UI 평가 교훈, 진행 보고 방식, 이번 세션 작업 기록을 추가했다. 공개 주소, 개발 서버, 미해결 과제, 푸시 승인 방식, 사용자 프로필을 갱신했다.
+- 문서:
+  - README: 대시보드 소개, 스크린샷, 운영·개발 서버, 관문
+  - CHANGELOG: 2026-11-23~26 항목
+  - CLAUDE.md: Frontend, 관문, 개발 서버
+  - AGENTS.md: 대시보드 운영, 관문
+  - 설명 페이지 '한계' 칸: 11-10 미커밋 수정까지 함께 커밋(사용자 승인)
+  - 개편 보고서: 6.3절 공개 주소 확인
+  - 개편 명세: 머리에 결과 안내
+- 그대로 둔 것: eXeco 웹앱 문서(DASHBOARD_SCENARIO, system_architecture), 과거 기록 문서(CONVERSATION_PROMPTS, PROMPT_HISTORY, SESSION_SUMMARY), 영업 시나리오(kpx_sales)
 
 ### Task: 웹 대시보드(app_v4) UI/UX TOP1 개편 ✅ 병합·운영 반영·푸시 완료 (TOP1 합격선 충족: 10차 루브릭·무결성 + 10b 화면 배치 독립 재평가)
 - 사용자 목표: "웹 대시보드의 GUI를(UI/UX) 경쟁 업체 TOP1 수준으로 업그레이드". TOP1 = UI 품질 기준(60Hertz 8.7 / Electricity Maps 9.2). 합격선 = R1~R8 모두 8.0 이상 · 평균 8.5 이상 + 화면 배치·무결성 관문 통과
@@ -19,7 +32,7 @@
 - 병합·배포: main fast-forward `15b49880` → `launchctl kickstart -k gui/$(id -u)/com.powerdemand.dashboard`. 운영 8504에서 두 테마 × 1440·390 × 4탭 모두 넘침·깨진 글자·콘솔 오류 0. origin 푸시 `bca36f30..15b49880`(이전부터 올리지 않았던 main 커밋 5개 포함)
 - 문서: `docs/2026-11-23-dashboard-ui-top1-design.md`(명세), `docs/2026-11-23-dashboard-ui-top1-report.md`(전후 보고서: 남은 결함 22건 5.3절, 승인 대기 P1~P11 5.1절), `docs/2026-11-23-dashboard-ui-top1/`(ui_guard·logic_guard·촬영 도구, 스크린샷)
 - 남은 일:
-  - 공개 주소 :8443은 2026-11-25 21:45~22:33에 응답하지 않았다(Tailscale CLI 상태 NeedsLogin, Tokyo 중계 연결 실패). 2026-11-26 04:13~04:15에 다시 확인하니 HTTP 200·상태 검사 ok였고, 두 테마 × 1440·390px에서 새 화면이 그려졌다(넘침·오류 0). 그때도 CLI(1.96.4)는 NeedsLogin을 보고했는데 실제 Tailscale은 1.104.7이라, CLI 상태보다 주소에 직접 요청해 확인하는 편이 정확하다
+  - 공개 주소 :8443은 2026-11-25 21:45~22:33에 응답하지 않았다(Tailscale CLI 상태 NeedsLogin, Tokyo 중계 연결 실패). 2026-11-26 04:13~04:15에 다시 확인하니 HTTP 200·상태 검사 ok였고, 두 테마 × 1440·390px에서 새 화면이 그려졌다(넘침·오류 0). 04:13 확인 때 PATH의 CLI(1.96.4)는 NeedsLogin을 보고했지만 공개 주소는 응답했고, 04:44에는 같은 CLI가 Running을 보고했다(실제 Tailscale 1.104.7, 원인 미확인). 공개 주소는 주소에 직접 요청해 확인한다
   - SMP 수집기가 `data/smp/smp_real_epsis.csv`를 쓰는 도중 앱이 읽으면 부분 표가 1시간 캐시돼 'SMP 지연 · 1023일 전 가격'이 보인다(21:15 개발 서버에서 관찰, 운영은 재시작으로 정상). 원자적 쓰기(os.replace) 또는 오래된 표 거부가 필요하다(데이터 로직, 승인 필요)
   - 보고서 5.3절 결함(사이드바를 연 1181~1320px 넘침, SMP CSV 내보내기의 0.00 입력 원값 등)과 P1~P11(P11 = app_v4.py 구조 분리, R8 바닥 원인)
 

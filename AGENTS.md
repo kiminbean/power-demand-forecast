@@ -79,7 +79,13 @@ docker-compose -f docker/docker-compose.v6.yml up -d
 ### Dashboard
 ```bash
 # Streamlit v4 (main)
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8504
+# Dev only: production .env has alerts on, and production 8504 runs under launchd com.powerdemand.dashboard
+SLACK_ALERTS_ENABLED=false EMAIL_ALERTS_ENABLED=false PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python streamlit run src/dashboard/app_v4.py --server.port 8514
+# Restart production after a merge: launchctl kickstart -k gui/$(id -u)/com.powerdemand.dashboard
+# UI gates after changes (docs/2026-11-23-dashboard-ui-top1-design.md sec 9.2/14.7):
+#   .venv/bin/python -B -m pytest tests/test_v4_*.py -q -p no:cacheprovider
+#   .venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/ui_guard.py --app src/dashboard/app_v4.py
+#   .venv/bin/python -I docs/2026-11-23-dashboard-ui-top1/logic_guard.py --before <pre-redesign app_v4.py> --after src/dashboard/app_v4.py
 
 # React v6
 cd web-v6 && npm install && npm run dev
