@@ -62,12 +62,7 @@ export function ReadingPanelBody({ legend, terms, method, onTerm, testID, figure
   return (
     <View style={styles.panel} testID={testID}>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.legend}</Text>
-      {legend.map(l => (
-        <View key={l.chip.text} style={styles.legendRow}>
-          <ProvenanceChip chip={l.chip} />
-          <Text variant="label" tone="text2" style={styles.grow} dataSet={{ pdMeta: 'legend' }}>{l.text}</Text>
-        </View>
-      ))}
+      {legend.map(l => <LegendRow key={l.chip.text} chip={l.chip} text={l.text} />)}
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.terms}</Text>
       <View style={styles.terms}>
         {terms.map(t => <TermLink key={t.id} label={t.label} onPress={() => onTerm(t.id)} />)}
@@ -75,6 +70,16 @@ export function ReadingPanelBody({ legend, terms, method, onTerm, testID, figure
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.method}</Text>
       {figure}
       {method.map(m => <Text key={m} variant="label" tone="text2" dataSet={{ pdMeta: 'method' }}>{m}</Text>)}
+    </View>
+  );
+}
+
+/** 범례 한 줄: 칩 + 그 표시의 이번 화면 값 또는 설명(값이 있으면 숫자는 메타). 패널과 둘러보기 5단계가 쓴다. */
+export function LegendRow({ chip, text }: { chip: Chip; text: string }) {
+  return (
+    <View style={styles.legendRow}>
+      <ProvenanceChip chip={chip} />
+      <Text variant="label" tone="text2" style={styles.grow} dataSet={{ pdMeta: 'legend' }}>{text}</Text>
     </View>
   );
 }

@@ -17,9 +17,13 @@ export type Column = {
   extra?: React.ReactNode;
 };
 export type Row = { key: string; cells: Readonly<Record<string, React.ReactNode>>; current?: boolean };
-export type DataTableProps = { caption: string; columns: readonly Column[]; rows: readonly Row[]; testID?: string };
+/**
+ * fit: 가로 스크롤 없이 칸이 폭을 나눠 갖고 글자는 칸 안에서 줄바꿈한다(긴 글 칸이 있는 출처 표). 가로 스크롤 안에서는 행 폭이 칸마다
+ * 한 줄 글자 폭의 합이 되어(크롬 내재 크기) 긴 글 표가 늘 넘치고 끝 칸이 잘린다(F10 측정: 4칸 × 165 = 658 > 574).
+ */
+export type DataTableProps = { caption: string; columns: readonly Column[]; rows: readonly Row[]; testID?: string; fit?: boolean };
 
-export function DataTable({ caption, columns, rows, testID }: DataTableProps) {
+export function DataTable({ caption, columns, rows, testID, fit = false }: DataTableProps) {
   const { theme } = useTheme();
   const cell = (column: Column, content: React.ReactNode) => (
     <View key={column.key} role="cell" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
@@ -28,31 +32,32 @@ export function DataTable({ caption, columns, rows, testID }: DataTableProps) {
         : content}
     </View>
   );
-  return (
-    <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.scrollContent} testID={testID}>
-      <View role="table" aria-label={caption} style={styles.table}>
-        <View role="row" style={[styles.row, { backgroundColor: theme.color.well }]}>
-          {columns.map(column => (
-            <View key={column.key} role="columnheader" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
-              <Text variant="label" weight="600" tone="text2" dataSet={labelData(column.title)}>{column.title}</Text>
-              {column.extra ? <View style={styles.extra}>{column.extra}</View> : null}
-            </View>
-          ))}
-        </View>
-        {rows.map(row => (
-          // 선택 행은 aria-current로 알리고 well 바탕 + 왼쪽 2 px primary로 보인다(4.1절). aria-selected는 table의 row에 허용되지 않는다.
-          <View key={row.key} role="row" style={[styles.row, styles.line, { borderTopColor: theme.color.border, borderLeftColor: 'transparent' },
-            row.current ? { backgroundColor: theme.color.well, borderLeftColor: theme.color.primary } : null]} {...web(row.current ? { 'aria-current': 'true' } : {})}>
-            {columns.map(column => cell(column, row.cells[column.key] ?? null))}
+  const table = (
+    <View role="table" aria-label={caption} style={styles.table}>
+      <View role="row" style={[styles.row, { backgroundColor: theme.color.well }]}>
+        {columns.map(column => (
+          <View key={column.key} role="columnheader" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
+            <Text variant="label" weight="600" tone="text2" dataSet={labelData(column.title)}>{column.title}</Text>
+            {column.extra ? <View style={styles.extra}>{column.extra}</View> : null}
           </View>
         ))}
       </View>
-    </ScrollView>
+      {rows.map(row => (
+        // 선택 행은 aria-current로 알리고 well 바탕 + 왼쪽 2 px primary로 보인다(4.1절). aria-selected는 table의 row에 허용되지 않는다.
+        <View key={row.key} role="row" style={[styles.row, styles.line, { borderTopColor: theme.color.border, borderLeftColor: 'transparent' },
+          row.current ? { backgroundColor: theme.color.well, borderLeftColor: theme.color.primary } : null]} {...web(row.current ? { 'aria-current': 'true' } : {})}>
+          {columns.map(column => cell(column, row.cells[column.key] ?? null))}
+        </View>
+      ))}
+    </View>
   );
+  if (fit) return <View style={styles.fit} testID={testID}>{table}</View>;
+  return <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.scrollContent} testID={testID}>{table}</ScrollView>;
 }
 
 const styles = StyleSheet.create({
   scroll: { flexGrow: 0, maxWidth: '100%' },
+  fit: { width: '100%' },
   scrollContent: { minWidth: '100%' },
   table: { flex: 1 },
   row: { flexDirection: 'row' },

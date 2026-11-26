@@ -11,10 +11,11 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from './src/theme/colors';
-import { Shell } from './src/app/Shell';
+import { Shell, useNav } from './src/app/Shell';
 import type { HeaderFonts, HeaderPalette, PanelContent, ShellHeaderProps } from './src/app/Shell';
 import type { SheetRegistry } from './src/app/SheetHost';
 import { applyDocumentTheme } from './src/app/head';
+import { rootState } from './src/app/routes';
 import type { RouteKey, RouteState, SourceRow } from './src/app/routes';
 import { ThemeProvider } from './src/app/theme';
 import {
@@ -22,7 +23,9 @@ import {
 } from './src/content/strings';
 import BiddingTab, { BiddingMethodFacts, BiddingPanel, useBiddingSourceRows } from './src/features/bidding/BiddingTab';
 import SettlementTab, { SettlementMethodFacts, SettlementPanel } from './src/features/settlement/SettlementTab';
+import GuideTab, { useStatusRows } from './src/features/guide/GuideTab';
 import { MethodSheetBody, TermSheetBody } from './src/features/guide/sheets';
+import { TextLink } from './src/ui/Controls';
 import { RefreshButton } from './src/ui/Button';
 import { Icon } from './src/ui/Icon';
 import SMPForecastScreen, { TodayMethodFacts, TodayPanel, TodaySourcesSheet } from './src/screens/SMPForecastScreen';
@@ -31,15 +34,24 @@ import SMPForecastScreen, { TodayMethodFacts, TodayPanel, TodaySourcesSheet } fr
 const HEADER_VERSION = 'v6.1';
 // 버전 글자의 숫자는 값이 아니라 이름이다(I2: data-pd-meta). web()은 헤더 VM 테스트에서 {}라서 부르지 않고 객체로 둔다.
 const VERSION_DATA: object = { dataSet: { pdMeta: 'version' } };
-// 탭 3개(알아보기는 F10). 오늘(F7)·입찰(F8)·정산(F9) 모두 새 화면(자기 h1 행)이라 셸의 레거시 틀은 더 쓰지 않는다.
-const TABS: readonly RouteKey[] = ['smp', 'bidding', 'settlement'];
+// 탭 4개(3.1절): 오늘(F7)·입찰(F8)·정산(F9)·알아보기(F10) 모두 새 화면(자기 h1 행)이라 셸의 레거시 틀은 더 쓰지 않는다.
+const TABS: readonly RouteKey[] = ['smp', 'bidding', 'settlement', 'guide'];
 
-/** 출처와 기준 시각 표(4.4절): 오늘 행 + 입찰 계산 행. 응답 상태 행은 F10이 더한다. */
+/**
+ * 출처와 기준 시각 표(4.4절): 오늘 행 + 입찰 계산 행 + 응답 상태 3행. 시트는 엿보기만 한다(응답 상태는 알아보기 › 데이터 출처와
+ * 연결 상태가 받는다, 6.3절): 그리로 가는 링크를 둔다.
+ */
 function SourcesSheet({ row }: { row: SourceRow | null }) {
-  return <TodaySourcesSheet row={row} extra={useBiddingSourceRows()} />;
+  const nav = useNav();
+  return (
+    <>
+      <TodaySourcesSheet row={row} extra={[...useBiddingSourceRows(), ...useStatusRows()]} />
+      <TextLink label="데이터 출처와 연결 상태" onPress={() => nav.push({ ...rootState('guide'), topic: 'sources' })} />
+    </>
+  );
 }
 // 화면 단계가 더하는 시트(3.1·4.4절). 산출 방식은 설명 글(guide.ko.json) + 그 카드 화면의 이번 값(각 화면 모듈이 자기 카드만 그린다).
-// 용어 시트의 "용어 사전 전체" 링크는 알아보기 탭이 생기는 F10이 onGlossary로 단다.
+// 용어 시트는 "이 앱에서 보는 곳 ›"과 "용어 사전 전체 ›"를 스스로 단다(sheets.tsx).
 const SHEETS: SheetRegistry = {
   method: {
     title: s => methodSheetTitle(s.card),
@@ -57,6 +69,8 @@ const renderPanel = (state: RouteState): PanelContent | null => {
   if (state.key === 'bidding') return { title: BIDDING_PANEL_TITLE, body: <BiddingPanel /> };
   return state.key === 'settlement' ? { title: SETTLEMENT_PANEL_TITLE, body: <SettlementPanel /> } : null;
 };
+// 숫자가 든 하위 상태 제목("거래시간(01h–24h)", "1분 둘러보기")은 이름표라 메타로 둔다(I2). 가져온 함수를 부르지 않는다(헤더 VM 테스트).
+const titleData = (title: string): object => (/\d/.test(title) ? { dataSet: { pdMeta: 'label' } } : {});
 // 셸이 테마 팔레트를 넘기지 않을 때(헤더 VM 테스트)의 옛 색.
 const LEGACY_PALETTE: HeaderPalette = {
   background: colors.surface, border: colors.border.primary, wordmark: colors.brand.navy,
@@ -81,7 +95,7 @@ function Header({ title, showBack, onBack, onHome, palette = LEGACY_PALETTE, fon
             <Text style={[fonts.wordmark, { color: palette.wordmark }]}>eXeco</Text>
           </Pressable>
         )}
-        {title ? <Text numberOfLines={1} style={[styles.title, fonts.title, { color: palette.title }]}>{title}</Text> : null}
+        {title ? <Text numberOfLines={1} {...titleData(title)} style={[styles.title, fonts.title, { color: palette.title }]}>{title}</Text> : null}
         {showBack ? null : version}
       </View>
       <View style={styles.side}>
@@ -101,6 +115,8 @@ function renderRoute(state: RouteState) {
       return <BiddingTab />;
     case 'settlement':
       return <SettlementTab />;
+    case 'guide':
+      return <GuideTab />;
     default:
       return null;
   }

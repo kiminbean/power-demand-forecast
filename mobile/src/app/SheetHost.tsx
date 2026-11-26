@@ -18,7 +18,8 @@ import type { DomEl } from '../ui/web';
 export type SheetEntry<S extends SheetState = SheetState> = { title(sheet: S): string; render(sheet: S): React.ReactNode };
 export type SheetRegistry = { [K in SheetKind]?: SheetEntry<Extract<SheetState, { kind: K }>> };
 
-const THEME_OPTIONS: readonly SegmentOption<ThemeMode>[] = [
+/** 화면 테마 선택지(4.4·8.4절). 알아보기 목록의 "화면 테마 · 시스템 설정 따름"도 이 이름을 쓴다. */
+export const THEME_OPTIONS: readonly SegmentOption<ThemeMode>[] = [
   { value: 'system', label: '시스템 설정 따름 (기본)' },
   { value: 'light', label: '밝게' },
   { value: 'dark', label: '어둡게' },

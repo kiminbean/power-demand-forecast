@@ -329,9 +329,12 @@ test('Screen·LiveRegion·OfflineBanner·ErrorBoundary·Tour: main, h1 tabIndex=
   assert.equal(textOf(tree(h(ui.ErrorBoundary, {}, 'app'))), 'app');
   const banner = tree(h(ui.TourBanner, { title: '1분 둘러보기', body: '설명', onStart: () => {}, onDismiss: () => {} }));
   assert.deepEqual(pressables(banner).map(p => p.props['aria-label']), ['둘러보기 시작', '닫기: 둘러보기 안내']);
-  const step1 = tree(h(ui.TourStep, { step: 1, total: 5, body: '설명', onPrev: () => {}, onNext: () => {}, onSkip: () => {} }));
+  const step1 = tree(h(ui.TourStep, { step: 1, total: 5, onPrev: () => {}, onNext: () => {}, onSkip: () => {} }, '설명'));
   assert.equal(all(step1, n => n.props.dataSet && n.props.dataSet.pdMeta === 'tour').map(textOf).join(''), '1 / 5');
+  assert.match(textOf(step1), /설명/);
   assertReachableDisabled(pressables(step1)[0], '첫 단계의 이전');
-  const step5 = tree(h(ui.TourStep, { step: 5, total: 5, body: '설명', onPrev: () => {}, onNext: () => {}, onSkip: () => {} }));
-  assert.equal(pressables(step5)[1].props['aria-label'], '둘러보기 마치기');
+  // 이름은 보이는 글자로 시작한다(WCAG 2.5.3). 마지막 단계(F10, 4.4절)는 [이전] [직접 둘러보기]이고 건너뛸 단계가 없다.
+  assert.deepEqual(pressables(step1).map(p => p.props['aria-label']).slice(1), ['다음 단계', '건너뛰기: 1분 둘러보기 닫기']);
+  const step5 = tree(h(ui.TourStep, { step: 5, total: 5, onPrev: () => {}, onNext: () => {}, onSkip: () => {} }));
+  assert.deepEqual(pressables(step5).map(p => p.props['aria-label']), ['이전 단계', '직접 둘러보기']);
 });

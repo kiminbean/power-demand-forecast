@@ -55,8 +55,11 @@ export function keepNegations(text: string, props: Omit<TextProps, 'children' | 
   return text.split(NEGATION).map((part, i) => (i % 2 ? <Text key={i} {...props} nowrap>{part}</Text> : part));
 }
 
-const TOGETHER = /(\d[\d.,]*–\d[\d.,]*원?|\d{2}-\d{2}(?:\([가-힣]\))?)/;
-/** 값 범위("171.7–244.1원")와 날짜("11-27(금)")는 값+단위처럼 한 줄로 묶는다(5.4절). 브라우저는 줄표·붙임표 뒤에서 줄을 바꿀 수 있다. */
+const TOGETHER = /(\d{4}-\d{2}-\d{2}(?:~\d{2}-\d{2})?|\d[\d.,]*–\d[\d.,]*원?|\d{2}-\d{2}(?:\([가-힣]\))?)/;
+/**
+ * 값 범위("171.7–244.1원")와 날짜("11-27(금)", "2026-11-26", 평가 기간 "2025-07-22~12-18")는 값+단위처럼 한 줄로 묶는다(5.4절).
+ * 브라우저는 줄표·붙임표 뒤에서 줄을 바꿀 수 있다(F8 관찰: 400 px 시트에서 "2025-" / "07-22~12-18").
+ */
 export function keepTogether(text: string, props: Omit<TextProps, 'children' | 'nowrap'>): React.ReactNode[] {
   return text.split(TOGETHER).map((part, i) => (i % 2 ? <Text key={i} {...props} nowrap>{part}</Text> : part));
 }

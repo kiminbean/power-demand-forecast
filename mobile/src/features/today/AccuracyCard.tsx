@@ -1,5 +1,5 @@
 // 예측은 얼마나 맞나요?(명세 4.1·7.7절): 문서화된 기준선 정확도(‹검증값›)만 굵게, API가 밝힌 수치는 회색 "API 표기" 줄로만.
-// 기준선이 아닌 예측이면 문서화 수치를 쓰지 않고 "이 모델의 검증 수치는 앱에 등록되어 있지 않습니다".
+// 기준선이 아닌 예측이면 문서화 수치를 쓰지 않고 "이 모델의 검증 수치는 앱에 등록되어 있지 않습니다". R²는 예측 방법 화면(알아보기)에서만 더한다.
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { AccuracyCardView } from './model';
@@ -26,6 +26,7 @@ export function AccuracyCard({ view, onMethod, onSources, onRetry }: AccuracyCar
         <View style={styles.group}>
           <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{d.main}</Text>
           <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{d.basis}</Text>
+          {d.r2 ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'documented' }}>{d.r2}</Text> : null}
           <Text variant="body" tone="text2" dataSet={{ pdMeta: 'documented' }}>{d.example}</Text>
         </View>
       ) : <Text variant="body" tone="text2">{view.unregistered}</Text>}

@@ -5,7 +5,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import type { Text as RNText } from 'react-native';
 import { LAYOUT, SPACE } from './tokens';
 import { Button } from './Button';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { web } from './web';
 import { useTheme } from '../app/theme';
 
@@ -27,7 +27,9 @@ export function Screen({ title, pill, answer, children, headingRef, scrollRef, t
   return (
     <ScrollView ref={scrollRef} role="main" testID={testID} style={styles.scroll} contentContainerStyle={[styles.content, { paddingHorizontal: gutter }]}>
       <View style={styles.h1row}>
-        <Text ref={headingRef} role="heading" {...web({ 'aria-level': 1, tabIndex: -1 })} variant="title" style={styles.h1}>{title}</Text>
+        {/* 숫자가 든 제목("거래시간(01h–24h)", "둘러보기 2/5")은 이름표라 메타로 둔다(I2). */}
+        <Text ref={headingRef} role="heading" {...web({ 'aria-level': 1, tabIndex: -1 })} variant="title" style={styles.h1}
+          dataSet={labelData(title)}>{title}</Text>
         {pill}
       </View>
       {answer}

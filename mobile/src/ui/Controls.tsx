@@ -5,7 +5,7 @@ import { HIT, RADIUS, SIZE, SPACE } from './tokens';
 import { IconButton } from './Button';
 import { Icon } from './Icon';
 import { useAnnounce } from './Live';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { domOf, keyOf, prevent, rovingIndex, web } from './web';
 import { useTheme } from '../app/theme';
 import { tradeHour } from '../lib/format';
@@ -81,32 +81,48 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
 }
 
 /**
- * 용어 시트를 여는 링크. 시각적으로 작아도 상자는 44. react-native-web 0.19.13은 role=link인 div에서 Enter를 브라우저 링크
- * 클릭에 맡기는데 div에는 클릭이 생기지 않아 열리지 않는다(F6 탐침): Enter를 직접 받는다(링크라서 Space로는 열지 않는다).
- * 라벨에 숫자가 있을 수 있어("80% 구간") 글자를 data-pd-meta="term"으로 둔다(I2).
+ * react-native-web 0.19.13은 role=link인 div에서 Enter를 브라우저 링크 클릭에 맡기는데 div에는 클릭이 생기지 않아 열리지 않는다
+ * (F6 탐침): 링크는 Enter를 직접 받는다(링크라서 Space로는 열지 않는다).
  */
-export function TermLink({ label, onPress }: { label: string; onPress: () => void }) {
-  const onKeyDown = (e: unknown) => {
+const enterOpens = (onPress: () => void) => web({
+  onKeyDown: (e: unknown) => {
     if (keyOf(e) !== 'Enter') return;
     prevent(e);
     onPress();
-  };
+  },
+});
+
+/** 글자 링크(화면 안 이동: "이 앱에서 보는 곳: 입찰 ›", "용어 사전 전체 ›"). 시각적으로 작아도 상자는 44. 이름은 보이는 글자 그대로. */
+export function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const { theme } = useTheme();
   return (
-    <Pressable role="link" aria-label={`용어 풀이: ${label}`} onPress={onPress} style={styles.term} {...web({ onKeyDown })}>
+    <Pressable role="link" aria-label={label} onPress={onPress} style={styles.term} {...enterOpens(onPress)}>
+      <View style={styles.linkRow}>
+        <Text variant="body" weight="500" tone="link" style={styles.underline} dataSet={labelData(label)}>{label}</Text>
+        <Icon name="chev" size={SIZE.chipIcon} color={theme.color.link} />
+      </View>
+    </Pressable>
+  );
+}
+
+/** 용어 시트를 여는 링크. 라벨에 숫자가 있을 수 있어("80% 구간") 글자를 data-pd-meta="term"으로 둔다(I2). */
+export function TermLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable role="link" aria-label={`용어 풀이: ${label}`} onPress={onPress} style={styles.term} {...enterOpens(onPress)}>
       <Text variant="body" weight="500" tone="link" style={styles.underline} dataSet={{ pdMeta: 'term' }}>{label}</Text>
     </Pressable>
   );
 }
 
-/** 알아보기 목록 행(높이 56). 이름은 보이는 글자 전체. */
-export function ListRow({ title, detail, onPress }: { title: string; detail?: string; onPress: () => void }) {
+/** 알아보기 목록 행(높이 56). 이름은 보이는 글자 전체. 숫자가 든 글자("낱말 13개", "거래시간(01h–24h)")는 이름표라 메타로 둔다. */
+export function ListRow({ title, detail, onPress, last = false }: { title: string; detail?: string; onPress: () => void; last?: boolean }) {
   const { theme } = useTheme();
   return (
-    <Pressable role="link" aria-label={detail ? `${title}, ${detail}` : title} onPress={onPress}
-      style={[styles.listRow, { borderBottomColor: theme.color.border }]}>
+    <Pressable role="link" aria-label={detail ? `${title}, ${detail}` : title} onPress={onPress} {...enterOpens(onPress)}
+      style={[styles.listRow, { borderBottomColor: last ? 'transparent' : theme.color.border }]}>
       <View style={styles.grow}>
-        <Text variant="body" weight="600">{title}</Text>
-        {detail ? <Text variant="label" tone="text2">{detail}</Text> : null}
+        <Text variant="body" weight="600" dataSet={labelData(title)}>{title}</Text>
+        {detail ? <Text variant="label" tone="text2" dataSet={labelData(detail)}>{detail}</Text> : null}
       </View>
       <Icon name="chev" size={SIZE.icon} color={theme.color.text3} />
     </Pressable>
@@ -127,6 +143,7 @@ const styles = StyleSheet.create({
   // 44보다 짧은 글자("정산")는 상자 가운데에 둔다: 왼쪽에 붙이면 다음 링크와의 간격만 넓어 보인다(F9 정산 용어 줄).
   term: { minHeight: HIT, minWidth: HIT, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
   underline: { textDecorationLine: 'underline' },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   listRow: { minHeight: SIZE.listRow, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, borderBottomWidth: 1, paddingVertical: SPACE.sm },
   grow: { flex: 1, minWidth: 0 },
 });

@@ -4,7 +4,7 @@ import {
   MINUS, age, clockHour, clockPhrase, dayShort, duration, krw, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeHour,
   tradeHourRange,
 } from '../lib/format';
-import { MINUTE_MS, addDays, daysBetween } from '../lib/kst';
+import { HOUR_MS, MINUTE_MS, SKEW_PLAUSIBLE_MS, addDays, daysBetween } from '../lib/kst';
 import { DOCUMENTED_SMP_ACCURACY, WATCH_RATIO } from '../lib/provenance';
 import type { ForecastKind } from '../lib/provenance';
 import type { MethodCardId } from './guide';
@@ -486,3 +486,36 @@ export const LEGEND_LOCKED = '실제 정산 자료 · 공개 데모에서 제공
 export const STATEMENT_FIGURE_LABELS = Object.freeze({ dayAhead: '① 하루전', deviation: '② 실시간 차이', total: '합계' });
 export const statementFigureText = (dayAhead: number, deviation: number, total: number) =>
   `예시 정산서 그림: ① 하루전 ${krw(dayAhead, 0)} + ② 실시간 차이 ${krw(deviation, 0)} = 합계 ${krw(total, 0)}`;
+
+// ---------------------------------------------------------------- 알아보기(F10, 4.4절). 긴 글은 guide.ko.json, 여기는 숫자가 들거나 상태로 바뀌는 짧은 글만.
+export const GUIDE_ANSWER = '이 앱이 무엇을 보여 주는지, 숫자를 어떻게 읽는지 설명합니다.';
+export const tourCardTitle = (steps: number) => `${TOUR_NAME} · ${num(steps, 0)}단계`;
+export const glossaryCountText = (count: number) => `낱말 ${num(count, 0)}개`;
+export const whereText = (tab: string) => `이 앱에서 보는 곳: ${tab}`;
+export const ABOUT_TITLE = `${APP_NAME} (공개 데모) ${APP_VERSION}`;
+export const ABOUT_ROW = `eXeco ${APP_VERSION} 공개 데모`;
+export const aboutSkewText = (skewMs: number) => `${clockSkewText(skewMs)} · 서버 시각 기준으로 표시`;
+export const ABOUT_SKEW_IMPLAUSIBLE = `서버 시각이 기기 시계와 ${num(SKEW_PLAUSIBLE_MS / HOUR_MS, 0)}시간 넘게 달라 기기 시계로 표시합니다`;
+export const MODEL_NOT_USED = '학습한 모델(v4.1)은 제주 재검증에서 이 기준선보다 나빠 쓰지 않습니다.';
+/** 예측 방법 화면의 이번 방문 서버 값(7.9절: 설명 문구의 숫자는 API가 말하는 사실에서만). 아무것도 모르면 null. */
+export function marketFactsText(deadline: number | null, tradingDate: string | null, minutes: number | null): string | null {
+  const parts = [deadline === null ? null : `하루전시장 마감 ${kstDate(deadline)} ${kstTime(deadline)}`,
+    tradingDate === null ? null : `입찰일 ${kstDayLabel(tradingDate)}`, minutes === null ? null : `실시간시장 ${num(minutes, 0)}분 단위`];
+  const known = parts.filter((p): p is string => p !== null);
+  return known.length ? `이번 방문의 서버 값: ${known.join(' · ')}` : null;
+}
+export const READING_HEADINGS = Object.freeze({ states: '네 가지 표시', other: '그 밖의 표시', time: '시각' });
+export const tradeHourExampleText = () => `${tradeHour(7)} = ${clockHour(6)}:00–${clockHour(7)}:00에 거래하는 1시간`;
+export const TOUR_CALC_FAILED = '계산 예시를 불러오지 못했습니다';
+export const TOUR_FINISH = '직접 둘러보기';
+export const TOUR_LEGEND_TITLE = '이번 방문의 표시';
+/** /realtime-status(4.4절). 목록 밖 값은 닫힌 쪽("알 수 없음")으로 둔다. 이 행들에는 "연결됨"이라는 말을 쓰지 않는다. */
+export const RS_OVERALL = Object.freeze({ all_connected: '모두 응답', partial: '일부 응답', disconnected: '응답 없음' });
+export const RS_PART = Object.freeze({ connected: '응답 정상', no_data: '자료 없음', error: '오류', unknown: '알 수 없음' });
+export const RS_DATE = Object.freeze({ current_date: '오늘 자료', historical: '과거 날짜 자료', future: '미래 날짜 자료', unknown: '날짜 미상' });
+export const RS_DATE_OTHER = '날짜 알 수 없음';
+export const RS_ITEMS = Object.freeze({ smp: '응답 상태 · SMP', supply: '응답 상태 · 수급', weather: '응답 상태 · 기상' });
+export const RS_SOURCE = 'API 서버 응답 상태(realtime-status)';
+export const rsBasisText = (at: number | null) => (at === null ? '응답 시각 미제공' : `응답 시각 ${kstClock(at)}`);
+export const rsOverallText = (overall: string) => `API 서버: ${overall}`;
+export const RS_FAILED = '응답 상태를 불러오지 못했습니다';

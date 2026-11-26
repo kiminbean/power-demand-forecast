@@ -41,7 +41,7 @@ const FORECAST_CHART_LABEL: Readonly<Record<ForecastKind, string>> = {
   model: '학습 모델 예측 SMP 24시간',
   fallback: 'API 대체값 24시간 (예측 SMP 아님)',
 };
-const chartLabel = (kind: ForecastKind) => FORECAST_CHART_LABEL[kind];
+export const chartLabel = (kind: ForecastKind) => FORECAST_CHART_LABEL[kind];
 
 // 요청마다 자료 저장소가 만든 10초 중단 신호를 묶은 클라이언트로 부른다.
 const api = (signal: AbortSignal) => createClient({ signal });
@@ -92,7 +92,7 @@ export function useTodayView(fetching = false) {
   return { view, res: { dayAhead, forecast, modelInfo, kpis, powerSupply, market }, skew: clock.skew };
 }
 
-// 오늘 화면의 둘러보기 배너는 첫 방문에만(4.4절). 저장소를 못 쓰면 그 방문 동안만 닫힌 것을 기억한다.
+// 오늘 화면의 둘러보기 배너는 첫 방문에만(4.4절). 저장소를 못 쓰면 그 방문 동안만 닫힌 것을 기억한다. 둘러보기를 연 것도 본 것으로 친다.
 const TOUR_SEEN_KEY = 'pd-tour-seen';
 let tourSeenThisVisit = false;
 type StorageLike = { getItem(k: string): string | null; setItem(k: string, v: string): void };
@@ -112,7 +112,7 @@ function tourSeen(): boolean {
     return false;
   }
 }
-function markTourSeen(): void {
+export function markTourSeen(): void {
   tourSeenThisVisit = true;
   try {
     const s = storage();
@@ -227,9 +227,9 @@ export function TodayMethodFacts({ card }: { card: MethodCard }) {
 }
 
 /** 출처와 기준 시각 시트(4.4절): 오늘 행 + 다른 화면이 넘기는 행(입찰 계산 F8, 응답 상태 F10). */
-export function TodaySourcesSheet({ row, extra = [] }: { row: SourceRow | null; extra?: readonly SourceRowItem[] }) {
+export function TodaySourcesSheet({ row, extra = [], page }: { row: SourceRow | null; extra?: readonly SourceRowItem[]; page?: boolean }) {
   const { view } = useTodayView(false);
-  return <SourcesTable rows={[...view.sources, ...extra]} highlight={row} />;
+  return <SourcesTable rows={[...view.sources, ...extra]} highlight={row} page={page} />;
 }
 
 /** ≥ 1280 "오늘 화면 읽는 법" 패널 본문(4.6절). */

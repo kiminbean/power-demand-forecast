@@ -10,17 +10,22 @@ export const TOPIC_IDS = ['reading', 'method', 'sources', 'about'] as const;
 export const METHOD_CARD_IDS = [
   'today-price', 'today-power', 'today-forecast', 'today-accuracy', 'bid-deadline', 'bid-ladder', 'bid-merit', 'settle-sample',
 ] as const;
+/** 숫자 읽는 법(4.4절)의 표시별 설명: 4상태 · 일반 칩 · 줄표 · 지연 · 끊김 · 시각. */
+export const LEGEND_KEYS = ['measured', 'forecast', 'estimated', 'example', 'plain', 'missing', 'stale', 'broken', 'time'] as const;
 export const GLOSSARY_SHORT_MAX = 60;
 const TEXT_MAX = 600;
 const PARAGRAPHS_MAX = 12;
 
 export type TopicId = (typeof TOPIC_IDS)[number];
 export type MethodCardId = (typeof METHOD_CARD_IDS)[number];
+export type LegendKey = (typeof LEGEND_KEYS)[number];
 export type GuideSection = { title: string; body: string[] };
 export type GlossaryEntry = { id: GlossaryId; short: string; body: string[] };
 export type GuideContent = {
   version: 1; tour: GuideSection[]; glossary: GlossaryEntry[];
   topics: Record<TopicId, GuideSection>; cards: Record<MethodCardId, GuideSection>;
+  /** 표시별 설명 한 문장씩. simplified: 예측 방법 화면의 "단순화한 설명" 목록(마감 · 이중 정산 · 가격 원리 · 실시간시장 구간, P7). */
+  legend: Record<LegendKey, string>; simplified: GuideSection;
 };
 
 export class GuideLoadError extends Error {
@@ -57,11 +62,11 @@ function section(v: unknown, path: string): GuideSection {
 }
 
 /** 키 집합이 정확히 같아야 한다(빠진 항목·모르는 항목 모두 실패). */
-function keyed<K extends string>(v: unknown, keys: readonly K[], path: string): Record<K, GuideSection> {
+function keyed<K extends string, V>(v: unknown, keys: readonly K[], path: string, read: (x: unknown, at: string) => V): Record<K, V> {
   const r = rec(v, path);
   const actual = Object.keys(r).sort().join(',');
   if (actual !== [...keys].sort().join(',')) bad(path, `keys ${keys.join(',')}`);
-  return Object.fromEntries(keys.map(k => [k, section(r[k], `${path}.${k}`)])) as Record<K, GuideSection>;
+  return Object.fromEntries(keys.map(k => [k, read(r[k], `${path}.${k}`)])) as Record<K, V>;
 }
 
 export function parseGuide(json: unknown): GuideContent {
@@ -77,7 +82,10 @@ export function parseGuide(json: unknown): GuideContent {
     return { id: e.id as GlossaryId, short: text(e.short, `glossary[${i}].short`, GLOSSARY_SHORT_MAX), body: paragraphs(e.body, `glossary[${i}].body`) };
   });
   if (new Set(glossary.map(g => g.id)).size !== ids.length) bad('glossary', 'unique ids');
-  return { version: 1, tour, glossary, topics: keyed(r.topics, TOPIC_IDS, 'topics'), cards: keyed(r.cards, METHOD_CARD_IDS, 'cards') };
+  return {
+    version: 1, tour, glossary, topics: keyed(r.topics, TOPIC_IDS, 'topics', section), cards: keyed(r.cards, METHOD_CARD_IDS, 'cards', section),
+    legend: keyed(r.legend, LEGEND_KEYS, 'legend', (x, at) => text(x, at)), simplified: section(r.simplified, 'simplified'),
+  };
 }
 
 /** base는 감지한 기준 경로('/mobile/' 또는 '/'). */

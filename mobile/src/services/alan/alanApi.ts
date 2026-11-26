@@ -260,7 +260,7 @@ class AlanApiService {
     // Bidding related
     if (lowerMessage.includes('입찰') || lowerMessage.includes('bidding')) {
       return {
-        answer: '현재 입찰 현황입니다:\n• 대기중: 49건\n• 예측완료: 71건\n• 상한도달: 131건\n\nAI 최적화를 통해 예상 수익을 12.3% 높일 수 있어요.',
+        answer: '앨런 서비스에 연결하지 못했습니다.',
         action: hasNavigationIntent ? { type: 'navigate', target: 'Bidding' } : undefined,
         suggestions: ['AI 최적화 실행', '입찰 현황 보기', '구간별 설정'],
       };
@@ -269,7 +269,7 @@ class AlanApiService {
     // Settlement related
     if (lowerMessage.includes('정산') || lowerMessage.includes('수익') || lowerMessage.includes('settlement')) {
       return {
-        answer: '최근 7일 정산 현황입니다:\n• 발전수익: 1,251M원\n• 발전량: 45.3MWh\n• 예측정확도: 94.5%\n\n전월 대비 수익이 8.2% 증가했습니다.',
+        answer: '앨런 서비스에 연결하지 못했습니다.',
         action: hasNavigationIntent ? { type: 'navigate', target: 'Settlement' } : undefined,
         suggestions: ['상세 정산 보기', '수익 분석', '예측 정확도 개선'],
       };

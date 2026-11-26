@@ -38,7 +38,9 @@ export function ProvenanceChip(props: ChipProps) {
   return (
     <View role="img" aria-label={chipA11yLabel(chip, source)} style={[styles.chip, { backgroundColor: tone.bg }, outline]} {...web({ dataSet: data })}>
       {chip.kind === 'plain' && chip.text === CHIPS.locked.text ? <Icon name="lock" size={SIZE.chipIcon} color={tone.text} /> : null}
-      <Text variant="meta" weight="600" color={tone.text}>{keepNegations(chipText(chip), { variant: 'meta', weight: '600', color: tone.text })}</Text>
+      <Text variant="meta" weight="600" color={tone.text} style={styles.shrink}>
+        {keepNegations(chipText(chip), { variant: 'meta', weight: '600', color: tone.text })}
+      </Text>
     </View>
   );
 }
@@ -50,7 +52,7 @@ export function StatusPill({ tone, text, icon }: { tone: PillTone; text: string;
   return (
     <View style={[styles.chip, { backgroundColor: c.bg }]} {...web({ dataSet: { pdPill: tone } })}>
       {icon ? <Icon name={icon} size={SIZE.chipIcon} color={c.text} /> : <View style={[styles.dot, { backgroundColor: c.text }]} />}
-      <Text variant="meta" weight="600" color={c.text} dataSet={{ pdMeta: 'pill' }}>{text}</Text>
+      <Text variant="meta" weight="600" color={c.text} dataSet={{ pdMeta: 'pill' }} style={styles.shrink}>{text}</Text>
     </View>
   );
 }
@@ -85,6 +87,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', gap: SPACE.xs, maxWidth: '100%',
   },
   now: { paddingHorizontal: SPACE.md - SPACE.xs },
+  // RN-web은 flex 항목의 flex-shrink를 0으로 둔다: 칩·pill 글자가 줄지 않으면 좁은 표 칸(출처 표의 상태 칸, 768에서 약 140 px)을
+  // 넘친다(F10 측정). 줄 수 있게 해 두면 칩은 칸 폭(maxWidth 100%) 안에서 글자를 줄바꿈한다. 자리가 넉넉한 곳의 모양은 그대로다.
+  shrink: { flexShrink: 1 },
   dot: { width: SIZE.dot, height: SIZE.dot, borderRadius: RADIUS.pill },
   ribbon: {
     borderWidth: 1, borderStyle: 'dotted', borderRadius: RADIUS.control, paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs,

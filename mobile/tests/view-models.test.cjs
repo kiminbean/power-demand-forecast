@@ -505,3 +505,107 @@ test('TermLink는 Enter로 열고(Space 아님) 라벨 숫자는 메타, KpiBloc
   assert.equal(flat(overhang.props.style).marginVertical, -10, '머리 줄은 칩 높이만 차지하고 [i]는 여백으로 내민다');
   assert.equal(ds(all(card, n => n.props.role === 'heading')[0]).pdMeta, 'label', '숫자가 든 제목은 메타');
 });
+
+// ---------------------------------------------------------------- 알아보기(F10, 4.4절): 출처 행 · 응답 상태 매핑 · 둘러보기 5단계 범례
+function loadGuide(width = 390) {
+  const rn = { ...defaultMocks()['react-native'], useWindowDimensions: () => ({ width, height: 844, scale: 1, fontScale: 1 }) };
+  const loader = createTsLoader({ mocks: { 'react-native': rn, 'react-native-svg': SVG } });
+  const at = rel => loader.load(path.join(SRC_ROOT, rel));
+  return { guide: at('features/guide/model.ts'), sheets: at('features/guide/sheets.tsx'), types: at('data/types.ts'), adapters: at('data/adapters.ts'),
+    provenance: at('lib/provenance.ts'), kst: at('lib/kst.ts') };
+}
+const RS = '/api/v1/realtime-status';
+const rsOf = (g, id) => {
+  const r = resolveVariant(id).responses[RS];
+  return r.status >= 400 ? { data: null, fetchedAt: null, status: 'error', error: new Error(String(r.status)) }
+    : { data: g.types.parseRealtimeStatus(r.body), fetchedAt: 0, status: 'ready', error: null };
+};
+const statusOf = (g, id) => g.guide.statusView(rsOf(g, id)).rows.map(r => [r.item, r.status, r.tone]);
+
+test('응답 상태 매핑(4.4절): status·data_date_status·overall_status → 한국어, 목록 밖·빠진 부분은 "알 수 없음", 응답 시각은 timestamp(KST), "연결됨" 없음', () => {
+  const g = loadGuide();
+  const base = g.guide.statusView(rsOf(g, 'guide-rs-base'));
+  assert.deepEqual(base.rows.map(r => [r.id, r.source, r.basis]), ['smp', 'supply', 'weather'].map(k => [`status:${k}`, 'API 서버 응답 상태(realtime-status)', '응답 시각 07:43']));
+  assert.deepEqual(base.overall, { text: '모두 응답', tone: 'ok', at: g.kst.parseApiTime('2026-11-26T07:43:21.732618') });
+  assert.deepEqual(statusOf(g, 'guide-rs-base'), [['응답 상태 · SMP', '응답 정상 · 과거 날짜 자료', 'ok'], ['응답 상태 · 수급', '응답 정상', 'ok'], ['응답 상태 · 기상', '응답 정상', 'ok']]);
+  assert.deepEqual(statusOf(g, 'guide-rs-all-current')[0], ['응답 상태 · SMP', '응답 정상 · 오늘 자료', 'ok']);
+  assert.deepEqual(statusOf(g, 'guide-rs-partial').map(r => [r[1], r[2]]), [['응답 정상 · 과거 날짜 자료', 'ok'], ['자료 없음', 'watch'], ['오류', 'danger']]);
+  assert.deepEqual(g.guide.statusView(rsOf(g, 'guide-rs-disconnected')).overall.text, '응답 없음');
+  assert.deepEqual(statusOf(g, 'guide-rs-unknown').map(r => [r[1], r[2]]), [['알 수 없음 · 날짜 미상', 'neutral'], ['알 수 없음', 'neutral'], ['알 수 없음', 'neutral']]);
+  assert.equal(statusOf(g, 'guide-rs-future-date')[0][1], '응답 정상 · 미래 날짜 자료');
+  assert.deepEqual(statusOf(g, 'guide-rs-no-date-status').map(r => r[1]), ['응답 정상', '자료 없음', '응답 정상']);
+  // 목록 밖 값과 빠진 부분은 닫힌 쪽으로(4.4절).
+  const odd = g.guide.statusView({ data: { timestamp: null, overall_status: 'great', smp_api: { status: 'connected!', data_date_status: 'today' }, power_supply_api: null,
+    weather_api: { status: 'constructor', data_date_status: null } }, fetchedAt: 0, status: 'ready', error: null });
+  assert.deepEqual(odd.rows.map(r => [r.status, r.tone, r.basis]), [['알 수 없음 · 날짜 알 수 없음', 'neutral', '응답 시각 미제공'],
+    ['알 수 없음', 'neutral', '응답 시각 미제공'], ['알 수 없음', 'neutral', '응답 시각 미제공']]);
+  assert.deepEqual([odd.overall.text, odd.overall.tone], ['알 수 없음', 'neutral']);
+  // 값이 없으면 받는 중 · 실패(502) · 이번 방문에 조회하지 않음(시트는 엿보기만), 상태 글자는 비운다.
+  const pending = s => g.guide.statusView({ data: null, fetchedAt: null, status: s, error: null }).rows.map(r => [r.basis, r.status]);
+  assert.deepEqual([pending('idle')[0], pending('loading')[0], g.guide.statusView(rsOf(g, 'guide-rs-error')).rows[0]].map(r => (Array.isArray(r) ? r : [r.basis, r.status])),
+    [['이번 방문에서 아직 조회하지 않음', null], ['불러오는 중', null], ['불러오지 못함', null]]);
+  const every = loadManifest().variants.filter(v => v.sweep === 'A').flatMap(v => g.guide.statusView(rsOf(g, v.id)).rows.map(r => `${r.item} ${r.status} ${r.basis}`));
+  assert.ok(every.every(t => !/연결됨/.test(t)));
+});
+
+test('출처 행(4.4절): 오늘 8행 + 입찰 계산 + 응답 상태 3행, 응답 상태 행은 수신 상태 pill · [출처 표]의 row=status는 세 행을 함께 표시 · 표지 밖 숫자 0', () => {
+  const m = load();
+  const g = loadGuide();
+  const today = viewOf(m, 'today-base').sources;
+  const status = g.guide.statusView(rsOf(g, 'guide-rs-partial')).rows;
+  const bidding = { id: 'bidding', item: '입찰 계산', source: 'API 서버 입찰 계산 (기준선 분위수)', basis: '조회 06:03', chip: null, status: null, link: null };
+  const rows = [...today, bidding, ...status];
+  assert.deepEqual(rows.map(r => r.id), ['day-ahead', 'forecast', 'accuracy', 'demand', 'supply', 'weather', 'market', 'bidding', 'status:smp', 'status:supply', 'status:weather']);
+  // 768 이상은 표, 다만 ≥ 1024 시트(오른쪽 400)는 목록이고 알아보기 화면(page, 본문 640)은 표다.
+  for (const [width, page, table] of [[390, false, 0], [768, false, 1], [1280, false, 0], [1280, true, 1]]) {
+    const root = tree(h(loadGuide(width).sheets.SourcesTable, { rows, highlight: 'status', page }));
+    assert.equal(all(root, n => n.props.role === 'table').length, table, `${width} page=${page}: 표/목록`);
+    // 출처 표는 가로 스크롤 없이 칸이 폭을 나눈다(긴 글 칸이 넘치고 끝 칸이 잘리던 것, F10 측정).
+    assert.equal(all(root, n => n.type === 'ScrollView' && n.props.horizontal).length, 0, `${width}: 가로 스크롤 없음`);
+    assert.equal(all(root, n => n.props['aria-current'] === 'true').length, 3, `${width}: row=status`);
+    assert.deepEqual(all(root, n => ds(n).pdPill).map(n => [ds(n).pdPill, textOf(n)]), [['ok', '응답 정상 · 과거 날짜 자료'], ['watch', '자료 없음'], ['danger', '오류']]);
+    assertI2(root, `출처 표 ${width}`);
+  }
+  // 평가 기간은 한 줄로 묶는다(F8 관찰: 400 px 시트에서 "2025-" / "07-22~12-18").
+  for (const width of [390, 768]) {
+    const root = tree(h(loadGuide(width).sheets.SourcesTable, { rows, highlight: null }));
+    assert.equal(all(root, n => ds(n).pdNowrap && textOf(n) === '2025-07-22~12-18').length, 1, `${width}: 평가 기간 한 줄`);
+  }
+});
+
+test('둘러보기 5단계 범례(4.4절): 이번 방문 값(115.3 확정 가격 · 145.2 기준선 예측 · 95% 낙찰 가능성 · 1,716만원 예시), 값이 없으면 표시와 설명만', () => {
+  const m = load();
+  const g = loadGuide();
+  const view = viewOf(m, 'today-base');
+  const seg = resolveVariant('bidding-base').responses['/api/v1/bidding/optimized-segments'].body;
+  const first = g.adapters.adaptSegments(g.types.parseSegments(seg), 0).hours.find(x => x.tradeHour === 19).segments[0];
+  const row = rows => rows.map(r => [g.provenance.chipText(r.chip), r.text]);
+  assert.deepEqual(row(g.guide.tourLegend({ confirmed: view.legend.confirmed, forecast: { kind: view.forecast.kind, value: view.legend.forecast },
+    probability: first.probability.value, statementTotal: 17160000 })), [
+    ['● 확정 가격', '115.3 원/kWh 확정 가격'], ['┅ 예측 · 기준선', '145.2 원/kWh 기준선 예측'], ['▨ 추정', '95% 낙찰 가능성 (예시 발전소 1구간)'],
+    ['┆ 예시', '1,716만원 예시 정산서']]);
+  const none = row(g.guide.tourLegend({ confirmed: null, forecast: { kind: null, value: null }, probability: null, statementTotal: 17160000 }));
+  assert.deepEqual(none.slice(0, 3).map(r => /\d/.test(r[1])), [false, false, false]);
+  assert.deepEqual(row(g.guide.tourLegend({ confirmed: null, forecast: { kind: 'model', value: 150 }, probability: null, statementTotal: 0 }))[1],
+    ['┅ 예측 · 학습 모델', '학습 모델 예측']);
+  assert.deepEqual(row(g.guide.tourLegend({ confirmed: null, forecast: { kind: 'fallback', value: 150 }, probability: null, statementTotal: 0 }))[1],
+    ['▨ 추정 · API 대체값 (모델 예측 아님)', 'API 대체값']);
+});
+
+test('예측 방법·앱 정보의 이번 방문 값: 정확도(+ R² 0.203, 기준선이 아니면 등록 안 됨) · 서버 시장 값 · 시계 차이 120초/12시간', () => {
+  const m = load();
+  const g = loadGuide();
+  const info = m.types.parseModelInfo(resolveVariant('today-base').responses['/api/v1/model/info'].body);
+  const base = g.guide.methodAccuracy('baseline', info);
+  assert.deepEqual([base.documented.main, base.documented.r2, base.api, base.footer.time], ['시간마다 평균 11.97원/kWh 빗나갑니다 (MAPE 11.75%)', 'R² 0.203',
+    'API 표기: 검증 MAPE 12.68% (최근 150일 재현) · 80% 구간 적중률 72.6% (최근 30일 보류 검증)', '평가 기간 2025-07-22~12-18']);
+  assert.equal(g.guide.methodAccuracy(null, null).documented.r2, 'R² 0.203');
+  const model = g.guide.methodAccuracy('model', null);
+  assert.deepEqual([model.documented, model.unregistered, model.api], [null, '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다', null]);
+  const market = m.types.parseMarketStatus(resolveVariant('today-base').responses['/api/v1/market-status'].body);
+  assert.equal(g.guide.marketFacts(market), '이번 방문의 서버 값: 하루전시장 마감 11-26(목) 10:00 KST · 입찰일 11-27(금) · 실시간시장 15분 단위');
+  assert.equal(g.guide.marketFacts(null), null);
+  const skew = ms => g.kst.clockSkew(ms, 0);
+  assert.deepEqual([skew(3 * 60000), skew(13 * 3600000), skew(60000), null].map(s => g.guide.aboutClockLines(s)),
+    [['기기 시계와 3분 차이 · 서버 시각 기준으로 표시'], ['서버 시각이 기기 시계와 12시간 넘게 달라 기기 시계로 표시합니다'], [], []]);
+});

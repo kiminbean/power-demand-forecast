@@ -1,13 +1,14 @@
 // 1분 둘러보기(4.4절). 배너는 덮개가 아니라 화면 안 카드다. 단계의 h1은 Screen 제목이 맡고(단계마다 h1 하나),
-// 여기서는 진행 "2 / 5" 글자·설명·이동 버튼을 그린다. 글은 guide.ko.json에서 오고 숫자는 strings.ts가 만든다.
+// 여기서는 진행 "2 / 5" 글자·설명(children)·이동 버튼을 그린다. 버튼은 설명 바로 아래라 단계 예시가 길어도 첫 화면에 있다.
+// 마지막 단계는 [이전] [직접 둘러보기](→ 오늘)이고 건너뛸 단계가 없어 [건너뛰기]가 없다. 글은 guide.ko.json, 숫자는 strings.ts.
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { RADIUS, SIZE, SPACE } from './tokens';
 import { Button } from './Button';
 import { Icon } from './Icon';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { useTheme } from '../app/theme';
-import { tourProgressText } from '../content/strings';
+import { TOUR_FINISH, TOUR_NAME, tourProgressText } from '../content/strings';
 
 export type TourBannerProps = { title: string; body: string; onStart: () => void; onDismiss: () => void };
 
@@ -17,7 +18,8 @@ export function TourBanner({ title, body, onStart, onDismiss }: TourBannerProps)
     <View style={[styles.banner, { backgroundColor: theme.color.surface, borderColor: theme.color.border }]} testID="tour-banner">
       <Icon name="book" size={SIZE.icon} color={theme.color.link} />
       <View style={styles.grow}>
-        <Text variant="body" weight="700">{title}</Text>
+        {/* "1분 둘러보기"의 숫자는 이름표라 메타로 둔다(I2). */}
+        <Text variant="body" weight="700" dataSet={labelData(title)}>{title}</Text>
         <Text variant="label" tone="text2">{body}</Text>
         <View style={styles.actions}>
           <Button tone="primary" label="둘러보기" accessibilityLabel="둘러보기 시작" onPress={onStart} />
@@ -31,22 +33,23 @@ export function TourBanner({ title, body, onStart, onDismiss }: TourBannerProps)
 export type TourStepProps = {
   step: number;
   total: number;
-  body: string;
   onPrev: () => void;
+  /** 마지막 단계에서는 [직접 둘러보기](부모가 오늘로 보낸다). */
   onNext: () => void;
   onSkip: () => void;
+  children?: React.ReactNode;
 };
 
-export function TourStep({ step, total, body, onPrev, onNext, onSkip }: TourStepProps) {
+export function TourStep({ step, total, onPrev, onNext, onSkip, children }: TourStepProps) {
   const last = step >= total;
   return (
     <View style={styles.step} testID="tour-step">
       <Text variant="meta" weight="600" tone="text3" dataSet={{ pdMeta: 'tour' }}>{tourProgressText(step, total)}</Text>
-      <Text variant="body" tone="text2">{body}</Text>
+      {children}
       <View style={styles.actions}>
         <Button label="이전" accessibilityLabel="이전 단계" onPress={onPrev} disabled={step <= 1} disabledReason="첫 단계입니다" />
-        <Button tone="primary" label={last ? '마치기' : '다음'} accessibilityLabel={last ? '둘러보기 마치기' : '다음 단계'} onPress={onNext} />
-        <Button tone="ghost" label="건너뛰기" accessibilityLabel="둘러보기 건너뛰기" onPress={onSkip} />
+        <Button tone="primary" label={last ? TOUR_FINISH : '다음'} accessibilityLabel={last ? TOUR_FINISH : '다음 단계'} onPress={onNext} />
+        {last ? null : <Button tone="ghost" label="건너뛰기" accessibilityLabel={`건너뛰기: ${TOUR_NAME} 닫기`} onPress={onSkip} />}
       </View>
     </View>
   );

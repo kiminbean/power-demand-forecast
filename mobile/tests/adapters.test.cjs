@@ -201,6 +201,9 @@ const GUIDE_OK = () => {
     glossary: Object.keys(s.GLOSSARY_TITLES).map(id => ({ id, short: '짧은 뜻입니다', body: ['풀이입니다.'] })),
     topics: Object.fromEntries(guide.TOPIC_IDS.map(id => [id, sec(`주제 ${id}`)])),
     cards: Object.fromEntries(guide.METHOD_CARD_IDS.map(id => [id, sec(`산출 방식 ${id}`)])),
+    // F10: 숫자 읽는 법의 표시별 설명, 예측 방법의 단순화한 설명 목록.
+    legend: Object.fromEntries(guide.LEGEND_KEYS.map(k => [k, `표시 ${k} 설명입니다.`])),
+    simplified: sec('시장 규칙 설명'),
   };
 };
 
@@ -211,6 +214,7 @@ test('guide loader: shape (keys, kinds, lengths, no digits), relative URL, one r
     j => { j.version = 2; }, j => { j.tour.pop(); }, j => { j.glossary[0].id = 'nope'; }, j => { j.glossary[1].id = j.glossary[0].id; },
     j => { j.glossary[0].short = '가'.repeat(61); }, j => { delete j.cards['bid-merit']; }, j => { j.topics.extra = j.topics.about; },
     j => { j.tour[0].body = []; }, j => { j.tour[0].title = '마감 10시'; }, j => { j.cards['today-price'].body = ['']; },
+    j => { delete j.legend.stale; }, j => { j.legend.time = '모든 시각은 KST (UTC+9)'; }, j => { j.legend.extra = '그 밖'; }, j => { delete j.simplified; },
   ];
   for (const mutate of broken) {
     const j = GUIDE_OK();

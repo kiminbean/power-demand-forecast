@@ -82,7 +82,10 @@ export type ForecastCardView =
 export type AccuracyCardView =
   | { state: 'loading' }
   | { state: 'error'; text: string }
-  | { state: 'ready'; documented: { main: string; basis: string; example: string } | null; unregistered: string | null; api: string | null; footer: Footer };
+  | {
+      state: 'ready'; documented: { main: string; basis: string; example: string; r2?: string } | null; unregistered: string | null;
+      api: string | null; footer: Footer;
+    };
 
 export type MethodFacts = { lines: string[]; link: { label: string; url: string } | null };
 export type TodayCardId = 'today-price' | 'today-power' | 'today-forecast' | 'today-accuracy';
