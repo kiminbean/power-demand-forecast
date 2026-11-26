@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-26 evening (mobile web app /mobile/ UI TOP1 redesign: build F0–F12 done on branch ui/mobile-top1, round 1 evaluation pending, not deployed, not pushed; earlier 2026-11-26: session memory + docs refresh; 2026-11-25: dashboard app_v4 UI TOP1 redesign merged·deployed·pushed; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
+> Last Updated: 2026-11-26 evening (mobile web app /mobile/ UI TOP1 redesign: build F0–F12 done on branch ui/mobile-top1, round 1 evaluation done — passed the bar narrowly (mean 8.53, lowest R1 8.0, mentor lens failed MEN-COPY, 54 defects open, no fix round), not deployed, not pushed; earlier 2026-11-26: session memory + docs refresh; 2026-11-25: dashboard app_v4 UI TOP1 redesign merged·deployed·pushed; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -12,15 +12,16 @@
 
 ## Current Session (2026-11-23 ~ 11-26)
 
-### Task: 모바일 웹앱(/mobile/) UI/UX TOP1 개편 — 빌드 F0\~F12 완료, round 1 평가 대기 (2026-11-26) ⏳ 평가 전·운영 미반영·푸시 안 함
+### Task: 모바일 웹앱(/mobile/) UI/UX TOP1 개편 — 빌드 F0\~F12와 round 1 평가 완료 (2026-11-26) ⏳ 합격선 턱걸이 통과·운영 미반영·푸시 안 함
 - 사용자 목표: 공개 모바일 웹앱(`/mobile/`, Expo + react-native-web)의 UI/UX를 경쟁사 TOP1 수준으로. 기준 제품 Electricity Maps 앱(약 9.1). 합격선 = R1\~R8 모두 8.0 이상 · 평균 8.5 이상 + 게이트 M1\~M9·I1\~I5 전부. round 0(개편 전) 평균 4.34
 - 진행: 시안 3개 중 C(비전문가 안내형)를 기반으로 설계 명세 `docs/2026-11-26-mobile-ui-top1-design.md` → 빌드 F0\~F12(단계마다 빌더 1명·로컬 커밋 1개). 워크트리 `.claude/worktrees/mobile-top1`, 브랜치 `ui/mobile-top1`(기준 `f2fbb5a2`)
 - 결과: 탭 4개(오늘·입찰·정산·알아보기), 화면마다 주소, 라이트·다크(시스템 + 앱 안 선택), 모든 숫자에 상태 칩·출처·KST 시각, 지어낸 값은 `mobile/src/data/examples.ts`에서만. 앨런 AI·입찰 제출·발전소 등록·시뮬레이션은 공개 빌드에서 뺌(파일은 남김, 삭제는 P2)
 - 최종 `check.sh`: tests 213 · fail 0 · 기존 35/35(수정 없음) · tsc 0 · export 0 · 번들 624,723 B(개편 전 725,177) · 금지 문자열 0 · 잠근 파일 변경 0 · 자리표시 0. 번들 sha256 `8c65b3ad…`
 - round1-pre 게이트 측정(평가 직전, 같은 측정 도구): 1,876기록(11.5절 상태 103개 + 변형 52개 × 6폭 × 2테마, grid 48, 회전 4) · axe 936회 · 보조 점검 284건 · 키보드 · 시간대 3개에서 M1\~M8·I1\~I5 실패 0. M9는 조건부: 서버 캐시를 데운 뒤 5,427 · 5,427 · 5,420 ms, 있는 그대로 잰 첫 3회 6,631 · 5,412 · 5,420 ms(서버 하루전 가격 캐시가 비어 `/smp/day-ahead` 1,685 ms). 증거 `scratchpad/mobile/eval/round1-pre/`, 게이트 표 `scratchpad/mobile/eval/steps/F12/INDEX.md`
-- 보고서: `docs/2026-11-26-mobile-ui-top1-report.md`(바뀐 것, 게이트 수치, 캡처 경로, 남은 승인). `mobile/README.md`·`CHANGELOG.md` 갱신
+- round 1 평가(렌즈 4개, 17:52\~19:14 KST, 같은 번들·앱 코드 변경 없음): 항목 평균 R1 8.0 · R2 8.6 · R3 8.2 · R4 9.0 · R5 9.0 · R6 8.4 · R7 8.75 · R8 8.3, 평균 8.53. layout_a11y(M1\~M9)·integrity(I1\~I5) 통과 → 워크플로 합격선을 넘었지만 턱걸이다. mentor 렌즈 불합격(MEN-COPY: 둘러보기 2/5 제목 "내일 값은 어제 값으로"가 본문과 반대 — 명세 4.4절 문구 자체의 오류, API 원문 'moderate', 풀이 없는 정확도 낱말 등). M9: 평가자 두 묶음 6회 모두 6.0초 이하(가장 느린 5,969 ms), 캡처의 있는 그대로 첫 회 6,129 ms. 결함 54건(높음 4) 열림, 수정 라운드 없음. 증거 `scratchpad/mobile/eval/round1/`(`ROUND1_RESULT.json`, 렌즈별 JSON)
+- 보고서: `docs/2026-11-26-mobile-ui-top1-report.md`(바뀐 것, 게이트 수치, round 1 점수·관문·결함, 캡처 경로와 개편 전후 스크린샷 4장, 남은 승인). `mobile/README.md`·`CHANGELOG.md` 갱신
 - 남은 일:
-  - round 1 평가(렌즈별 R1\~R8 + 게이트). 떨어지면 결함 목록으로 F13… 수정 단계
+  - P1(운영 배포) 승인 여부. 그 전에 승인 없이 고칠 수 있는 높음 결함(둘러보기 2/5 제목, 입찰 성향을 바꾸면 초점이 사라짐, 휴대폰 폭 표)을 수정 단계 하나로 고치고 다시 잴지 함께 정한다. 명세 변경이 필요한 결정 거리 4개는 보고서 5.1절
   - 승인 항목 P1(운영 배포, 명세 13절 백업·되돌리기 명령) \~ P11(푸시·병합). M9 여유를 가장 크게 늘리는 것은 P3(번들 gzip: 624,723 → 181,131 B)이다
   - 측정 도구(`check.sh`·`sweep.py`·`run_gate_checks_v2.sh`)와 증거는 세션 scratchpad(`scratchpad/mobile/`)에 있어 세션이 끝나면 사라진다. 저장소만으로 돌릴 수 있는 것은 `cd mobile && npm test && npm run typecheck`와 웹 export다(`mobile/README.md`)
 
