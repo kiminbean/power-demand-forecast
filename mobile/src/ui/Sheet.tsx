@@ -1,14 +1,17 @@
 // 시트(6.2절): 휴대폰은 아래 시트(최대 85 %, 위 모서리 20), 600–1023은 아래쪽 640 폭, ≥ 1024는 오른쪽 패널 400.
 // role=dialog + aria-modal + aria-labelledby, 초점 가둠(Tab·Shift+Tab), Esc, 스크림 클릭, 닫히면 연 요소로 초점 복귀.
+// round 2(M5·FOCUS): 시트 상자는 tabIndex=-1이라 안의 글자를 눌러도 초점이 body로 빠지지 않고, 시트 제목도 tabIndex=-1이라 본문의
+// [다시 시도](설명 글을 못 받았을 때)가 버튼이 사라지기 전에 초점을 제목으로 옮긴다(RetryScope).
 // 열고 닫는 것과 히스토리(3.3절)는 SheetHost(F6)가 맡는다: 이 부품은 열린 동안만 그려진다. RN Modal은 쓰지 않는다.
 import { useEffect, useId, useRef } from 'react';
 import type React from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import type { Text as RNText, ViewStyle } from 'react-native';
 import { LAYOUT, MOTION, RADIUS, SPACE } from './tokens';
 import { IconButton } from './Button';
+import { RetryScope } from './Card';
 import { Text, labelData } from './Text';
-import { domOf, tabStops, useScrollFocus, web, webStyle } from './web';
+import { domOf, focusRef, tabStops, useScrollFocus, web, webStyle } from './web';
 import type { DomEl } from './web';
 import { useTheme } from '../app/theme';
 
@@ -27,6 +30,7 @@ export function Sheet({ title, onClose, children, testID = 'sheet' }: SheetProps
   const { width } = useWindowDimensions();
   const panelRef = useRef<View>(null);
   const closeRef = useRef<View>(null);
+  const titleRef = useRef<RNText>(null);
   // 부모가 렌더마다 새 함수를 넘겨도 가둠·복귀 효과를 다시 걸지 않게 최신 값만 들고 있는다.
   const closeLatest = useRef(onClose);
   closeLatest.current = onClose;
@@ -77,15 +81,17 @@ export function Sheet({ title, onClose, children, testID = 'sheet' }: SheetProps
         {...web({ onClick: () => closeLatest.current(), dataSet: { pdScrim: 'true' } })} />
       <View ref={panelRef} role="dialog" aria-modal aria-labelledby={titleId}
         style={[styles.panel, place, { backgroundColor: theme.color.surface }, lift, motion.enter]}
-        {...web({ dataSet: width >= LAYOUT.railFrom ? {} : { pdSafe: 'bottom x' } })}>
+        {...web({ tabIndex: -1, dataSet: width >= LAYOUT.railFrom ? {} : { pdSafe: 'bottom x' } })}>
         <View style={[styles.head, { borderBottomColor: theme.color.border }]}>
           {/* 숫자가 든 제목("산출 방식 · 오늘 24시간 가격", "80% 구간")은 이름표라 메타로 둔다(I2). */}
-          <Text role="heading" {...web({ 'aria-level': 2 })} nativeID={titleId} variant="body" weight="700" style={styles.title}
+          <Text ref={titleRef} role="heading" {...web({ 'aria-level': 2, tabIndex: -1 })} nativeID={titleId} variant="body" weight="700" style={styles.title}
             dataSet={labelData(title)}>{title}</Text>
           <IconButton pressRef={closeRef} icon="close" accessibilityLabel="닫기" onPress={() => closeLatest.current()} testID="sheet-close" />
         </View>
         <ScrollView style={styles.body} contentContainerStyle={styles.content} onLayout={body.onLayout} onContentSizeChange={body.onContentSizeChange}
-          {...web({ role: 'region', 'aria-labelledby': titleId, ...body.focus })}>{children}</ScrollView>
+          {...web({ role: 'region', 'aria-labelledby': titleId, ...body.focus })}>
+          <RetryScope focus={() => focusRef(titleRef)}>{children}</RetryScope>
+        </ScrollView>
       </View>
     </View>
   );

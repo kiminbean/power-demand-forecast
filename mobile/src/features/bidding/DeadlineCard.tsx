@@ -1,8 +1,7 @@
 // 하루전시장 입찰 마감(명세 4.2절): 서버 시장 상태로 정한 단계(확인 중 · 접수 중 · 마감 임박 · 마감 · 불일치 · 오류), 카운트다운
 // (마감 뒤에는 다음 마감까지, round 1 D13: 하루 14시간 동안 이 카드에 큰 숫자가 없었다. «오늘 마감됨»은 제목 옆)
-// (분 내림, 셸 시계가 분이 바뀔 때마다 다시 그린다 · 알리지 않는다), 마감·입찰일, 실시간시장 구간, 출처. 글자와 단계는 model.ts가
+// (분 내림, 셸 시계가 분이 바뀔 때마다 다시 그린다 · 알리지 않는다), 마감·거래일, 실시간시장 구간, 출처. 글자와 단계는 model.ts가
 // 정하고 여기서는 배치만 한다. 둘러보기 3단계(F10)도 이 카드를 그대로 쓴다.
-import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { DeadlineCardView } from './model';
 import { ChipList } from '../today/TodayParts';

@@ -6,14 +6,14 @@ import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Text as RNText } from 'react-native';
-import { HIT, LAYOUT, RADIUS, SIZE, SPACE } from './tokens';
+import { HIT, LAYOUT, RADIUS, SIZE, SPACE, skeletonBucket } from './tokens';
 import { Button, IconButton } from './Button';
 import { ProvenanceChip } from './Chips';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { useAnnounce } from './Live';
 import { Text, keepTogether, labelData } from './Text';
-import { domOf, web, webStyle } from './web';
+import { focusRef, web, webStyle } from './web';
 import { useClock } from '../app/Shell';
 import { useTheme } from '../app/theme';
 import { kstNow } from '../lib/kst';
@@ -40,9 +40,15 @@ export type CardProps = {
 export const CARD_BORDER = 1;
 export const cardPadding = (windowWidth: number) => (windowWidth < LAYOUT.narrowBelow ? SPACE.md : SPACE.lg);
 
-/** [다시 시도]가 눌렸음을 기억했다가(arm) 그 카드의 StateView가 끝나면(report) 결과를 알린다. 카드 밖(전부 실패 안내)은 화면이 맡는다. */
+/**
+ * [다시 시도]가 눌렸음을 기억했다가(arm) 그 StateView가 끝나면(report) 결과를 알린다. 카드는 제목(h2), 시트는 시트 제목, 카드 밖 설명 글
+ * (알아보기 화면의 GuideGate)은 화면 h1이 초점 자리다(round 2 M5·FOCUS: 카드 밖 [다시 시도]는 초점이 body로 떨어지고 알림이 없었다).
+ * 오늘 화면의 전부 실패 안내는 화면이 따로 맡는다(범위 밖).
+ */
 type RetryFocus = { arm(): void; report(kind: StateKind | 'gone'): void };
 const RetryContext = createContext<RetryFocus | null>(null);
+/** 가장 가까운 초점 자리(카드·시트·화면 범위)가 이미 있는가. */
+export const useInRetryScope = () => useContext(RetryContext) !== null;
 
 function useRetryFocus(focusTarget: () => void): RetryFocus {
   const announce = useAnnounce();
@@ -64,22 +70,23 @@ function useRetryFocus(focusTarget: () => void): RetryFocus {
   }), []);
 }
 
+/** 이 범위 안 StateView의 [다시 시도]가 초점을 focus()로 옮기고, 다시 받으면 "다시 불러왔습니다 · HH:MM KST"를 알린다. */
+export function RetryScope({ focus, children }: { focus: () => void; children?: React.ReactNode }) {
+  return <RetryContext.Provider value={useRetryFocus(focus)}>{children}</RetryContext.Provider>;
+}
+
 export function Card({ title, chips, onMethod, ribbon, children, testID, state, fill = false }: CardProps) {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
   const narrow = width < LAYOUT.narrowBelow;
   const shadow = theme.elevation.card ? webStyle({ boxShadow: theme.elevation.card }) : null;
   const titleRef = useRef<RNText>(null);
-  const retry = useRetryFocus(() => {
-    const node = domOf(titleRef);
-    if (node) node.focus();
-  });
   return (
     <View testID={testID} style={[styles.card, { backgroundColor: theme.color.surface, borderColor: theme.color.border,
       padding: cardPadding(width) }, shadow, fill ? styles.fill : null]} {...web({ dataSet: state ? { pdCard: 'true', state } : { pdCard: 'true' } })}>
       {ribbon}
       <CardHeader title={title} chips={chips} onMethod={onMethod} narrow={narrow} titleRef={titleRef} />
-      <RetryContext.Provider value={retry}>{children}</RetryContext.Provider>
+      <RetryScope focus={() => focusRef(titleRef)}>{children}</RetryScope>
     </View>
   );
 }
@@ -150,12 +157,14 @@ export type StateViewProps = {
   onRetry?: () => void;
   /** 버튼 글자(기본 "다시 시도"). 입찰 계산은 "다시 계산"(4.2절). */
   retryLabel?: string;
-  /** 최종 카드 본문과 같은 높이(레이아웃 점프 0). */
-  minHeight?: number;
+  /** 최종 카드 본문과 같은 높이(레이아웃 점프 0). 폭 구간 표(tokens SKELETON)를 주면 그 화면 폭의 값을 쓴다(round 2 CLS). */
+  minHeight?: number | readonly number[];
 };
 
-export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', minHeight = SIZE.stateMin }: StateViewProps) {
+export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', minHeight: height = SIZE.stateMin }: StateViewProps) {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const minHeight = typeof height === 'number' ? height : height[skeletonBucket(width)];
   const announce = useAnnounce();
   const retryFocus = useContext(RetryContext);
   const message = text ?? STATE_TEXT[kind];

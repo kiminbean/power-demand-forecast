@@ -1,6 +1,6 @@
 // 값 표시(6.2·7.2절). Value·KpiBlock·HeroValue는 Provenanced<number>만, SampleValue는 Example<number>만 받는다:
 // 칩 없는 숫자나 예시 값을 실제 값 자리에 넣으면 컴파일 오류다. 글자는 넘겨받은 format.ts 함수 하나로 한 번만 만든다.
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SPACE } from './tokens';
 import type { TextVariant } from './tokens';
@@ -36,13 +36,15 @@ function UnitText({ unit, size }: { unit: AnyUnit; size: Size }) {
 
 export type ValueProps = {
   v: Provenanced<number>; format: Formatter; size?: Size; showUnit?: boolean;
+  /** 실측이 아닌 값(API 기본값·전국 값·시뮬레이션)은 흐린 글자(round 2 멘토: 실측 KPI와 같은 굵은 숫자로 보였다). */
+  muted?: boolean;
   /** API 값으로 계산한 값(예비력 = 공급능력 − 수요, 관심 경계 = 공급능력 ÷ 1.15). API 원값이 아니라서 data-pd-meta="derived". */
   derived?: boolean;
 };
 /** 실제 값. data-pd-value="{상태}", data-pd-raw=API 원값(I2·I3 검사가 보이는 글자와 비교한다). 계산값은 derived로 표시한다. */
-export function Value({ v, format, size = 'body', showUnit = true, derived = false }: ValueProps) {
+export function Value({ v, format, size = 'body', showUnit = true, derived = false, muted = false }: ValueProps) {
   return (
-    <Text variant={size} weight={size === 'display' || size === 'title' ? '700' : '600'} nowrap
+    <Text variant={size} weight={size === 'display' || size === 'title' ? '700' : '600'} tone={muted ? 'text2' : 'text1'} nowrap
       dataSet={derived ? { pdMeta: 'derived' } : { pdValue: v.state, pdRaw: String(v.value) }}>
       {format(v.value)}{showUnit ? <UnitText unit={v.unit} size={size} /> : null}
     </Text>
@@ -63,17 +65,20 @@ type BlockProps = {
   label: string; v: Provenanced<number>; format: Formatter; chip?: React.ReactNode; testID?: string;
   /** 라벨과 값을 한 줄에(들어가지 않으면 줄바꿈). 4.1절 전력 카드 "쓰는 전력(수요)  664 MW". */
   inline?: boolean;
+  /** 실측이 아닌 값: 본문 크기 흐린 글자(round 2). */
+  muted?: boolean;
 };
 
-function Block({ label, v, format, chip, testID, size, inline = false }: BlockProps & { size: 'display' | 'title' }) {
+function Block({ label, v, format, chip, testID, size: given, inline = false, muted = false }: BlockProps & { size: 'display' | 'title' }) {
+  const size = muted ? 'body' : given;
   // 라벨 → 값+단위 → 칩을 한 문자열로 읽히게 묶는다(role=group은 이름을 가질 수 있는 역할).
   const name = `${label} ${spokenValue(format(v.value), v.unit)}, ${chipA11yLabel(v.chip, v.source)}`;
   const labelText = <Text variant="label" weight="600" tone="text2">{label}</Text>;
   return (
     <View role="group" aria-label={name} testID={testID} style={styles.block}>
       {inline
-        ? <View style={styles.inline}>{labelText}<Value v={v} format={format} size={size} /></View>
-        : <>{labelText}<Value v={v} format={format} size={size} /></>}
+        ? <View style={styles.inline}>{labelText}<Value v={v} format={format} size={size} muted={muted} /></View>
+        : <>{labelText}<Value v={v} format={format} size={size} muted={muted} /></>}
       {chip ?? <ProvenanceChip chip={v.chip} source={v.source} />}
     </View>
   );

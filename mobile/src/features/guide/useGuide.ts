@@ -7,6 +7,8 @@ import type { GuideContent } from '../../content/guide';
 
 const loader = createGuideLoader();
 const loaded = new Map<string, GuideContent>();
+// 한 문(GuideGate)의 [다시 시도]가 성공하면 같은 화면의 다른 문(≥ 1280 패널·시트)도 함께 받은 내용을 그린다(round 2: 패널은 오류로 남았다).
+const listeners = new Set<() => void>();
 
 export type GuideState = { status: 'loading' | 'ready' | 'error'; content: GuideContent | null; retry: () => void };
 type Held = Omit<GuideState, 'retry'>;
@@ -20,6 +22,13 @@ export function useGuide(): GuideState {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<Held>(() => held(base));
   useEffect(() => {
+    const onLoaded = () => setState(held(base));
+    listeners.add(onLoaded);
+    return () => {
+      listeners.delete(onLoaded);
+    };
+  }, [base]);
+  useEffect(() => {
     if (loaded.has(base)) {
       setState(held(base));
       return undefined;
@@ -30,6 +39,7 @@ export function useGuide(): GuideState {
       content => {
         loaded.set(base, content);
         if (live) setState({ status: 'ready', content });
+        listeners.forEach(fn => fn());
       },
       () => {
         if (live) setState({ status: 'error', content: null });

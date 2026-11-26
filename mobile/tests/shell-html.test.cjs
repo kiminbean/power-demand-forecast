@@ -218,6 +218,9 @@ test('prefetch script: per route it starts exactly the GETs that route sends on 
     if (want.length) {
       assert.deepEqual(Object.keys(table.r), want, url);
       assert.deepEqual([table.t, table.x], [1234, false], url);
+      // round 2 NOW-KST: 응답이 도착하면 그 기기 시각을 a에 적는다(앱이 조회 시각으로 쓰고 서버 시각과 짝짓는다).
+      await Promise.all(Object.values(table.r));
+      assert.deepEqual(Object.entries(table.a), want.map(w => [w, 1234]), url);
     } else assert.equal(table, undefined, `${url}: 보낼 것이 없으면 표도 없다`);
   }
   // 오늘은 영웅 카드(M9 content)를 정하는 하루전 가격을 먼저 시작한다.

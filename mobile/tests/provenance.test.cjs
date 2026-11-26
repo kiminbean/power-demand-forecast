@@ -61,12 +61,27 @@ test('supplyPair uses only the current-hour row, within ±1 MW of KPI demand, an
   assert.equal(p.supplyPair(KPIS, null).ok, false);
 });
 
+test('supplyPair (round 2 integrity): 공급능력은 /power-supply가 실시간 값으로 맞췄다고 말할 때만 — 30일 평균·모의 패턴·숫자 불일치는 미수신', () => {
+  assert.match(SUPPLY.data_source, /scaled to real-time: demand 664 MW, supply 1191 MW/);
+  const src = s => ({ ...SUPPLY, data_source: s });
+  // 크롤러가 수요만 줄 때(api/v6_routes.py): 지금 시각 행의 수요는 KPI와 맞지만 공급은 EPSIS 30일 평균 그대로다.
+  const epsis = { ...src('EPSIS Real Data (30-day avg, last: 2025-04-30) + Renewable ML'),
+    data: SUPPLY.data.map(r => (r.hour === 6 ? { ...r, supply: 1304.2 } : r)) };
+  assert.deepEqual(p.supplyPair(KPIS, epsis), { ok: false, reason: '공급능력 미수신' });
+  assert.equal(p.supplyPair(KPIS, src('Simulated Pattern + Renewable ML')).ok, false);
+  assert.equal(p.supplyPair(KPIS, src(null)).ok, false);
+  assert.equal(p.supplyPair(KPIS, { current_hour: SUPPLY.current_hour, data: SUPPLY.data }).ok, false, 'data_source 없음');
+  // 실시간 공급 숫자와 그 행의 공급이 ±1 MW 밖이면(다른 응답·다른 행) 쓰지 않는다.
+  assert.equal(p.supplyPair(KPIS, src('EPSIS Pattern (scaled to real-time: demand 664 MW, supply 1189 MW)')).ok, false);
+  assert.equal(p.supplyPair(KPIS, src('EPSIS Pattern (scaled to real-time: demand 664 MW, supply 1190 MW) + Renewable ML')).ok, true);
+});
+
 test('reserveLevel boundaries (≥15 정상, <15 보통, <10 낮음, <5 위험): KPX 공식 경보 단계 낱말은 쓰지 않는다(D9)', () => {
   const label = r => (p.reserveLevel(r) || {}).label;
   assert.equal(label(79.5), '정상 · 넉넉합니다');
   assert.equal(label(15), '정상 · 넉넉합니다');
-  assert.equal(label(14.99), '보통 · 여유가 줄고 있습니다');
-  assert.equal(label(10), '보통 · 여유가 줄고 있습니다');
+  assert.equal(label(14.99), '보통 · 여유가 15% 아래입니다', '값 하나로는 추세를 말하지 않는다(round 2)');
+  assert.equal(label(10), '보통 · 여유가 15% 아래입니다');
   assert.equal(label(9.99), '낮음 · 여유가 부족합니다');
   assert.equal(label(5), '낮음 · 여유가 부족합니다');
   // KPX 전력수급 위기경보 단계(준비·관심·주의·경계·심각)와 겹치는 이름이 없다.

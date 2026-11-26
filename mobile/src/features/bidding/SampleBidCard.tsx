@@ -15,12 +15,12 @@ import { krwFromThousand, mw, pct, price } from '../../lib/format';
 import { CHIPS } from '../../lib/provenance';
 import {
   BID_COLUMNS, CARD_TITLES, NO_SEND_NOTE, RECALC_LABEL, RISK_LABELS, bidDayText, bidHourLabel, closedBidDayText,
-  ladderLegendText, ladderReadingText, segmentIdText,
+  ladderKeyItems, ladderReadingText, segmentIdText,
 } from '../../content/strings';
 import { ChipList } from '../today/TodayParts';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
 import { ProvenanceChip, SampleRibbon } from '../../ui/Chips';
-import { ChartBleed } from '../../ui/charts/ChartFrame';
+import { ChartBleed, ChartKey } from '../../ui/charts/ChartFrame';
 import { LadderChart } from '../../ui/charts/LadderChart';
 import { HourStepper, SegmentedControl } from '../../ui/Controls';
 import type { SegmentOption } from '../../ui/Controls';
@@ -60,7 +60,7 @@ export type SampleBidCardProps = {
   onRetry: () => void;
   onMethod: () => void;
   onSources: () => void;
-  /** 하루전시장이 오늘 마감됐다(마감 카드의 단계): 계산의 입찰일이 마감된 입찰일임을 밝힌다(D13). */
+  /** 하루전시장이 오늘 마감됐다(마감 카드의 단계): 계산의 거래일이 마감된 거래일임을 밝힌다(D13). */
   closed?: boolean;
 };
 
@@ -72,7 +72,7 @@ export function SampleBidCard({ view, risk, onRisk, onHour, onRetry, onMethod, o
   const [mode, setMode] = useState<Mode>('chart');
   const [picked, setPicked] = useState<number | null>(null);
   const ready = view.state === 'ready' ? view : null;
-  // 320에서는 스텝퍼에서 날짜를 빼고 카드 부제로 옮긴다(4.2절 폭별). 마감 뒤에는 마감된 입찰일 기준이라고 붙인다(D13).
+  // 320에서는 스텝퍼에서 날짜를 빼고 카드 부제로 옮긴다(4.2절 폭별). 마감 뒤에는 마감된 거래일 기준이라고 붙인다(D13).
   const day = ready && ready.tradingDate ? (closed ? closedBidDayText(ready.tradingDate) : narrow ? bidDayText(ready.tradingDate) : null) : null;
   const plant = (
     <Text variant="label" tone="text2" testID="bid-plant">
@@ -130,7 +130,7 @@ export function SampleBidCard({ view, risk, onRisk, onHour, onRetry, onMethod, o
     revenue: view.total.revenue ? <SampleValue v={view.total.revenue} format={krwFromThousand} size="label" showUnit={false} /> : DASH,
   };
   const band = view.hour.baselineBand;
-  const legend = ladderLegendText(view.kind, view.hour.baselineQ50, band ? band.q10 : null, band ? band.q90 : null);
+  const key = ladderKeyItems(view.kind, view.hour.baselineQ50, band ? band.q10 : null, band ? band.q90 : null);
   // 600 px 아래는 같은 열의 행 카드(D2): "1구간 · 물량(MW, 예시) 5 · 가격(원/kWh) 171.7 · 낙찰 가능성(추정) 95% · 기대 수입 56.1만원".
   const table = (
     <DataTable caption={view.tableCaption} columns={columns} cards={phone} testID={phone ? 'bid-cards' : 'bid-table'}
@@ -146,7 +146,7 @@ export function SampleBidCard({ view, risk, onRisk, onHour, onRetry, onMethod, o
       <SegmentedControl label="보기 방식" options={MODES} value={mode} onChange={setMode} />
       {mode === 'chart' ? (
         <View style={styles.group}>
-          <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }} testID="bid-legend">{keepTogether(legend, { variant: 'meta', tone: 'text2' })}</Text>
+          <ChartKey items={key} testID="bid-legend" />
           <ChartBleed>
             <LadderChart hour={view.hour} label={view.chartLabel} selected={picked} onSelect={setPicked} />
           </ChartBleed>

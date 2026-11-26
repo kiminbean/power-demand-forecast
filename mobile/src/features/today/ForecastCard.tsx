@@ -8,26 +8,24 @@ import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { ChipSpec, ForecastCardView, HourRow } from './model';
 import { ChipList } from './TodayParts';
-import { price, tradeClockRange, tradeHourNo } from '../../lib/format';
+import { price, rangeSep, tradeClockRange, tradeHourNo } from '../../lib/format';
 import {
   CARD_TITLES, FORECAST_SUBJECT_SHORT, FULL_DAY_LABEL, HOUR_COLUMNS, PERIOD_COLUMNS, SHORT_DAY_LABEL, TABLE_CAPTIONS, TO_NOW_LABEL, TO_NOW_REASON,
   ZERO_INPUT_CELL,
 } from '../../content/strings';
 import { Button } from '../../ui/Button';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
-import { ChartBleed } from '../../ui/charts/ChartFrame';
+import { ChartBleed, ChartKey } from '../../ui/charts/ChartFrame';
 import { StepChart } from '../../ui/charts/StepChart';
 import { HourStepper, SegmentedControl } from '../../ui/Controls';
 import type { SegmentOption } from '../../ui/Controls';
 import { DataTable } from '../../ui/DataTable';
 import { RichText } from '../../ui/Rich';
 import { Text, keepTogether } from '../../ui/Text';
-import { LAYOUT, SIZE, SPACE } from '../../ui/tokens';
+import { LAYOUT, SIZE, SKELETON, SPACE } from '../../ui/tokens';
 import { Value } from '../../ui/Values';
 
 const TITLE = CARD_TITLES['today-forecast'];
-/** 스켈레톤 = 차트(220) + 스텝퍼(44) + 판독·요약 줄: 레이아웃이 뛰지 않게. */
-const SKELETON_HEIGHT = 380;
 const DASH = '—';
 type Mode = 'chart' | 'table';
 const MODES: readonly SegmentOption<Mode>[] = [{ value: 'chart', label: '차트' }, { value: 'table', label: '표' }];
@@ -36,7 +34,7 @@ function hourCells(row: HourRow): Record<string, React.ReactNode> {
   const p = row.point;
   const q50 = p.kind === 'zero' ? ZERO_INPUT_CELL : p.q50 ? <Value v={p.q50} format={price} size="label" showUnit={false} /> : DASH;
   const band = p.band ? (
-    <Text variant="label" nowrap><Value v={p.band.q10} format={price} size="label" showUnit={false} />–<Value v={p.band.q90} format={price} size="label" showUnit={false} /></Text>
+    <Text variant="label" nowrap><Value v={p.band.q10} format={price} size="label" showUnit={false} />{rangeSep(p.band.q10.value, p.band.q90.value)}<Value v={p.band.q90} format={price} size="label" showUnit={false} /></Text>
   ) : DASH;
   // 확정 가격은 받은 시간에만(없으면 표는 "—", 행 카드는 그 조각을 뺀다).
   const confirmed = row.confirmed ? <Value v={row.confirmed} format={price} size="label" showUnit={false} /> : null;
@@ -61,7 +59,7 @@ export function ForecastCard({ view, chartLabel, now, onSelectHour, onToNow, onM
   const [fullDay, setFullDay] = useState(false);
   const chips = (list: readonly ChipSpec[]) => <ChipList chips={list} />;
   if (view.state === 'loading') {
-    return <Card title={TITLE} onMethod={onMethod} testID="today-forecast"><StateView kind="loading" minHeight={SKELETON_HEIGHT} /></Card>;
+    return <Card title={TITLE} onMethod={onMethod} testID="today-forecast"><StateView kind="loading" minHeight={SKELETON.forecast} /></Card>;
   }
   if (view.state === 'error') {
     return <Card title={TITLE} onMethod={onMethod} testID="today-forecast"><StateView kind="error" text={view.text} onRetry={onRetry} /></Card>;
@@ -84,9 +82,9 @@ export function ForecastCard({ view, chartLabel, now, onSelectHour, onToNow, onM
       <SegmentedControl label="보기 방식" options={MODES} value={mode} onChange={setMode} />
       {mode === 'chart' ? (
         <View style={styles.group}>
-          <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{keepTogether(view.legend, { variant: 'meta', tone: 'text2' })}</Text>
+          <ChartKey items={view.key} testID="today-chart-key" />
           <ChartBleed>
-            <StepChart forecast={view.view} label={chartLabel(view.kind)} now={now} dots={view.dots}
+            <StepChart forecast={view.view} label={chartLabel(view.kind)} now={now} dots={view.dots} withdrawn={view.dotsWithdrawn}
               selectedHour={view.selected} onSelectHour={onSelectHour} />
           </ChartBleed>
         </View>

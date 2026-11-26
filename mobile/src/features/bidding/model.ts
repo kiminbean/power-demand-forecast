@@ -71,7 +71,7 @@ export type DeadlineCardView = {
   countdown: string | null;
   /** 큰 숫자 위 줄: 마감 뒤에만 "다음 마감까지". */
   countdownLead: string | null;
-  /** "마감 11-26(목) 10:00 KST · 입찰일 11-27(금)" / 마감 뒤 "다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)". */
+  /** "마감 11-26(목) 10:00 KST · 거래일 11-27(금)" / 마감 뒤 "다음 마감 11-27(금) 10:00 KST · 거래일 11-28(토)". */
   when: string | null;
   /** 불일치·오류 문장. */
   note: string | null;
@@ -100,7 +100,7 @@ export type BiddingView = {
   /** 서버 상태와 계산이 어긋남(확인 조회 전후 모두 참). 화면이 즉시 한 번 다시 조회한다. */
   mismatch: boolean;
   calc: BidCardView;
-  /** 계산이 오래된 입력으로 만들어졌다(입찰일·예측일이 바뀜). 화면이 한 번 다시 계산한다. */
+  /** 계산이 오래된 입력으로 만들어졌다(거래일·예측일이 바뀜). 화면이 한 번 다시 계산한다. */
   calcStale: boolean;
   facts: Record<BiddingCardId, MethodFacts>;
   sources: SourceRowView[];
@@ -116,7 +116,7 @@ const validHour = (h: unknown): h is number => typeof h === 'number' && Number.i
 type MarketFacts = {
   /** 서버가 hours_remaining을 셈한 시각(current_time, 읽지 못하면 받은 시각). */
   ref: number; serverTime: number | null; status: 'open' | 'closed' | 'other'; trading: string | null;
-  /** 입찰일 하루 전 HH:MM(이번 마감)과 입찰일 HH:MM(마감 뒤의 다음 마감). */
+  /** 거래일 하루 전 HH:MM(이번 마감)과 거래일 HH:MM(마감 뒤의 다음 마감). */
   deadline: number | null; next: number | null; fetchedAt: number; raw: MarketStatus;
 };
 
@@ -195,7 +195,7 @@ function deadlineOf(input: BiddingInput, f: MarketFacts | null): { view: Deadlin
     };
   }
   if (f.status === 'closed') {
-    // 다음 마감은 입찰일(trading_date) 10:00이고 그 마감의 입찰일은 하루 뒤다(시장 규칙, round 1 integrity: 마감된 입찰일과 짝지어 읽혔다).
+    // 다음 마감은 거래일(trading_date) 10:00이고 그 마감의 거래일은 하루 뒤다(시장 규칙, round 1 integrity: 마감된 거래일과 짝지어 읽혔다).
     return {
       view: { phase: 'closed', pill: null, status: { tone: 'neutral', text: CLOSED_TODAY_TEXT }, ...base, countdown: nextCountdownText(f.next - now),
         countdownLead: NEXT_DEADLINE_LEAD,
@@ -213,7 +213,7 @@ function deadlineOf(input: BiddingInput, f: MarketFacts | null): { view: Deadlin
 }
 
 // ---------------------------------------------------------------- 예시 발전소 입찰 계산(4.2·7.8절)
-/** 오래된 입력(4.2절): 계산의 입찰일이 시장 상태의 입찰일과 다르거나, 계산을 받은 뒤 기준선 예측일이 바뀌었다. */
+/** 오래된 입력(4.2절): 계산의 거래일이 시장 상태의 거래일과 다르거나, 계산을 받은 뒤 기준선 예측일이 바뀌었다. */
 export function calcInputStale(input: Pick<BiddingInput, 'market' | 'calc' | 'forecast' | 'calcForecastDate'>): boolean {
   const calc = input.calc.data;
   if (!calc) return false;
@@ -235,9 +235,9 @@ function calcError(error: unknown): BidCardView {
 }
 
 /**
- * 가격 근거 공개 줄(7.8절 2): 계산의 입찰일이 기준선 예측일과 다르고, 보이는 시간의 계산기 q50이 같은 예측의 q50과 0.05 안이면
- * "가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이". 백엔드가 D+1 기준선을 주면(P5) 저절로 사라진다.
- * 예측을 받지 못했으면 확인할 수 없다는 것을 그대로 쓴다(round 1 D5): "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27".
+ * 가격 근거 공개 줄(7.8절 2): 계산의 거래일이 기준선 예측일과 다르고, 보이는 시간의 계산기 q50이 같은 예측의 q50과 0.05 안이면
+ * "가격 근거: 11-26 기준선(=11-25 확정 가격) · 거래일 11-27과 하루 차이". 백엔드가 D+1 기준선을 주면(P5) 저절로 사라진다.
+ * 예측을 받지 못했으면 확인할 수 없다는 것을 그대로 쓴다(round 1 D5): "가격 근거 확인 전 · 서버 기준선 예측 사용 · 거래일 11-27".
  * 받는 중이면 아무것도 쓰지 않는다(받으면 줄이 생긴다).
  */
 function priceBasis(seg: SegmentsView, hour: HourBidView, forecast: SmpForecast | null, failed: boolean): string | null {

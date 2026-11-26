@@ -3,7 +3,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Text as RNText } from 'react-native';
-import { LAYOUT, SPACE } from './tokens';
+import { LAYOUT, SPACE, TYPE_SCALE } from './tokens';
 import { Button } from './Button';
 import { Text, keepTogether, labelData } from './Text';
 import { web } from './web';
@@ -42,10 +42,12 @@ export function Screen({ title, pill, answer, children, headingRef, scrollRef, t
  * 5초 문장(15/500 text1). 화면 view model이 데이터 상태로 만든 글자를 그대로 받는다. 숫자는 바로 아래 카드 값과 같은 포맷 결과라서
  * (view model이 같은 값·같은 함수로 만든다) 문장 전체를 data-pd-meta="answer"로 둔다(I2: 카드 밖 숫자는 메타 안에만).
  */
-export function AnswerLine({ children }: { children: React.ReactNode }) {
+export function AnswerLine({ children, minLines }: { children: React.ReactNode; minLines?: number }) {
   // 글자로 오면 값+단위·시각·짧은 괄호를 한 줄로 묶는다(keepTogether, round 1: "684" / "MW"가 갈라짐).
   const body = typeof children === 'string' ? keepTogether(children, { variant: 'body', weight: '500' }) : children;
-  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true', pdMeta: 'answer' }}>{body}</Text>;
+  // minLines: 불러오는 동안 다 받은 문장의 줄 수만큼 자리를 잡는다(round 2: 한 줄에서 두세 줄로 늘며 아래 카드가 모두 밀렸다).
+  const reserve = minLines ? { minHeight: minLines * TYPE_SCALE.body.lineHeight } : null;
+  return <Text variant="body" weight="500" style={reserve} dataSet={{ pdAnswer: 'true', pdMeta: 'answer' }}>{body}</Text>;
 }
 
 /** 한국어 오류 화면: h1 + [다시 불러오기]. 콘솔에 쓰지 않는다(7.10절). */

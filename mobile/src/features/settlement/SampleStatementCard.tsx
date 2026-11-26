@@ -5,6 +5,7 @@
 // ① 행은 두 줄 · ② 행은 한 줄로 섞여서 폭 구간으로 정한다. 둘러보기 4단계(F10)도 이 카드를 그대로 쓴다.
 // StatementFigure는 ①+② 식 그림(폭포)이다. round 1 D14: 1280 패널에만 있던 그림을 모든 폭에서 이 카드 안에 둔다(768 정산 화면이 반쯤
 // 비었다). 빈 상자 둘과 머리카락 선처럼 보이지 않게 ①·합계는 예시 호박색으로 채우고 ②는 진한 호박색 칸으로 내려간다. y는 0부터다.
+// round 2: 채움은 두 테마에서 같은 호박색 한 벌(SERIES.exampleFill·exampleMark), 외곽선만 테마별(chart.exampleEdge, 3:1).
 import React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { settlementView } from './model';
@@ -24,8 +25,8 @@ const TITLE = CARD_TITLES['settle-sample'];
 const whole = (v: number) => num(v, 0);
 /** 정산 예시 금액은 만원 단위로 떨어진다: "1,800만원"(4.3절). */
 const manwon = (v: number) => krw(v, 0);
-/** 그림 치수: 막대 칸 높이(②의 −84만원도 5 px 넘게 보인다), 막대 바닥 높이, 칸 안 막대 좌우 여백. */
-const FIGURE = { plot: 112, minBar: 3, inset: '18%' } as const;
+/** 그림 치수: 막대 칸 높이(round 2: 112 → 80, 표를 되풀이하는 그림이 약 250 px였다), 막대 바닥 높이, 칸 안 막대 좌우 여백. */
+const FIGURE = { plot: 80, minBar: 3, inset: '18%' } as const;
 /** 정산서 행을 한 줄로 두는 폭(4.6절 폭 구간: 600 미만은 휴대폰). 시트가 가운데로 오는 폭과 같은 경계다. */
 const ONE_LINE_FROM = LAYOUT.sheetCenterFrom;
 
@@ -66,8 +67,6 @@ export function SampleStatementCard({ onMethod }: { onMethod?: () => void }) {
 /** ①+② 식 그림: 위 줄은 "1,800만원 + −84만원 = 1,716만원", 아래는 막대(②는 ①의 끝에서 내려가는 칸), 칸 이름. 이름은 식 문장. */
 export function StatementFigure({ view }: { view: SettlementView }) {
   const { theme } = useTheme();
-  const ink = theme.chip.example;
-  const fill = theme.chart.exampleFill;
   const { bars, top, summary } = view.figure;
   const px = (v: number) => (top > 0 ? Math.round((v / top) * FIGURE.plot) : 0);
   return (
@@ -80,8 +79,8 @@ export function StatementFigure({ view }: { view: SettlementView }) {
               <Text variant="meta" weight="600" tone="text2" nowrap dataSet={{ pdExample: 'true' }}>{manwon(b.amount.value)}</Text>
               <View style={[styles.plot, { borderBottomColor: theme.color.borderStrong }]}>
                 <View testID="settle-figure-bar" style={[styles.bar, {
-                  bottom: px(b.from), height: Math.max(FIGURE.minBar, px(b.to) - px(b.from)), borderColor: ink.text,
-                  backgroundColor: b.id === 'deviation' ? theme.chart.exampleMark : fill,
+                  bottom: px(b.from), height: Math.max(FIGURE.minBar, px(b.to) - px(b.from)), borderColor: theme.chart.exampleEdge,
+                  backgroundColor: b.id === 'deviation' ? theme.series.exampleMark : theme.series.exampleFill,
                 }]} />
               </View>
               <Text variant="meta" tone="text3" style={styles.center}>{b.label}</Text>

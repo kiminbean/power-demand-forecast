@@ -2,8 +2,7 @@
 // 막대 위에 낙찰 가능성(추정) 글자 12 px. 360 미만에서는 1·4·7·10구간 글자만 보인다(표에는 전부 있다).
 // round 1 D12: 막대는 채우지 않고 외곽선 + ▨ 추정 칩과 같은 빗금으로 그린다(10개 단색 막대가 한 덩어리로 읽혔고, 자홍은 오늘 차트의 예측
 // 색이었다). 그 시간 기준선은 자홍 점선, 80% 구간은 옅은 띠로 깔아 어느 구간이 기준선 아래인지 보인다. 고른 구간만 primary로 채운다.
-// 단위 옆에 "막대 위 % = 낙찰 가능성(추정)". 불투명도로 확률을 나타내지 않는다. role=img + 요약 이름, ←/→/Home/End와 누름으로 고른다.
-import React from 'react';
+// 단위 옆에 "계단 위 % = 낙찰 가능성(추정)"(round 2: 같은 그림을 계단 한 이름으로). 불투명도로 확률을 나타내지 않는다. role=img + 요약 이름, ←/→/Home/End와 누름으로 고른다.
 import { View, useWindowDimensions } from 'react-native';
 import { Defs, Line, Rect, Svg } from 'react-native-svg';
 import { CHART, LAYOUT } from '../tokens';
@@ -81,7 +80,7 @@ export function LadderChart({ hour, label, selected = null, onSelect, width: fix
           {band ? (
             <Rect testID="ladder-band" x={r2(plot.left)} y={r2(yOf(band.q90, scale, plot))} width={r2(plot.width)}
               height={r2(Math.max(0, yOf(band.q10, scale, plot) - yOf(band.q90, scale, plot)))} fill={theme.series.band}
-              stroke={theme.series.bandEdge} strokeWidth={CHART.axis} />
+              stroke={theme.series.bandEdge} strokeWidth={CHART.axis} strokeDasharray={CHART.bandDash} />
           ) : null}
           {bars.map(b => {
             const on = b.index === current;

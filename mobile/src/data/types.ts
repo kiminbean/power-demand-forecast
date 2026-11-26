@@ -4,7 +4,7 @@ export class ApiShapeError extends Error {
   readonly endpoint: string;
   readonly path: string;
   constructor(endpoint: string, path: string, expected: string) {
-    super(`API 응답 모양이 다릅니다: ${endpoint} ${path} (${expected})`);
+    super(`API response shape: ${endpoint} ${path} (${expected})`);
     this.name = 'ApiShapeError';
     this.endpoint = endpoint;
     this.path = path;
@@ -98,7 +98,8 @@ export function parseKpis(json: unknown): DashboardKpis {
 }
 
 export type PowerSupplyRow = { hour: number; supply: number | null; demand: number | null };
-export type PowerSupply = { current_hour: number | null; data: PowerSupplyRow[] };
+/** data_source: 공급능력이 실시간 값으로 맞춘 것인지 밝히는 글자(round 2 integrity, provenance.supplyPair가 읽는다). */
+export type PowerSupply = { current_hour: number | null; data: PowerSupplyRow[]; data_source: string | null };
 export function parsePowerSupply(json: unknown): PowerSupply {
   const c = { endpoint: '/api/v1/power-supply' };
   const r = rec(json, c, '$');
@@ -106,7 +107,7 @@ export function parsePowerSupply(json: unknown): PowerSupply {
     const x = rec(row, c, `data[${i}]`);
     return { hour: int(x.hour, c, `data[${i}].hour`), supply: numOrNull(x.supply, c, `data[${i}].supply`), demand: numOrNull(x.demand, c, `data[${i}].demand`) };
   });
-  return { current_hour: intOrNull(r.current_hour, c, 'current_hour'), data };
+  return { current_hour: intOrNull(r.current_hour, c, 'current_hour'), data, data_source: strOrNull(r.data_source, c, 'data_source') };
 }
 
 export type MarketStatus = {

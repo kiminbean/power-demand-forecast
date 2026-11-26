@@ -19,10 +19,11 @@ import { CHIPS } from '../../lib/provenance';
 import { appResources, shouldLoadOnMount, useRefreshWhileVisible, useResource } from '../../lib/resource';
 import type { Resource } from '../../lib/resource';
 import {
-  BIDDING_EXAMPLE_NOTE, BIDDING_PANEL_METHOD, BIDDING_TERMS, MY_PLANT_BODY, MY_PLANT_TITLE, legendPlantText, legendProbabilityText,
+  BIDDING_EXAMPLE_NOTE, BIDDING_TERMS, MY_PLANT_BODY, MY_PLANT_TITLE, legendPlantText, legendProbabilityText,
   legendRuleText,
 } from '../../content/strings';
-import { LiveFacts } from '../guide/sheets';
+import { GuideGate, LiveFacts } from '../guide/sheets';
+import type { GuideContent } from '../../content/guide';
 import { ReadingPanelBody } from '../today/TodayParts';
 import { calcKey, calcLoader } from './calculator';
 import { biddingView, riskOf } from './model';
@@ -31,7 +32,7 @@ import { DeadlineCard } from './DeadlineCard';
 import { MeritOrderCard } from './MeritOrderCard';
 import { SampleBidCard } from './SampleBidCard';
 import { RestrictedCard } from '../../ui/Card';
-import { NowPill, ProvenanceChip } from '../../ui/Chips';
+import { ClockPills } from '../../ui/Chips';
 import { AnswerLine, Screen } from '../../ui/Screen';
 import { Text } from '../../ui/Text';
 import { SPACE } from '../../ui/tokens';
@@ -102,7 +103,7 @@ export default function BiddingTab() {
     reloadMarket().finally(() => setRecheck('done'));
   }, [view.mismatch, recheck, reloadMarket]);
 
-  // 계산이 오래된 입력(입찰일·예측일이 바뀜)이면 한 번 다시 계산한다. 그동안 카드는 스켈레톤이다.
+  // 계산이 오래된 입력(거래일·예측일이 바뀜)이면 한 번 다시 계산한다. 그동안 카드는 스켈레톤이다.
   useEffect(() => {
     if (!view.calcStale) {
       if (staleFor === key) setStaleFor(null);
@@ -135,12 +136,7 @@ export default function BiddingTab() {
   const openMethod = (card: BiddingCardId) => () => nav.openSheet({ kind: 'method', card });
   const openSources = (row: SourceRow) => () => nav.openSheet({ kind: 'sources', row });
 
-  const pill = (
-    <View style={styles.pills}>
-      <NowPill now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
-    </View>
-  );
+  const pill = <ClockPills now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} skew={skew} />;
   const answer = (
     <View style={styles.answer}>
       <AnswerLine>{view.answer}</AnswerLine>
@@ -173,8 +169,11 @@ export function useBiddingSourceRows() {
   return useBiddingView(false).view.sources;
 }
 
-/** ≥ 1280 "입찰 읽는 법" 패널(4.2·4.6절): 이 화면의 표시 예 · 용어 3개 · 읽는 법 3줄. */
-export function BiddingPanel() {
+/**
+ * ≥ 1280 "입찰 읽는 법" 패널(4.2·4.6절): 이 화면의 표시 예 · 용어 3개 · 읽는 법 3줄. content: 이미 받은 설명 글(시험이 넘긴다), 없으면
+ * GuideGate가 받는다.
+ */
+export function BiddingPanel({ content }: { content?: GuideContent }) {
   const { view } = useBiddingView(false);
   const nav = useNav();
   const legend = [
@@ -182,10 +181,13 @@ export function BiddingPanel() {
     { chip: CHIPS.estShort, text: legendProbabilityText(view.legend.probability) },
     { chip: CHIPS.exampleVirtual, text: legendPlantText(view.legend.capacityMw) },
   ];
-  return <ReadingPanelBody legend={legend} terms={BIDDING_TERMS} method={BIDDING_PANEL_METHOD} onTerm={id => nav.openSheet({ kind: 'term', id })} testID="bidding-panel" />;
+  // 읽는 법 문장은 guide.ko.json(panels.bidding, round 2 번들).
+  const body = (c: GuideContent) => (
+    <ReadingPanelBody legend={legend} terms={BIDDING_TERMS} method={c.panels.bidding} onTerm={id => nav.openSheet({ kind: 'term', id })} testID="bidding-panel" />
+  );
+  return content ? body(content) : <GuideGate>{body}</GuideGate>;
 }
 
 const styles = StyleSheet.create({
-  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
   answer: { gap: SPACE.xs },
 });

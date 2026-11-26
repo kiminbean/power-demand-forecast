@@ -1,13 +1,12 @@
 // 오늘 화면이 시트와 패널에 넘기는 것(명세 4.1·4.4·4.6절): 산출 방식 시트의 "이번 화면의 값", 출처와 기준 시각 표의 오늘 행(다른 화면이
 // 넘기는 행을 뒤에 붙인다), ≥ 1280 "오늘 화면 읽는 법" 패널. App.tsx와 알아보기가 쓴다. 산출 방식·패널은 엿보기만 하고, 출처 표는 이번
 // 방문에 아직 없는 행의 자료를 받는다(round 1 D15).
-import React from 'react';
 import { useSourceRowsLoad, useTodayView } from './data';
 import type { TodayCardId } from './model';
 import { TodayPanelBody } from './TodayParts';
 import { useNav } from '../../app/Shell';
 import type { MethodCard, SourceRow } from '../../app/routes';
-import { LiveFacts, SourcesTable } from '../guide/sheets';
+import { GuideGate, LiveFacts, SourcesTable } from '../guide/sheets';
 import type { SourceRowItem } from '../guide/sheets';
 
 const isTodayCard = (card: MethodCard): card is TodayCardId => card.startsWith('today-');
@@ -34,5 +33,5 @@ export function TodaySourcesSheet({ row, extra = [], page }: { row: SourceRow | 
 export function TodayPanel() {
   const { view } = useTodayView(false);
   const nav = useNav();
-  return <TodayPanelBody legend={view.legend} onTerm={id => nav.openSheet({ kind: 'term', id })} />;
+  return <GuideGate>{c => <TodayPanelBody legend={view.legend} text={c.panels} onTerm={id => nav.openSheet({ kind: 'term', id })} />}</GuideGate>;
 }

@@ -219,7 +219,7 @@ test('범위 막대 계산(4.1절): 0…공급능력, 수요 끝, 경계 = 공�
   assert.equal(strings.supplyFormulaText(1191, 664, 527), '공급능력 1,191 MW − 수요 664 MW = 예비력 527 MW');
   assert.equal(strings.boundaryText(1191 / 1.15), '수요가 1,036 MW를 넘으면 예비율 15% 미만');
   assert.equal(strings.boundaryRuleText(), '넘으면 예비율 15% 미만');
-  assert.doesNotMatch(strings.boundaryText(1191 / 1.15) + strings.TODAY_PANEL_METHOD.join(' '), /관심|경계|주의|심각/);
+  assert.doesNotMatch(strings.boundaryText(1191 / 1.15) + strings.todayReserveLine(), /관심|경계|주의|심각/);
 });
 
 test('키·라벨 자리: ←/→는 양 끝에서 멈춤, Home·End, 라벨 상자는 차트 밖으로 나가지 않는다', () => {
@@ -268,12 +268,16 @@ test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·�
   const [band] = byTestId(root, 'step-band');
   assert.deepEqual([band.props.fill, band.props.stroke, ui.tokens.SERIES.band], [ui.tokens.SERIES.band, ui.tokens.SERIES.bandEdge, 'rgba(192,38,211,.08)'],
     '띠는 8 % 면 + 1 px 테두리(D10)');
-  // 띠가 그림 위(300)를 넘는 시간마다 맨 위에 ▲ 하나, 띠 경로는 그림 안에서 잘린다.
+  // 띠가 그림 위(300)를 넘는 시간마다 ▲ 하나(round 2: 그림 밖 위쪽 줄, 꼭짓점이 위), 띠 경로는 그림 안에서 잘리고 끝은 흐린다.
   const over = FORECAST.q90.slice(0, 24).filter((v, i) => FORECAST.q50[i] > 0 && v > 300).length;
   assert.ok(over > 0, '양성 대조: 스냅숏의 띠는 300을 넘는다');
   const marks = byTestId(root, 'step-clipped');
   assert.equal(marks.length, over);
-  marks.forEach(mk => assert.match(mk.props.d, new RegExp(`L[\\d.]+ ${py}L`), '▲ 꼭짓점은 그림 맨 위'));
+  marks.forEach(mk => {
+    const ys = [...mk.props.d.matchAll(/[ML][\d.]+ ([\d.]+)/g)].map(x => Number(x[1]));
+    assert.ok(Math.max(...ys) < py && Math.min(...ys) > py - ui.tokens.CHART.clipRow && ys[1] < ys[0], `▲는 그림 밖 위쪽 줄, 꼭짓점이 위: ${mk.props.d}`);
+  });
+  assert.ok(byTestId(root, 'step-fade').length > 0, '잘린 띠 끝을 흐린다');
   const ys = [...band.props.d.matchAll(/[MV]([-\d.]+)(?: ([-\d.]+))?/g)].map(m => Number(m[2] ?? m[1])).filter(Number.isFinite);
   assert.ok(Math.min(...ys.filter(y => y > 1)) >= py - 0.01, '띠는 그림 위로 나가지 않는다');
   const [dot] = byTestId(root, 'step-confirmed');
@@ -282,6 +286,32 @@ test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·�
   // 라벨 상자는 모두 차트 상자 안이다(가로 넘침 0).
   all(root, n => n.type === 'View' && flat(n.props.style).position === 'absolute' && typeof flat(n.props.style).width === 'number')
     .forEach(v => { const s = flat(v.props.style); assert.ok(s.left >= 0 && s.left + s.width <= 358 + 0.01, JSON.stringify(s)); });
+});
+
+test('StepChart 아래로 넘친 띠(round 2 integrity): q10 < 0인 시간마다 축 위 ▼, 띠 아래쪽 끝은 흐리고, 끊김이면 확정 가격 점은 속이 빈다', () => {
+  const ui = load();
+  const q10 = FORECAST.q10.slice();
+  q10[12] = -11.09; // 13h(12–13시), 라이브 /smp-forecast에서 본 값
+  q10[13] = -0.98;
+  const fc = ui.adapters.adaptForecast(ui.types.parseForecast({ ...FORECAST, q10 }));
+  const { confirmed } = views(ui);
+  const root = tree(h(ui.StepChart, { forecast: fc, label: '기준선 예측 SMP 24시간', now: NOW, width: 358, dots: [confirmed], withdrawn: true })).children[0];
+  const [px, py, pw, ph] = root.props.dataSet.pdPlot.split(' ').map(Number);
+  const low = byTestId(root, 'step-clipped-low');
+  assert.equal(low.length, 2);
+  low.forEach(mk => {
+    const ys = [...mk.props.d.matchAll(/[ML][\d.]+ ([\d.]+)/g)].map(x => Number(x[1]));
+    assert.ok(close(ys[1], py + ph) && ys[0] < ys[1], `▼ 꼭짓점이 축: ${mk.props.d}`);
+  });
+  assert.ok(close(Number(/^M([\d.]+)/.exec(low[0].props.d)[1]) + ui.tokens.CHART.clipMark / 2, px + (12.5 / 24) * pw), '13h 가운데');
+  const [dot] = byTestId(root, 'step-confirmed');
+  assert.deepEqual([dot.props.fill, dot.props.stroke], [ui.tokens.THEMES.light.color.surface, ui.tokens.THEMES.light.color.text1], '끊김: 속 빈 점');
+  // 범례: 띠 항목이 아래쪽 잘림을 말한다(위로 넘친 시간도 있으면 둘 다).
+  const key = ui.strings.forecastKeyItems('baseline', { top: true, bottom: true }, 'ring', true);
+  assert.deepEqual(key.map(k => k.swatch), ['dash', 'band', 'ring', 'line']);
+  assert.equal(key[1].text, '80% 구간(▲▼ 잘림)');
+  assert.equal(ui.strings.forecastKeyItems('baseline', { top: false, bottom: true }, 'dot', true)[1].text, '80% 구간(▼ 아래쪽 잘림)');
+  assert.deepEqual(ui.strings.forecastKeyItems('fallback', { top: false, bottom: false }, null, false).map(k => k.text), ['API 대체값(모델 예측 아님)']);
 });
 
 test('StepChart 상호작용: 초점·키·누름은 onSelectHour가 있을 때만, 응답자·터치 처리기 없음(세로 끌기 = 페이지 스크롤)', () => {
@@ -388,7 +418,7 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
     assert.ok(close(baseline.props.x1, px2) && close(baseline.props.x2, px2 + pw2));
     const [band] = byTestId(root, 'ladder-band');
     assert.ok(close(band.props.y, py2 + ((250 - hour.baselineBand.q90) / 250) * ph2) && band.props.fill === ui.tokens.SERIES.band);
-    assert.deepEqual(metaTexts(root, 'caption'), ['막대 위 % = 낙찰 가능성(추정)']);
+    assert.deepEqual(metaTexts(root, 'caption'), ['계단 위 % = 낙찰 가능성(추정)']);
     all(root, n => n.type === 'Text').forEach(t => assert.ok(flat(t.props.style).fontSize >= 12));
     const key = k => ({ key: k, preventDefault: () => {} });
     root.props.onKeyDown(key('ArrowRight'));

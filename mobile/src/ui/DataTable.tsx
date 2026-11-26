@@ -83,8 +83,9 @@ export function DataTable({ caption, columns, rows, testID, fit = false, cellMin
       </View>
       {rows.map(row => (
         <View key={row.key} role="row" style={[styles.row, rowLook(row)]} {...current(row)}>
-          {columns.map(column => (
-            <View key={column.key} role="cell" style={[styles.cell, width(column), column.align === 'right' ? styles.right : null]}>
+          {/* 첫 열(시간대·거래시간·구간·항목)은 행 머리(round 2: 칸을 옮겨 다니면 값마다 그 행 이름을 함께 읽는다). */}
+          {columns.map((column, i) => (
+            <View key={column.key} role={i === 0 ? 'rowheader' : 'cell'} style={[styles.cell, width(column), column.align === 'right' ? styles.right : null]}>
               {/* 글자 칸도 줄바꿈 단위(keepTogether)를 지킨다: "밤·아침 00–" / "08시"처럼 시각 범위가 갈리지 않게(round 1). */}
               {text(column, row.cells[column.key] ?? DASH)}
             </View>

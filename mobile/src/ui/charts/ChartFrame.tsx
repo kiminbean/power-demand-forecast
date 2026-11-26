@@ -4,12 +4,14 @@ import { useCallback, useId, useState } from 'react';
 import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
-import { Pattern, Rect } from 'react-native-svg';
-import { CHART, LAYOUT, TYPE_SCALE } from '../tokens';
+import { Circle, Defs, Line, Pattern, Rect, Svg } from 'react-native-svg';
+import { CHART, LAYOUT, SPACE, TYPE_SCALE } from '../tokens';
 import type { FontWeight } from '../tokens';
 import { CARD_BORDER, cardPadding } from '../Card';
-import { Text } from '../Text';
+import { Text, keepTogether } from '../Text';
 import type { TextTone } from '../Text';
+import { useTheme } from '../../app/theme';
+import type { KeyItem, KeySwatch } from '../../content/strings';
 import { keyOf, prevent, web, webStyle } from '../web';
 import { keyStep } from './chartMath';
 
@@ -65,6 +67,51 @@ export function ChartLabel({ text, left, top, width, meta, align = 'center', ton
   );
 }
 
+/**
+ * 범례 기호 하나(16×12): 차트와 같은 색·선 모양을 상자에 맞게 줄였다(CHART.key*). 테두리가 있는 꼴은 선 굵기의 반만큼 안으로 들여 잘리지
+ * 않게 하고, 속 빈 점은 테두리 바깥이 채운 점과 같은 크기다.
+ */
+function KeySwatchSvg({ kind, hatchId }: { kind: KeySwatch; hatchId: string }) {
+  const { theme } = useTheme();
+  const c = theme.color;
+  const w = CHART.keyW;
+  const h = CHART.keyH;
+  const mid = h / 2;
+  const bandIn = CHART.axis / 2;
+  const hatchIn = CHART.barStrokeLadder / 2;
+  return (
+    <Svg width={w} height={h}>
+      {kind === 'hatch' ? <Defs><Hatch id={hatchId} color={theme.chip.estimated.hatch ?? c.border} /></Defs> : null}
+      {kind === 'dash' ? <Line x1={0} x2={w} y1={mid} y2={mid} stroke={theme.series.smp} strokeWidth={CHART.line} strokeDasharray={CHART.keyDash} /> : null}
+      {kind === 'band' ? <Rect x={bandIn} y={(h - CHART.keyBand) / 2} width={w - 2 * bandIn} height={CHART.keyBand} fill={theme.series.band}
+        stroke={theme.series.bandEdge} strokeWidth={CHART.axis} strokeDasharray={CHART.bandDash} /> : null}
+      {kind === 'dot' ? <Circle cx={w / 2} cy={mid} r={CHART.keyDot} fill={c.text1} /> : null}
+      {kind === 'ring' ? <Circle cx={w / 2} cy={mid} r={CHART.keyDot - CHART.dotRing / 2} fill={c.surface} stroke={c.text1} strokeWidth={CHART.dotRing} /> : null}
+      {kind === 'line' ? <Line x1={w / 2} x2={w / 2} y1={0} y2={h} stroke={c.borderStrong} strokeWidth={CHART.nowLine} /> : null}
+      {kind === 'hatch' ? <Rect x={hatchIn} y={hatchIn} width={w - 2 * hatchIn} height={h - 2 * hatchIn} fill={`url(#${hatchId})`} stroke={c.borderStrong}
+        strokeWidth={CHART.barStrokeLadder} /> : null}
+    </Svg>
+  );
+}
+
+/**
+ * 차트 위 한 줄 범례(round 2 parity: 기호를 문장으로 풀던 세 줄을 기호 + 이름으로). 기호는 장식이라 숨기고, 이름은 메타 글자다(숫자가 들 수
+ * 있다, I2). 항목 사이에서만 줄이 바뀐다. 그림의 뜻은 차트 이름(role=img 요약)과 표 보기가 따로 준다.
+ */
+export function ChartKey({ items, testID }: { items: readonly KeyItem[]; testID?: string }) {
+  const hatchId = useSvgId('pd-key');
+  return (
+    <View style={styles.key} testID={testID}>
+      {items.map(it => (
+        <View key={it.swatch} style={styles.keyItem}>
+          <View aria-hidden importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><KeySwatchSvg kind={it.swatch} hatchId={hatchId} /></View>
+          <Text variant="meta" tone="text2" style={styles.keyText} dataSet={{ pdMeta: 'legend' }}>{keepTogether(it.text, { variant: 'meta', tone: 'text2' })}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** 차트를 카드 안쪽 여백과 테두리 끝까지 넓혀 카드 폭으로 그린다. Card의 바로 아래 자식으로 둔다. */
 export function ChartBleed({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
@@ -101,6 +148,9 @@ export const chartStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  key: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: SPACE.md, rowGap: SPACE.xs },
+  keyItem: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, maxWidth: '100%' },
+  keyText: { flexShrink: 1, minWidth: 0 },
   label: { position: 'absolute', height: LABEL_HEIGHT, justifyContent: 'center' },
   left: { alignItems: 'flex-start' },
   center: { alignItems: 'center' },

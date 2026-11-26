@@ -70,7 +70,7 @@ function inputFor(m, id, { withForecast = false, advanceMs = 0, failAfter = fals
 const viewOf = (m, id, opts) => m.model.biddingView(inputFor(m, id, opts));
 const chipText = (m, c) => (c.chip ? m.provenance.chipText(c.chip) : c.text);
 
-/** 서버(api/v6_routes.py get_market_status)가 그 순간에 보낼 시장 상태: 10시 전 open, 입찰일은 내일, 남은 시간은 다음 10:00까지. */
+/** 서버(api/v6_routes.py get_market_status)가 그 순간에 보낼 시장 상태: 10시 전 open, 거래일은 내일, 남은 시간은 다음 10:00까지. */
 function marketAt(m, t) {
   const p = m.kst.kstParts(t);
   const pad = n => String(n).padStart(2, '0');
@@ -87,11 +87,11 @@ const at = (m, t, data, rest = {}) => m.model.biddingView({
 });
 
 // ---------------------------------------------------------------- 1. 하루전 마감 상태 기계(4.2절 상태표)
-test('06:03:57 접수 중: 3시간 56분 · 마감 11-26(목) 10:00 KST · 입찰일 11-27(금) · 다음 구간 06:15 · 서버 시각 출처', () => {
+test('06:03:57 접수 중: 3시간 56분 · 마감 11-26(목) 10:00 KST · 거래일 11-27(금) · 다음 구간 06:15 · 서버 시각 출처', () => {
   const m = load();
   const v = viewOf(m, 'bidding-base');
   const d = v.deadline;
-  assert.deepEqual([d.phase, d.countdown, d.when, d.pill], ['open', '3시간 56분 남음', '마감 11-26(목) 10:00 KST · 입찰일 11-27(금)', { tone: 'ok', text: '접수 중' }]);
+  assert.deepEqual([d.phase, d.countdown, d.when, d.pill], ['open', '3시간 56분 남음', '마감 11-26(목) 10:00 KST · 거래일 11-27(금)', { tone: 'ok', text: '접수 중' }]);
   // round 1 멘토: 출처 줄이 이미 "API 서버 시장 상태"라 "(API 기준)"을 뺐다.
   assert.equal(d.rtm, '실시간시장은 15분 단위입니다 · 다음 구간 06:15 KST');
   assert.equal(d.status, null, '접수 중에는 제목 옆 상태 없음(pill은 카운트다운 아래)');
@@ -103,7 +103,7 @@ test('06:03:57 접수 중: 3시간 56분 · 마감 11-26(목) 10:00 KST · 입�
   assert.ok(!JSON.stringify(d).includes('"15분"'));
 });
 
-test('09:20 마감 임박 · 09:59:30 1분 미만 · 10:00:30·10:01 마감: 다음 마감까지 큰 숫자 · 제목 옆 «오늘 마감됨» · 다음 마감의 입찰일(D13)', () => {
+test('09:20 마감 임박 · 09:59:30 1분 미만 · 10:00:30·10:01 마감: 다음 마감까지 큰 숫자 · 제목 옆 «오늘 마감됨» · 다음 마감의 거래일(D13)', () => {
   const m = load();
   const soon = viewOf(m, 'bidding-imminent-0920');
   assert.deepEqual([soon.deadline.phase, soon.deadline.countdown, soon.deadline.pill], ['imminent', '40분 남음', { tone: 'watch', text: '마감 임박' }]);
@@ -112,9 +112,9 @@ test('09:20 마감 임박 · 09:59:30 1분 미만 · 10:00:30·10:01 마감: 다
   assert.deepEqual([last.deadline.phase, last.deadline.countdown], ['imminent', '1분 미만 남음'], '"0분"이라 쓰지 않는다');
   assert.match(last.answer, /마감까지 1분 미만 남았습니다\(마감 임박\)\.$/);
   for (const view of [at(m, KST(2026, 11, 26, 10, 0, 30), marketAt(m, KST(2026, 11, 26, 10, 0, 30))), viewOf(m, 'bidding-closed-1001')]) {
-    // 하루 14시간 동안 큰 숫자가 없던 카드(round 1 parity): 서버 시각으로 맞춘 지금에서 다음 마감(입찰일 11-27 10:00)까지.
+    // 하루 14시간 동안 큰 숫자가 없던 카드(round 1 parity): 서버 시각으로 맞춘 지금에서 다음 마감(거래일 11-27 10:00)까지.
     assert.deepEqual([view.deadline.phase, view.deadline.countdownLead, view.deadline.countdown, view.deadline.when, view.deadline.pill, view.deadline.status],
-      ['closed', '다음 마감까지', '23시간 59분', '다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)', null, { tone: 'neutral', text: '오늘 마감됨' }]);
+      ['closed', '다음 마감까지', '23시간 59분', '다음 마감 11-27(금) 10:00 KST · 거래일 11-28(토)', null, { tone: 'neutral', text: '오늘 마감됨' }]);
     assert.equal(view.answer, '오늘 입찰은 마감됐습니다. 다음 마감은 내일 오전 10시입니다.');
   }
   const night = at(m, KST(2026, 11, 26, 23, 59, 30), marketAt(m, KST(2026, 11, 26, 23, 59, 30)));
@@ -150,7 +150,7 @@ test('불일치(hours_remaining 1.0 대 3.9 · 10:00:30인데 open): 한 번 다
     assert.deepEqual([done.deadline.phase, done.deadline.pill, done.deadline.countdown], ['mismatch', { tone: 'ok', text: '접수 중' }, null], id);
     assert.deepEqual(done.deadline.chips.map(c => chipText(m, c)), ['시장 규칙 · 서버 시각', '시각 확인 필요'], id);
     assert.equal(done.answer, '입찰 마감 시각을 확인하지 못해 남은 시간을 표시하지 않습니다.', id);
-    assert.equal(done.deadline.when, '마감 11-26(목) 10:00 KST · 입찰일 11-27(금)', id);
+    assert.equal(done.deadline.when, '마감 11-26(목) 10:00 KST · 거래일 11-27(금)', id);
   }
   // 허용 차이 0.2시간 안(서버가 소수 첫째 자리로 반올림): 09:20의 0.7 대 0.667은 불일치가 아니다.
   assert.equal(viewOf(m, 'bidding-imminent-0920').mismatch, false);
@@ -187,10 +187,10 @@ test('같은 순간은 TZ=UTC·Asia/Seoul·America/Los_Angeles에서 같은 단�
   const results = Object.fromEntries(['UTC', 'Asia/Seoul', 'America/Los_Angeles'].map(tz => [tz, run(tz)]));
   assert.notEqual(results.UTC[0].localHour, results['Asia/Seoul'][0].localHour, '양성 대조: 기기 시간대가 실제로 바뀌었다');
   const expected = [
-    { phase: 'open', countdown: '3시간 56분 남음', when: '마감 11-26(목) 10:00 KST · 입찰일 11-27(금)', next: '06:15' },
-    { phase: 'imminent', countdown: '1분 미만 남음', when: '마감 11-26(목) 10:00 KST · 입찰일 11-27(금)', next: '10:00' },
-    { phase: 'closed', countdown: '23시간 59분', when: '다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)', next: '10:15' },
-    { phase: 'closed', countdown: '10시간', when: '다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)', next: '00:00' },
+    { phase: 'open', countdown: '3시간 56분 남음', when: '마감 11-26(목) 10:00 KST · 거래일 11-27(금)', next: '06:15' },
+    { phase: 'imminent', countdown: '1분 미만 남음', when: '마감 11-26(목) 10:00 KST · 거래일 11-27(금)', next: '10:00' },
+    { phase: 'closed', countdown: '23시간 59분', when: '다음 마감 11-27(금) 10:00 KST · 거래일 11-28(토)', next: '10:15' },
+    { phase: 'closed', countdown: '10시간', when: '다음 마감 11-27(금) 10:00 KST · 거래일 11-28(토)', next: '00:00' },
   ];
   for (const [tz, rows] of Object.entries(results)) {
     rows.forEach((r, i) => {
@@ -210,7 +210,7 @@ test('계산 기대 문자열: 19h · 18–19시 · 11-27 · 171.7–244.1 · 95
   assert.equal(c.state, 'ready');
   assert.deepEqual([c.selected, s.bidHourLabel(c.selected, c.tradingDate), c.first, c.last], [19, '19h · 18–19시 · 11-27', 1, 24], '기본 거래시간 19h(와이어프레임)');
   assert.equal(s.bidHourLabel(c.selected, null), '19h · 18–19시', '320에서는 날짜를 카드 부제로');
-  assert.equal(s.bidDayText(c.tradingDate), '입찰일 11-27(금)');
+  assert.equal(s.bidDayText(c.tradingDate), '거래일 11-27(금)');
   assert.equal(c.summary, '50 MW를 10구간으로 나눠 171.7–244.1원에 내는 계산입니다.');
   assert.equal(c.trend, '가격이 낮은 구간일수록 낙찰 가능성(추정)이 높습니다 (95%→5%).');
   assert.equal(c.notReal, '낙찰 가능성은 기준선 분위수로 계산한 값이며 실제 낙찰 확률이 아닙니다.');
@@ -227,8 +227,8 @@ test('계산 기대 문자열: 19h · 18–19시 · 11-27 · 171.7–244.1 · 95
   const facts = v.facts['bid-ladder'].lines;
   // D6: API 원문 낱말은 한국어 이름 뒤 괄호("API 값 …", "API 이름: …")에만. 성향 글자는 세그먼트와 같은 표(RISK_LABELS)에서 온다.
   assert.deepEqual(facts, ['계산 방법: 분위수 기반 확률 낙찰 모델 (API 이름: Quantile-based Probabilistic Clearing Model)',
-    'API 모델 이름: 기준선 예측 (전날 같은 시간 제주 하루전 가격)', 'API 입찰일 11-27(금) · 성향 균형 (API 값 moderate) · 예시 용량 50 MW']);
-  assert.deepEqual(v.facts['bid-deadline'].lines, ['API 표기: 하루전시장 접수 중 (API 값 open) · 마감 10:00 · 입찰일 2026-11-27 · 남은 시간 3.9시간',
+    'API 모델 이름: 기준선 예측 (전날 같은 시간 제주 하루전 가격)', 'API 거래일 11-27(금) · 성향 균형 (API 값 moderate) · 예시 용량 50 MW']);
+  assert.deepEqual(v.facts['bid-deadline'].lines, ['API 표기: 하루전시장 접수 중 (API 값 open) · 마감 10:00 · 거래일 2026-11-27 · 남은 시간 3.9시간',
     '서버 시각으로 다시 계산한 남은 시간 3.9시간 (차이가 0.2시간을 넘으면 남은 시간을 숨깁니다)']);
   assert.deepEqual(v.sources.map(r => [r.id, r.item, r.source, r.basis, chipText(m, r.chip)]),
     [['bidding', '입찰 계산', 'API 서버 입찰 계산 (기준선 분위수)', '조회 06:03', '▨ 추정']]);
@@ -237,24 +237,24 @@ test('계산 기대 문자열: 19h · 18–19시 · 11-27 · 171.7–244.1 · 95
   assert.deepEqual(['idle', 'loading', 'error'].map(pendingCalc), ['입찰 화면을 열면 계산합니다', '불러오는 중', '불러오지 못함']);
 });
 
-test('가격 근거 줄(7.8절 2): 엿본 예측이 있고 입찰일과 다르며 q50이 0.05 안일 때만, D+1 기준선(P5)이면 사라진다', () => {
+test('가격 근거 줄(7.8절 2): 엿본 예측이 있고 거래일과 다르며 q50이 0.05 안일 때만, D+1 기준선(P5)이면 사라진다', () => {
   const m = load();
   const present = viewOf(m, 'bidding-price-basis-present', { withForecast: true }).calc;
-  assert.equal(present.basis, '가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이');
+  assert.equal(present.basis, '가격 근거: 11-26 기준선(=11-25 확정 가격) · 거래일 11-27과 하루 차이');
   for (const hour of [1, 8, 13, 24]) {
     assert.equal(viewOf(m, 'bidding-price-basis-present', { withForecast: true, selectedHour: hour }).calc.basis, present.basis, `${hour}h`);
   }
   assert.equal(viewOf(m, 'bidding-price-basis-absent', { withForecast: true }).calc.basis, null, 'D+1 기준선: q50이 달라 줄이 없다');
   // round 1 D5: 입찰 화면이 예측을 같은 저장소로 받는다. 받는 중이면 줄이 없고(받으면 생긴다), 받지 못했으면 확인할 수 없다는 것을 쓴다.
   assert.equal(viewOf(m, 'bidding-price-basis-present').calc.basis, null, '예측을 받는 중: 아직 쓰지 않는다');
-  assert.equal(viewOf(m, 'bidding-price-basis-present', { forecastFailed: true }).calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27');
+  assert.equal(viewOf(m, 'bidding-price-basis-present', { forecastFailed: true }).calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 거래일 11-27');
   assert.equal(viewOf(m, 'bidding-price-basis-present', { withForecast: true, forecastFailed: true }).calc.basis, present.basis,
     '앞서 받은 예측이 있으면(다시 받기만 실패) 그 예측으로 확인한다');
-  assert.equal(m.strings.priceBasisPendingText('model', '2026-11-28'), '가격 근거 확인 전 · 서버 학습 모델 예측 사용 · 입찰일 11-28');
-  assert.equal(viewOf(m, 'bidding-price-basis-forecast-error').calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27', '변형(B6): 예측 502');
+  assert.equal(m.strings.priceBasisPendingText('model', '2026-11-28'), '가격 근거 확인 전 · 서버 학습 모델 예측 사용 · 거래일 11-28');
+  assert.equal(viewOf(m, 'bidding-price-basis-forecast-error').calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 거래일 11-27', '변형(B6): 예측 502');
   // 날짜 뒤 '과/와'와 날 수: 11-22와, 11-28과, 이틀이면 "2일 차이".
-  assert.equal(m.strings.priceBasisText('2026-11-21', '2026-11-22', 'baseline'), '가격 근거: 11-21 기준선(=11-20 확정 가격) · 입찰일 11-22와 하루 차이');
-  assert.equal(m.strings.priceBasisText('2026-11-26', '2026-11-28', 'model'), '가격 근거: 11-26 학습 모델 예측 · 입찰일 11-28과 2일 차이');
+  assert.equal(m.strings.priceBasisText('2026-11-21', '2026-11-22', 'baseline'), '가격 근거: 11-21 기준선(=11-20 확정 가격) · 거래일 11-22와 하루 차이');
+  assert.equal(m.strings.priceBasisText('2026-11-26', '2026-11-28', 'model'), '가격 근거: 11-26 학습 모델 예측 · 거래일 11-28과 2일 차이');
 });
 
 test('계산 상태: 503 한 번(다시 보내 성공) · 두 번([다시 계산]) · 500 · 400(버튼 없음) · 8초 지연 · 빈 값', () => {
@@ -271,7 +271,7 @@ test('계산 상태: 503 한 번(다시 보내 성공) · 두 번([다시 계산
   assert.deepEqual([none.state, none.text], ['empty', '계산된 입찰 구간이 없습니다']);
 });
 
-test('오래된 입력: 계산의 입찰일 ≠ 시장 상태 입찰일, 또는 계산 뒤 예측일이 바뀜 → 다시 계산하는 동안 스켈레톤, 그래도 다르면 시각 확인 필요', () => {
+test('오래된 입력: 계산의 거래일 ≠ 시장 상태 거래일, 또는 계산 뒤 예측일이 바뀜 → 다시 계산하는 동안 스켈레톤, 그래도 다르면 시각 확인 필요', () => {
   const m = load();
   const base = inputFor(m, 'bidding-base');
   const old = { ...base, calc: { ...base.calc, data: { ...base.calc.data, trading_date: '2026-11-26' } } };
@@ -514,7 +514,7 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   assert.deepEqual(merit.map(p => [p.props['aria-label'], p.props['aria-expanded']]), [['가격은 어떻게 정해지나요? 펼치기', false]]);
   assert.equal(all(root, n => n.props.testID === 'merit-body').length, 0, '처음에는 접혀 있다');
   const basis = all(root, n => n.props.testID === 'bid-basis')[0];
-  assert.equal(textOf(basis), '가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이');
+  assert.equal(textOf(basis), '가격 근거: 11-26 기준선(=11-25 확정 가격) · 거래일 11-27과 하루 차이');
   // 날짜·값 범위는 붙임표·줄표에서 줄이 갈리지 않게 묶는다(5.4절, 320에서 "11-" / "27과"로 갈렸다).
   const nowrap = node => all(node, n => ds(n).pdNowrap === 'true').map(textOf);
   // 짧은 괄호는 통째로 묶는다(round 1: "(MAPE" / "11.75%)"가 갈렸다): 안의 날짜도 함께 한 줄.
@@ -522,7 +522,8 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'deadline')[0]), ['11-26(목)', '10:00 KST', '11-27(금)'], '시각도 "10:00" / "KST"로 갈리지 않는다');
   assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'summary')[0]), ['50 MW', '171.7–244.1원'], '값+단위도 한 줄');
   // F13c 갈림 탐침: 320에서 실시간시장 줄이 "06:15" / "KST"로, 추세 문장의 괄호가 갈릴 수 있었다(keepTogether 밖이었다).
-  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'rtm')[0]), ['06:15 KST']);
+  // round 2: 이름표와 시각을 한 묶음으로("다음 구간" / "06:15 KST"가 갈리지 않게).
+  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'rtm')[0]), ['다음 구간 06:15 KST']);
   assert.ok(nowrap(all(root, n => ds(n).pdMeta === 'summary')[1]).includes('(95%→5%)'));
   const countdown = all(root, n => n.props.testID === 'bid-countdown')[0];
   assert.deepEqual([textOf(countdown), ds(countdown).pdMeta, flat(countdown.props.style).fontSize], ['3시간 56분 남음', 'countdown', 32]);
@@ -544,7 +545,7 @@ test('D6: 보이는 글자에 API 원문 성향·영어 계산 방법이 맨몸�
     const input = inputFor(m, 'bidding-base');
     const v = m.model.biddingView({ ...input, risk, calc: { ...input.calc, data: { ...input.calc.data, risk_level: risk } } });
     const lines = Object.values(v.facts).flatMap(f => f.lines);
-    assert.ok(lines.includes(`API 입찰일 11-27(금) · 성향 ${label} (API 값 ${risk}) · 예시 용량 50 MW`), risk);
+    assert.ok(lines.includes(`API 거래일 11-27(금) · 성향 ${label} (API 값 ${risk}) · 예시 용량 50 MW`), risk);
     for (const line of lines) assert.doesNotMatch(line, bare, line);
     assert.ok(lines.filter(l => /Quantile/.test(l)).every(l => /\(API 이름: Quantile-based Probabilistic Clearing Model\)$/.test(l)), risk);
     // 카드(마감·계단·가격 원리·내 발전소)에는 영어 API 낱말이 아예 없다: 성향 세그먼트 글자는 같은 표(RISK_LABELS)에서 온다.
@@ -569,14 +570,16 @@ test('표 보기(600 이상): 구간 10행 + 합계 행, 가격은 값(원값), 
   const rows = all(table, n => n.props.role === 'row');
   assert.equal(rows.length, 12, '머리 + 10구간 + 합계');
   const heads = all(rows[0], n => n.props.role === 'columnheader');
-  assert.deepEqual(heads.map(hd => textOf(all(hd, n => n.type === 'Text')[0])), ['구간', '물량(MW, 예시)', '가격(원/kWh)', '낙찰 가능성(추정)', '기대 수입']);
+  assert.deepEqual(heads.map(hd => textOf(all(hd, n => n.type === 'Text')[0])), ['구간', '물량(MW, 예시)', '가격(원/kWh)', '낙찰 가능성(추정)', '기대 수입(입찰가)']);
   assert.deepEqual(all(heads[4], n => ds(n).pdChip).map(n => n.props['aria-label']), ['상태: 예시', '상태: 추정, 출처 API 서버 입찰 계산 (기준선 분위수)']);
-  const cells = all(rows[1], n => n.props.role === 'cell');
+  const cells = all(rows[1], n => n.props.role === 'cell' || n.props.role === 'rowheader');
   assert.deepEqual(cells.map(textOf), ['1', '5 (예시)', '171.7', '95%', '81.6만원 (예시)']);
   assert.deepEqual([ds(all(cells[2], n => ds(n).pdValue)[0]).pdRaw, all(cells[3], n => ds(n).pdValue).length, ds(all(cells[3], n => n.type === 'Text')[0]).pdMeta],
     ['171.7', 0, 'derived'], '가격만 API 원값, 낙찰 가능성(×100)은 계산값');
   assert.ok(all(cells[1], n => ds(n).pdExample).length === 1 && all(cells[4], n => ds(n).pdExample).length === 1);
-  assert.deepEqual(all(rows[11], n => n.props.role === 'cell').map(textOf), ['합계', '50 (예시)', '—', '—', '468.6만원 (예시)']);
+  assert.deepEqual(all(rows[11], n => n.props.role === 'cell' || n.props.role === 'rowheader').map(textOf), ['합계', '50 (예시)', '—', '—', '468.6만원 (예시)']);
+  // 첫 열은 행 머리(round 2): 칸을 옮겨 다니는 화면 읽기에서 값마다 구간 이름이 함께 읽힌다.
+  assert.deepEqual(all(rows[11], n => n.props.role === 'rowheader').map(textOf), ['합계']);
 });
 
 test('행 카드(600 미만, D2): 표 대신 목록 11행(10구간 + 합계), 값은 모두 보이고 조각마다 한 줄, 기대 수입 칩은 목록 위 한 줄', () => {
@@ -588,15 +591,15 @@ test('행 카드(600 미만, D2): 표 대신 목록 11행(10구간 + 합계), �
     assert.equal(list.props['aria-label'], '18–19시 구간별 입찰 계산');
     const items = all(list, n => n.props.role === 'listitem');
     assert.equal(items.length, 11);
-    assert.equal(textOf(items[0]), '1구간물량(MW, 예시) 5 (예시) · 가격(원/kWh) 171.7 · 낙찰 가능성(추정) 95% · 기대 수입 81.6만원 (예시)');
-    assert.equal(textOf(items[10]), '합계물량(MW, 예시) 50 (예시) · 기대 수입 468.6만원 (예시)', '합계 행의 빈 칸(가격·낙찰 가능성)은 행 카드에서 뺀다');
+    assert.equal(textOf(items[0]), '1구간물량(MW, 예시) 5 (예시) · 가격(원/kWh) 171.7 · 낙찰 가능성(추정) 95% · 기대 수입(입찰가) 81.6만원 (예시)');
+    assert.equal(textOf(items[10]), '합계물량(MW, 예시) 50 (예시) · 기대 수입(입찰가) 468.6만원 (예시)', '합계 행의 빈 칸(가격·낙찰 가능성)은 행 카드에서 뺀다');
     // 값 표지는 표와 같다: 가격은 API 원값(data-pd-value), 낙찰 가능성은 계산값, 물량·기대 수입은 예시.
     assert.equal(ds(all(items[0], n => ds(n).pdValue)[0]).pdRaw, '171.7');
     assert.equal(all(items[0], n => ds(n).pdExample).length, 2);
     const pieces = all(items[0], n => ds(n).pdNowrap === 'true').map(textOf);
     assert.ok(pieces.includes('가격(원/kWh) 171.7') && pieces.includes('낙찰 가능성(추정) 95%'), pieces.join(' | '));
     const chipsLine = all(root, n => n.props.testID === 'bid-cards')[0].children[0];
-    assert.equal(textOf(chipsLine), '기대 수입┆ 예시▨ 추정');
+    assert.equal(textOf(chipsLine), '기대 수입(입찰가)┆ 예시▨ 추정');
   }
 });
 
@@ -619,18 +622,21 @@ test('계단 차트 범례·판독 칩(D12)과 마감 뒤 카드(D13): 기준선
   const m = load();
   const view = viewOf(m, 'bidding-base');
   const root = renderBidding(m, view);
-  assert.equal(textOf(all(root, n => n.props.testID === 'bid-legend')[0]), '점선 = 기준선 205.9원 · 띠 = 80% 구간 175.2–239.3원 · 빗금 막대 = 입찰 가격(추정)');
+  // round 2: 기호 + 이름(파선 · 띠 · 빗금 계단) 한 줄 범례.
+  assert.deepEqual(all(all(root, n => n.props.testID === 'bid-legend')[0], n => ds(n).pdMeta === 'legend').map(textOf),
+    ['기준선 205.9원', '80% 구간 175.2–239.3원', '입찰 가격(추정)']);
+  assert.deepEqual(m.strings.ladderKeyItems('baseline', 205.9, 175.2, 239.3).map(k => k.swatch), ['dash', 'band', 'hatch']);
   assert.equal(all(root, n => n.props.testID === 'bid-reading').length, 0, '고르기 전에는 판독 칩 없음');
   const closed = viewOf(m, 'bidding-closed-1001');
   const card = tree(h(m.DeadlineCard, { view: closed.deadline, onMethod: noop, onSources: noop, onRetry: noop }));
   const countdown = all(card, n => n.props.testID === 'bid-countdown')[0];
   assert.deepEqual([textOf(countdown), flat(countdown.props.style).fontSize, ds(countdown).pdNowrap], ['23시간 59분', 32, 'true']);
-  assert.ok(textOf(card).includes('다음 마감까지23시간 59분다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)'), textOf(card));
+  assert.ok(textOf(card).includes('다음 마감까지23시간 59분다음 마감 11-27(금) 10:00 KST · 거래일 11-28(토)'), textOf(card));
   const pills = all(card, n => ds(n).pdPill);
   assert.deepEqual(pills.map(textOf), ['오늘 마감됨'], '«마감» pill은 날짜 줄 밑이 아니라 제목 옆 하나');
-  // 마감 뒤 예시 계산의 날짜는 마감된 입찰일이라고 밝힌다(round 1 integrity).
+  // 마감 뒤 예시 계산의 날짜는 마감된 거래일이라고 밝힌다(round 1 integrity).
   const after = tree(h(m.SampleBidCard, { view: view.calc, risk: 'moderate', onRisk: noop, onHour: noop, onRetry: noop, onMethod: noop, onSources: noop, closed: true }));
-  assert.equal(textOf(all(after, n => n.props.testID === 'bid-plant')[0]), '예시 풍력발전소 · 50 MW (예시) (가상) · 마감된 입찰일 11-27 기준');
+  assert.equal(textOf(all(after, n => n.props.testID === 'bid-plant')[0]), '예시 풍력발전소 · 50 MW (예시) (가상) · 마감된 거래일 11-27 기준');
 });
 
 test('가격 원리(펼침): 예시 6개를 싼 순서로 쌓은 그림 + 예시 수요선, 마지막 발전기 유류 E 220원, 글 대안 6행, 펼침 상태 aria-expanded', () => {
@@ -648,9 +654,11 @@ test('가격 원리(펼침): 예시 6개를 싼 순서로 쌓은 그림 + 예시
   assert.deepEqual([chart.props.role, chart.props['aria-label']], ['img', ex.summary]);
   const bars = all(chart, n => n.props.testID === 'merit-bar');
   assert.equal(bars.length, 6);
-  const ink = m.tokens.THEMES.light.chip.example; // 예시 글자색(7.1절 "가격 원리 SVG는 예시 글자색"), 공급자 밖 기본 테마는 light
-  assert.deepEqual(bars.map(b => b.props.fill === ink.text), [false, false, false, false, true, false], '마지막 발전기만 채운다');
-  assert.ok(bars.every(b => b.props.height >= 3 && b.props.stroke === ink.text), '0원 발전기도 보인다');
+  // 예시 호박색 한 벌(round 2: 두 테마에서 같은 채움, 외곽선만 테마별). 공급자 밖 기본 테마는 light.
+  const S = m.tokens.SERIES;
+  const edge = m.tokens.THEMES.light.chart.exampleEdge;
+  assert.deepEqual(bars.map(b => b.props.fill === S.exampleMark), [false, false, false, false, true, false], '마지막 발전기만 진하게 채운다');
+  assert.ok(bars.every(b => b.props.height >= 3 && b.props.stroke === edge), '0원 발전기도 보인다');
   // 수요선은 마지막 발전기 가격 글자 위아래 두 토막(글자를 가로지르지 않는다).
   const demand = all(chart, n => n.props.testID === 'merit-demand');
   const label = all(chart, n => n.type === 'Text' && textOf(n) === '220원')[0];

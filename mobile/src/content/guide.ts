@@ -2,6 +2,7 @@
 // 번들 대신 public/content/guide.ko.json에 두고, 처음 필요할 때 상대 경로로 한 번 읽는다. 모양(키·종류·길이)이 틀리면 실패다.
 import { GLOSSARY_TITLES } from './strings';
 import type { GlossaryId } from './strings';
+import type { ForecastKind } from '../lib/provenance';
 
 /** 경로 깊이가 1이라 어느 경로에서든 기준 폴더로 풀린다(3.1절). */
 export const GUIDE_PATH = 'content/guide.ko.json';
@@ -10,9 +11,11 @@ export const TOPIC_IDS = ['reading', 'method', 'sources', 'about'] as const;
 export const METHOD_CARD_IDS = [
   'today-price', 'today-power', 'today-forecast', 'today-accuracy', 'bid-deadline', 'bid-ladder', 'bid-merit', 'settle-sample',
 ] as const;
+const FORECAST_KINDS: readonly ForecastKind[] = ['baseline', 'model', 'fallback'];
 /** 숫자 읽는 법(4.4절)의 표시별 설명: 4상태 · 일반 칩 · 줄표 · 지연 · 끊김 · 시각. */
 export const LEGEND_KEYS = ['measured', 'forecast', 'estimated', 'example', 'plain', 'missing', 'stale', 'broken', 'time'] as const;
-export const GLOSSARY_SHORT_MAX = 60;
+/** 한 줄 뜻 길이 한도(4.4절). 정산의 뜻(round 2: 화면·용어·둘러보기가 같은 문장)이 61자라 64로 둔다. */
+export const GLOSSARY_SHORT_MAX = 64;
 const TEXT_MAX = 600;
 const PARAGRAPHS_MAX = 12;
 
@@ -27,12 +30,17 @@ export type GuideContent = {
   topics: Record<TopicId, GuideSection>; cards: Record<MethodCardId, GuideSection>;
   /** 표시별 설명 한 문장씩. simplified: 예측 방법 화면의 "단순화한 설명" 목록(마감 · 이중 정산 · 가격 원리 · 실시간시장 구간, P7). */
   legend: Record<LegendKey, string>; simplified: GuideSection;
+  /**
+   * ≥ 1280 "이 화면 읽는 법" 패널의 숫자 없는 문장(round 2: 번들 한도 때문에 strings.ts에서 옮겼다). graph는 받은 예측 종류별 그래프 줄,
+   * estimated·example은 범례의 추정·예시 행. 숫자가 든 줄(예비율 15%, 1 MWh = 1,000 kWh)은 strings.ts에 남는다.
+   */
+  panels: { today: string[]; bidding: string[]; settlement: string[]; graph: Record<ForecastKind, string>; estimated: string; example: string };
 };
 
 export class GuideLoadError extends Error {
   readonly reason: 'http' | 'network' | 'shape';
   constructor(reason: 'http' | 'network' | 'shape', detail: string) {
-    super(`설명을 불러오지 못했습니다 (${reason}: ${detail})`);
+    super(`guide content failed (${reason}: ${detail})`);
     this.name = 'GuideLoadError';
     this.reason = reason;
   }
@@ -73,6 +81,15 @@ function keyed<K extends string, V>(v: unknown, keys: readonly K[], path: string
   return Object.fromEntries(keys.map(k => [k, read(r[k], `${path}.${k}`)])) as Record<K, V>;
 }
 
+function panels(v: unknown): GuideContent['panels'] {
+  const r = rec(v, 'panels');
+  return {
+    today: paragraphs(r.today, 'panels.today'), bidding: paragraphs(r.bidding, 'panels.bidding'), settlement: paragraphs(r.settlement, 'panels.settlement'),
+    graph: keyed(r.graph, FORECAST_KINDS, 'panels.graph', (x, at) => text(x, at)),
+    estimated: text(r.estimated, 'panels.estimated'), example: text(r.example, 'panels.example'),
+  };
+}
+
 export function parseGuide(json: unknown): GuideContent {
   const r = rec(json, '$');
   if (r.version !== 1) bad('version', '=== 1');
@@ -92,6 +109,7 @@ export function parseGuide(json: unknown): GuideContent {
   return {
     version: 1, tour, glossary, topics: keyed(r.topics, TOPIC_IDS, 'topics', section), cards: keyed(r.cards, METHOD_CARD_IDS, 'cards', section),
     legend: keyed(r.legend, LEGEND_KEYS, 'legend', (x, at) => text(x, at)), simplified: section(r.simplified, 'simplified'),
+    panels: panels(r.panels),
   };
 }
 

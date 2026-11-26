@@ -1,6 +1,5 @@
 // 선 아이콘(명세 5.6절). 장식이 기본이라 보조 기술에서 숨기고, 이름은 감싼 버튼이 가진다.
 // @expo/vector-icons(TTF 400 KB)와 src/components/Ionicon.tsx는 쓰지 않는다.
-import React from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { ICONS, ICON_STROKE_WIDTH, ICON_VIEWBOX } from './icons';

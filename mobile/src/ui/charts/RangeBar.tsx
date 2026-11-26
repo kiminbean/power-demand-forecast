@@ -1,10 +1,11 @@
 // 수급 범위 막대(명세 4.1·5.3·6.2절): 0…공급능력, 수요 구간은 series.demand 채움, 예비력 구간은 series.reserve 빗금 + 외곽선,
-// 경계(공급능력 ÷ 1.15, 예비율 15 %가 되는 수요)는 watch 색 눈금 + 삼각 표지 + 글자 "수요 1,036 MW · 넘으면 예비율 15% 미만"(D9: KPX 경보
+// 경계(공급능력 ÷ 1.15, 예비율 15 %가 되는 수요)는 watch 색 눈금 + 삼각 표지 + 글자 "▲ 수요 1,036 MW · 넘으면 예비율 15% 미만"(D9: KPX 경보
 // 단계 낱말 "관심 경계"를 쓰지 않고 수요 수준이라고 밝힌다). 짝이 맞는 실시간 값일 때만 그린다(화면이 SupplyView로 판단).
+// round 2: 경계 글자는 막대 아래 왼쪽부터 한 줄이고 ▲는 글자 앞에 붙는다("▲ 수요 N MW ·"는 한 묶음, 줄은 "·" 뒤에서만 바뀐다). 전에는
+// 글자가 줄을 바꾸면 ▲가 홀로 왼쪽 끝으로 밀려 눈금과 멀어졌다.
 // 막대 안에 글자를 두지 않는다(12 px 글자가 파랑 채움 위에서 두 테마 모두 4.5:1을 넘지 못한다): 수요·예비력 이름은 막대 양 끝 위 줄,
 // 경계는 아래 줄. 수요·예비력 값은 바로 위 수급 식에 있어 이름표에 다시 쓰지 않는다(round 1 D17: 같은 숫자가 두 번 나왔다).
 // role=img, 이름 = 식 문장 + 경계 문장. 누르는 기능이 없다.
-import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Defs, Line, Path, Rect, Svg } from 'react-native-svg';
 import { CHART, SPACE } from '../tokens';
@@ -30,7 +31,7 @@ export type RangeBarProps = {
 
 const SPOKEN_MW = '메가와트';
 
-function Swatch({ kind, hatchId }: { kind: 'demand' | 'reserve' | 'watch'; hatchId: string }) {
+function Swatch({ kind, hatchId }: { kind: 'demand' | 'reserve'; hatchId: string }) {
   const { theme } = useTheme();
   const s = CHART.swatch;
   const inset = CHART.barStroke / 2;
@@ -39,7 +40,6 @@ function Swatch({ kind, hatchId }: { kind: 'demand' | 'reserve' | 'watch'; hatch
       {kind === 'demand' ? <Rect x={0} y={0} width={s} height={s} fill={theme.series.demand} /> : null}
       {kind === 'reserve' ? <Rect x={inset} y={inset} width={s - CHART.barStroke} height={s - CHART.barStroke} fill={`url(#${hatchId})`}
         stroke={theme.series.reserve} strokeWidth={CHART.barStroke} /> : null}
-      {kind === 'watch' ? <Path d={`M0 ${s}L${s / 2} 0L${s} ${s}Z`} fill={theme.series.watch} /> : null}
     </Svg>
   );
 }
@@ -80,13 +80,12 @@ export function RangeBar({ supply, demand, reserve, boundary, width: fixedWidth,
             <Path testID="range-boundary-mark" fill={theme.series.watch}
               d={`M${r2(geo.boundaryX)} ${CHART.bar + 2 * CHART.barTick}L${r2(geo.boundaryX + CHART.triangle / 2)} ${svgHeight}L${r2(geo.boundaryX - CHART.triangle / 2)} ${svgHeight}Z`} />
           </Svg>
-          <View style={[styles.boundaryRow, { paddingRight: r2(Math.max(0, geo.width - geo.boundaryX - CHART.triangle / 2)) }]}>
-            <Swatch kind="watch" hatchId={hatchId} />
-            <Text variant="label" tone="text2" style={styles.shrink}>
-              수요 <Value v={boundary} format={mw} size="label" derived />{' · '}
-              <Text variant="label" tone="text2" nowrap dataSet={{ pdMeta: 'rule' }}>{boundaryRuleText()}</Text>
-            </Text>
-          </View>
+          <Text variant="label" tone="text2" testID="range-boundary-label">
+            <Text variant="label" tone="text2" nowrap>
+              <Text variant="label" color={theme.series.watch}>▲</Text>{' 수요 '}<Value v={boundary} format={mw} size="label" derived />{' ·'}
+            </Text>{' '}
+            <Text variant="label" tone="text2" nowrap dataSet={{ pdMeta: 'rule' }}>{boundaryRuleText()}</Text>
+          </Text>
         </View>
       ) : null}
     </View>
@@ -97,6 +96,4 @@ const styles = StyleSheet.create({
   stack: { gap: SPACE.xs },
   legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: SPACE.md, rowGap: SPACE.xs },
   item: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
-  boundaryRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.xs },
-  shrink: { flexShrink: 1, textAlign: 'right' },
 });

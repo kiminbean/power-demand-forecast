@@ -14,6 +14,7 @@ import { CHIPS, chipA11yLabel, chipText } from '../lib/provenance';
 import type { Chip } from '../lib/provenance';
 import { freshness, nowPillText, staleChipText } from '../content/strings';
 import type { NowPillInput } from '../content/strings';
+import type { ClockSkew } from '../lib/kst';
 
 /** lag의 text: 조회 나이가 아닌 지연(가격 거래시간 불일치 "지연 · 07h 값", "예측일 지연")에 쓰는 글자. 없으면 조회 시각으로 만든다. */
 export type ChipProps = { chip: Chip; source?: string | null } | { lag: 'stale' | 'broken'; at: number; text?: string };
@@ -46,7 +47,10 @@ export function ProvenanceChip(props: ChipProps) {
   );
 }
 
-/** 예비율 단계·접수 상태: 채움 + 색 점(또는 아이콘) + 글자. 글자에 시각이 들어갈 수 있어 메타로 표시한다. */
+/**
+ * 예비율 단계·접수 상태·수신 상태: 채움 + 작은 네모(또는 아이콘) + 글자. 글자에 시각이 들어갈 수 있어 메타로 표시한다. 둥근 점(●)은 실측·확정
+ * 값의 표시라서 상태 pill에는 쓰지 않는다(round 2 멘토: "● 오늘 마감됨"이 실측 칩처럼 보였다).
+ */
 export function StatusPill({ tone, text, icon }: { tone: PillTone; text: string; icon?: IconName }) {
   const { theme } = useTheme();
   const c = theme.pill[tone];
@@ -67,11 +71,24 @@ export function NowPill(input: NowPillInput) {
   const [online, setOnline] = useState(isOnline);
   useEffect(() => watchOnline(setOnline), []);
   const stage = input.fetchedAt === null ? 'fresh' : freshness(input.now - input.fetchedAt);
-  const tone = stage === 'fresh' ? { bg: theme.color.nowPillBg, text: theme.color.nowPillText } : theme.pill[stage === 'stale' ? 'watch' : 'danger'];
+  // 평소에는 옅은 바탕 + 1 px 테두리(round 2 parity: 짙은 남색 캡슐이 h1과 큰 숫자보다 먼저 눈에 띄었다). 채운 색은 지연·끊김에만.
+  const fresh = stage === 'fresh';
+  const tone = fresh ? { bg: theme.color.well, text: theme.color.text1 } : theme.pill[stage === 'stale' ? 'watch' : 'danger'];
   return (
-    <View style={[styles.chip, styles.now, { backgroundColor: tone.bg }]} testID="now-pill" {...web({ dataSet: { pdMeta: 'now', pdStage: stage } })}>
+    <View style={[styles.chip, styles.now, { backgroundColor: tone.bg }, fresh ? { borderWidth: 1, borderColor: theme.color.border } : null]} testID="now-pill"
+      {...web({ dataSet: { pdMeta: 'now', pdStage: stage } })}>
       {stage === 'fresh' ? null : <Icon name={stage === 'stale' ? 'clock' : 'alert'} size={SIZE.chipIcon} color={tone.text} />}
       <Text variant="meta" weight="600" color={tone.text}>{nowPillText({ ...input, offline: !online })}</Text>
+    </View>
+  );
+}
+
+/** h1 행 오른쪽 묶음(3.4·7.6절): NowPill + 서버 시계가 타당하지 않으면 ‹서버 시각 확인 필요 · 기기 시계 기준›. 네 화면이 같이 쓴다. */
+export function ClockPills({ skew, ...input }: NowPillInput & { skew: ClockSkew | null }) {
+  return (
+    <View style={styles.pills}>
+      <NowPill {...input} />
+      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
     </View>
   );
 }
@@ -93,10 +110,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', gap: SPACE.xs, maxWidth: '100%',
   },
   now: { paddingHorizontal: SPACE.md - SPACE.xs },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
   // RN-web은 flex 항목의 flex-shrink를 0으로 둔다: 칩·pill 글자가 줄지 않으면 좁은 표 칸(출처 표의 상태 칸, 768에서 약 140 px)을
   // 넘친다(F10 측정). 줄 수 있게 해 두면 칩은 칸 폭(maxWidth 100%) 안에서 글자를 줄바꿈한다. 자리가 넉넉한 곳의 모양은 그대로다.
   shrink: { flexShrink: 1 },
-  dot: { width: SIZE.dot, height: SIZE.dot, borderRadius: RADIUS.pill },
+  dot: { width: SIZE.dot, height: SIZE.dot, borderRadius: RADIUS.mark },
   ribbon: {
     borderWidth: 1, borderStyle: 'dotted', borderRadius: RADIUS.control, paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs,
     alignSelf: 'stretch',

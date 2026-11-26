@@ -6,8 +6,9 @@
 // 시계 차이 → 앱 시각. 브라우저 확인(첫 화면 상자·시트·T1–T9 캡처)은 scratchpad/mobile/eval/steps/F7에 있다.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
-const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
+const { createTsLoader, defaultMocks, MOBILE_ROOT, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 const { loadManifest, resolveVariant } = require('./helpers/fixtures.cjs');
 
 const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
@@ -26,7 +27,7 @@ function load(width = 390, { forceTable = false } = {}) {
   return {
     model: at('features/today/model.ts'), types: at('data/types.ts'), client: at('data/client.ts'), kst: at('lib/kst.ts'),
     sp: at('utils/smpPresentation.ts'), rich: at('ui/Rich.tsx'), format: at('lib/format.ts'), strings: at('content/strings.ts'),
-    provenance: at('lib/provenance.ts'),
+    provenance: at('lib/provenance.ts'), guide: at('content/guide.ts'),
     ...at('features/today/PriceCard.tsx'), ...at('features/today/PowerCard.tsx'), ...at('features/today/ForecastCard.tsx'),
     ...at('features/today/AccuracyCard.tsx'), ...at('features/today/TodayParts.tsx'), ...at('ui/Controls.tsx'), ...at('ui/Values.tsx'),
     ...at('ui/Chips.tsx'), ...at('ui/Card.tsx'),
@@ -93,7 +94,7 @@ function project(m, view) {
       level: W.level.text, levelNote: W.level.note, formula: m.rich.lineText(W.supply.formula), supply: f.mw(W.supply.supply.value),
       reserveMw: f.mw(W.supply.reserve.value), boundary: f.mw(W.supply.boundary.value), weather: m.rich.lineText(W.weather.line),
       weatherChip: chip(W.weather.chip), footer: `${W.footer.source} · ${W.footer.time} · ${W.footer.extra}` },
-    forecast: { chips: F.chips.map(chip), legend: F.legend, selected: F.selected, stepLabel: F.stepLabel(F.selected), reading: m.rich.lineText(F.reading),
+    forecast: { chips: F.chips.map(chip), legend: F.key.map(k => `${k.swatch} ${k.text}`).join(' · '), selected: F.selected, stepLabel: F.stepLabel(F.selected), reading: m.rich.lineText(F.reading),
       summary: F.summary, uncertainty: F.uncertainty, periods: F.periods.map(p => [p.label, p.mean, p.min, p.max]), periodNote: F.periodNote,
       window: [F.window.from, F.window.to], footer: `${F.footer.source} · ${F.footer.time}` },
     accuracy: { main: A.documented.main, basis: A.documented.basis, example: A.documented.example, footer: `${A.footer.source} · ${A.footer.time}` },
@@ -154,6 +155,8 @@ function assertI2(root, label) {
 }
 
 /** 오늘 화면 본문(셸·Screen 틀 제외)을 그린다: 카드 넷 + 용어 줄 + (1280) 패널 본문. */
+/** ≥ 1280 패널의 숫자 없는 문장(guide.ko.json panels, round 2). */
+const panelsOf = m => m.guide.parseGuide(JSON.parse(fs.readFileSync(path.join(MOBILE_ROOT, 'public/content/guide.ko.json'), 'utf8'))).panels;
 function renderToday(m, view, nowMs) {
   const noop = () => {};
   return tree([
@@ -163,7 +166,7 @@ function renderToday(m, view, nowMs) {
       onMethod: noop, onSources: noop, onRetry: noop }),
     h(m.AccuracyCard, { view: view.accuracy, onMethod: noop, onSources: noop, onRetry: noop }),
     h(m.TermRow, { onOpen: noop }),
-    h(m.TodayPanelBody, { legend: view.legend, onTerm: noop }),
+    h(m.TodayPanelBody, { legend: view.legend, text: panelsOf(m), onTerm: noop }),
   ]);
 }
 
@@ -252,6 +255,45 @@ test('KPI 조회 12분(지연)·61분(끊김): NowPill·칩·AnswerLine 과거�
   assert.ok(!JSON.stringify(broken.power.chips).includes('"measured"'));
 });
 
+test('round 2 integrity: 확정 가격 점의 칩은 가격 카드와 같은 규칙 — 12분(같은 거래시간)은 그대로, 61분(끊김)은 "06:03 값"과 속 빈 점', () => {
+  const m = load();
+  const stale = viewOf(m, 'today-kpi-age-12m', { advanceMs: 12 * 60_000, failAfter: true });
+  assert.deepEqual(stale.forecast.chips.map(c => chipLabel(m, c)), ['┅ 예측 · 기준선', '● 확정 가격 · 지금 시간만'],
+    '같은 거래시간의 확정 가격은 조회 나이로 바뀌지 않는다(가격 카드와 같다)');
+  assert.equal(stale.forecast.dotsWithdrawn, false);
+  const broken = viewOf(m, 'today-kpi-age-61m', { advanceMs: 61 * 60_000, failAfter: true });
+  assert.deepEqual(broken.forecast.chips.map(c => [c.lag || null, chipLabel(m, c)]), [[null, '┅ 예측 · 기준선'], ['broken', '06:03 값']]);
+  assert.ok(!broken.forecast.chips.some(c => c.chip && c.chip.kind === 'measured'), '끊김이면 실측 ● 칩을 거둔다(7.6절)');
+  assert.equal(broken.forecast.dotsWithdrawn, true);
+  assert.ok(broken.forecast.key.some(k => k.swatch === 'ring') && !broken.forecast.key.some(k => k.swatch === 'dot'), '범례도 속 빈 점');
+  // 거래시간이 지나 유예도 끝났으면(지연 · 07h 값) 점의 칩도 같은 칩이다.
+  const late = viewOf(m, 'today-hour-boundary-stale');
+  if (late.forecast.dots.length) assert.deepEqual(late.forecast.chips.slice(1).map(c => chipLabel(m, c)), ['지연 · 07h 값']);
+});
+
+test('round 2 integrity: 1280 패널·둘러보기 5단계의 예측 행은 받은 예측의 종류와 날짜를 따른다(대체값·모르는 모델·예측일 어제)', () => {
+  const m = load(1280);
+  const panelRows = view => {
+    const root = tree(h(m.TodayPanelBody, { legend: view.legend, text: panelsOf(m), onTerm: () => {} }));
+    return all(root, n => ds(n).pdMeta === 'legend').map(textOf);
+  };
+  const methodLines = view => all(tree(h(m.TodayPanelBody, { legend: view.legend, text: panelsOf(m), onTerm: () => {} })), n => ds(n).pdMeta === 'method').map(textOf);
+  const base = viewOf(m, 'today-base');
+  assert.equal(panelRows(base)[1], '145.2원/kWh 기준선 예측 (06–07시)');
+  for (const id of ['today-forecast-fallback', 'today-forecast-unknown-model']) {
+    const v = viewOf(m, id);
+    assert.equal(v.legend.kind, 'fallback', id);
+    assert.equal(panelRows(v)[1], 'API 대체값', `${id}: 대체값을 기준선 예측이라 부르지 않는다`);
+    assert.equal(methodLines(v)[1], '그래프는 API 대체값이며 모델 예측이 아닙니다.', id);
+    assert.doesNotMatch(panelRows(v).join(' '), /기준선 예측 \(/, id);
+  }
+  const lag = viewOf(m, 'today-forecast-date-yesterday');
+  assert.equal(lag.legend.forecast, null, '예측일이 오늘이 아니면 이 시간 값이 아니다');
+  assert.equal(panelRows(lag)[1], '기준선 예측 · 어제 같은 시간 가격');
+  const tour = loadGuide(1280).guide.tourLegend({ today: lag.legend, forecastKind: lag.legend.kind, probability: null, statementTotal: 17160000 });
+  assert.equal(tour[1].text, '기준선 예측 · 어제 같은 시간 가격', '둘러보기 5단계도 같은 규칙');
+});
+
 test('일부 실패·전부 실패(서버·네트워크): 카드마다 자기 상태, 전부 실패는 원인과 함께 한 번', () => {
   const m = load();
   const partial = viewOf(m, 'today-partial-kpis-error');
@@ -271,7 +313,7 @@ test('수요 출처 ②④⑤⑥: 머리 칩 ▨ 추정값 기준 + KPI별 칩, 
   const cases = {
     'today-demand-src-2': [['▨ 추정 · 실측 아님', '▨ 추정 · 실측 아님'], '출처를 확인할 수 없어 예비율 단계를 판정하지 않습니다', 'API 서버 값 (출처 확인 불가)'],
     'today-demand-src-4': [['▨ 추정 · 실측 아님', '▨ 기본값 · 실측 아님'], 'API 서버가 실측 대신 기본 예비율(25%)을 보냈습니다', 'EPSIS 30일 평균 (API 서버 대체값)'],
-    'today-demand-src-5': [['▨ 추정 · 실측 아님', '▨ 전국 값 · 제주 아님'], 'API 서버가 제주 대신 전국 예비율을 보냈습니다', '전국 값 × 0.018 비례 추정 (API 서버)'],
+    'today-demand-src-5': [['▨ 추정 · 실측 아님', '▨ 전국 값 · 제주 아님'], 'API 서버가 제주 대신 전국 예비율을 보냈습니다', '전국 값 × 0.018 비례 추정'],
     'today-demand-src-6': [['▨ 시뮬레이션 · 실측 아님', '▨ 기본값 · 실측 아님'], 'API 서버가 실측 대신 기본값(수요 650 MW·예비율 25%)을 보냈습니다', 'API 서버 기본값 650 MW·25% (실측 아님)'],
   };
   for (const [id, [kpiChips, why, source]] of Object.entries(cases)) {
@@ -291,8 +333,13 @@ test('공급능력 짝 불일치·기상 file/default/none·KPI 빈 값', () => 
   assert.deepEqual([pair.power.supply.kind, pair.power.supply.text], ['missing', '공급능력 미수신 · 예비율은 KPX 발표값입니다']);
   assert.equal(pair.answer, '지금 시간 제주 전기 도매가격은 1kWh에 115.3원이고, 예비율은 79.5%로 넉넉합니다(앱 기준).');
   assert.deepEqual(pair.facts['today-power'].lines, [], 'MW 계산 차이는 짝이 맞을 때만');
+  // round 2 integrity(잠복): 지금 행의 수요가 KPI와 맞아도 공급능력이 실시간으로 맞춘 값이 아니면(EPSIS 30일 평균) 짝을 짓지 않는다.
+  const epsis = viewOf(m, 'today-supply-epsis-30day');
+  assert.deepEqual([epsis.power.supply.kind, epsis.power.supply.text], ['missing', '공급능력 미수신 · 예비율은 KPX 발표값입니다']);
+  assert.equal(epsis.answer, '지금 시간 제주 전기 도매가격은 1kWh에 115.3원이고, 예비율은 79.5%로 넉넉합니다(앱 기준).');
+  assert.ok(!epsis.sources.find(r => r.id === 'supply').chip, '출처 표의 공급능력 행도 실측 칩이 없다');
   const file = viewOf(m, 'today-weather-file');
-  assert.deepEqual([chipLabel(m, file.power.weather.chip), file.power.footer.extra], ['▨ 추정 · 실시간 아님', '날씨 기상청 과거 자료 24시간 평균 (API 서버) · 실시간 아님']);
+  assert.deepEqual([chipLabel(m, file.power.weather.chip), file.power.footer.extra], ['▨ 추정 · 실시간 아님', '날씨 기상청 과거 자료 24시간 평균 · 실시간 아님']);
   const def = viewOf(m, 'today-weather-default');
   assert.deepEqual([chipLabel(m, def.power.weather.chip), m.rich.lineText(def.power.weather.line), def.power.footer.extra],
     ['▨ 기본값 · 실측 아님', '날씨 5.0°C · 바람 3.0 m/s · 맑음', '날씨 API 서버 기본값 (실측 아님)']);
@@ -418,9 +465,9 @@ test('줄바꿈 단위(F13c 갈림 탐침): 차트 범례의 짧은 괄호·80%,
   const { input } = inputFor(m, 'today-base');
   const root = renderToday(m, m.model.todayView(input), input.now);
   const nowrapOf = node => all(node, n => ds(n).pdNowrap === 'true').map(textOf);
-  // 360에서 "(▲ 위쪽" / "잘림)", 320에서 판독 줄 "116.9–" / "174.6원"으로 갈렸다(F13c split_probe).
-  const legend = nowrapOf(all(root, n => ds(n).pdMeta === 'legend')[0]);
-  assert.ok(legend.includes('(어제 같은 시간 가격)') && legend.includes('80%'), legend.join(' | '));
+  // 360에서 "(▲ 위쪽" / "잘림)", 320에서 판독 줄 "116.9–" / "174.6원"으로 갈렸다(F13c split_probe). round 2: 범례는 기호 + 이름 항목.
+  const legend = all(all(root, n => n.props.testID === 'today-chart-key')[0], n => ds(n).pdMeta === 'legend').flatMap(nowrapOf);
+  assert.ok(legend.includes('(어제 같은 시간 가격)') && legend.includes('(▲ 위쪽 잘림)'), legend.join(' | '));
   assert.ok(nowrapOf(all(root, n => n.props.testID === 'today-reading')[0]).includes('116.9–174.6원'), '범위는 두 값과 줄표·단위를 한 묶음으로');
   assert.ok(nowrapOf(all(root, n => ds(n).pdMeta === 'hour')[0]).includes('06–07시'));
 });
@@ -477,7 +524,8 @@ test('카드 렌더 의미: today-hero data-state, [i] 4개·[출처 표] 4개 �
   assert.deepEqual(all(tables[1], n => n.props.role === 'columnheader').map(textOf), ['거래시간', '확정 가격', '기준선 예측', '80% 구간']);
   const current = all(tables[1], n => n.props.role === 'row' && n.props['aria-current'] === 'true');
   assert.equal(current.length, 1);
-  assert.deepEqual(all(current[0], n => n.props.role === 'cell').map(textOf), ['07h · 06–07시', '115.3', '145.2', '116.9–174.6'], '표 칸은 거래시간 번호와 시각 범위(D11 허용)');
+  assert.deepEqual(all(current[0], n => n.props.role === 'cell' || n.props.role === 'rowheader').map(textOf), ['07h · 06–07시', '115.3', '145.2', '116.9–174.6'], '표 칸은 거래시간 번호와 시각 범위(D11 허용)');
+  assert.deepEqual(all(current[0], n => n.props.role === 'rowheader').map(textOf), ['07h · 06–07시'], '거래시간 칸은 행 머리(round 2)');
   assert.equal(textOf(all(tables[1], n => n.props.role === 'row')[1]).split('—').length, 2, '확정 가격이 없는 표 칸은 "—"');
   const twelve = view.forecast.rows.slice(view.forecast.window.from - 1, view.forecast.window.to);
   assert.deepEqual([twelve.length, twelve[0].hour, twelve[11].hour], [12, 7, 18]);
@@ -505,7 +553,7 @@ test('확정 가격 점은 이번 방문 동안 쌓인다(D10): 받은 거래시
   assert.deepEqual(m.model.todayView({ ...fb, seen }).forecast.dots, []);
   // 띠가 그림 위로 넘치지 않으면 범례에 ▲ 뜻을 붙이지 않는다.
   assert.ok(!m.model.todayView({ ...input, forecast: { ...input.forecast, data: { ...input.forecast.data, q90: input.forecast.data.q50.slice() } } })
-    .forecast.legend.includes('▲'));
+    .forecast.key.some(k => k.text.includes('▲')));
 });
 
 test('오늘 카드 글 밀도(D17): 요약·불확실성은 본문 크기 한 문단, 범위 막대 이름표에 값을 다시 쓰지 않음, 둘러보기 배너는 제목 한 줄', () => {
@@ -610,9 +658,10 @@ test('응답 상태 매핑(4.4절): status·data_date_status·overall_status →
   const base = g.guide.statusView(rsOf(g, 'guide-rs-base'));
   assert.deepEqual(base.rows.map(r => [r.id, r.source, r.basis]), ['smp', 'supply', 'weather'].map(k => [`status:${k}`, 'API 서버 응답 상태(realtime-status)', '응답 시각 07:43']));
   assert.deepEqual(base.overall, { text: '모두 응답', tone: 'ok', at: g.kst.parseApiTime('2026-11-26T07:43:21.732618') });
-  assert.deepEqual(statusOf(g, 'guide-rs-base'), [['응답 상태 · SMP', '응답 정상 · 과거 날짜 자료', 'ok'], ['응답 상태 · 수급', '응답 정상', 'ok'], ['응답 상태 · 기상', '응답 정상', 'ok']]);
+  // 과거·미래 날짜 자료는 응답이 정상이어도 관심 색(round 2 멘토).
+  assert.deepEqual(statusOf(g, 'guide-rs-base'), [['응답 상태 · SMP', '응답 정상 · 과거 날짜 자료', 'watch'], ['응답 상태 · 수급', '응답 정상', 'ok'], ['응답 상태 · 기상', '응답 정상', 'ok']]);
   assert.deepEqual(statusOf(g, 'guide-rs-all-current')[0], ['응답 상태 · SMP', '응답 정상 · 오늘 자료', 'ok']);
-  assert.deepEqual(statusOf(g, 'guide-rs-partial').map(r => [r[1], r[2]]), [['응답 정상 · 과거 날짜 자료', 'ok'], ['자료 없음', 'watch'], ['오류', 'danger']]);
+  assert.deepEqual(statusOf(g, 'guide-rs-partial').map(r => [r[1], r[2]]), [['응답 정상 · 과거 날짜 자료', 'watch'], ['자료 없음', 'watch'], ['오류', 'danger']]);
   assert.deepEqual(g.guide.statusView(rsOf(g, 'guide-rs-disconnected')).overall.text, '응답 없음');
   assert.deepEqual(statusOf(g, 'guide-rs-unknown').map(r => [r[1], r[2]]), [['알 수 없음 · 날짜 미상', 'neutral'], ['알 수 없음', 'neutral'], ['알 수 없음', 'neutral']]);
   assert.equal(statusOf(g, 'guide-rs-future-date')[0][1], '응답 정상 · 미래 날짜 자료');
@@ -646,7 +695,7 @@ test('출처 행(4.4절): 오늘 8행 + 입찰 계산 + 응답 상태 3행, 응�
     // 출처 표는 가로 스크롤 없이 칸이 폭을 나눈다(긴 글 칸이 넘치고 끝 칸이 잘리던 것, F10 측정).
     assert.equal(all(root, n => n.type === 'ScrollView' && n.props.horizontal).length, 0, `${width}: 가로 스크롤 없음`);
     assert.equal(all(root, n => n.props['aria-current'] === 'true').length, 3, `${width}: row=status`);
-    assert.deepEqual(all(root, n => ds(n).pdPill).map(n => [ds(n).pdPill, textOf(n)]), [['ok', '응답 정상 · 과거 날짜 자료'], ['watch', '자료 없음'], ['danger', '오류']]);
+    assert.deepEqual(all(root, n => ds(n).pdPill).map(n => [ds(n).pdPill, textOf(n)]), [['watch', '응답 정상 · 과거 날짜 자료'], ['watch', '자료 없음'], ['danger', '오류']]);
     assertI2(root, `출처 표 ${width}`);
   }
   // 평가 기간은 한 줄로 묶는다(F8 관찰: 400 px 시트에서 "2025-" / "07-22~12-18").
@@ -693,7 +742,7 @@ test('예측 방법·앱 정보의 이번 방문 값: 정확도(+ R² 0.203, 기
   const model = g.guide.methodAccuracy('model');
   assert.deepEqual([model.documented, model.unregistered], [null, '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다']);
   const market = m.types.parseMarketStatus(resolveVariant('today-base').responses['/api/v1/market-status'].body);
-  assert.equal(g.guide.marketFacts(market), '이번 방문의 서버 값: 하루전시장 마감 11-26(목) 10:00 KST · 입찰일 11-27(금) · 실시간시장 15분 단위');
+  assert.equal(g.guide.marketFacts(market), '이번 방문의 서버 값: 하루전시장 마감 11-26(목) 10:00 KST · 거래일 11-27(금) · 실시간시장 15분 단위');
   assert.equal(g.guide.marketFacts(null), null);
   const skew = ms => g.kst.clockSkew(ms, 0);
   assert.deepEqual([skew(3 * 60000), skew(13 * 3600000), skew(60000), null].map(s => g.guide.aboutClockLines(s)),

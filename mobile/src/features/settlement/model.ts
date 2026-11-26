@@ -4,7 +4,7 @@
 import { EXAMPLE_STATEMENT, EXAMPLE_STATEMENT_AMOUNTS, KWH_PER_MWH } from '../../data/examples';
 import type { Example } from '../../data/examples';
 import {
-  SETTLEMENT_ANSWER, STATEMENT_FIGURE_LABELS, STATEMENT_ROWS, legendStatementText, settlementPanelMethod, statementFactText,
+  SETTLEMENT_ANSWER, STATEMENT_FIGURE_LABELS, STATEMENT_ROWS, legendStatementText, settlementUnitLine, statementFactText,
   statementFigureText, statementTotalFactText, unitFactText,
 } from '../../content/strings';
 
@@ -21,7 +21,8 @@ export type SettlementView = {
   facts: readonly string[];
   /** ≥ 1280 패널 범례의 예시 행과 읽는 법 세 줄. */
   legend: string;
-  panelMethod: readonly string[];
+  /** ≥ 1280 패널 읽는 법의 단위 줄(앞 두 줄은 guide.ko.json panels.settlement, round 2). */
+  panelUnit: string;
   /** y는 0부터, top은 가장 높은 막대 끝(그림 높이의 기준). */
   figure: { summary: string; bars: readonly FigureBar[]; top: number };
 };
@@ -53,7 +54,7 @@ export function settlementView(): SettlementView {
       statementTotalFactText(won.dayAhead.value, won.deviation.value, won.total.value),
     ],
     legend: legendStatementText(won.total.value),
-    panelMethod: settlementPanelMethod(KWH_PER_MWH),
+    panelUnit: settlementUnitLine(KWH_PER_MWH),
     figure: {
       summary: statementFigureText(won.dayAhead.value, won.deviation.value, won.total.value),
       bars,

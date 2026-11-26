@@ -27,7 +27,8 @@ import type { DomEl } from '../ui/web';
 import { MINUTE_MS, clockSkew, kstNow } from '../lib/kst';
 import type { ClockSkew } from '../lib/kst';
 import {
-  REFRESH_FAILED_TEXT, REFRESH_NONE_REASON, REFRESH_OFFLINE_REASON, offlineText, refreshDoneText, refreshFailedText, screenReloadingText,
+  ONLINE_AGAIN_TEXT, REFRESH_FAILED_TEXT, REFRESH_NONE_REASON, REFRESH_OFFLINE_REASON, offlineText, refreshDoneText, refreshFailedText,
+  screenReloadingText,
 } from '../content/strings';
 
 export type HeaderPalette = { background: string; border: string; wordmark: string; title: string; version: string; icon: string };
@@ -193,8 +194,15 @@ function ShellBody({ tabs, legacy = NO_KEYS, renderRoute, renderHeader, renderPa
   const [busy, setBusy] = useState(false);
   const [reloads, setReloads] = useState(0);
   const online = useOnline();
+  const wasOnline = useRef(online);
 
   useEffect(() => router.start(), [router]);
+  // 오프라인이 되고 풀릴 때 셸의 알림 하나로도 알린다(round 2: 띠의 role=status만으로는 글자가 이미 있어 읽히지 않을 수 있었다).
+  useEffect(() => {
+    if (wasOnline.current === online) return;
+    wasOnline.current = online;
+    announce(online ? ONLINE_AGAIN_TEXT : offlineText(data ? data.fetchedAt : null));
+  }, [online, announce, data]);
   // 시트가 열린 동안 바깥(헤더·본문·탭 막대)은 inert(round 1 접근성: 화면 읽기 프로그램이 시트 밖으로 나갔다). 레이아웃 효과라서 시트가
   // 닫히며 연 버튼으로 초점을 돌려주기(시트의 일반 효과) 전에 풀린다.
   const sheetOpen = Boolean(shown.sheet && registry[shown.sheet.kind]);

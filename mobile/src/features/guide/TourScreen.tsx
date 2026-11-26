@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react';
 import type React from 'react';
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { tourLegend } from './model';
 import { GuideGate } from './sheets';
 import { useGuide } from './useGuide';
@@ -29,11 +29,12 @@ import { useTodayView } from '../today/data';
 import { markTourSeen } from '../today/tourSeen';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
 import { ProvenanceChip, SampleRibbon } from '../../ui/Chips';
-import { ChartBleed } from '../../ui/charts/ChartFrame';
+import { ChartBleed, ChartKey } from '../../ui/charts/ChartFrame';
 import { Screen } from '../../ui/Screen';
 import { StepChart } from '../../ui/charts/StepChart';
 import { Text, keepTogether } from '../../ui/Text';
-import { TourStep } from '../../ui/Tour';
+import { TourStep, TourStepEnd } from '../../ui/Tour';
+import { LAYOUT } from '../../ui/tokens';
 
 // 둘러보기에서는 입찰 화면처럼 다시 조회·다시 계산을 걸지 않는다: 불일치·오래된 입력이면 그 상태(‹시각 확인 필요›)를 그대로 보인다.
 const TOUR_FLOW: BiddingFlow = { recheck: 'done', staleRetried: true };
@@ -67,8 +68,8 @@ function TourForecast() {
   }
   return (
     <Card title={title} chips={<ChipList chips={f.chips} />} onMethod={open.method('today-forecast')} testID="tour-forecast">
-      <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{keepTogether(f.legend, { variant: 'meta', tone: 'text2' })}</Text>
-      <ChartBleed><StepChart forecast={f.view} label={chartLabel(f.kind)} now={now} dots={f.dots} /></ChartBleed>
+      <ChartKey items={f.key} />
+      <ChartBleed><StepChart forecast={f.view} label={chartLabel(f.kind)} now={now} dots={f.dots} withdrawn={f.dotsWithdrawn} /></ChartBleed>
       {a && a.documented ? <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{keepTogether(a.documented.main, { variant: 'body', weight: '700' })}</Text> : null}
       {a && a.documented ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{keepTogether(a.documented.basis, { variant: 'meta', tone: 'text3' })}</Text> : null}
       {a && a.unregistered ? <Text variant="body" tone="text2">{a.unregistered}</Text> : null}
@@ -129,14 +130,18 @@ export function TourScreen({ step, pill }: { step: number; pill: React.ReactNode
   const guide = useGuide();
   useEffect(() => { markTourSeen(); }, []);
   const section = guide.content ? guide.content.tour[step - 1] : null;
+  const { width } = useWindowDimensions();
   const toStep = (n: number) => nav.push({ ...rootState('guide'), tour: n });
+  const onPrev = () => toStep(step - 1);
+  const onNext = () => (step < TOUR_STEPS ? toStep(step + 1) : nav.push(rootState('smp')));
+  // NowPill은 진행 글자 줄에 둔다(round 2: 단계 제목 길이에 따라 h1 행에서 줄을 바꿔 단계마다 머리가 뛰었다).
   return (
-    <Screen title={section ? section.title : tourLabel(step, TOUR_STEPS)} pill={pill} testID="guide-tour">
-      <TourStep step={step} total={TOUR_STEPS} onPrev={() => toStep(step - 1)} onSkip={() => nav.push(rootState('guide'))}
-        onNext={() => (step < TOUR_STEPS ? toStep(step + 1) : nav.push(rootState('smp')))}>
+    <Screen title={section ? section.title : tourLabel(step, TOUR_STEPS)} testID="guide-tour">
+      <TourStep step={step} total={TOUR_STEPS} pill={pill} onPrev={onPrev} onSkip={() => nav.push(rootState('guide'))} onNext={onNext}>
         <GuideGate>{c => <View>{c.tour[step - 1].body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}</View>}</GuideGate>
       </TourStep>
       <TourExample step={step} />
+      {width < LAYOUT.rowCardsBelow ? <TourStepEnd step={step} total={TOUR_STEPS} onPrev={onPrev} onNext={onNext} /> : null}
     </Screen>
   );
 }

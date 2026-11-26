@@ -327,6 +327,22 @@
       ]
     },
     {
+      "id": "today-supply-epsis-30day",
+      "screen": "today",
+      "sweep": "T9",
+      "state": "공급능력이 30일 평균(실시간으로 맞추지 않음)",
+      "spec": "7.4 supplyPair · round 2",
+      "inject": [
+        {
+          "route": "/api/v1/power-supply",
+          "set": {
+            "/data_source": "EPSIS Real Data (30-day avg, last: 2025-04-30) + Renewable ML",
+            "/data/6/supply": 1304.2
+          }
+        }
+      ]
+    },
+    {
       "id": "today-weather-file",
       "screen": "today",
       "sweep": "T9",

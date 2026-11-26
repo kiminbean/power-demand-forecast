@@ -89,6 +89,14 @@ export function clippedRuns(kinds: readonly HourKind[], q90: readonly (number | 
   return runsOf(kinds.map((k, i) => k === 'value' && isFiniteNumber(q90[i]) && (q90[i] as number) > scale.top));
 }
 
+/**
+ * 80% 띠 아래쪽(q10)이 그림 맨 아래 눈금(보통 0)보다 낮은 값 시간들(round 2 integrity: q10이 음수인 시간의 띠가 0에서 시작하는 것처럼
+ * 보였다). 그 시간은 축 위에 ▼로 표시한다.
+ */
+export function clippedLowRuns(kinds: readonly HourKind[], q10: readonly (number | null)[], scale: Scale): Run[] {
+  return runsOf(kinds.map((k, i) => k === 'value' && isFiniteNumber(q10[i]) && (q10[i] as number) < scale.bottom));
+}
+
 /** 시 경계 k(0–24)의 x. 거래시간 H는 경계 H−1과 H 사이다. */
 export const boundaryX = (k: number, plot: Box) => plot.left + (k / HOURS) * plot.width;
 export const hourCenterX = (hour: number, plot: Box) => boundaryX(hour - 0.5, plot);
@@ -233,12 +241,16 @@ export const stepChartHeight = (width: number) => pickHeight(CHART.stepHeights, 
 export const ladderChartHeight = (width: number) => pickHeight(CHART.ladderHeights, width);
 
 export type StepLayout = { width: number; height: number; plot: Box; scale: Scale; note: boolean };
-/** 위에서부터: 단위·지금 pill 줄 → 그림 → x 눈금 줄 → (0.00 입력이 있으면) 각주 줄. */
-export function stepLayout(width: number, scale: Scale, note: boolean): StepLayout {
+/**
+ * 위에서부터: 단위·지금 pill 줄 → (띠가 위로 넘쳤으면 ▲ 줄, round 2 parity: ▲가 그림 안 지금 pill 바로 아래에 있었다) → 그림 → x 눈금 줄
+ * → (0.00 입력이 있으면) 각주 줄. 차트 높이는 그대로이고 그림이 그만큼 낮아진다.
+ */
+export function stepLayout(width: number, scale: Scale, note: boolean, clipRow = false): StepLayout {
   const height = stepChartHeight(width);
   const left = yGutter(scale);
+  const top = CHART.topRow + (clipRow ? CHART.clipRow : 0);
   const bottom = height - CHART.xRow - (note ? CHART.noteRow : 0);
-  return { width, height, scale, note, plot: { left, top: CHART.topRow, width: Math.max(1, width - left - CHART.edge), height: Math.max(1, bottom - CHART.topRow) } };
+  return { width, height, scale, note, plot: { left, top, width: Math.max(1, width - left - CHART.edge), height: Math.max(1, bottom - top) } };
 }
 
 /** 지금 pill: 지금선 가운데에 두되 왼쪽 위 단위 글자와 겹치지 않고 차트 밖으로 나가지 않게 붙인다. */

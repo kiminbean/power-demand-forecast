@@ -54,6 +54,14 @@ test('API 십진 값을 그대로 한 번 반올림(0.5는 0에서 먼 쪽): toF
   assert.equal(f.price(Number.NaN), '—');
 });
 
+test('범위 구분(round 2 parity): 음수가 든 범위는 " ~ ", 아니면 "–" — 값은 그대로(한 번 반올림)', () => {
+  assert.equal(f.priceRange(171.7, 244.1), '171.7–244.1');
+  assert.equal(f.priceRange(-11.09, 315.94), '−11.1 ~ 315.9', '빼기 기호·줄표가 "−11.1–315.9"처럼 겹치지 않는다');
+  assert.equal(f.priceRange(-0.98, 300.76), '−1.0 ~ 300.8');
+  assert.equal(f.rangeSep(-0.04, 10), '–', '반올림해 0.0이면 음수가 아니다(보이는 글자 기준)');
+  assert.equal(f.rangeSep(5, -3), ' ~ ');
+});
+
 test('6.3 examples: trade hour labels use two digits (07h · 06–07시)', () => {
   assert.equal(f.tradeHour(7), '07h · 06–07시');
   assert.equal(f.tradeHour(1), '01h · 00–01시');

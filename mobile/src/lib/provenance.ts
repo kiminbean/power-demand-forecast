@@ -1,7 +1,8 @@
 // 출처 판정(명세 7.1·7.4·7.7절). 문구는 대시보드와 한 글자도 다르지 않게 둔다:
 // 수요·예비율은 src/dashboard/app_v4.py 3352–3366행, 기상은 _fmt_weather_provenance, 단계는 3296–3316행.
-// 예외 하나(round 1 D9, 모바일만): 예비율 단계 이름은 KPX 공식 경보 단계 낱말(준비·관심·주의·경계·심각)을 쓰지 않는다.
-// 대시보드의 관심·주의 자리에 보통·낮음을 쓰고, 판정 문장(verdict)은 대시보드와 같다.
+// 예외 둘(모바일만): 예비율 단계 이름은 KPX 공식 경보 단계 낱말(준비·관심·주의·경계·심각)을 쓰지 않는다(round 1 D9, 대시보드의
+// 관심·주의 자리에 보통·낮음). 보통의 판정 문장은 값 하나로 알 수 없는 추세("줄고 있습니다") 대신 수준을 말한다(round 2 integrity).
+// 나머지 판정 문장은 대시보드와 같다. 대시보드 쪽 같은 수정은 보고서 후속 항목이다.
 import type { ChipKind } from '../ui/tokens';
 
 export type Chip = Readonly<{ kind: ChipKind; text: string }>;
@@ -101,9 +102,14 @@ export type SupplyPair =
   | Readonly<{ ok: true; hour: number; supplyMw: number; demandMw: number; reserveMw: number; watchBoundaryMw: number }>
   | Readonly<{ ok: false; reason: typeof SUPPLY_MISSING }>;
 
+/** /power-supply가 지금 시각 행을 실시간 값으로 맞췄을 때의 data_source(api/v6_routes.py): "… scaled to real-time: demand N MW, supply N MW". */
+const REALTIME_SUPPLY = /scaled to real-time:[^)]*\bsupply (\d+(?:\.\d+)?) MW/;
+
 /**
- * /power-supply에서 hour === current_hour인 행 하나만 본다. 그 행의 demand가 KPI 수요와 ±1 MW 안이고 수요가 ③일 때만
- * 그 행의 supply를 실측 공급능력으로 쓴다. 다른 시각 행(패턴)은 쓰지 않는다. 반올림은 표시할 때 1회.
+ * /power-supply에서 hour === current_hour인 행 하나만 본다. 그 행의 demand가 KPI 수요와 ±1 MW 안이고 수요가 ③이며, data_source가 그
+ * 행의 supply를 실시간 공급능력으로 맞췄다고 말할 때(그 숫자와 ±1 MW)만 실측 공급능력으로 쓴다. 다른 시각 행(패턴)은 쓰지 않는다.
+ * round 2 integrity: 크롤러가 수요만 주면 지금 시각 행의 수요는 KPI와 맞지만 공급은 EPSIS 30일 평균("EPSIS Real Data (30-day avg …)")
+ * 그대로라서 예비력·경계가 2025년 평균에서 나왔다. 반올림은 표시할 때 1회.
  */
 export function supplyPair(kpis: unknown, powerSupply: unknown): SupplyPair {
   const missing = { ok: false, reason: SUPPLY_MISSING } as const;
@@ -116,6 +122,8 @@ export function supplyPair(kpis: unknown, powerSupply: unknown): SupplyPair {
   if (!isRecord(row) || !isFiniteNumber(row.supply) || !isFiniteNumber(row.demand) || row.supply <= 0) return missing;
   // 1e-9: 664.3과 665.3의 차이가 부동소수로 1.0000000000000568이 되는 것을 경계 안으로 둔다.
   if (Math.abs(row.demand - demand) > PAIR_TOLERANCE_MW + 1e-9) return missing;
+  const live = typeof powerSupply.data_source === 'string' ? REALTIME_SUPPLY.exec(powerSupply.data_source) : null;
+  if (!live || Math.abs(Number(live[1]) - row.supply) > PAIR_TOLERANCE_MW + 1e-9) return missing;
   return { ok: true, hour, supplyMw: row.supply, demandMw: demand, reserveMw: row.supply - demand, watchBoundaryMw: row.supply / WATCH_RATIO };
 }
 
@@ -123,7 +131,7 @@ export type ReserveTone = 'ok' | 'watch' | 'caution' | 'danger';
 export type ReserveLevel = Readonly<{ tone: ReserveTone; name: string; verdict: string; label: string }>;
 const LEVELS: ReadonlyArray<{ min: number; tone: ReserveTone; name: string; verdict: string }> = [
   { min: 15, tone: 'ok', name: '정상', verdict: '넉넉합니다' },
-  { min: 10, tone: 'watch', name: '보통', verdict: '여유가 줄고 있습니다' },
+  { min: 10, tone: 'watch', name: '보통', verdict: '여유가 15% 아래입니다' },
   { min: 5, tone: 'caution', name: '낮음', verdict: '여유가 부족합니다' },
   { min: -Infinity, tone: 'danger', name: '위험', verdict: '공급이 빠듯합니다' },
 ];

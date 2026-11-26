@@ -107,7 +107,7 @@ export function daysBetween(from: string, to: string): number | null {
   return a === null || b === null ? null : Math.round((b - a) / DAY_MS);
 }
 
-/** 날짜 키(+dayOffset일)의 'HH:MM' KST 시각(epoch ms). 하루전시장 마감 = 입찰일 하루 전 10:00(4.2절). 모양이 틀리면 null. */
+/** 날짜 키(+dayOffset일)의 'HH:MM' KST 시각(epoch ms). 하루전시장 마감 = 거래일 하루 전 10:00(4.2절). 모양이 틀리면 null. */
 export function kstAt(dayKey: string, hhmm: string, dayOffset = 0): number | null {
   const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm).trim());
   const day = addDays(dayKey, dayOffset);

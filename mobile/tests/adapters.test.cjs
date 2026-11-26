@@ -45,7 +45,7 @@ test('forecast: baseline kind from the same response, made 06:03, band only for 
   const raw = fx('_api_v1_smp-forecast.json');
   const view = a.adaptForecast(types.parseForecast(raw));
   assert.deepEqual([view.kind, view.shortName, view.forecastDate, view.q50.chip.text, view.q50.state, view.q50.source, view.q50.time.kst, view.q50.note],
-    ['baseline', '기준선', '2026-11-26', '예측 · 기준선', 'forecast', 'API 서버 기준선 예측', '만든 시각 06:03 KST', '예측일 2026-11-26']);
+    ['baseline', '기준선', '2026-11-26', '예측 · 기준선', 'forecast', 'API 서버 기준선 예측', '만든 시각 06:03 KST', '예측일 11-26(목)']);
   assert.equal(view.modelUsed, raw.model_used);
   assert.equal(view.q50.value.length, 24);
   assert.ok(view.band && view.band.q10.length === 24);
@@ -234,6 +234,37 @@ test('client prefetch (round 1 D3): index.html이 미리 받은 응답을 URL마
   assert.equal(client_.takePrefetch({ t: T0 + 10, r: { a: Promise.resolve(1) } }, 'a', T0), null, '기기 시계가 거꾸로 가면 쓰지 않는다');
 });
 
+test('prefetch arrival (round 2 NOW-KST): 미리 받은 응답은 도착 시각이 조회 시각 — 1초에 도착, 130초에 꺼내도 시계 차이 ≈ 0 · 나이 129초', async () => {
+  const resource = load('lib/resource.ts');
+  const kst = load('lib/kst.ts');
+  const body = fx('_api_v1_market-status.json');
+  const server = kst.parseApiTime(body.current_time);
+  const T0 = server - 1000; // 미리 받기를 시작한 기기 시각. 서버는 1초 뒤에 응답했다(그 응답의 current_time = 도착 시각).
+  let now = T0 + 130_000; // 번들을 130초 붙잡은 뒤에 앱이 꺼낸다.
+  const deps = { now: () => now, setTimer: (fn, ms) => setTimeout(fn, Math.min(ms, 5)), clearTimer: t => clearTimeout(t) };
+  const store = resource.createResourceStore(deps);
+  const table = { t: T0, r: { [ENDPOINTS.marketStatus]: Promise.resolve(okJson(body)) }, a: { [ENDPOINTS.marketStatus]: T0 + 1000 }, x: false };
+  const { calls, impl } = fakeFetch(() => okJson(body));
+  const client = createClient({ baseUrl: '', fetchImpl: impl, prefetch: () => table, now: () => now });
+  assert.equal(await store.load(ENDPOINTS.marketStatus, () => client.getMarketStatus()), true);
+  const snap = store.get(ENDPOINTS.marketStatus);
+  assert.equal(calls.length, 0, '미리 받은 응답을 썼다');
+  assert.equal(snap.fetchedAt, T0 + 1000, '조회 시각 = 도착 시각(꺼낸 시각이 아님)');
+  const skew = kst.clockSkew(kst.parseApiTime(snap.data.current_time), snap.fetchedAt);
+  assert.ok(Math.abs(skew.skewMs) < 1000 && !skew.notable, `서버 시계 차이 ${skew.skewMs} ms`);
+  assert.equal(now - snap.fetchedAt, 129_000, '나이 129초');
+  assert.equal(s.nowPillText({ now: kst.kstNow(skew, now), fetchedAt: snap.fetchedAt + skew.skewMs }), `${f.kstTime(server + 129_000)} · 조회 2분 전`);
+  // 대조: 도착 시각이 없는 보통 요청은 받은 순간이 조회 시각이다(같은 저장소 규칙).
+  now += 1000;
+  assert.equal(await store.load(ENDPOINTS.kpis, () => client.getDashboardKPIs()), true);
+  assert.equal(store.get(ENDPOINTS.kpis).fetchedAt, now);
+  // 도착 시각이 미래(기기 시계가 뒤로 감)면 믿지 않고 받은 순간을 쓴다.
+  const table2 = { t: now, r: { [ENDPOINTS.forecast]: Promise.resolve(okJson(fx('_api_v1_smp-forecast.json'))) }, a: { [ENDPOINTS.forecast]: now + 60_000 } };
+  const c2 = createClient({ baseUrl: '', fetchImpl: impl, prefetch: () => table2, now: () => now });
+  assert.equal(await store.load(ENDPOINTS.forecast, () => c2.getSMPForecast()), true);
+  assert.equal(store.get(ENDPOINTS.forecast).fetchedAt, now);
+});
+
 test('examples: the only home of invented values, frozen, 50 MW virtual plant and 1,716만원 sample statement', () => {
   assert.deepEqual([ex.EXAMPLE_PLANT.name.value, ex.EXAMPLE_PLANT.capacityMw.value, ex.EXAMPLE_PLANT.capacityMw.unit], ['예시 풍력발전소', 50, 'MW']);
   const st = ex.EXAMPLE_STATEMENT;
@@ -255,6 +286,9 @@ const GUIDE_OK = () => {
     // F10: 숫자 읽는 법의 표시별 설명, 예측 방법의 단순화한 설명 목록.
     legend: Object.fromEntries(guide.LEGEND_KEYS.map(k => [k, `표시 ${k} 설명입니다.`])),
     simplified: sec('시장 규칙 설명'),
+    // round 2: ≥ 1280 패널의 숫자 없는 문장(번들에서 옮겼다).
+    panels: { today: ['오늘 패널입니다.'], bidding: ['입찰 패널입니다.'], settlement: ['정산 패널입니다.'],
+      graph: { baseline: '기준선입니다.', model: '모델입니다.', fallback: '대체값입니다.' }, estimated: '추정입니다.', example: '예시입니다.' },
   };
 };
 
@@ -263,9 +297,10 @@ test('guide loader: shape (keys, kinds, lengths, no digits), relative URL, one r
   assert.equal(guide.parseGuide(GUIDE_OK()).glossary.length, 13);
   const broken = [
     j => { j.version = 2; }, j => { j.tour.pop(); }, j => { j.glossary[0].id = 'nope'; }, j => { j.glossary[1].id = j.glossary[0].id; },
-    j => { j.glossary[0].short = '가'.repeat(61); }, j => { delete j.cards['bid-merit']; }, j => { j.topics.extra = j.topics.about; },
+    j => { j.glossary[0].short = '가'.repeat(65); }, j => { delete j.cards['bid-merit']; }, j => { j.topics.extra = j.topics.about; },
     j => { j.tour[0].body = []; }, j => { j.tour[0].title = '마감 10시'; }, j => { j.cards['today-price'].body = ['']; },
     j => { delete j.legend.stale; }, j => { j.legend.time = '모든 시각은 KST (UTC+9)'; }, j => { j.legend.extra = '그 밖'; }, j => { delete j.simplified; },
+    j => { delete j.panels; }, j => { j.panels.graph = { baseline: '기준선' }; }, j => { j.panels.bidding = []; }, j => { j.panels.example = '24시간'; },
   ];
   for (const mutate of broken) {
     const j = GUIDE_OK();

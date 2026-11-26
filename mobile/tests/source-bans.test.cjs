@@ -34,6 +34,8 @@ const TEXT_RULES = [
   { id: 'console', re: /\bconsole\s*\./ },
   { id: 'phrase', re: /R[²2]\s*=\s*0\.95|BiLSTM|CatBoost|AI 최적화|AI 추천|신뢰도|현재 SMP|실시간 데이터|자동 입찰|등록되었습니다|제출 완료|임시 저장|운영자 계정/ },
   { id: 'private-path', re: /\/settlements\b|\/power-plants\b|\/resources\b|\/smp\/rtm\b|\/smp\/current\b/ },
+  // 전기를 주고받는 날은 KPX 말대로 거래일이다(round 2 멘토 MEN-COPY: "입찰일"이 입찰하는 날로 읽혀 마감 뒤 날짜와 엇갈렸다).
+  { id: 'copy-term', re: /입찰일/ },
 ];
 // 이모지·기호 문자는 주석까지 포함한 원문에서 찾는다. 화살표(→ U+2192)는 허용한다(입찰 문구 "95%→5%").
 const EMOJI = /[☀-➿️⌚⌛⏩-⏳⏸-⏺⬅-⬇⬛⬜⭐⭕]|[\u{1F000}-\u{1FAFF}]/u;
@@ -216,17 +218,9 @@ test('App.tsx and SMPForecastScreen.tsx enter the scope as soon as their bytes c
   }
 });
 
-test('transitional legacy imports are still used (delete the entry when F8/F9 replace the tab)', () => {
-  for (const [rel, targets] of Object.entries(TRANSITIONAL_IMPORTS)) {
-    const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-    const sf = parse(rel, text);
-    const imported = sf.statements
-      .filter(st => ts.isImportDeclaration(st) && ts.isStringLiteral(st.moduleSpecifier))
-      .map(st => resolveImport(rel, st.moduleSpecifier.text))
-      .filter(Boolean)
-      .map(target => target.replace(/\.(tsx?|jsx?)$/, ''));
-    for (const target of targets) assert.ok(imported.includes(target), `${rel} no longer imports ${target}: remove it from TRANSITIONAL_IMPORTS`);
-  }
+test('no transitional legacy import remains (F8/F9 retired them; a new entry must come with its own check)', () => {
+  // round 2 integrity(R8): 빈 표를 도는 단언 없는 테스트였다. 표가 비어 있다는 사실 자체를 단언한다(새 항목이 생기면 여기서 걸린다).
+  assert.deepEqual(TRANSITIONAL_IMPORTS, {});
 });
 
 const POSITIVE = [
@@ -253,6 +247,8 @@ const POSITIVE = [
   ['src/app/g2.ts', "Alert.alert('x');", ['blocking-dialog']],
   ['src/data/h.ts', "console.log('x');", ['console']],
   ['public/content/guide.ko.json', '{ "a": "신뢰도 75%" }', ['phrase']],
+  ['public/content/guide.ko.json', '{ "a": "마감 시각과 입찰일" }', ['copy-term']],
+  ['src/content/strings.ts', "export const d = (t: string) => `입찰일 ${t}`;", ['copy-term']],
   ['src/content/strings.ts', "export const m = 'GradientBoosting (R²=0.95)';", ['phrase']],
   ['src/data/i.ts', "fetch('/api/v1/settlements/summary');", ['private-path']],
   ['src/data/i2.ts', "fetch('/api/v1/smp/current?region=jeju');", ['private-path']],

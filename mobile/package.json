@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "eslint .",
     "test": "node --test $(ls tests/*.test.cjs | grep -v '\\.browser\\.')",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "check": "npm test && npm run typecheck"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",

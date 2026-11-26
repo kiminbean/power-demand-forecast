@@ -17,7 +17,7 @@ export type Loader<T> = (signal: AbortSignal) => Promise<T>;
 export class RequestTimeoutError extends Error {
   readonly retryable = true;
   constructor() {
-    super('요청 시간이 지났습니다');
+    super('request timed out');
     this.name = 'RequestTimeoutError';
   }
 }
@@ -35,6 +35,18 @@ const defaultDeps = (): StoreDeps => ({
 });
 
 const IDLE: Resource<never> = Object.freeze({ data: null, fetchedAt: null, status: 'idle', error: null, busy: false });
+
+/**
+ * 응답이 실제로 도착한 기기 시각(round 2 NOW-KST). index.html이 번들을 받는 동안 미리 받은 응답은 앱이 번들을 실행한 뒤에야 꺼낸다:
+ * 꺼낸 순간을 조회 시각으로 쓰면 나이가 그만큼 어리게 읽히고, 그 응답의 서버 시각(current_time)과 짝지은 앱 시계가 그만큼 늦는다
+ * (번들을 130초 붙잡으면 2분 늦은 "지금"). 클라이언트가 값 객체에 도착 시각을 붙이면 저장소가 그것을 조회 시각으로 쓴다(없으면 받은 순간).
+ */
+const ARRIVED = new WeakMap<object, number>();
+export function markArrived<T>(data: T, at: number): T {
+  if (typeof data === 'object' && data !== null && Number.isFinite(at)) ARRIVED.set(data as unknown as object, at);
+  return data;
+}
+const arrivedAt = (data: unknown): number | null => (typeof data === 'object' && data !== null ? ARRIVED.get(data) ?? null : null);
 type Outcome<T> = { ok: true; data: T } | { ok: false; error: unknown };
 
 export function createResourceStore(deps: StoreDeps = defaultDeps()) {
@@ -96,7 +108,11 @@ export function createResourceStore(deps: StoreDeps = defaultDeps()) {
           outcome = await attempt(loader);
         }
         e.inflight = null;
-        if (outcome.ok) patch(e, { data: outcome.data, fetchedAt: deps.now(), status: 'ready', error: null, busy: false });
+        if (outcome.ok) {
+          const now = deps.now();
+          const arrived = arrivedAt(outcome.data);
+          patch(e, { data: outcome.data, fetchedAt: arrived !== null && arrived <= now ? arrived : now, status: 'ready', error: null, busy: false });
+        }
         else patch(e, { status: 'error', error: outcome.error, busy: false });
         return outcome.ok;
       };

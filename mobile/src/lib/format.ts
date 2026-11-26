@@ -42,6 +42,16 @@ export const mw = (v: number | null | undefined) => num(v, 0);
 /** 백분율 값(이미 % 단위). 79.5 → "79.5" */
 export const pct = (v: number | null | undefined, decimals = 1) => num(v, decimals);
 
+/**
+ * 범위의 구분 글자(round 2 parity): 보이는 두 끝 중 하나라도 음수면 " ~ "(빼기 기호·범위 줄표·시각 줄표가 "−11.1–315.9"처럼 한 줄로
+ * 겹쳐 읽혔다), 아니면 "–". 값은 그대로다(I3).
+ */
+export function rangeSep(lo: number, hi: number): string {
+  return price(lo).startsWith(MINUS) || price(hi).startsWith(MINUS) ? ' ~ ' : '–';
+}
+/** 가격 범위 "171.7–244.1", 음수가 있으면 "−11.1 ~ 315.9". */
+export const priceRange = (lo: number, hi: number) => `${price(lo)}${rangeSep(lo, hi)}${price(hi)}`;
+
 /** 원 → 만원·억원(1억 이상은 소수 둘째 자리 억원). 반올림 1회. */
 export function krw(won: number | null | undefined, decimals = 1): string {
   if (!isFiniteNumber(won)) return DASH;

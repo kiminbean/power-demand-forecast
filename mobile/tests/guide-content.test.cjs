@@ -60,11 +60,11 @@ function assertI2(root, label) {
 const links = root => all(root, n => n.props.role === 'link');
 const BANNED = /R[²2]\s*=\s*0\.95|BiLSTM|CatBoost|AI 최적화|AI 추천|신뢰도|현재 SMP|실시간 데이터|자동 입찰|등록되었습니다|제출 완료|임시 저장|운영자 계정|연결됨/;
 
-test('guide.ko.json: 둘러보기 5단계 제목(4.4절 그대로) · 용어 13개(사전 순서, 한 줄 뜻 60자 이하) · 주제 넷 · 표시별 설명 9개 · 단순화한 설명 넷', () => {
+test('guide.ko.json: 둘러보기 5단계 제목(4.4절 그대로) · 용어 13개(사전 순서, 한 줄 뜻 64자 이하) · 주제 넷 · 표시별 설명 9개 · 단순화한 설명 넷', () => {
   const m = load();
   const c = content(m);
   assert.deepEqual(c.tour.map(t => t.title), ['제주 전기값은 시간마다 바뀝니다', '오늘 값은 어제 같은 시간 값으로 짐작합니다', '발전소는 하루 전에 팝니다',
-    '판 만큼 정산 받습니다', '숫자 옆 표시를 보세요']);
+    '판 양과 실제 발전으로 정산합니다', '숫자 옆 표시를 보세요']);
   assert.deepEqual(c.glossary.map(g => g.id), Object.keys(m.strings.GLOSSARY_TITLES));
   for (const g of c.glossary) assert.ok(g.short.length <= m.guide.GLOSSARY_SHORT_MAX, g.id);
   assert.deepEqual(Object.keys(c.topics).sort(), ['about', 'method', 'reading', 'sources']);
@@ -82,12 +82,39 @@ test('D1: 둘러보기 2단계와 용어 사전 "기준선 예측"·예측 방�
   const baseline = c.glossary.find(g => g.id === 'baseline');
   // 어제 값을 "내일"에 쓰면 48시간 차이가 된다(round 1 멘토 major): 같은 날짜 표현만 허용한다.
   for (const [label, text] of [['tour[1].title', step2.title], ['tour[1].body', step2.body.join(' ')], ['glossary baseline', baseline.short],
-    ['method', c.topics.method.body[0]], ['chart legend', m.strings.forecastLegendText('baseline')]]) {
+    ['method', c.topics.method.body[0]], ['chart legend', m.strings.forecastKeyItems('baseline', { top: false, bottom: false }, null, false)[0].text]]) {
     assert.match(text, /어제 같은 시간/, label);
     assert.doesNotMatch(text, /내일/, label);
   }
   for (const text of [step2.title, step2.body.join(' '), baseline.short, c.topics.method.body[0]]) assert.match(text, /오늘/, text);
   assert.match(step2.body.join(' '), /학습한 모델이 아닌 단순한 방법이라 평소 얼마나 빗나가는지도 함께 보여 줍니다/);
+});
+
+test('round 2 MEN-COPY: 거래일(입찰일 아님) · 정산 뜻 한 문장 · 낙찰 가능성과 SMP 가격 규칙이 한 가지', () => {
+  const m = load();
+  const c = content(m);
+  const raw = fs.readFileSync(JSON_FILE, 'utf8');
+  // 전기를 주고받는 날은 거래일이다(KPX 낱말, 앱의 "거래시간"과 같은 말). 입찰일은 화면 글자 어디에도 없다(source-bans copy-term도 본다).
+  assert.doesNotMatch(raw, /입찰일/);
+  const dam = c.glossary.find(g => g.id === 'dam');
+  assert.ok(dam.body.some(p => /전기를 실제로 주고받는 날을 거래일이라고 합니다/.test(p)), '하루전시장 용어가 거래일을 풀이한다');
+  const store = m.strings;
+  const exported = Object.values(store).filter(v => typeof v === 'string').join(' ');
+  assert.doesNotMatch(exported, /입찰일/);
+  // 정산: 화면 첫 문장 · 용어 한 줄 뜻 · 둘러보기 4단계가 예시 정산서가 보여 주는 같은 두 부분을 말한다.
+  const settle = c.glossary.find(g => g.id === 'settlement');
+  const definition = '하루전시장에서 판 양은 하루전 가격으로, 실제 발전과의 차이는 실시간 가격으로 계산해 돈을 주고받';
+  assert.ok(store.SETTLEMENT_ANSWER.startsWith(`정산은 ${definition}`), store.SETTLEMENT_ANSWER);
+  assert.ok(settle.short.startsWith(definition), settle.short);
+  assert.ok(c.tour[3].body[0].startsWith(definition), c.tour[3].body[0]);
+  assert.equal(c.tour[3].title, '판 양과 실제 발전으로 정산합니다');
+  // 낙찰 가능성: 낮게 내면 받는 값이 낮아진다고 하지 않는다(SMP 용어: 그 시간 모든 전기에 같은 값). 낙찰되면 SMP를 받는다.
+  const clearing = c.glossary.find(g => g.id === 'clearing').body.join(' ');
+  assert.doesNotMatch(clearing, /받는 값은 낮아/);
+  assert.match(clearing, /낙찰되면 그 시간 SMP를 받습니다/);
+  assert.match(c.cards['bid-ladder'].body.join(' '), /입찰 가격 × 물량 × 낙찰 가능성/);
+  // 산출 방식 시트가 시트 뒤 카드의 문장을 가리킨다("아래 두 줄은"은 시트 안에 없는 것을 가리켰다).
+  assert.doesNotMatch(c.cards['today-price'].body.join(' '), /아래 두 줄/);
 });
 
 test('D7: 뜻·읽는 법이 먼저, 짝·검증 규칙은 끝의 흐린 "자세히" 한 줄 — 공급능력 뜻, "KPI 수요"·"±1 MW" 없음, 규칙은 detail에만', () => {
@@ -161,8 +188,10 @@ test('용어 사전(?topic=glossary): 항목마다 이름 링크(→ 용어 화�
   assert.equal(names.length, titles.length * 2);
   titles.forEach((t, i) => {
     assert.equal(names[i * 2], `${t}, ${c.glossary[i].short}`);
-    assert.equal(names[i * 2 + 1], `이 앱에서 보는 곳: ${m.routes.ROUTES[m.model.TERM_WHERE[c.glossary[i].id]].tab}`);
+    // 링크 이름에 용어를 넣는다(round 2, WCAG 2.4.9): 보이는 글자 "이 앱에서 보는 곳: 오늘"을 품고 13개가 서로 다르다.
+    assert.equal(names[i * 2 + 1], `${t} · 이 앱에서 보는 곳: ${m.routes.ROUTES[m.model.TERM_WHERE[c.glossary[i].id]].tab}`);
   });
+  assert.equal(new Set(names).size, names.length, '같은 이름의 링크가 없다');
   assert.ok(links(root).every(l => typeof l.props.onKeyDown === 'function' && flat(l.props.style).minHeight >= 44));
   assertI2(root, '용어 사전');
 });

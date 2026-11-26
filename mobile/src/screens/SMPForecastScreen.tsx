@@ -16,7 +16,6 @@ import type { SourceRow } from '../app/routes';
 import { isVisible, watchVisible } from '../app/head';
 import { createClient, ENDPOINTS } from '../data/client';
 import { kstNow, kstParts } from '../lib/kst';
-import { CHIPS } from '../lib/provenance';
 import type { ForecastKind } from '../lib/provenance';
 import { appResources, useRefreshWhileVisible } from '../lib/resource';
 import { TOUR_BANNER, retryDoneText } from '../content/strings';
@@ -30,11 +29,11 @@ import { ForecastCard } from '../features/today/ForecastCard';
 import { PowerCard } from '../features/today/PowerCard';
 import { PriceCard } from '../features/today/PriceCard';
 import { AllFailedNotice, TermRow } from '../features/today/TodayParts';
-import { NowPill, ProvenanceChip } from '../ui/Chips';
+import { ClockPills } from '../ui/Chips';
 import { useAnnounce } from '../ui/Live';
 import { AnswerLine, Screen } from '../ui/Screen';
 import { TourBanner } from '../ui/Tour';
-import { LAYOUT, SPACE } from '../ui/tokens';
+import { LAYOUT, SPACE, answerLines } from '../ui/tokens';
 import { focusCardTitle, focusScreenHeading } from '../ui/web';
 
 /** 기준선 계단 차트의 접근 이름 머리(요약 문장이 뒤에 붙는다). 예측 종류마다 이름이 다르다. */
@@ -162,15 +161,11 @@ export default function SMPForecastScreen() {
       onRetry={() => { kpis.reload(); powerSupply.reload(); }} fill={twoUp} />
   );
 
-  const pill = (
-    <View style={styles.pills}>
-      <NowPill now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
-    </View>
-  );
+  const pill = <ClockPills now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} skew={skew} pending={view.heroState === 'loading'} />;
   const failedAll = view.allFailed;
   return (
-    <Screen title={ROUTES.smp.heading} pill={pill} answer={<AnswerLine>{view.answer}</AnswerLine>} testID="today-screen">
+    <Screen title={ROUTES.smp.heading} pill={pill} testID="today-screen"
+      answer={<AnswerLine minLines={view.heroState === 'loading' || view.power.state === 'loading' ? answerLines(width) : undefined}>{view.answer}</AnswerLine>}>
       {failedAll ? <AllFailedNotice text={failedAll.text} onRetry={onRetryAll} hero={!failedAll.showCards} /> : null}
       {failedAll && !failedAll.showCards ? null : (
         <>
@@ -189,7 +184,6 @@ export default function SMPForecastScreen() {
 }
 
 const styles = StyleSheet.create({
-  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
   twoUp: { flexDirection: 'row', gap: SPACE.md, width: '100%' },
   half: { flex: 1, minWidth: 0 },
 });

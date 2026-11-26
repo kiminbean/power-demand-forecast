@@ -38,7 +38,6 @@ function MeritChart({ marginal, summary }: { marginal: number; summary: string }
   const total = items.reduce((a, it) => a + it.quantity, 0);
   const xOf = (v: number) => plot.left + (total > 0 ? v / total : 0) * plot.width;
   const demandX = xOf(EXAMPLE_MERIT_DEMAND_MW.value);
-  const ink = theme.chip.example;
   const demandText = meritDemandText(EXAMPLE_MERIT_DEMAND_MW.value);
   // 수요선은 늘 마지막 발전기의 폭을 지나므로 그 가격 글자 위아래로 나눠 그린다(글자를 가로지르지 않게).
   const markTop = bars[marginal] ? Math.min(bars[marginal].y, bottom - MIN_BAR) : bottom;
@@ -53,7 +52,7 @@ function MeritChart({ marginal, summary }: { marginal: number; summary: string }
             const top = Math.min(b.y, bottom - MIN_BAR);
             return (
               <Rect key={b.index} testID="merit-bar" x={r2(b.x0)} y={r2(top)} width={r2(Math.max(0, b.x1 - b.x0 - CHART.barGap))} height={r2(bottom - top)}
-                fill={b.index === marginal ? ink.text : ink.bg} stroke={ink.text} strokeWidth={CHART.barStroke} />
+                fill={b.index === marginal ? theme.series.exampleMark : theme.series.exampleFill} stroke={theme.chart.exampleEdge} strokeWidth={CHART.barStroke} />
             );
           })}
           <Line x1={r2(plot.left)} x2={r2(plot.left + plot.width)} y1={r2(bottom)} y2={r2(bottom)} stroke={theme.color.borderStrong} strokeWidth={CHART.axis} />

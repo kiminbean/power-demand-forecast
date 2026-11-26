@@ -93,10 +93,11 @@ const enterOpens = (onPress: () => void) => web({
 });
 
 /** 글자 링크(화면 안 이동: "이 앱에서 보는 곳: 입찰 ›", "용어 사전 전체 ›"). 시각적으로 작아도 상자는 44. 이름은 보이는 글자 그대로. */
-export function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+/** accessibilityLabel: 같은 글자의 링크가 여럿일 때 구별되는 이름(보이는 글자를 품는다, WCAG 2.5.3). */
+export function TextLink({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel?: string }) {
   const { theme } = useTheme();
   return (
-    <Pressable role="link" aria-label={label} onPress={onPress} style={styles.term} {...enterOpens(onPress)}>
+    <Pressable role="link" aria-label={accessibilityLabel ?? label} onPress={onPress} style={styles.term} {...enterOpens(onPress)}>
       <View style={styles.linkRow}>
         <Text variant="body" weight="500" tone="link" style={styles.underline} dataSet={labelData(label)}>{label}</Text>
         <Icon name="chev" size={SIZE.chipIcon} color={theme.color.link} />

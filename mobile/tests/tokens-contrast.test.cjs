@@ -7,6 +7,8 @@ const path = require('node:path');
 const { loadTs, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
 const tokens = loadTs(path.join(SRC_ROOT, 'ui/tokens.ts'));
+// 쓰이는 쌍 목록은 시험 자료라 번들 밖 파일에 있다(round 2 F14). THEMES는 tokens.ts 그대로다.
+const { CONTRAST_PAIRS } = loadTs(path.join(SRC_ROOT, 'ui/contrastPairs.ts'));
 const { ICONS } = loadTs(path.join(SRC_ROOT, 'ui/icons.ts'));
 
 function parseColor(text) {
@@ -61,7 +63,7 @@ test('every used text/background pair meets 4.5:1 (text) or 3:1 (non-text) in bo
   t.diagnostic('| 테마 | 글자·선 | 바탕 | 대비 | 기준 | 쓰임 |');
   t.diagnostic('|---|---|---|---|---|---|');
   for (const themeName of ['light', 'dark']) {
-    for (const pair of tokens.CONTRAST_PAIRS) {
+    for (const pair of CONTRAST_PAIRS) {
       const value = measure(themeName, pair);
       const bg = pair.overlay ? `${pair.bg} + ${pair.overlay}` : pair.bg;
       t.diagnostic(`| ${themeName} | ${pair.fg} | ${bg} | ${value.toFixed(2)} | ${pair.min} | ${pair.use} |`);
@@ -69,7 +71,20 @@ test('every used text/background pair meets 4.5:1 (text) or 3:1 (non-text) in bo
     }
   }
   assert.deepEqual(failures, []);
-  assert.ok(tokens.CONTRAST_PAIRS.length >= 37, `pairs ${tokens.CONTRAST_PAIRS.length}`);
+  assert.ok(CONTRAST_PAIRS.length >= 37, `pairs ${CONTRAST_PAIRS.length}`);
+});
+
+test('the contrast pair list stays out of the bundle: no app module imports ui/contrastPairs (round 2 F14)', () => {
+  const fs = require('node:fs');
+  const files = [];
+  const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) walk(full); else if (/\.(ts|tsx)$/.test(e.name)) files.push(full);
+  });
+  walk(SRC_ROOT);
+  const importers = files.filter(f => /(?:from|require\()\s*['"][^'"]*contrastPairs['"]/.test(fs.readFileSync(f, 'utf8')));
+  assert.deepEqual(importers, []);
+  assert.ok(!('CONTRAST_PAIRS' in tokens), 'tokens.ts는 쌍 목록을 내보내지 않는다');
 });
 
 test('spec anchor values: 5.1 table minimums and 5.3 data-colour minimums on cards', () => {

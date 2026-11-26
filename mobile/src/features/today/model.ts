@@ -6,23 +6,23 @@ import type { ForecastPoint, ForecastView, KpiView, Provenanced, SupplyView } fr
 import type { DashboardKpis, DayAheadSmp, MarketStatus, ModelInfo, PowerSupply, SmpForecast } from '../../data/types';
 import type { ResourceStatus } from '../../lib/resource';
 import { HOUR_MS, MINUTE_MS, kstDateKey, kstParts, parseApiTime, tradeHourAt } from '../../lib/kst';
-import { mw, num, price, tradeHour } from '../../lib/format';
+import { mw, num, price, rangeSep, tradeHour } from '../../lib/format';
 import { CHIPS, DOCUMENTED_SMP_ACCURACY, forecastChip, weatherProvenance } from '../../lib/provenance';
 import type { Chip, ForecastKind, ReserveTone } from '../../lib/provenance';
-import { clippedRuns, forecastStats, hourKinds, periodStats, stepScale, widestBand } from '../../ui/charts/chartMath';
+import { clippedLowRuns, clippedRuns, forecastStats, hourKinds, periodStats, stepScale, widestBand } from '../../ui/charts/chartMath';
 import {
   ACCURACY_SOURCE, ACCURACY_UNREGISTERED, ANSWER_ALL_FAILED, ANSWER_LOADING, BAND_LABEL, BOUNDARY_CHECKING_TEXT, CONFIRMED_LABEL,
   FAIL_CAUSE, FORECAST_DATE_LAG, FORECAST_EMPTY, FORECAST_SUBJECT_SHORT, KPI_LABELS, KPX_LINK_LABEL, LEVEL_NOTE, MODEL_INFO_FAILED,
   NO_JUDGE_BROKEN, NO_JUDGE_EMPTY, NO_JUDGE_UNKNOWN_SOURCE, NO_PRICE_TEXT, SOURCE_ITEMS, SOURCE_PENDING, SOURCE_TEXT, ZERO_INPUT_LABEL,
   accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyText, allFailedText, answerBrokenText, answerStaleText,
-  apiAccuracyLines, compareDeltaParts, compareRatioText, dayAheadBasisText, forecastBasisText, forecastLegendText, forecastSourceLine,
-  forecastSummaryText, forecastTimeLine, freshness, hourStaleChipText, hourStepLabel, kpxOriginalText, loadFailedText, lookupAt,
+  apiAccuracyLines, compareDeltaParts, compareRatioText, dayAheadBasisText, forecastBasisText, forecastKeyItems, forecastSourceLine,
+  footerSource, forecastSummaryText, forecastTimeLine, freshness, hourStaleChipText, hourStepLabel, kpxOriginalText, loadFailedText, lookupAt,
   lookupBasisText, modelInfoFactText, modelUsedText, observedBasisText, observedLookup, periodLabelText, periodNoteText, priceHourLine,
   reserveCalcText, serverBasisText, supplyMissingText, todayAnswerText, uncertaintyText, weatherSourceText,
 } from '../../content/strings';
-import type { AnswerPower, AnswerPrice, Freshness, LegendValue } from '../../content/strings';
+import type { AnswerPower, AnswerPrice, Freshness, KeyItem, LegendValue } from '../../content/strings';
 import type { SourceRow } from '../../app/routes';
-import type { Line, Seg } from '../../ui/Rich';
+import type { Atom, Line, Seg } from '../../ui/Rich';
 
 export type { Line, Seg };
 
@@ -56,7 +56,11 @@ export type PriceCardView =
   | { state: 'loading' }
   | { state: 'error'; text: string }
   | { state: 'unavailable'; text: string; footer: Footer }
-  | { state: 'ready'; price: Provenanced<number>; chips: ChipSpec[]; hourLine: string; checking: string | null; compare: Line[]; footer: Footer };
+  | {
+      state: 'ready'; price: Provenanced<number>; chips: ChipSpec[]; hourLine: string; checking: string | null; compare: Line[]; footer: Footer;
+      /** 비교 문장의 재료(기준선 예측)를 아직 받는 중: 그 자리를 비워 두어 받은 뒤 카드가 자라지 않게 한다(round 2 CLS). */
+      comparePending: boolean;
+    };
 
 export type KpiItem = { label: string; value: Provenanced<number> | null; chip: ChipSpec | null; note: string | null };
 export type SupplyPart =
@@ -81,7 +85,11 @@ export type ForecastCardView =
   | {
       state: 'ready'; view: ForecastView; kind: ForecastKind; chips: ChipSpec[];
       /** 확정 가격 점(D10): 이번 방문에서 받은 거래시간마다 하나, 7.8절 1 조건을 지나는 것만. 지금 응답 하나뿐이면 길이 1. */
-      dots: ConfirmedDot[]; legend: string;
+      dots: ConfirmedDot[];
+      /** 차트 위 한 줄 범례(기호 + 이름, round 2 parity). */
+      key: KeyItem[];
+      /** 끊김(60분)이면 점의 실측 표시를 거둔다(속 빈 점, 7.6절 · round 2 integrity). */
+      dotsWithdrawn: boolean;
       selected: number; nowHour: number; isNow: boolean; stepLabel: (hour: number) => string;
       reading: Line; summary: string; uncertainty: string | null; periods: PeriodRow[]; periodNote: string | null;
       rows: HourRow[]; window: { from: number; to: number }; footer: Footer;
@@ -100,7 +108,8 @@ export type MethodFacts = { lines: string[]; api?: string[]; link: { label: stri
 export type TodayCardId = 'today-price' | 'today-power' | 'today-forecast' | 'today-accuracy';
 export type SourceRowView = { id: SourceRow; item: string; source: string; basis: string; chip: ChipSpec | null; status: string | null; link: string | null };
 
-export type TodayLegend = { demand: number | null; confirmed: LegendValue | null; forecast: LegendValue | null };
+/** kind: 받은 예측의 종류(범례의 예측 행이 기준선이 아니면 그 종류의 칩과 이름만 쓴다, round 2). */
+export type TodayLegend = { demand: number | null; confirmed: LegendValue | null; forecast: LegendValue | null; kind: ForecastKind | null };
 
 export type TodayView = {
   heroState: 'loading' | 'ready' | 'unavailable' | 'error';
@@ -193,15 +202,23 @@ function readForecast(c: Ctx): ForecastView | null {
   return r.data === null ? null : adaptForecast(r.data);
 }
 
+/**
+ * 가격의 지연·끊김 칩(없으면 null): 끊김(60분)은 "06:04 값", 거래시간이 지나 유예도 끝났으면 "지연 · 07h 값". 같은 거래시간이면 조회 나이로
+ * 지연 처리하지 않는다(그 시간의 확정 가격은 바뀌지 않는다). 차트의 확정 가격 점도 같은 칩을 쓴다(round 2 integrity). 지금 가격이 없으면
+ * (이번 방문에 앞서 받은 점만 있을 때) 끊김만 본다.
+ */
+function priceLagChip(c: Ctx, p: PriceFacts | null, fetchedAt: number): ChipSpec | null {
+  if (freshness(c.now - fetchedAt) === 'broken') return { lag: 'broken', at: fetchedAt };
+  return p && p.mismatch && !p.grace ? { lag: 'stale', at: fetchedAt, text: hourStaleChipText(p.tradeHour) } : null;
+}
+
 function priceCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): PriceCardView {
   const r = c.input.dayAhead;
   if (!hasData(r)) return failed(r) ? { state: 'error', text: loadFailedText('가격', c.now) } : { state: 'loading' };
   const footer: Footer = { source: `출처 ${r.data.data_source ?? 'API 서버 하루전 가격'}`, time: lookupAt(r.fetchedAt) };
   if (!p) return { state: 'unavailable', text: NO_PRICE_TEXT, footer };
   const stage = freshness(c.now - r.fetchedAt);
-  const chip: ChipSpec = stage === 'broken' ? { lag: 'broken', at: r.fetchedAt }
-    : p.mismatch && !p.grace ? { lag: 'stale', at: r.fetchedAt, text: hourStaleChipText(p.tradeHour) }
-      : { chip: p.price.chip, source: p.price.source };
+  const chip: ChipSpec = priceLagChip(c, p, r.fetchedAt) ?? { chip: p.price.chip, source: p.price.source };
   let compare: Line[] = [];
   if (cmp) {
     const d = compareDeltaParts(cmp.diff, cmp.kind === 'baseline' ? DOCUMENTED_SMP_ACCURACY.maeKrwPerKwh : null);
@@ -213,7 +230,8 @@ function priceCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): PriceC
   }
   // 끊김(60분)이면 "확인 중"을 쓰지 않는다: AnswerLine과 칩이 이미 "그때 값"이라고 말한다.
   return { state: 'ready', price: p.price, chips: [chip], hourLine: priceHourLine(p.tradeHour),
-    checking: p.grace && stage !== 'broken' ? BOUNDARY_CHECKING_TEXT : null, compare, footer };
+    checking: p.grace && stage !== 'broken' ? BOUNDARY_CHECKING_TEXT : null, compare, footer,
+    comparePending: !cmp && c.input.forecast.data === null && c.input.forecast.status !== 'error' };
 }
 
 // ---------------------------------------------------------------- 전력
@@ -248,19 +266,21 @@ function powerCard(c: Ctx, w: PowerFacts | null): PowerCardView {
   const part: SupplyPart = supply.status === 'paired' && kpi.demand
     ? {
         kind: 'paired', supply: supply.supply, demand: kpi.demand, reserve: supply.reserve, boundary: supply.watchBoundary,
-        // 이름과 값은 한 줄로 묶어 " − "·" = " 앞에서만 줄이 바뀐다(round 1: "… = 예비력" / "684 MW").
-        formula: [{ g: [{ t: '공급능력 ' }, { v: supply.supply, f: mw, unit: true }] }, { t: ' − ' },
-          { g: [{ t: '수요 ' }, { v: kpi.demand, f: mw, unit: true }] }, { t: ' = ' },
-          { g: [{ t: '예비력 ' }, { v: supply.reserve, f: mw, unit: true, derived: true }] }],
+        // 이름과 값, 그 앞 연산자를 한 줄로 묶어 " − "·" = " 앞에서만 줄이 바뀐다(round 1: "… = 예비력" / "684 MW", round 2: "=" 뒤에서
+        // 갈려 "=" 홀로 줄 끝에 남았다).
+        formula: [{ g: [{ t: '공급능력 ' }, { v: supply.supply, f: mw, unit: true }] }, { t: ' ' },
+          { g: [{ t: '− 수요 ' }, { v: kpi.demand, f: mw, unit: true }] }, { t: ' ' },
+          { g: [{ t: '= 예비력 ' }, { v: supply.reserve, f: mw, unit: true, derived: true }] }],
       }
     : { kind: 'missing', text: supplyMissingText(allMeasured && kpi.reserveRate !== null) };
   const wp = weatherProvenance(k.data);
   const wx = kpi.weather;
   let weather: { line: Line; chip: ChipSpec } | null = null;
   if (wx && wp.chip) {
-    const valueOrDash = (v: Provenanced<number> | null): Seg => (v ? { v, f: one, unit: true } : { t: '—' });
+    const valueOrDash = (v: Provenanced<number> | null): Atom => (v ? { v, f: one, unit: true } : { t: '—' });
     weather = {
-      line: [{ t: '날씨 ' }, valueOrDash(wx.temperature), { t: ' · 바람 ' }, valueOrDash(wx.windSpeed), { t: ' · ' },
+      // 이름과 값은 한 줄 묶음(round 2: 768–1023 두 칸 카드에서 값이 이름과 갈렸다).
+      line: [{ g: [{ t: '날씨 ' }, valueOrDash(wx.temperature)] }, { t: ' · ' }, { g: [{ t: '바람 ' }, valueOrDash(wx.windSpeed)] }, { t: ' · ' },
         { m: wx.condition ? wx.condition.value : '—', tag: 'condition' }],
       chip: lag ?? { chip: wp.chip, source: wp.source },
     };
@@ -271,7 +291,7 @@ function powerCard(c: Ctx, w: PowerFacts | null): PowerCardView {
     demand: item(KPI_LABELS.demand, kpi.demand, prov.demandChip, null),
     reserve: item(KPI_LABELS.reserve, kpi.reserveRate, prov.reserveChip, reserveNote),
     level, judgeNote, supply: part, weather,
-    footer: { source: `출처 ${prov.source}`, time: observedLookup(fetchedAt), extra: weather && wp.source ? weatherSourceText(wp.source) : undefined },
+    footer: { source: `출처 ${footerSource(prov.source)}`, time: observedLookup(fetchedAt), extra: weather && wp.source ? weatherSourceText(wp.source) : undefined },
   };
 }
 
@@ -284,7 +304,10 @@ function readingLine(fc: ForecastView, point: ForecastPoint, confirmed: Confirme
   else {
     segs.push({ t: `${subject} ` }, { v: point.q50, f: price }, { t: '원' });
     // 범위는 한 줄 묶음(g): 두 값 사이 줄표 뒤에서 줄이 바뀌지 않게(F13c 갈림 탐침: 320에서 "85.9–" / "130.6원").
-    if (point.band) segs.push({ t: ' · ' }, { m: BAND_LABEL, tag: 'label' }, { t: ' ' }, { g: [{ v: point.band.q10, f: price }, { t: '–' }, { v: point.band.q90, f: price }, { t: '원' }] });
+    if (point.band) {
+      const sep = rangeSep(point.band.q10.value, point.band.q90.value);
+      segs.push({ t: ' · ' }, { m: BAND_LABEL, tag: 'label' }, { t: ' ' }, { g: [{ v: point.band.q10, f: price }, { t: sep }, { v: point.band.q90, f: price }, { t: '원' }] });
+    }
   }
   if (confirmed && confirmed.tradeHour === point.tradeHour) segs.push({ t: ` · ${CONFIRMED_LABEL} ` }, { v: confirmed.price, f: price }, { t: '원' });
   return segs;
@@ -323,7 +346,11 @@ function forecastCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): For
   const stats = forecastStats(fc.q50.value);
   if (!stats) return { state: 'empty', text: FORECAST_EMPTY, chips: [kindChip, ...lagChips], footer };
   const dots = confirmedDots(c, fc, p, cmp);
-  const chips: ChipSpec[] = [kindChip, ...(dots.length ? [{ chip: CHIPS.confirmedPoint, source: dots[0].price.source }] : []), ...lagChips];
+  // 점의 칩은 가격 카드와 같은 규칙(round 2 integrity): 끊김이면 "06:04 값"(실측 ● 철회, 점은 속이 빈다), 거래시간이 지났으면 "지연 · 07h 값".
+  const fetched = c.input.dayAhead.fetchedAt;
+  const lag = dots.length && fetched !== null ? priceLagChip(c, p, fetched) : null;
+  const dotChips: ChipSpec[] = !dots.length ? [] : lag ? [lag] : [{ chip: CHIPS.confirmedPoint, source: dots[0].price.source }];
+  const chips: ChipSpec[] = [kindChip, ...dotChips, ...lagChips];
   const selected = validHour(c.input.selectedHour) ? c.input.selectedHour : c.nowHour;
   const widest = fc.band ? widestBand(fc.q50.value, fc.band.q10, fc.band.q90) : null;
   const periods = periodStats(fc.q50.value);
@@ -333,11 +360,15 @@ function forecastCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): For
     const dot = dotAt(hour);
     return { hour, label: tradeHour(hour), point: forecastPoint(fc, hour), confirmed: dot ? dot.price : null };
   });
-  // 차트와 같은 눈금(stepScale)으로 띠가 그림 위로 넘치는지 본다: 넘치면 범례의 띠 항목에 ▲ 뜻을 붙인다(D10).
-  const clipped = fc.band !== null && clippedRuns(hourKinds(fc.q50.value), fc.band.q90, stepScale(fc.q50.value, dots.map(d => d.price.value))).length > 0;
+  // 차트와 같은 눈금(stepScale)으로 띠가 그림 위·아래로 넘치는지 본다: 넘치면 범례의 띠 항목에 ▲·▼ 뜻을 붙인다(D10, round 2 integrity).
+  const kinds = hourKinds(fc.q50.value);
+  const scale = stepScale(fc.q50.value, dots.map(d => d.price.value));
+  const clip = { top: fc.band !== null && clippedRuns(kinds, fc.band.q90, scale).length > 0, bottom: fc.band !== null && clippedLowRuns(kinds, fc.band.q10, scale).length > 0 };
+  const withdrawn = Boolean(lag && 'lag' in lag && lag.lag === 'broken');
   const from = Math.min(selected, HOURS_IN_DAY - TABLE_ROWS + 1);
   return {
-    state: 'ready', view: fc, kind: fc.kind, chips, dots, legend: forecastLegendText(fc.kind, clipped),
+    state: 'ready', view: fc, kind: fc.kind, chips, dots, key: forecastKeyItems(fc.kind, clip, dots.length ? (withdrawn ? 'ring' : 'dot') : null, !dateLag),
+    dotsWithdrawn: withdrawn,
     selected, nowHour: c.nowHour, isNow: selected === c.nowHour, stepLabel: hour => hourStepLabel(hour, hour === c.nowHour),
     reading: readingLine(fc, forecastPoint(fc, selected), dotAt(selected)),
     summary: forecastSummaryText(stats, fc.kind), uncertainty: widest ? uncertaintyText(widest) : null,
@@ -484,7 +515,10 @@ export function todayView(input: TodayInput): TodayView {
     legend: {
       demand: power,
       confirmed: p && !p.mismatch ? { value: p.price.value, hour: p.tradeHour } : null,
-      forecast: nowPoint && nowPoint.q50 ? { value: nowPoint.q50.value, hour: c.nowHour } : null,
+      // 예측일이 KST 오늘이 아니면(예측일 지연) 이 시간의 기준선 값이 아니다: 값 없이 표시와 설명만(7.8절 1과 같은 규칙, round 2).
+      forecast: nowPoint && nowPoint.q50 && forecastView.state === 'ready' && forecastView.view.forecastDate === c.today
+        ? { value: nowPoint.q50.value, hour: c.nowHour } : null,
+      kind: readForecast(c)?.kind ?? null,
     },
     recheckPrice: Boolean(p && p.mismatch && input.dayAhead.fetchedAt !== null && input.dayAhead.fetchedAt < hourStartOf(now) + BOUNDARY_RECHECK_MS[0]),
   };

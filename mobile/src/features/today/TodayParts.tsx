@@ -1,14 +1,13 @@
 // 오늘 화면 조각(명세 4.1·4.6절): 칩 묶음, 용어 줄, 전부 실패 안내, ≥ 1280 "이 화면 읽는 법" 패널 본문.
 // 글자와 상태는 model.ts가 정하고 여기서는 배치만 한다.
-import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { ChipSpec, TodayLegend } from './model';
 import { CHIPS } from '../../lib/provenance';
 import type { Chip } from '../../lib/provenance';
 import {
-  LEGEND_ESTIMATED, LEGEND_EXAMPLE, PANEL_HEADINGS, TERMS_HEADING, TODAY_PANEL_METHOD, TODAY_TERMS, legendForecastText,
-  legendMeasuredText,
+  PANEL_HEADINGS, TERMS_HEADING, TODAY_TERMS, legendForecastRow, legendMeasuredText, todayReserveLine,
 } from '../../content/strings';
+import type { GuideContent } from '../../content/guide';
 import type { GlossaryId } from '../../content/strings';
 import { useTheme } from '../../app/theme';
 import { StateView } from '../../ui/Card';
@@ -82,16 +81,21 @@ export function LegendRow({ chip, text }: { chip: Chip; text: string }) {
   );
 }
 
-/** 오늘 패널: 4상태 범례(이 화면의 실제 값으로, 없으면 표시와 설명만) · 용어 3개 · 산출 방식 요약 3줄. */
-export function TodayPanelBody({ legend: values, onTerm }: { legend: TodayLegend; onTerm: (id: GlossaryId) => void }) {
+/**
+ * 오늘 패널: 4상태 범례(이 화면의 실제 값으로, 없으면 표시와 설명만) · 용어 3개 · 산출 방식 요약 3줄. 예측 행과 그래프 줄은 받은 예측의
+ * 종류를 따른다(둘러보기 5단계와 같은 함수, round 2 integrity: 대체값·예측일 지연에도 "기준선 예측 100.4원"이라고 썼다).
+ */
+export function TodayPanelBody({ legend: values, text, onTerm }: { legend: TodayLegend; text: GuideContent['panels']; onTerm: (id: GlossaryId) => void }) {
   const legend = [
     { chip: CHIPS.measuredConfirmed, text: legendMeasuredText(values.demand, values.confirmed) },
-    { chip: CHIPS.forecastBaseline, text: legendForecastText(values.forecast) },
-    { chip: CHIPS.estNotMeasured, text: LEGEND_ESTIMATED },
-    { chip: CHIPS.example, text: LEGEND_EXAMPLE },
+    legendForecastRow(values.kind, values.forecast),
+    { chip: CHIPS.estNotMeasured, text: text.estimated },
+    { chip: CHIPS.example, text: text.example },
   ];
   const terms = TODAY_TERMS.filter(t => t.id === 'smp' || t.id === 'reserve' || t.id === 'band');
-  return <ReadingPanelBody legend={legend} terms={terms} method={TODAY_PANEL_METHOD} onTerm={onTerm} testID="today-panel" />;
+  // 숫자 없는 문장은 guide.ko.json(panels), 예비율 줄은 strings.ts(round 2 번들). 그래프 줄은 받은 예측의 종류, 받기 전이면 기준선.
+  const method = [...text.today, text.graph[values.kind ?? 'baseline'], todayReserveLine()];
+  return <ReadingPanelBody legend={legend} terms={terms} method={method} onTerm={onTerm} testID="today-panel" />;
 }
 
 const styles = StyleSheet.create({

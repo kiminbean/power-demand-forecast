@@ -1,6 +1,7 @@
 // 허용 목록 GET 중 앱이 쓰는 것만 감싼다(명세 2.1절 3, 6.3절). 메서드 이름은 옛 src/services/api.ts와 같다.
 // 기준 URL은 src/config/environment.ts 규칙(웹은 같은 출처 상대 경로)을 따른다. 처리한 실패는 상태로 보여 주므로 로그를 남기지 않는다.
 import { API_URL } from '../config/environment';
+import { markArrived } from '../lib/resource';
 import { EXAMPLE_PLANT } from './examples';
 import {
   ApiShapeError, parseDayAhead, parseForecast, parseKpis, parseMarketStatus, parseModelInfo, parsePowerSupply,
@@ -25,7 +26,7 @@ export class ApiHttpError extends Error {
   readonly endpoint: string;
   readonly status: number;
   constructor(endpoint: string, status: number) {
-    super(`API 오류 ${status}: ${endpoint}`);
+    super(`API HTTP ${status}: ${endpoint}`);
     this.name = 'ApiHttpError';
     this.endpoint = endpoint;
     this.status = status;
@@ -40,7 +41,7 @@ export class ApiNetworkError extends Error {
   readonly endpoint: string;
   readonly retryable = true;
   constructor(endpoint: string) {
-    super(`API에 닿지 못했습니다: ${endpoint}`);
+    super(`API unreachable: ${endpoint}`);
     this.name = 'ApiNetworkError';
     this.endpoint = endpoint;
   }
@@ -49,10 +50,13 @@ export class ApiNetworkError extends Error {
 export type FetchResponseLike = { ok: boolean; status: number; json(): Promise<unknown> };
 export type FetchLike = (url: string, init: { method: 'GET'; signal?: AbortSignal }) => Promise<FetchResponseLike>;
 /**
- * index.html이 번들을 받는 동안 미리 시작한 첫 화면 GET(round 1 D3, 명세 8.1·9절): 시작 시각 t, URL → 응답 약속 r, 닫힘 x.
- * 그 스크립트는 경로마다 그 화면이 처음 그릴 때 보내는 요청만 시작한다(tests/shell-html이 ENDPOINTS·예시 용량과 맞춰 본다).
+ * index.html이 번들을 받는 동안 미리 시작한 첫 화면 GET(round 1 D3, 명세 8.1·9절): 시작 시각 t, URL → 응답 약속 r, URL → 응답이 도착한
+ * 기기 시각 a(round 2 NOW-KST), 닫힘 x. 그 스크립트는 경로마다 그 화면이 처음 그릴 때 보내는 요청만 시작한다(tests/shell-html이
+ * ENDPOINTS·예시 용량과 맞춰 본다).
  */
-export type PrefetchTable = { t: number; r: Record<string, Promise<FetchResponseLike> | undefined>; x?: boolean };
+export type PrefetchTable = {
+  t: number; r: Record<string, Promise<FetchResponseLike> | undefined>; a?: Record<string, number | undefined>; x?: boolean;
+};
 /** 미리 받은 응답을 쓰는 나이 한도: 자료 저장소의 새로 받기 주기(lib/resource REFRESH_EVERY_MS, 5분)와 같다. */
 export const PREFETCH_MAX_AGE_MS = 5 * 60_000;
 /** signal: 이 클라이언트의 모든 요청에 붙는 중단 신호(자료 저장소가 요청마다 10초 신호를 묶은 클라이언트를 만든다). */
@@ -84,7 +88,8 @@ export function createClient(options: ClientOptions = {}) {
   async function get<T>(path: string, parse: (json: unknown) => T, signal: AbortSignal | undefined = options.signal): Promise<T> {
     let response: FetchResponseLike;
     const url = base + path;
-    const early = takePrefetch(prefetch(), url, now());
+    const table = prefetch();
+    const early = takePrefetch(table, url, now());
     try {
       // 미리 받은 응답은 상태(503 포함)를 그대로 쓴다(재시도 규칙이 같다). 연결이 실패했으면 바로 보통 요청으로 다시 받는다.
       response = await (early ? early.catch(() => doFetch(url, { method: 'GET', signal })) : doFetch(url, { method: 'GET', signal }));
@@ -99,7 +104,10 @@ export function createClient(options: ClientOptions = {}) {
     } catch {
       throw new ApiShapeError(path, '$', 'JSON');
     }
-    return parse(body);
+    // 미리 받은 응답이면 도착한 기기 시각을 값에 붙인다(자료 저장소의 조회 시각, round 2 NOW-KST). 미리 받기가 실패해 보통 요청으로
+    // 받았으면 도착 시각이 없다(그때는 저장소가 받은 순간을 쓴다).
+    const arrived = early && table && table.a ? table.a[url] : undefined;
+    return typeof arrived === 'number' ? markArrived(parse(body), arrived) : parse(body);
   }
 
   return {
@@ -110,7 +118,7 @@ export function createClient(options: ClientOptions = {}) {
     getPowerSupply: (signal?: AbortSignal) => get(ENDPOINTS.powerSupply, parsePowerSupply, signal),
     getMarketStatus: (signal?: AbortSignal) => get(ENDPOINTS.marketStatus, parseMarketStatus, signal),
     getOptimizedSegments: (risk: RiskLevel, signal?: AbortSignal) => {
-      if (!RISK_LEVELS.includes(risk)) throw new TypeError(`알 수 없는 입찰 성향: ${String(risk)}`);
+      if (!RISK_LEVELS.includes(risk)) throw new TypeError(`unknown risk level: ${String(risk)}`);
       const query = `?capacity_mw=${EXAMPLE_PLANT.capacityMw.value}&risk_level=${risk}`;
       return get(ENDPOINTS.segments + query, parseSegments, signal);
     },

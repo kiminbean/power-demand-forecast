@@ -2,17 +2,17 @@
 // 시트 틀(dialog·aria-modal·초점 가둠·Esc·복귀·히스토리)은 ui/Sheet와 app/SheetHost가 맡는다. 긴 글은 guide.ko.json에서만 오고,
 // 숫자는 화면 값에서만 온다(JSON에는 숫자가 없다). 행은 화면마다 모듈이 넘긴다: 오늘(F7) · 입찰 계산(F8) · 응답 상태(F10, guide/model).
 // 용어 시트와 용어 화면(?term=)은 같은 본문을 쓴다: 한 줄 뜻 + 풀이 + "이 앱에서 보는 곳 ›"(시트는 "용어 사전 전체 ›"를 더한다).
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useGuide } from './useGuide';
 import { TERM_WHERE } from './model';
 import { useNav } from '../../app/Shell';
 import { ROUTES, rootState } from '../../app/routes';
 import type { GuideContent, GuideSection, MethodCardId } from '../../content/guide';
-import { DETAIL_LABEL, LIVE_FACTS_HEADING, SIMPLIFIED_NOTE, SOURCE_HEADINGS, SOURCES_NOTES, whereText } from '../../content/strings';
+import { DETAIL_LABEL, GLOSSARY_TITLES, LIVE_FACTS_HEADING, SIMPLIFIED_NOTE, SOURCE_HEADINGS, SOURCES_NOTES, whereText } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 import { useTheme } from '../../app/theme';
-import { StateView } from '../../ui/Card';
+import { RetryScope, StateView, useInRetryScope } from '../../ui/Card';
 import { ProvenanceChip, StatusPill } from '../../ui/Chips';
 import type { ChipProps } from '../../ui/Chips';
 import { TextLink } from '../../ui/Controls';
@@ -20,19 +20,26 @@ import { DataTable } from '../../ui/DataTable';
 import { Text, keepTogether, labelData } from '../../ui/Text';
 import { HIT, LAYOUT, RADIUS, SPACE } from '../../ui/tokens';
 import type { PillTone } from '../../ui/tokens';
-import { web } from '../../ui/web';
+import { focusScreenHeading, web } from '../../ui/web';
 
 const GUIDE_LOADING = '설명을 불러오는 중입니다';
 const GUIDE_FAILED = '설명을 불러오지 못했습니다';
 /** 표 보기는 768 이상(4.4절). 다만 ≥ 1024의 시트는 오른쪽 패널(400)이라 두 줄 목록이다(알아보기 화면은 본문 640이라 표). */
 const SOURCES_TABLE_FROM = 768;
 
-/** 설명 글이 준비되면 그린다. 읽는 동안 스켈레톤, 실패하면 "설명을 불러오지 못했습니다" + [다시 시도]. 입찰의 가격 원리 카드도 쓴다. */
+/**
+ * 설명 글이 준비되면 그린다. 읽는 동안 스켈레톤, 실패하면 "설명을 불러오지 못했습니다" + [다시 시도]. 입찰의 가격 원리 카드도 쓴다.
+ * [다시 시도](round 2 M5·FOCUS): 버튼이 사라지기 전에 초점을 가장 가까운 제목(카드 h2 · 시트 제목 · 그 밖은 화면 h1)으로 옮기고, 다시 받으면
+ * "다시 불러왔습니다 · HH:MM KST"를 알린다. 카드·시트 밖이면 화면 h1 범위를 여기서 만든다. 오류와 불러오는 중이 같은 자리(같은 꼴)라
+ * 누른 StateView가 다시 만들어지지 않는다. 한 화면에는 이 문이 하나다(용어 화면은 뜻과 풀이를 한 문으로 묶는다).
+ */
 export function GuideGate({ children }: { children: (content: GuideContent) => React.ReactNode }) {
   const guide = useGuide();
+  const scoped = useInRetryScope();
   if (guide.status === 'ready' && guide.content) return <>{children(guide.content)}</>;
-  if (guide.status === 'error') return <StateView kind="error" text={GUIDE_FAILED} onRetry={guide.retry} />;
-  return <StateView kind="loading" text={GUIDE_LOADING} />;
+  const view = guide.status === 'error'
+    ? <StateView kind="error" text={GUIDE_FAILED} onRetry={guide.retry} /> : <StateView kind="loading" text={GUIDE_LOADING} />;
+  return scoped ? view : <RetryScope focus={focusScreenHeading}>{view}</RetryScope>;
 }
 
 /** 짝·검증 규칙 한 줄(D7): 뜻과 읽는 법 뒤에 흐린 글자로. */
@@ -87,11 +94,15 @@ export function MethodSheetBody({ card, facts }: { card: MethodCardId; facts?: R
   );
 }
 
-/** "이 앱에서 보는 곳: 입찰 ›"(4.4절): 그 용어가 보이는 탭으로 간다. */
+/**
+ * "이 앱에서 보는 곳: 입찰 ›"(4.4절): 그 용어가 보이는 탭으로 간다. 접근 이름에 용어를 넣는다(round 2: 용어 사전의 링크 13개 중 8개가
+ * 같은 이름 "…오늘"이라 링크 목록에서 구별되지 않았다, WCAG 2.4.9).
+ */
 export function WhereLink({ id }: { id: GlossaryId }) {
   const nav = useNav();
   const key = TERM_WHERE[id];
-  return <TextLink label={whereText(ROUTES[key].tab)} onPress={() => nav.push(rootState(key))} />;
+  const label = whereText(ROUTES[key].tab);
+  return <TextLink label={label} accessibilityLabel={`${GLOSSARY_TITLES[id]} · ${label}`} onPress={() => nav.push(rootState(key))} />;
 }
 
 /**
@@ -99,24 +110,23 @@ export function WhereLink({ id }: { id: GlossaryId }) {
  * 알아보기 탭이 있으면 "용어 사전 전체 ›"를 단다. 용어 화면(?term=)은 한 줄 뜻을 AnswerLine으로 따로 그린다.
  */
 export function TermSheetBody({ id, sheet = true }: { id: GlossaryId; sheet?: boolean }) {
+  return <GuideGate>{content => <TermBody content={content} id={id} sheet={sheet} />}</GuideGate>;
+}
+
+/** 용어 한 항목의 본문(설명 글을 받은 뒤). 용어 화면(?term=)은 한 줄 뜻과 이것을 한 GuideGate로 묶는다. */
+export function TermBody({ content, id, sheet }: { content: GuideContent; id: GlossaryId; sheet: boolean }) {
   const nav = useNav();
+  const entry = content.glossary.find(g => g.id === id);
+  if (!entry) return <StateView kind="empty" />;
   return (
-    <GuideGate>
-      {content => {
-        const entry = content.glossary.find(g => g.id === id);
-        if (!entry) return <StateView kind="empty" />;
-        return (
-          <View style={styles.body} testID={`term-${id}`}>
-            {sheet ? <Text variant="body" weight="600">{entry.short}</Text> : null}
-            {entry.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
-            <Detail text={entry.detail} />
-            {sheet && TERM_WHERE[id] === nav.state.key ? null : <WhereLink id={id} />}
-            {sheet && nav.tabs.includes('guide')
-              ? <TextLink label="용어 사전 전체" onPress={() => nav.push({ ...rootState('guide'), topic: 'glossary' })} /> : null}
-          </View>
-        );
-      }}
-    </GuideGate>
+    <View style={styles.body} testID={`term-${id}`}>
+      {sheet ? <Text variant="body" weight="600">{entry.short}</Text> : null}
+      {entry.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
+      <Detail text={entry.detail} />
+      {sheet && TERM_WHERE[id] === nav.state.key ? null : <WhereLink id={id} />}
+      {sheet && nav.tabs.includes('guide')
+        ? <TextLink label="용어 사전 전체" onPress={() => nav.push({ ...rootState('guide'), topic: 'glossary' })} /> : null}
+    </View>
   );
 }
 

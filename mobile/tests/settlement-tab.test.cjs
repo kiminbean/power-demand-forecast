@@ -20,7 +20,7 @@ function load(width = 390, globals) {
   const tab = at('features/settlement/SettlementTab.tsx');
   return {
     model: at('features/settlement/model.ts'), examples: at('data/examples.ts'), format: at('lib/format.ts'), strings: at('content/strings.ts'),
-    tokens: at('ui/tokens.ts'), card: at('features/settlement/SampleStatementCard.tsx'),
+    tokens: at('ui/tokens.ts'), card: at('features/settlement/SampleStatementCard.tsx'), guide: at('content/guide.ts'),
     SettlementTab: tab.default, SettlementPanel: tab.SettlementPanel, SettlementMethodFacts: tab.SettlementMethodFacts,
   };
 }
@@ -121,7 +121,9 @@ test('예시 정산서 산수(4.3절): 120,000 kWh × 150 = 18,000,000원 · −
   assert.deepEqual([f.krw(won.total.value), f.krw(-840000), f.krw(123456789, 0), f.krw(99995000, 0), f.krw(null, 0)],
     ['1,716.0만원', '−84.0만원', '1.23억원', '1.00억원', '—']);
   const view = m.model.settlementView();
-  assert.equal(view.answer, '정산은 판 전기값을 KPX가 계산해 주는 과정입니다. 아래 숫자는 계산 방식을 보여 주는 예시입니다.');
+  // 정산 뜻 하나(round 2): 화면 첫 문장 = 용어 한 줄 뜻 = 둘러보기 4단계 본문(예시 정산서의 ①·② 두 부분).
+  assert.equal(view.answer, '정산은 하루전시장에서 판 양은 하루전 가격으로, 실제 발전과의 차이는 실시간 가격으로 계산해 돈을 주고받는 과정입니다. '
+    + '아래 숫자는 계산 방식을 보여 주는 예시입니다.');
   // ~ = 줄바꿈하지 않는 빈칸(U+00A0): 값과 단위, 연산자와 값은 한 줄에 둔다(5.4절).
   assert.deepEqual(view.facts, [
     '단위: 1~MWh =~1,000~kWh (가격이 kWh당이라 MWh로 적은 양을 kWh로 바꿔 곱합니다)',
@@ -130,7 +132,7 @@ test('예시 정산서 산수(4.3절): 120,000 kWh × 150 = 18,000,000원 · −
     '합계: 18,000,000원 −~840,000원 =~17,160,000원 (1,716만원)',
   ].map(nb));
   assert.equal(view.legend, '1,716만원 예시 정산서', '둘러보기 5단계의 ┆1,716만원 예시 정산서┆와 같은 글자');
-  assert.equal(view.panelMethod[2], nb('①~+~②가 그날 받는 돈입니다. 가격이 kWh당이라 1~MWh는 1,000~kWh로 바꿔 곱합니다.'));
+  assert.equal(view.panelUnit, nb('①~+~②가 그날 받는 돈입니다. 가격이 kWh당이라 1~MWh는 1,000~kWh로 바꿔 곱합니다.'));
 });
 
 test('정산서 렌더: 행(라벨 / 양 × 가격 = 금액) · 합계 · 가상 발전소 줄 · 설명 두 줄, well 면, 머리 리본이 제목보다 먼저, 출처 줄 없음(7.3절)', () => {
@@ -245,12 +247,15 @@ test('정산 화면 의미: h1 정산 · AnswerLine · 제한 카드(잠김 칩,
 
 test('≥ 1280 "정산 읽는 법" 패널: 표시 예(┆예시┆ 1,716만원 예시 정산서 · ‹잠김›) · 용어 셋 · 읽는 법 세 줄(그림은 카드 안, D14)', () => {
   const m = load(1280);
-  const root = tree(h(m.SettlementPanel, {}));
+  // 숫자 없는 읽는 법 문장은 guide.ko.json(panels.settlement, round 2 번들): 받기 전에는 스켈레톤이고, 받은 뒤에는 그 두 줄 + 단위 줄.
+  assert.equal(all(tree(h(m.SettlementPanel, {})), n => ds(n).pdState === 'loading').length, 1);
+  const content = m.guide.parseGuide(JSON.parse(fs.readFileSync(path.join(MOBILE_ROOT, 'public/content/guide.ko.json'), 'utf8')));
+  const root = tree(h(m.SettlementPanel, { content }));
   assertI2(root, 'panel');
   assert.deepEqual(all(root, n => ds(n).pdMeta === 'legend').map(textOf), ['1,716만원 예시 정산서', '실제 정산 자료 · 공개 데모에서 제공하지 않음']);
   assert.deepEqual(all(root, n => ds(n).pdChip !== undefined).map(n => n.props['aria-label']), ['상태: 예시', '상태: 잠김']);
   assert.deepEqual(all(root, n => n.type === 'Pressable').map(p => p.props['aria-label']), ['용어 풀이: 정산', '용어 풀이: 하루전시장', '용어 풀이: 실시간시장']);
-  assert.deepEqual(all(root, n => ds(n).pdMeta === 'method').map(textOf), [...m.model.settlementView().panelMethod]);
+  assert.deepEqual(all(root, n => ds(n).pdMeta === 'method').map(textOf), [...content.panels.settlement, m.model.settlementView().panelUnit]);
   assert.equal(all(root, n => n.props.testID === 'settle-figure').length, 0, '패널에 그림을 두 번 두지 않는다');
 });
 
@@ -259,18 +264,18 @@ test('①+② 식 그림(round 1 D14): 모든 폭에서 예시 정산서 카드 
     const m = load(width);
     const card = byId(tree(h(m.card.SampleStatementCard, {})), 'settle-sample');
     const fig = byId(card, 'settle-figure');
-    assert.deepEqual([fig.props.role, fig.props['aria-label']], ['img', '예시 정산서 그림: ① 하루전 1,800만원 + ② 실시간 차이 −84만원 = 합계 1,716만원'], `${width}`);
+    assert.deepEqual([fig.props.role, fig.props['aria-label']], ['img', '예시 정산서 그림: ① 하루전 1,800만원 + ② 실제와의 차이 −84만원 = 합계 1,716만원'], `${width}`);
     assert.equal(fig.children[0].props['aria-hidden'], true, '그림 안은 이름이 대신 읽힌다');
     const bars = all(fig, n => n.props.testID === 'settle-figure-bar').map(b => flat(b.props.style));
     // 112 px 칸: ①은 0–112, ②는 1,716만원 높이(107)에서 ①의 끝(112)까지 5 px, 합계는 0–107(빈 상자 둘과 머리카락 선이 아니다).
-    assert.deepEqual(bars.map(b => [b.bottom, b.height]), [[0, 112], [107, 5], [0, 107]], `${width}`);
+    // round 2: 칸 높이 80(표를 되풀이하는 그림이 약 250 px였다). ①은 0–80, ②는 1,716만원 높이(76)에서 ①의 끝(80)까지 4 px, 합계는 0–76.
+    assert.deepEqual(bars.map(b => [b.bottom, b.height]), [[0, 80], [76, 4], [0, 76]], `${width}`);
     const t = m.tokens.THEMES.light;
-    assert.deepEqual(bars.map(b => b.backgroundColor), [t.chart.exampleFill, t.chart.exampleMark, t.chart.exampleFill]);
-    // ② 진한 칸: 밝은 테마는 예시 글자색 그대로, 어두운 테마는 휘도 0.6 아래(예시 글자색 #FCD34D는 0.68이라 어두운 바탕 위 밝은 덩어리, F13b 측정).
-    const lum = hex => { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
-    assert.ok(t.chart.exampleMark === t.chip.example.text && lum(m.tokens.THEMES.dark.chart.exampleMark) < 0.6 && lum(m.tokens.THEMES.dark.chip.example.text) > 0.6);
-    assert.ok(bars.every(b => b.borderColor === t.chip.example.text), '예시 글자색 외곽선(7.1절)');
+    // round 2: 채움은 두 테마에서 같은 호박색 한 벌, 외곽선만 테마별(3:1은 tokens-contrast가 본다).
+    const S = m.tokens.SERIES;
+    assert.deepEqual(bars.map(b => b.backgroundColor), [S.exampleFill, S.exampleMark, S.exampleFill]);
+    assert.equal(m.tokens.THEMES.dark.series.exampleMark, t.series.exampleMark, '두 테마에서 같은 채움');
+    assert.ok(bars.every(b => b.borderColor === t.chart.exampleEdge), '테마별 외곽선');
     assert.deepEqual(all(fig, n => ds(n).pdExample !== undefined).map(textOf), ['1,800만원', '−84만원', '1,716만원']);
     assert.deepEqual(all(fig, n => n.type === 'Text' && /^[+=]$/.test(textOf(n))).map(textOf), ['+', '=']);
     const order = all(card, n => ['settle-statement', 'settle-figure'].includes(n.props.testID)).map(n => n.props.testID);

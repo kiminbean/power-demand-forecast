@@ -70,6 +70,12 @@ export function setInert(ref: { current: unknown } | null | undefined, on: boole
   else node.removeAttribute('inert');
 }
 
+/** ref의 DOM 요소(제목 h1·h2, tabIndex=-1)로 초점을 옮긴다. 네이티브·VM에서는 아무 일도 하지 않는다. */
+export function focusRef(ref: { current: unknown } | null | undefined): void {
+  const node = domOf(ref);
+  if (node) node.focus();
+}
+
 /**
  * 같은 화면의 카드 제목(h2, tabIndex=-1)으로 초점을 옮긴다(round 1 D4: 둘러보기 안내를 닫으면 다음 카드 제목으로). testID는 카드의 것이다.
  * 찾지 못하면 false(부르는 쪽이 화면 h1로 보낸다).

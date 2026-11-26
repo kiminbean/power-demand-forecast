@@ -5,14 +5,14 @@ import type { RouteKey } from '../../app/routes';
 import type { MarketStatus, RealtimeStatus } from '../../data/types';
 import { kstAt, parseApiTime, parseDayKey } from '../../lib/kst';
 import type { ClockSkew } from '../../lib/kst';
-import { CHIPS, forecastChip } from '../../lib/provenance';
+import { CHIPS } from '../../lib/provenance';
 import type { Chip, ForecastKind } from '../../lib/provenance';
 import type { AccuracyCardView, Fetched, TodayLegend } from '../today/model';
 import type { PillTone } from '../../ui/tokens';
 import {
-  ABOUT_SKEW_IMPLAUSIBLE, ACCURACY_SOURCE, ACCURACY_UNREGISTERED, FORECAST_SUBJECT_SHORT, RS_DATE, RS_DATE_OTHER, RS_ITEMS, RS_OVERALL, RS_PART, RS_SOURCE, SOURCE_PENDING,
-  SOURCES_PARTLY_FAILED, aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText, legendForecastText,
-  legendMeasuredText, legendProbabilityText, legendStatementText, marketFactsText, rsBasisText, rsOverallText,
+  ABOUT_SKEW_IMPLAUSIBLE, ACCURACY_SOURCE, ACCURACY_UNREGISTERED, RS_DATE, RS_DATE_OTHER, RS_ITEMS, RS_OVERALL, RS_PART, RS_SOURCE, SOURCE_PENDING,
+  SOURCES_PARTLY_FAILED, aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText,
+  legendForecastRow, legendMeasuredText, legendProbabilityText, legendStatementText, marketFactsText, rsBasisText, rsOverallText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 
@@ -42,8 +42,10 @@ export function statusView(r: Fetched<RealtimeStatus>): StatusView {
     // 날짜 상태는 SMP에만 있는 선택 필드다. 빠진 부분은 상태를 모르는 것으로 본다.
     const date = k === 'smp' && part && part.data_date_status !== null ? dateText(part.data_date_status) : null;
     const status = part ? partText(part.status) : RS_PART.unknown;
+    // 과거·미래 날짜 자료는 응답이 정상이어도 관심 색(round 2 멘토: "오늘 자료"와 같은 초록이라 가격이 낡았는지 알 수 없었다).
+    const offDate = k === 'smp' && part && (part.data_date_status === 'historical' || part.data_date_status === 'future');
     return { id: `status:${k}`, item: RS_ITEMS[k], source: RS_SOURCE, basis: rsBasisText(at), chip: null,
-      status: date ? `${status} · ${date}` : status, tone: statusTone(part ? part.status : null), link: null };
+      status: date ? `${status} · ${date}` : status, tone: offDate ? 'watch' : statusTone(part ? part.status : null), link: null };
   });
   return { rows, overall: { text: overallText(d.overall_status), tone: statusTone(d.overall_status), at } };
 }
@@ -78,10 +80,7 @@ export type TourLegendInput = {
  * 예측이 기준선이 아니면(학습 모델·대체값) 그 종류의 칩과 이름만 쓴다(기준선 문구에 다른 값을 넣지 않는다).
  */
 export function tourLegend(i: TourLegendInput): LegendRow[] {
-  const kind = i.forecastKind;
-  const forecast: LegendRow = kind && kind !== 'baseline'
-    ? { chip: forecastChip(kind), text: FORECAST_SUBJECT_SHORT[kind] }
-    : { chip: CHIPS.forecastBaseline, text: legendForecastText(kind === 'baseline' ? i.today.forecast : null) };
+  const forecast: LegendRow = legendForecastRow(i.forecastKind, i.today.forecast);
   return [
     // 실측·확정 행: 지금 잰 수요와 KPX 확정 가격을 함께 예로 든다(round 1 멘토: 카드의 "● 실측"을 범례에서도 찾을 수 있게).
     { chip: CHIPS.measuredConfirmed, text: legendMeasuredText(i.today.demand, i.today.confirmed) },
@@ -106,7 +105,7 @@ export function methodAccuracy(kind: ForecastKind | null): AccuracyCardView {
   };
 }
 
-/** 예측 방법 화면의 이번 방문 서버 값: 하루전 마감(입찰일 하루 전 dam.deadline) · 입찰일 · 실시간시장 구간 길이. 시장 상태를 받지 않았으면 null. */
+/** 예측 방법 화면의 이번 방문 서버 값: 하루전 마감(거래일 하루 전 dam.deadline) · 거래일 · 실시간시장 구간 길이. 시장 상태를 받지 않았으면 null. */
 export function marketFacts(market: MarketStatus | null): string | null {
   if (!market) return null;
   const trading = parseDayKey(market.dam.trading_date);

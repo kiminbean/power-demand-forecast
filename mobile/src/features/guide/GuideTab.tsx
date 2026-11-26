@@ -5,9 +5,9 @@
  * 출처 표의 오늘 행 자료 중 이번 방문에 아직 없는 것(TodaySourcesSheet). 입찰 계산은 부르지 않는다(서버가 한 번에 하나만 계산한다).
  * 그 밖의 값(예측 종류·시장 상태·시계 차이)은 이번 방문의 저장소를 엿보기만 한다.
  */
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { GuideGate, TermSheetBody, WhereLink } from './sheets';
+import { GuideGate, TermBody, WhereLink } from './sheets';
 import { aboutClockLines, marketFacts, methodAccuracy, sourcesChip, statusView } from './model';
 import { TourScreen } from './TourScreen';
 import { useClock, useNav } from '../../app/Shell';
@@ -21,7 +21,7 @@ import { CHIPS, smpForecastKind } from '../../lib/provenance';
 import { useResource } from '../../lib/resource';
 import type { GuideContent } from '../../content/guide';
 import {
-  ABOUT_ROW, ABOUT_TITLE, GLOSSARY_TITLES, GUIDE_ANSWER, MODEL_NOT_USED, READING_HEADINGS, RS_FAILED, SIMPLIFIED_NOTE, SOURCE_PENDING,
+  ABOUT_ROW, ABOUT_TITLE, GLOSSARY_TITLES, GUIDE_ANSWER, READING_HEADINGS, RS_FAILED, SIMPLIFIED_NOTE, SOURCE_PENDING,
   SOURCES_SHEET_TITLE, TOUR_BANNER, TOUR_NAME, appUpdatedText, glossaryCountText, tourCardTitle, tradeHourExampleText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
@@ -31,7 +31,7 @@ import { useTodayView } from '../today/data';
 import { TodaySourcesSheet } from '../today/sheets';
 import { Button } from '../../ui/Button';
 import { Card, StateView } from '../../ui/Card';
-import { NowPill, ProvenanceChip, StatusPill } from '../../ui/Chips';
+import { ClockPills, ProvenanceChip, StatusPill } from '../../ui/Chips';
 import { ListRow, TextLink } from '../../ui/Controls';
 import { AnswerLine, Screen } from '../../ui/Screen';
 import { Text, keepTogether } from '../../ui/Text';
@@ -44,12 +44,7 @@ const topicState = (topic: GuideTopic) => ({ ...rootState('guide'), topic });
 /** 조회가 없는 화면의 NowPill: KST 시각만(3.4절). 서버 시계가 타당하지 않으면 ‹시각 확인 필요›(7.6절). 둘러보기 단계에도 넘긴다. */
 export function GuidePill() {
   const { now, skew, skewNotable } = useClock();
-  return (
-    <View style={styles.pills}>
-      <NowPill now={now} fetchedAt={null} skewNotable={skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
-    </View>
-  );
+  return <ClockPills now={now} fetchedAt={null} skewNotable={skewNotable} skew={skew} />;
 }
 
 /** 목록 행 묶음(카드와 같은 면·모서리). 마지막 행은 아래 선이 없다. */
@@ -153,7 +148,6 @@ function MethodScreen() {
           <>
             <AnswerLine>{c.topics.method.body[0]}</AnswerLine>
             {c.topics.method.body.slice(1).map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
-            <Text variant="label" tone="text2" dataSet={{ pdMeta: 'model' }}>{MODEL_NOT_USED}</Text>
             <AccuracyCard view={accuracy} onMethod={() => nav.openSheet({ kind: 'method', card: 'today-accuracy' })}
               onSources={() => nav.openSheet({ kind: 'sources', row: 'accuracy' })} onRetry={() => { forecast.reload(); }} />
             <Card title={c.simplified.title} chips={<ProvenanceChip chip={CHIPS.simplified} />} testID="method-simplified">
@@ -213,10 +207,17 @@ export default function GuideTab() {
   if (state.tour !== null) return <TourScreen step={state.tour} pill={<GuidePill />} />;
   const term = state.term;
   if (term !== null) {
+    // 한 줄 뜻과 풀이를 한 문으로 묶는다: 설명 글을 못 받으면 오류 안내와 [다시 시도]가 하나만 보인다(round 2: 둘이 보였다).
     return (
       <Screen title={GLOSSARY_TITLES[term]} pill={<GuidePill />} testID="guide-term">
-        <GuideGate>{c => <AnswerLine>{(c.glossary.find(g => g.id === term) ?? { short: '' }).short}</AnswerLine>}</GuideGate>
-        <Card title="자세한 풀이"><TermSheetBody id={term} sheet={false} /></Card>
+        <GuideGate>
+          {c => (
+            <>
+              <AnswerLine>{(c.glossary.find(g => g.id === term) ?? { short: '' }).short}</AnswerLine>
+              <Card title="자세한 풀이"><TermBody content={c} id={term} sheet={false} /></Card>
+            </>
+          )}
+        </GuideGate>
       </Screen>
     );
   }
@@ -237,7 +238,6 @@ export default function GuideTab() {
 }
 
 const styles = StyleSheet.create({
-  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
   start: { alignSelf: 'flex-start' },
   list: { borderWidth: 1, borderRadius: RADIUS.card, paddingHorizontal: SPACE.lg, width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
   term: { borderBottomWidth: 1, paddingBottom: SPACE.xs },

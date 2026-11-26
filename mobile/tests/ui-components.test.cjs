@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
+const { createTsLoader, defaultMocks, loadTs, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
 const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle' };
 function load(width = 390) {
@@ -311,6 +311,20 @@ test('StateView: 불러오는 중 aria-busy, 오류만 다시 시도, 제한 상
   assert.equal(pressables(tree(h(ui.StateView, { kind: 'error' }))).length, 0, '성공할 수 없으면 버튼을 그리지 않는다');
 });
 
+test('StateView 스켈레톤 표(round 2 CLS): 폭 구간마다 그 칸의 높이, 구간 경계는 LAYOUT의 배치 경계 · AnswerLine 줄 수', () => {
+  const { LAYOUT, SKELETON, skeletonBucket, answerLines } = loadTs(path.join(SRC_ROOT, 'ui/tokens.ts'));
+  const cases = [[320, 0], [LAYOUT.narrowBelow - 1, 0], [LAYOUT.narrowBelow, 1], [LAYOUT.answerTwoLinesFrom - 1, 1], [LAYOUT.answerTwoLinesFrom, 2],
+    [LAYOUT.rowCardsBelow - 1, 2], [LAYOUT.rowCardsBelow, 4], [LAYOUT.twoUpFrom - 1, 4], [LAYOUT.twoUpFrom, 3], [LAYOUT.railFrom - 1, 3],
+    [LAYOUT.railFrom, 4], [1280, 4]];
+  for (const [width, bucket] of cases) assert.equal(skeletonBucket(width), bucket, `${width}px`);
+  // StateView가 그 폭의 칸을 고른다(가격·전력 두 칸인 768–1023은 넷째 칸).
+  for (const [width, bucket] of [[320, 0], [360, 1], [390, 2], [768, 3], [1280, 4]]) {
+    const loading = tree(h(load(width).StateView, { kind: 'loading', minHeight: SKELETON.power })).children[0];
+    assert.equal(flat(loading.props.style).minHeight, SKELETON.power[bucket], `${width}px`);
+  }
+  assert.deepEqual([320, LAYOUT.answerTwoLinesFrom - 1, LAYOUT.answerTwoLinesFrom, 1280].map(answerLines), [3, 3, 2, 2]);
+});
+
 test('DataTable·TermLink·ListRow: table 역할, 현재 행 aria-current, 링크 이름·높이', () => {
   const ui = load();
   const table = tree(h(ui.DataTable, {
@@ -318,7 +332,8 @@ test('DataTable·TermLink·ListRow: table 역할, 현재 행 aria-current, 링�
     rows: [{ key: '7', cells: { h: '07h', p: 'x' }, current: true }, { key: '8', cells: { h: '08h', p: 'y' } }],
   }));
   assert.equal(byRole(table, 'table')[0].props['aria-label'], '시간별 기준선 예측');
-  assert.deepEqual(['row', 'columnheader', 'cell'].map(r => byRole(table, r).length), [3, 2, 4]);
+  // 첫 열은 행 머리(round 2): 칸 4개 중 2개가 rowheader.
+  assert.deepEqual(['row', 'columnheader', 'rowheader', 'cell'].map(r => byRole(table, r).length), [3, 2, 2, 2]);
   assert.equal(byRole(table, 'row')[1].props['aria-current'], 'true');
   assert.equal(all(table, n => n.type === 'ScrollView')[0].props.horizontal, true);
   const term = pressables(tree(h(ui.TermLink, { label: 'SMP', onPress: () => {} })))[0];

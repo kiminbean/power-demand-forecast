@@ -1,7 +1,6 @@
 // 글자 조각 줄(명세 1.3 I2·I3): 화면 view model이 문장을 조각으로 넘기면 여기서 한 줄로 그린다.
 // t = 평문(숫자 없음, view-models 테스트가 확인), m = 메타(시각·라벨·계산값·요약, data-pd-meta), v = API 값(Value: data-pd-value +
 // data-pd-raw, derived면 data-pd-meta="derived"). 그래서 화면의 모든 숫자가 값·메타 표지 안에 놓인다.
-import React from 'react';
 import { Text, keepTogether } from './Text';
 import type { TextTone } from './Text';
 import { Value, unitText } from './Values';
@@ -10,7 +9,7 @@ import type { FontWeight, TextVariant } from './tokens';
 import type { Provenanced } from '../data/adapters';
 
 /** m의 strong: 계산값 숫자를 같은 줄의 API 값(Value, 600)과 같은 굵기로 보인다. g: 한 줄로 묶는 조각들(수급 식의 "예비력 527 MW"). */
-type Atom = { t: string } | { m: string; tag: string; strong?: boolean } | { v: Provenanced<number>; f: Formatter; unit?: boolean; derived?: boolean };
+export type Atom = { t: string } | { m: string; tag: string; strong?: boolean } | { v: Provenanced<number>; f: Formatter; unit?: boolean; derived?: boolean };
 export type Seg = Atom | { g: readonly Atom[] };
 export type Line = readonly Seg[];
 

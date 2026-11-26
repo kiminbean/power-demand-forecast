@@ -1,5 +1,6 @@
 // 디자인 토큰의 단일 원천(명세 5절). 새 코드에서 색 hex는 이 파일에만 둔다(7.10절 금지 검사 예외).
-// 가져오기가 없어야 한다: 헤더 VM 테스트와 대비 테스트가 이 파일을 그대로 읽는다.
+// 가져오기가 없어야 한다: 헤더 VM 테스트와 대비 테스트가 이 파일을 그대로 읽는다. 실제로 쓰는 글자·바탕 쌍 목록(M4)은
+// ui/contrastPairs.ts에 있다(round 2: 앱이 쓰지 않는 시험 자료라 번들에서 뺐다).
 export type ThemeName = 'light' | 'dark';
 export type ColorRole = 'canvas' | 'surface' | 'well' | 'border' | 'borderStrong' | 'text1' | 'text2' | 'text3' | 'link'
   | 'primary' | 'onPrimary' | 'nowPillBg' | 'nowPillText' | 'scrim';
@@ -8,10 +9,14 @@ export type PillTone = 'ok' | 'watch' | 'caution' | 'danger' | 'neutral';
 export type ChipTone = { text: string; bg: string; border: string | null; borderStyle: 'solid' | 'dashed' | 'dotted'; hatch: string | null };
 
 // 데이터 색은 두 테마에서 같다(5.3절, 대시보드 SERIES). 경보 빨강은 공개 화면에 쓰지 않아 두지 않는다.
-// 80% 띠는 8 % 면 + 1 px 테두리(round 1 D10): 13 % 면이 그림을 덮어 기준선 점선이 묻혔다.
+// 80% 띠는 8 % 면 + 1 px 테두리(round 1 D10): 13 % 면이 그림을 덮어 기준선 점선이 묻혔다. 테두리는 자홍 그대로의 1 px 점선이다(round 2
+// 접근성: 45 % 실선은 2.04:1·1.62:1로 M4 3:1에 못 미쳤다. 점선이라 기준선 파선보다 옅게 읽힌다).
 export const SERIES = {
-  demand: '#3B82F6', supply: '#64748B', reserve: '#16A34A', smp: '#C026D3', band: 'rgba(192,38,211,.08)', bandEdge: 'rgba(192,38,211,.45)',
+  demand: '#3B82F6', supply: '#64748B', reserve: '#16A34A', smp: '#C026D3', band: 'rgba(192,38,211,.08)', bandEdge: '#C026D3',
   watch: '#B45309',
+  // 예시 그림(가격 원리 계단·정산 ①+② 그림)의 호박색 한 벌(round 2 parity: 테마마다 크림·밤색 ↔ 회색·노랑으로 색이 바뀌었다). 채움은 두 테마에서
+  // 같고 외곽선만 테마의 chart.exampleEdge(3:1)다.
+  exampleFill: 'rgba(245,158,11,.25)', exampleMark: '#F59E0B',
 } as const;
 
 export type Theme = {
@@ -20,11 +25,8 @@ export type Theme = {
   chip: Record<ChipKind, ChipTone>;
   pill: Record<PillTone, { text: string; bg: string }>;
   series: typeof SERIES;
-  /**
-   * exampleFill: 예시 그림(정산 ①+② 폭포)의 채움. 예시 칩과 같은 호박색이고 테마마다 밝기만 다르다(round 1 parity).
-   * exampleMark: ② 진한 칸. 밝은 테마는 예시 글자색, 어두운 테마는 그 글자색(#FCD34D)이 어두운 바탕 위 밝은 덩어리로 읽혀 한 단계 짙게(F13b 측정).
-   */
-  chart: { pastShade: string; zeroHatch: string; exampleFill: string; exampleMark: string };
+  /** exampleEdge: 예시 그림 막대의 외곽선(밝은 테마 amber-700, 어두운 테마 amber-300). 채움은 SERIES.exampleFill·exampleMark(round 2). */
+  chart: { pastShade: string; zeroHatch: string; exampleEdge: string };
 };
 
 const light: Theme = {
@@ -47,7 +49,7 @@ const light: Theme = {
   },
   series: SERIES,
   // 지난 시간 음영 = text3 6 %, 0.00 입력 빗금 = text3 22 %(5.3절)
-  chart: { pastShade: 'rgba(86,101,122,.06)', zeroHatch: 'rgba(86,101,122,.22)', exampleFill: 'rgba(217,119,6,.30)', exampleMark: '#92400E' },
+  chart: { pastShade: 'rgba(86,101,122,.06)', zeroHatch: 'rgba(86,101,122,.22)', exampleEdge: '#B45309' },
 };
 
 // dark는 그림자 대신 면 단계로 구분하고, 시트는 1 px borderStrong 테두리를 쓴다(5.1절).
@@ -70,7 +72,7 @@ const dark: Theme = {
     danger: { text: '#F87171', bg: '#37293B' }, neutral: { text: '#CBD5E1', bg: '#1A2439' },
   },
   series: SERIES,
-  chart: { pastShade: 'rgba(148,163,184,.06)', zeroHatch: 'rgba(148,163,184,.22)', exampleFill: 'rgba(245,158,11,.30)', exampleMark: '#F59E0B' },
+  chart: { pastShade: 'rgba(148,163,184,.06)', zeroHatch: 'rgba(148,163,184,.22)', exampleEdge: '#FCD34D' },
 };
 
 export const THEMES: Readonly<Record<ThemeName, Theme>> = { light, dark };
@@ -90,7 +92,8 @@ export const TYPE_SCALE: Readonly<Record<TextVariant, { fontSize: number; lineHe
 export const DISPLAY_COMPACT = { maxWidth: 360, fontSize: 28, lineHeight: 32 } as const;
 
 export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, x3: 32, x4: 48 } as const;
-export const RADIUS = { card: 14, control: 10, pill: 999, sheet: 20 } as const;
+/** mark: 상태 pill의 작은 네모 표지(둥근 ●는 실측·확정 표시라서 쓰지 않는다, round 2). */
+export const RADIUS = { card: 14, control: 10, pill: 999, sheet: 20, mark: 2 } as const;
 export const MOTION = { sheetMs: 200, shimmerMs: 1200 } as const;
 /** 모든 상호작용 요소의 DOM 상자 최소 크기(M2). */
 export const HIT = 44;
@@ -101,7 +104,25 @@ export const HIT = 44;
 export const LAYOUT = {
   header: 56, tabBar: 56, offlineBanner: 40, gutter: 16, gutterNarrow: 12, narrowBelow: 360, rail: 240, column: 640,
   railFrom: 1024, panel: 320, panelFrom: 1280, sheetPanel: 400, sheetMaxHeight: 0.85, sheetCenterFrom: 600, rowCardsBelow: 600, twoUpFrom: 768,
+  /** 오늘 AnswerLine이 두 줄에 드는 폭(그 아래는 세 줄, round 2 CLS). */
+  answerTwoLinesFrom: 390,
 } as const;
+/** 오늘 AnswerLine과 가격 카드 비교 문단이 다 받은 뒤 차지하는 줄 수(390 미만 세 줄, 그 밖 두 줄): 받는 동안 그만큼 자리를 잡는다(round 2 CLS). */
+export const answerLines = (width: number) => (width < LAYOUT.answerTwoLinesFrom ? 3 : 2);
+/**
+ * 오늘 카드 스켈레톤 높이(StateView minHeight, round 2 CLS): 다 받은 카드 본문 높이를 폭 구간마다 잰 값(F14 card_heights.py, round 0
+ * 스냅숏 꼴의 실측 자료). 구간 [360 미만, 390 미만, 600 미만, 768–1023(가격·전력 두 칸), 그 밖]. 불러오는 동안과 받은 뒤의 높이가 같아야
+ * 아래가 밀리지 않는다.
+ */
+export const SKELETON = {
+  hero: [222, 191, 173, 355, 173], power: [386, 281, 263, 355, 263], forecast: [677, 669, 617, 536, 536], accuracy: [228, 190, 190, 127, 127],
+} as const;
+/** SKELETON의 칸: 구간 경계는 LAYOUT의 배치 경계 그대로다(좁은 폭 · AnswerLine 두 줄 · 휴대폰 행 카드 · 태블릿 두 칸). */
+export function skeletonBucket(width: number): number {
+  if (width >= LAYOUT.twoUpFrom && width < LAYOUT.railFrom) return 3;
+  const below = [LAYOUT.narrowBelow, LAYOUT.answerTwoLinesFrom, LAYOUT.rowCardsBelow].findIndex(edge => width < edge);
+  return below === -1 ? 4 : below;
+}
 /** 부품 치수(6.2절): 칩·pill 높이 24, 목록 행 56, 탭 위 표시 3, 아이콘 크기. cellMinNarrow: 360 미만 시간대 요약 표(4칸이 272 px에 든다). */
 export const SIZE = {
   chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72, cellMinNarrow: 56,
@@ -125,46 +146,13 @@ export const CHART = {
   edge: 12, tickGap: 4, topRow: 26, xRow: 24, xLabelTop: 6, noteRow: 22, ladderTop: 40, labelGap: 2,
   line: 2, axis: 1, grid: 1, nowLine: 1.5, dash: '6 4', dotR: 5, dotRing: 2, selMark: 3, barGap: 1,
   pill: 20, pillTop: 3, pillPad: 8, hatch: 6, hatchLine: 2, swatch: 12, yIntervals: 5, stepIntervals: 4, clipMark: 6, barStrokeLadder: 1.5,
+  /**
+   * round 2: 띠가 넘친 시간의 ▲ 줄(그림 밖 12), 잘린 띠 끝을 흐리는 높이(10), 띠 테두리 점선, 범례 기호 상자(16×12)와 그 안의 작은 꼴
+   * (파선 · 점 반지름 · 띠 높이: 차트의 것을 상자에 맞게 줄였다).
+   */
+  clipRow: 12, clipFade: 10, bandDash: '1 2', keyW: 16, keyH: 12, keyDash: '4 3', keyDot: 4, keyBand: 7,
   glyph: { hangul: 12.5, wide: 11.5, space: 3.5, other: 7.5 },
   stepHeights: [{ below: 320, height: 200 }, { below: 380, height: 220 }, { below: 500, height: 230 }, { below: Infinity, height: 260 }],
   ladderHeights: [{ below: 320, height: 180 }, { below: 500, height: 200 }, { below: Infinity, height: 240 }],
   bar: 24, barTick: 4, triangle: 7, barStroke: 1.5,
 } as const;
-
-// 실제로 쓰는 글자·바탕 쌍(M4). tokens-contrast 테스트가 두 테마에서 모두 계산한다. 경로는 Theme 객체 기준.
-export type ContrastPair = { fg: string; bg: string; overlay?: string; min: 4.5 | 3; use: string };
-const onAll = (fg: string, use: string, min: 4.5 | 3 = 4.5): ContrastPair[] =>
-  ['color.canvas', 'color.surface', 'color.well'].map(bg => ({ fg, bg, min, use }));
-const chipPairs = (['measured', 'forecast', 'estimated', 'example', 'plain'] as const).map((k): ContrastPair => ({
-  fg: `chip.${k}.text`, bg: `chip.${k}.bg`, overlay: k === 'estimated' ? `chip.${k}.hatch` : undefined, min: 4.5, use: `칩 ${k}`,
-}));
-const pillPairs = (['ok', 'watch', 'caution', 'danger', 'neutral'] as const).map((k): ContrastPair => ({
-  fg: `pill.${k}.text`, bg: `pill.${k}.bg`, min: 4.5, use: `pill ${k}`,
-}));
-const seriesPairs = (['demand', 'supply', 'reserve', 'smp', 'watch'] as const).map((k): ContrastPair => ({
-  fg: `series.${k}`, bg: 'color.surface', min: 3, use: `차트 계열 ${k} (카드 위)`,
-}));
-// 차트 덧칠 위의 선·점(F5): 계단선·확정 가격 점·선택 고리·지금선이 80% 띠나 지난 시간 음영 위에 놓여도 3:1을 넘는다.
-const chartPairs: ContrastPair[] = [
-  { fg: 'series.smp', bg: 'color.surface', overlay: 'series.band', min: 3, use: '계단선 · 80% 띠 위' },
-  { fg: 'series.smp', bg: 'color.surface', overlay: 'chart.pastShade', min: 3, use: '계단선 · 지난 시간 음영 위' },
-  { fg: 'color.text1', bg: 'color.surface', overlay: 'series.band', min: 3, use: '확정 가격 점 · 띠 위' },
-  { fg: 'color.primary', bg: 'color.surface', overlay: 'series.band', min: 3, use: '선택한 시간 고리 · 띠 위' },
-  { fg: 'color.borderStrong', bg: 'color.surface', overlay: 'chart.pastShade', min: 3, use: '지금선·x축 · 지난 시간 음영 위' },
-];
-export const CONTRAST_PAIRS: readonly ContrastPair[] = [
-  ...onAll('color.text1', '제목·값·AnswerLine'),
-  ...onAll('color.text2', '본문·라벨·예시 값'),
-  ...onAll('color.text3', '출처·시각·단위·메타'),
-  ...onAll('color.link', 'TermLink·[출처 표]·[i]'),
-  { fg: 'color.text3', bg: 'color.surface', overlay: 'chart.pastShade', min: 4.5, use: '차트 지난 시간 음영 위 축 글자' },
-  { fg: 'color.primary', bg: 'color.surface', min: 4.5, use: '활성 탭 라벨' },
-  { fg: 'color.onPrimary', bg: 'color.primary', min: 4.5, use: '주 버튼 글자' },
-  { fg: 'color.nowPillText', bg: 'color.nowPillBg', min: 4.5, use: 'NowPill·차트 지금 pill' },
-  ...chipPairs,
-  ...pillPairs,
-  ...onAll('color.borderStrong', '입력·세그먼트 외곽, 차트 축', 3),
-  ...onAll('color.primary', '포커스 링·활성 탭 표시', 3),
-  ...seriesPairs,
-  ...chartPairs,
-];
