@@ -57,6 +57,11 @@ export function tradeHour(hour: number | null | undefined): string {
   return validHour(hour) ? `${pad2(hour)}h · ${pad2(hour - 1)}–${pad2(hour)}시` : DASH;
 }
 
+/** 하루 안의 시(0–24) 두 자리. 차트 x 눈금 "00 06 12 18 24". */
+export function clockHour(hour: number | null | undefined): string {
+  return typeof hour === 'number' && Number.isInteger(hour) && hour >= 0 && hour <= 24 ? pad2(hour) : DASH;
+}
+
 /** 연속 거래시간 구간. (3, 5) → "03–05h · 02–05시" */
 export function tradeHourRange(from: number | null | undefined, to: number | null | undefined): string {
   if (!validHour(from) || !validHour(to) || from > to) return DASH;

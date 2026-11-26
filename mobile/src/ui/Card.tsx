@@ -27,6 +27,10 @@ export type CardProps = {
   state?: string;
 };
 
+/** 카드 테두리와 안쪽 여백(360 미만 12, 그 밖 16). 차트를 카드 폭으로 넓힐 때(ChartBleed)도 같은 값을 쓴다. */
+export const CARD_BORDER = 1;
+export const cardPadding = (windowWidth: number) => (windowWidth < LAYOUT.narrowBelow ? SPACE.md : SPACE.lg);
+
 export function Card({ title, chips, onMethod, ribbon, children, testID, state }: CardProps) {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
@@ -34,7 +38,7 @@ export function Card({ title, chips, onMethod, ribbon, children, testID, state }
   const shadow = theme.elevation.card ? webStyle({ boxShadow: theme.elevation.card }) : null;
   return (
     <View testID={testID} style={[styles.card, { backgroundColor: theme.color.surface, borderColor: theme.color.border,
-      padding: narrow ? SPACE.md : SPACE.lg }, shadow]} {...web({ dataSet: state ? { pdCard: 'true', state } : { pdCard: 'true' } })}>
+      padding: cardPadding(width) }, shadow]} {...web({ dataSet: state ? { pdCard: 'true', state } : { pdCard: 'true' } })}>
       {ribbon}
       <CardHeader title={title} chips={chips} onMethod={onMethod} narrow={narrow} />
       {children}
@@ -129,7 +133,7 @@ export function StateView({ kind, text, onRetry, minHeight = SIZE.stateMin }: St
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: RADIUS.card, borderWidth: 1, gap: SPACE.md, width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
+  card: { borderRadius: RADIUS.card, borderWidth: CARD_BORDER, gap: SPACE.md, width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.sm },
   titleRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.sm, minHeight: HIT },
   stack: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' },

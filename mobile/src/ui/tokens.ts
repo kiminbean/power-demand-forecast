@@ -97,6 +97,20 @@ export const SIZE = {
   chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72,
 } as const;
 
+/**
+ * 차트 치수(4.1·4.2·6.2절). 차트 폭은 카드 폭(296·358·398·608)이고 높이는 그 폭 구간으로 고른다.
+ * glyph는 12 px 시스템 글꼴의 글자 폭 추정값이다. 실제보다 넉넉하게 잡아 라벨 상자가 글자보다 좁아지지 않게 한다.
+ */
+export const CHART = {
+  edge: 12, tickGap: 4, topRow: 26, xRow: 24, xLabelTop: 6, noteRow: 22, ladderTop: 40, labelGap: 2,
+  line: 2, axis: 1, grid: 1, nowLine: 1.5, dash: '6 4', dotR: 5, dotRing: 2, selMark: 3, barGap: 1,
+  pill: 20, pillTop: 3, pillPad: 8, hatch: 6, hatchLine: 2, swatch: 12, yIntervals: 5,
+  glyph: { hangul: 12.5, wide: 11.5, space: 3.5, other: 7.5 },
+  stepHeights: [{ below: 320, height: 200 }, { below: 380, height: 220 }, { below: 500, height: 230 }, { below: Infinity, height: 260 }],
+  ladderHeights: [{ below: 320, height: 180 }, { below: 500, height: 200 }, { below: Infinity, height: 240 }],
+  bar: 24, barTick: 4, triangle: 7, barStroke: 1.5,
+} as const;
+
 // 실제로 쓰는 글자·바탕 쌍(M4). tokens-contrast 테스트가 두 테마에서 모두 계산한다. 경로는 Theme 객체 기준.
 export type ContrastPair = { fg: string; bg: string; overlay?: string; min: 4.5 | 3; use: string };
 const onAll = (fg: string, use: string, min: 4.5 | 3 = 4.5): ContrastPair[] =>
@@ -110,6 +124,14 @@ const pillPairs = (['ok', 'watch', 'caution', 'danger', 'neutral'] as const).map
 const seriesPairs = (['demand', 'supply', 'reserve', 'smp', 'watch'] as const).map((k): ContrastPair => ({
   fg: `series.${k}`, bg: 'color.surface', min: 3, use: `차트 계열 ${k} (카드 위)`,
 }));
+// 차트 덧칠 위의 선·점(F5): 계단선·확정 가격 점·선택 고리·지금선이 80% 띠나 지난 시간 음영 위에 놓여도 3:1을 넘는다.
+const chartPairs: ContrastPair[] = [
+  { fg: 'series.smp', bg: 'color.surface', overlay: 'series.band', min: 3, use: '계단선 · 80% 띠 위' },
+  { fg: 'series.smp', bg: 'color.surface', overlay: 'chart.pastShade', min: 3, use: '계단선 · 지난 시간 음영 위' },
+  { fg: 'color.text1', bg: 'color.surface', overlay: 'series.band', min: 3, use: '확정 가격 점 · 띠 위' },
+  { fg: 'color.primary', bg: 'color.surface', overlay: 'series.band', min: 3, use: '선택한 시간 고리 · 띠 위' },
+  { fg: 'color.borderStrong', bg: 'color.surface', overlay: 'chart.pastShade', min: 3, use: '지금선·x축 · 지난 시간 음영 위' },
+];
 export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...onAll('color.text1', '제목·값·AnswerLine'),
   ...onAll('color.text2', '본문·라벨·예시 값'),
@@ -124,4 +146,5 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...onAll('color.borderStrong', '입력·세그먼트 외곽, 차트 축', 3),
   ...onAll('color.primary', '포커스 링·활성 탭 표시', 3),
   ...seriesPairs,
+  ...chartPairs,
 ];
