@@ -11,16 +11,38 @@ export const webStyle = (style: Record<string, unknown>) => style as unknown as 
 export const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 } as const;
 
 export type DomEl = {
-  focus(): void;
+  focus(options?: { preventScroll?: boolean }): void;
   contains(node: unknown): boolean;
   querySelectorAll(selector: string): ArrayLike<DomEl>;
   getClientRects(): ArrayLike<unknown>;
 };
+export type ScrollEl = DomEl & { scrollTop: number; scrollHeight: number; clientHeight: number };
 
 /** 웹에서 호스트 컴포넌트의 ref는 DOM 요소다. 네이티브·VM 테스트에서는 null이라 아무 일도 하지 않는다. */
 export function domOf(ref: { current: unknown } | null | undefined): DomEl | null {
   const node = ref ? (ref.current as Partial<DomEl> | null) : null;
   return node && typeof node.focus === 'function' && typeof node.querySelectorAll === 'function' ? (node as DomEl) : null;
+}
+
+/**
+ * root 안의 세로 스크롤 상자, 스크롤 범위가 큰 것부터. 셸이 화면을 모르고도(레거시 화면의 ScrollView까지) 맨 위로 올리고
+ * 위치를 기억·복원하는 통로다(3.3절). getComputedStyle이 없는 환경(네이티브·node)에서는 빈 배열.
+ */
+export function scrollBoxes(root: DomEl | null): ScrollEl[] {
+  if (!root || typeof getComputedStyle !== 'function') return [];
+  const boxes = Array.from(root.querySelectorAll('*')) as ScrollEl[];
+  const range = (el: ScrollEl) => el.scrollHeight - el.clientHeight;
+  return boxes
+    .filter(el => /^(auto|scroll)$/.test(getComputedStyle(el as unknown as Element).overflowY))
+    .sort((a, b) => range(b) - range(a));
+}
+
+/** 라우트가 바뀌면 h1(tabIndex=-1)로 초점을 옮긴다. 초점이 스크롤을 움직이지 않게 한다(복원한 위치를 지킨다). */
+export function focusHeading(root: DomEl | null): boolean {
+  const heading = root ? root.querySelectorAll('h1, [role="heading"][aria-level="1"]')[0] : undefined;
+  if (!heading) return false;
+  heading.focus({ preventScroll: true });
+  return true;
 }
 
 /** Tab으로 갈 수 있는 것: Pressable은 늘 tabindex를 0 또는 -1로 쓴다(비활성·roving 칸은 -1). */

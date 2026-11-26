@@ -62,7 +62,8 @@ export function Rail<K extends string>(props: Omit<TabBarProps<K>, 'orientation'
 const styles = StyleSheet.create({
   bar: { borderTopWidth: 1 },
   rail: { width: LAYOUT.rail, borderRightWidth: 1, paddingVertical: SPACE.sm },
-  listH: { flexDirection: 'row' },
+  // 600–1023에서도 탭 칸은 본문 열(640)과 같은 폭 가운데에 둔다(4.6절). 막대 바탕은 화면 끝까지.
+  listH: { flexDirection: 'row', width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
   listV: { flexDirection: 'column', gap: SPACE.xs },
   tabH: { flex: 1, minHeight: LAYOUT.tabBar, minWidth: HIT, alignItems: 'center', justifyContent: 'center', gap: SPACE.xs / 2 },
   tabV: { minHeight: HIT + SPACE.sm, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingHorizontal: SPACE.xl },

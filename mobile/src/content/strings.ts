@@ -39,9 +39,19 @@ export function nowPillText({ now, fetchedAt, skewNotable = false }: NowPillInpu
 /** 지연이면 "지연 · 06:04 값", 끊김이면 실측 글리프를 거두고 "06:04 값". */
 export const staleChipText = (fetchedAt: number, stage: Exclude<Freshness, 'fresh'>) =>
   (stage === 'stale' ? `지연 · ${kstClock(fetchedAt)} 값` : `${kstClock(fetchedAt)} 값`);
-export const offlineText = (lastData: number) => `오프라인 · 마지막 자료 ${kstTime(lastData)}`;
+/** 마지막 자료 시각을 모르면(화면이 아직 알려 주지 않음) 시각 없이 쓴다. */
+export const offlineText = (lastData: number | null) =>
+  (lastData === null ? '오프라인 · 새 자료를 받을 수 없습니다' : `오프라인 · 마지막 자료 ${kstTime(lastData)}`);
 export const refreshDoneText = (at: number) => `${kstTime(at)} 기준으로 새로 불러왔습니다`;
 export const refreshFailedText = (shown: number) => `새로고침 실패 · ${kstClock(shown)} 값 표시 중`;
+export const REFRESH_FAILED_TEXT = '새로고침 실패';
+// 헤더 새로고침을 숨기지 않고 비활성으로 둘 때 이름 뒤에 붙는 까닭(3.4·7.6절).
+export const REFRESH_NONE_REASON = '이 화면은 새로 불러올 자료가 없습니다';
+export const REFRESH_OFFLINE_REASON = '오프라인이라 새로 불러올 수 없습니다';
+/** 자기 새로고침을 셸에 알리지 않는 레거시 화면은 다시 그려서 다시 받게 한다. 결과는 그 화면이 보여 준다. */
+export const screenReloadingText = (screen: string) => `${screen} 화면을 다시 불러오는 중입니다`;
+/** 라우트가 바뀔 때 live region 알림: "입찰 화면". */
+export const screenAnnouncement = (screen: string) => `${screen} 화면`;
 export const clockSkewText = (skewMs: number) => `기기 시계와 ${num(Math.abs(skewMs) / MINUTE_MS, 0)}분 차이`;
 
 /** 문서화된 정확도(7.7절). 수치는 provenance.ts의 상수 하나에서만 온다. */
@@ -109,8 +119,11 @@ export const watchReservePctText = () => `예비율 ${num((WATCH_RATIO - 1) * 10
 export const watchBoundaryText = (boundary: number, unit = 'MW') => `관심 경계 ${mw(boundary)} ${unit} (${watchReservePctText()})`;
 
 export const tourProgressText = (step: number, total: number) => `${num(step, 0)} / ${num(total, 0)}`;
+export const TOUR_NAME = '1분 둘러보기';
+/** 둘러보기 단계의 화면 이름: "둘러보기 2/5". */
+export const tourLabel = (step: number, total: number) => `둘러보기 ${num(step, 0)}/${num(total, 0)}`;
 export const routeTitle = (screen: string) => `${screen} · ${APP_NAME}`;
-export const tourTitle = (step: number, total: number) => `둘러보기 ${num(step, 0)}/${num(total, 0)} · ${APP_NAME}`;
+export const tourTitle = (step: number, total: number) => routeTitle(tourLabel(step, total));
 
 /** 용어 사전 12항목의 제목. 숫자가 든 제목이 있어 JSON(숫자 금지)이 아니라 여기 둔다. 뜻풀이는 guide.ko.json. */
 export const GLOSSARY_TITLES = Object.freeze({

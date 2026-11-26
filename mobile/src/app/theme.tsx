@@ -58,10 +58,11 @@ export function documentTheme(mode: ThemeMode): DocumentTheme {
   return { dataTheme: mode, colorScheme: mode, themeColor: { light: canvas, dark: canvas } };
 }
 
-export type ThemeContextValue = { mode: ThemeMode; scheme: ThemeName; theme: Theme; setMode: (mode: ThemeMode) => void };
+/** setMode는 이 기기에 저장했으면 true를 돌려준다(저장소를 못 쓰면 그 방문 동안만 적용, 테마 시트가 그대로 알린다). */
+export type ThemeContextValue = { mode: ThemeMode; scheme: ThemeName; theme: Theme; setMode: (mode: ThemeMode) => boolean };
 
 // 공급자 밖(테스트·오류 화면)에서도 그릴 수 있게 밝은 테마를 기본값으로 둔다.
-const ThemeContext = createContext<ThemeContextValue>({ mode: 'system', scheme: 'light', theme: THEMES.light, setMode: () => undefined });
+const ThemeContext = createContext<ThemeContextValue>({ mode: 'system', scheme: 'light', theme: THEMES.light, setMode: () => false });
 
 type ThemeProviderProps = { children?: React.ReactNode; onDocumentTheme?: (value: DocumentTheme) => void };
 
@@ -73,8 +74,9 @@ export function ThemeProvider({ children, onDocumentTheme }: ThemeProviderProps)
     if (onDocumentTheme) onDocumentTheme(documentTheme(mode));
   }, [mode, onDocumentTheme]);
   const setMode = useCallback((next: ThemeMode) => {
-    writeThemeMode(next);
+    const saved = writeThemeMode(next);
     setModeState(next);
+    return saved;
   }, []);
   const value = useMemo(() => ({ mode, scheme, theme: THEMES[scheme], setMode }), [mode, scheme, setMode]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

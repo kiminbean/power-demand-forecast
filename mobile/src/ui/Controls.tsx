@@ -33,9 +33,13 @@ export function HourStepper({ hour, onChange, min = FIRST_TRADE_HOUR, max = LAST
 }
 
 export type SegmentOption<T extends string> = { value: T; label: string };
-export type SegmentedControlProps<T extends string> = { label: string; options: readonly SegmentOption<T>[]; value: T; onChange: (value: T) => void };
+export type SegmentedControlProps<T extends string> = {
+  label: string; options: readonly SegmentOption<T>[]; value: T; onChange: (value: T) => void;
+  /** 긴 선택지(테마 시트)는 위아래로 쌓는다. 키는 네 방향 모두 같다. */
+  vertical?: boolean;
+};
 /** role=radiogroup > radio(aria-checked). 화살표·Home·End로 고르고 초점도 옮긴다(roving tabindex). */
-export function SegmentedControl<T extends string>({ label, options, value, onChange }: SegmentedControlProps<T>) {
+export function SegmentedControl<T extends string>({ label, options, value, onChange, vertical = false }: SegmentedControlProps<T>) {
   const { theme } = useTheme();
   const refs = useRef<Array<View | null>>([]);
   const current = Math.max(0, options.findIndex(o => o.value === value));
@@ -48,12 +52,13 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
     if (node) node.focus();
   };
   return (
-    <View role="radiogroup" aria-label={label} style={[styles.segment, { borderColor: theme.color.borderStrong }]}>
+    <View role="radiogroup" aria-label={label} style={[styles.segment, vertical ? styles.segmentV : null, { borderColor: theme.color.borderStrong }]}>
       {options.map((o, i) => {
         const on = i === current;
         return (
           <Pressable key={o.value} ref={el => { refs.current[i] = el; }} role="radio" aria-checked={on} aria-label={o.label}
-            onPress={() => onChange(o.value)} style={[styles.segItem, on ? { backgroundColor: theme.color.primary } : null]}
+            onPress={() => onChange(o.value)}
+            style={[styles.segItem, vertical ? styles.segItemV : null, on ? { backgroundColor: theme.color.primary } : null]}
             {...web({ tabIndex: on ? 0 : -1, onKeyDown: (e: unknown) => onKey(e, i) })}>
             <Text variant="label" weight="600" color={on ? theme.color.onPrimary : theme.color.text2}>{o.label}</Text>
           </Pressable>
@@ -96,6 +101,8 @@ const styles = StyleSheet.create({
     minHeight: HIT, minWidth: HIT, paddingHorizontal: SPACE.lg, borderRadius: RADIUS.control, alignItems: 'center', justifyContent: 'center',
     flexShrink: 1,
   },
+  segmentV: { flexDirection: 'column', alignSelf: 'stretch' },
+  segItemV: { alignItems: 'flex-start' },
   term: { minHeight: HIT, minWidth: HIT, justifyContent: 'center', alignSelf: 'flex-start' },
   underline: { textDecorationLine: 'underline' },
   listRow: { minHeight: SIZE.listRow, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, borderBottomWidth: 1, paddingVertical: SPACE.sm },

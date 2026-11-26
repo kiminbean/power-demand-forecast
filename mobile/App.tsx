@@ -1,407 +1,100 @@
 /**
- * RE-BMS Mobile App v6.1.0 - Cross-Platform Edition
- * 100% Feature Parity with Web-v6.1.0
- * Supports iOS, Android, and Web
+ * eXeco 제주 전력시장 — 공개 모바일 웹앱의 입구(명세 3·6.1절). 셸(라우터·탭·시트·알림·테마)은 src/app/Shell.tsx가 맡고,
+ * 이 파일에는 훅 없는 Header와 라우트 스위치만 둔다.
  *
- * Tabs (3-tab navigation):
- * - SMP Forecast (24h Prediction)
- * - Bidding (DAM/RTM Management)
- * - Settlement (Revenue Analysis)
+ * 헤더 회귀 테스트(tests/header-neutral-status-regression.test.cjs)가 이 파일 끝에 `export { Header };`를 덧붙여 VM에서 돌린다.
+ * 그 VM은 react · react-native(View·Text·TouchableOpacity·StyleSheet) · src/theme/colors만 진짜로 주고 나머지 가져오기는 {}다.
+ * 그래서 모듈 최상위에서는 StyleSheet.create 말고 아무것도 부르지 않고, Header는 가져온 값을 읽지 않는다: 색·글자 꼴·상태는
+ * 셸이 props로 넘기고, 없으면 colors.ts의 옛 색을 쓴다. 크기 숫자는 토큰을 읽을 수 없어 그대로 적고 tests/header-palette가 맞춰 본다.
  */
-
-import React, { useState } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from './src/components/Ionicon';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Platform,
-  TouchableOpacity,
-  SafeAreaView,
-} from 'react-native';
-
-// eXeco DS v1 tokens (dark command-center surfaces, emerald accent)
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from './src/theme/colors';
+import { Shell } from './src/app/Shell';
+import type { HeaderFonts, HeaderPalette, ShellHeaderProps } from './src/app/Shell';
+import { applyDocumentTheme } from './src/app/head';
+import type { RouteKey, RouteState } from './src/app/routes';
+import { ThemeProvider } from './src/app/theme';
+import { RefreshButton } from './src/ui/Button';
+import { Icon } from './src/ui/Icon';
 import SMPForecastScreen from './src/screens/SMPForecastScreen';
 import BiddingScreen from './src/screens/BiddingScreen';
 import SettlementScreen from './src/screens/SettlementScreen';
-import KPXSimulationScreen from './src/screens/KPXSimulationScreen';
-import RTMSimulationScreen from './src/screens/RTMSimulationScreen';
-import AlanChatScreen from './src/screens/alan/AlanChatScreen';
 
-// Tab Icon using vector icons (Ionicons, eXeco DS v1: focused emerald / unfocused mute)
-const TabIcon = ({ name, focused }: { name: string; focused: boolean }) => {
-  const iconMap: { [key: string]: string } = {
-    'bar-chart': 'trending-up',
-    'hammer': 'hammer',
-    'wallet': 'wallet',
-  };
-
-  const ionName = (iconMap[name] || 'ellipse') as keyof typeof Ionicons.glyphMap;
-  return (
-    <Ionicons
-      name={focused ? ionName : `${ionName}-outline` as keyof typeof Ionicons.glyphMap}
-      size={22}
-      color={focused ? '#2563EB' : '#94A3B8'}
-    />
-  );
+// 헤더 버전 표기(P8 전까지 v6.1). src/content/strings.ts의 APP_VERSION과 같아야 한다.
+const HEADER_VERSION = 'v6.1';
+// F6: 탭 3개(알아보기는 F10). 세 화면 모두 아직 자기 h1이 없는 레거시 화면이라 셸이 h1 행을 둘러 준다(F7·F8·F9가 하나씩 뺀다).
+const TABS: readonly RouteKey[] = ['smp', 'bidding', 'settlement'];
+const LEGACY: readonly RouteKey[] = ['smp', 'bidding', 'settlement'];
+// 셸이 테마 팔레트를 넘기지 않을 때(헤더 VM 테스트)의 옛 색.
+const LEGACY_PALETTE: HeaderPalette = {
+  background: colors.surface, border: colors.border.primary, wordmark: colors.brand.navy,
+  title: colors.text.primary, version: colors.text.muted, icon: colors.text.primary,
 };
+const NO_FONTS: HeaderFonts = {};
+// 레거시 입찰 화면이 부르는 이동은 DAM·RTM 시뮬레이션 화면뿐인데, 그 화면은 공개 빌드에서 뺐다(4.5절). 넘기지 않으면 가짜 결과를
+// window.alert로 띄우므로 아무것도 하지 않는 이동을 넘긴다(F8이 입찰 탭을 바꾸면 사라진다).
+const LEGACY_BIDDING_NAVIGATION = { navigate: () => undefined, goBack: () => undefined };
 
-// Tab configuration (3 tabs only - matching web-v6.1.0)
-type TabKey = 'smp' | 'bidding' | 'settlement';
+type HeaderProps = Partial<ShellHeaderProps>;
 
-interface TabConfig {
-  key: TabKey;
-  label: string;
-  icon: string;
-}
-
-const tabs: TabConfig[] = [
-  { key: 'smp', label: 'SMP예측', icon: 'bar-chart' },
-  { key: 'bidding', label: '입찰관리', icon: 'hammer' },
-  { key: 'settlement', label: '정산', icon: 'wallet' },
-];
-
-// Header Component
-function Header({ title, showBack, onBack }: { title?: string; showBack?: boolean; onBack?: () => void }) {
+/** 모든 탭에서 같은 헤더(3.4절): 워드마크 + v6.1 | 새로고침. 하위 상태: ←(첫 TouchableOpacity) + 제목 | v6.1 + 새로고침. */
+function Header({ title, showBack, onBack, onHome, palette = LEGACY_PALETTE, fonts = NO_FONTS, refresh }: HeaderProps) {
+  const version = <Text style={[fonts.version, { color: palette.version }]}>{HEADER_VERSION}</Text>;
   return (
-    <View style={styles.header}>
-      <View style={styles.headerLeft}>
+    <View role="banner" style={[styles.header, { backgroundColor: palette.background, borderBottomColor: palette.border }]}>
+      <View style={styles.side}>
         {showBack ? (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          <TouchableOpacity onPress={onBack} role="button" aria-label="뒤로" style={styles.target}>
+            <Icon name="back" size={22} color={palette.icon} />
           </TouchableOpacity>
         ) : (
-          <Text style={styles.logoText}>eXeco</Text>
+          <Pressable onPress={onHome} role="button" aria-label="eXeco 처음 화면" style={styles.wordmark}>
+            <Text style={[fonts.wordmark, { color: palette.wordmark }]}>eXeco</Text>
+          </Pressable>
         )}
-        {title && <Text style={styles.headerTitle}>{title}</Text>}
+        {title ? <Text numberOfLines={1} style={[styles.title, fonts.title, { color: palette.title }]}>{title}</Text> : null}
+        {showBack ? null : version}
       </View>
-      <View style={styles.headerRight}>
-        <Text style={styles.versionText}>v6.1</Text>
+      <View style={styles.side}>
+        {showBack ? version : null}
+        {refresh ? <RefreshButton onPress={refresh.onPress} busy={refresh.busy} disabledReason={refresh.disabledReason} /> : null}
       </View>
     </View>
   );
 }
 
-// Bottom Tab Bar
-function BottomTabBar({
-  activeTab,
-  onTabChange,
-  onOpenAlan,
-}: {
-  activeTab: TabKey | null;
-  onTabChange: (tab: TabKey) => void;
-  onOpenAlan?: () => void;
-}) {
-  return (
-    <View style={styles.tabBar}>
-      <View style={styles.tabsRow} accessibilityRole="tablist">
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            style={styles.tabItem}
-            accessibilityRole="tab"
-            accessibilityLabel={tab.label}
-            accessibilityState={{ selected: isActive }}
-            aria-selected={isActive}
-            onPress={() => onTabChange(tab.key)}
-            activeOpacity={0.7}
-          >
-            <TabIcon name={tab.icon} focused={isActive} />
-            <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-      </View>
-      {onOpenAlan && (
-        <TouchableOpacity
-          style={styles.alanNavButton}
-          accessibilityRole="button"
-          accessibilityLabel="Alan AI 채팅 열기"
-          onPress={onOpenAlan}
-          activeOpacity={0.8}
-        >
-          <View style={styles.alanAvatar}>
-            <Ionicons name="sparkles" size={24} color={colors.brand.primary} />
-          </View>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
-// Error Boundary
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: string }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: '' };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Something went wrong</Text>
-          <Text style={styles.errorText}>{this.state.error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => this.setState({ hasError: false, error: '' })}
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    return this.props.children;
+/** 라우트 스위치: 화면 본문만 고른다(헤더·탭·시트는 셸). */
+function renderRoute(state: RouteState) {
+  switch (state.key) {
+    case 'smp':
+      return <SMPForecastScreen />;
+    case 'bidding':
+      return <BiddingScreen webNavigation={LEGACY_BIDDING_NAVIGATION} />;
+    case 'settlement':
+      return <SettlementScreen />;
+    default:
+      return null;
   }
 }
 
-// Main App
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('smp');
-  const [simulationScreen, setSimulationScreen] = useState<'none' | 'dam' | 'rtm'>('none');
-  const [showAlanChat, setShowAlanChat] = useState(false);
-
-  // Navigation handler for simulation screens
-  const handleNavigate = (screen: string) => {
-    if (screen === 'KPXSimulation' || screen === 'DAM') {
-      setSimulationScreen('dam');
-    } else if (screen === 'RTMSimulation' || screen === 'RTM') {
-      setSimulationScreen('rtm');
-    } else if (screen.toLowerCase() === 'smp') {
-      setActiveTab('smp');
-    } else if (screen.toLowerCase() === 'bidding') {
-      setActiveTab('bidding');
-    } else if (screen.toLowerCase() === 'settlement') {
-      setActiveTab('settlement');
-    }
-    setShowAlanChat(false);
-  };
-
-  const handleBack = () => {
-    setSimulationScreen('none');
-  };
-
-  // Web navigation object for screens that need it
-  const webNavigation = {
-    navigate: handleNavigate,
-    goBack: handleBack,
-  };
-
-  // Render simulation screens
-  if (simulationScreen === 'dam') {
-    return (
-      <ErrorBoundary>
-        <SafeAreaView style={styles.container}>
-          <StatusBar style="dark" />
-          <Header title="DAM 시뮬레이션" showBack onBack={handleBack} />
-          <View style={styles.content}>
-            <KPXSimulationScreen />
-          </View>
-        </SafeAreaView>
-      </ErrorBoundary>
-    );
-  }
-
-  if (simulationScreen === 'rtm') {
-    return (
-      <ErrorBoundary>
-        <SafeAreaView style={styles.container}>
-          <StatusBar style="dark" />
-          <Header title="RTM 시뮬레이션" showBack onBack={handleBack} />
-          <View style={styles.content}>
-            <RTMSimulationScreen />
-          </View>
-        </SafeAreaView>
-      </ErrorBoundary>
-    );
-  }
-
-  // Render main screen based on active tab
-  const renderScreen = () => {
-    if (showAlanChat) {
-      return (
-        <AlanChatScreen
-          onNavigate={(screen) => {
-            setShowAlanChat(false);
-            handleNavigate(screen);
-          }}
-        />
-      );
-    }
-
-    switch (activeTab) {
-      case 'smp':
-        return <SMPForecastScreen />;
-      case 'bidding':
-        return <BiddingScreen webNavigation={webNavigation} />;
-      case 'settlement':
-        return <SettlementScreen />;
-      default:
-        return <SMPForecastScreen />;
-    }
-  };
-
   return (
-    <ErrorBoundary>
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
-        <Header />
-        <View style={styles.content}>{renderScreen()}</View>
-        <BottomTabBar
-          activeTab={showAlanChat ? null : activeTab}
-          onTabChange={(tab) => {
-            setShowAlanChat(false);
-            setActiveTab(tab);
-          }}
-          onOpenAlan={!showAlanChat ? () => setShowAlanChat(true) : undefined}
-        />
-      </SafeAreaView>
-    </ErrorBoundary>
+    <ThemeProvider onDocumentTheme={applyDocumentTheme}>
+      <StatusBar style="auto" />
+      <Shell tabs={TABS} legacy={LEGACY} renderRoute={renderRoute} renderHeader={Header} />
+    </ThemeProvider>
   );
 }
 
+// 크기는 토큰과 같다: 높이 LAYOUT.header 56, 누름 상자 HIT 44, 여백 SPACE.xs 4 · SPACE.md 12(글자가 화면 끝에서 16).
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    flex: 1,
-  },
-
-  // Header
   header: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.primary,
+    height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, borderBottomWidth: 1,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoText: {
-    color: colors.brand.navy,
-    fontSize: 24,
-    fontWeight: 'bold',
-    fontStyle: 'italic',
-  },
-  headerTitle: {
-    color: colors.text.primary,
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 12,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingRight: 8,
-  },
-
-  versionText: {
-    fontSize: 12,
-    color: colors.text.muted,
-  },
-
-  // Tab Bar
-  tabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.primary,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-    paddingTop: 8,
-  },
-  tabsRow: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  alanNavButton: {
-    paddingHorizontal: 8,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingVertical: 6,
-  },
-  tabLabel: {
-    fontSize: 10,
-    color: colors.text.secondary,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: colors.brand.primary,
-    fontWeight: '600',
-  },
-
-  // Error
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.bg,
-    padding: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text.primary,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: colors.info,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  retryText: {
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-
-  // Alan button
-  alanAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.brand.primary,
-  },
+  side: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 },
+  target: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  wordmark: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, justifyContent: 'center' },
+  title: { flexShrink: 1 },
 });

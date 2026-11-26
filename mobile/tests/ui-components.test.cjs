@@ -53,6 +53,16 @@ const byRole = (root, role) => all(root, n => n.props.role === role);
 const pressables = root => all(root, n => n.type === 'Pressable');
 const HANGUL = /[가-힣]/;
 
+// 까닭 있는 비활성(F6 키보드 점검으로 고침): RN-web 0.19는 disabled를 받은 <button>에 native disabled를 붙여 Tab에서 빼므로
+// Pressable에는 disabled가 없고 누름도 없으며, ref가 DOM에 aria-disabled를 단다.
+function assertReachableDisabled(node, label) {
+  assert.equal(node.props.disabled, undefined, `${label}: Pressable disabled 없음`);
+  assert.equal(node.props.onPress, undefined, `${label}: 누름 없음`);
+  const attrs = new Map();
+  node.props.ref({ setAttribute: (k, v) => attrs.set(k, v), removeAttribute: k => attrs.delete(k), hasAttribute: k => attrs.has(k) });
+  assert.equal(attrs.get('aria-disabled'), 'true', `${label}: aria-disabled`);
+}
+
 function assertTarget(node, label) {
   const s = flat(node.props.style);
   const w = Math.max(s.minWidth || 0, s.width || 0);
@@ -86,8 +96,16 @@ test('Button·IconButton·RefreshButton: role=button, 한국어 이름, 44 px, �
   assert.equal(busy.props.onPress, undefined, '진행 중에는 누름을 받지 않는다');
   assert.equal(all(info, n => n.props['aria-hidden'] === true).length, 1, '아이콘은 장식(aria-hidden)');
   assert.equal(refresh.props['aria-label'], '가격·전력 정보 새로고침 · 이 화면은 새로 불러올 자료가 없습니다');
-  assert.equal(refresh.props.disabled, true);
-  assert.equal(refresh.props.tabIndex, 0, '까닭 있는 비활성은 Tab으로 닿는다');
+  assertReachableDisabled(refresh, '까닭 있는 비활성은 Tab으로 닿는다');
+  // 까닭 없는 비활성은 RN-web의 native disabled를 그대로 쓰고, ref가 RN-web이 단 aria-disabled를 지우지 않는다.
+  const plain = pressables(tree(h(ui.IconButton, { icon: 'info', accessibilityLabel: '산출 방식 보기: 확정 가격', disabled: true, onPress: () => {} })))[0];
+  assert.equal(plain.props.disabled, true);
+  const attrs = new Map([['disabled', ''], ['aria-disabled', 'true']]);
+  plain.props.ref({ setAttribute: (k, v) => attrs.set(k, v), removeAttribute: k => attrs.delete(k), hasAttribute: k => attrs.has(k) });
+  assert.equal(attrs.get('aria-disabled'), 'true');
+  const enabled = new Map([['aria-disabled', 'true']]);
+  retry.props.ref({ setAttribute: (k, v) => enabled.set(k, v), removeAttribute: k => enabled.delete(k), hasAttribute: k => enabled.has(k) });
+  assert.equal(enabled.has('aria-disabled'), false, '다시 켜진 버튼에서 우리가 단 aria-disabled를 걷는다');
 });
 
 test('ProvenanceChip: 글자 + 글리프 + 모양, role=img 긴 이름, 누를 수 없음, 지연·끊김·잠김', () => {
@@ -191,10 +209,10 @@ test('HourStepper: 버튼 2개 이름, 양 끝 비활성(까닭), 값은 메타,
   assert.equal(all(mid, n => n.props.dataSet && n.props.dataSet.pdMeta === 'hour').map(textOf).join(''), '07h · 06–07시');
   assert.equal(all(mid, n => 'aria-live' in n.props).length, 0);
   const first = pressables(tree(h(ui.HourStepper, { hour: 1, onChange: () => {} })))[0];
-  assert.equal(first.props.disabled, true);
+  assertReachableDisabled(first, '01h의 ‹');
   assert.equal(first.props['aria-label'], '이전 거래시간 · 첫 거래시간입니다');
   const last = pressables(tree(h(ui.HourStepper, { hour: 24, onChange: () => {} })))[1];
-  assert.equal(last.props.disabled, true);
+  assertReachableDisabled(last, '24h의 ›');
 });
 
 test('SegmentedControl: radiogroup > radio(aria-checked), roving tabindex, 화살표·Home·End', () => {
@@ -313,7 +331,7 @@ test('Screen·LiveRegion·OfflineBanner·ErrorBoundary·Tour: main, h1 tabIndex=
   assert.deepEqual(pressables(banner).map(p => p.props['aria-label']), ['둘러보기 시작', '닫기: 둘러보기 안내']);
   const step1 = tree(h(ui.TourStep, { step: 1, total: 5, body: '설명', onPrev: () => {}, onNext: () => {}, onSkip: () => {} }));
   assert.equal(all(step1, n => n.props.dataSet && n.props.dataSet.pdMeta === 'tour').map(textOf).join(''), '1 / 5');
-  assert.equal(pressables(step1)[0].props.disabled, true);
+  assertReachableDisabled(pressables(step1)[0], '첫 단계의 이전');
   const step5 = tree(h(ui.TourStep, { step: 5, total: 5, body: '설명', onPrev: () => {}, onNext: () => {}, onSkip: () => {} }));
   assert.equal(pressables(step5)[1].props['aria-label'], '둘러보기 마치기');
 });
