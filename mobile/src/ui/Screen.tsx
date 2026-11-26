@@ -1,0 +1,78 @@
+// 화면 골격(4.0절): h1 행(제목 20/700 + NowPill) → AnswerLine → 카드들. 내용 영역이 role=main(<main>)이고
+// h1은 tabIndex=-1이라 라우트가 바뀌면 셸(F6)이 headingRef로 초점을 옮긴다. 여백 16(360 미만 12), 아래 24, 본문 열 최대 640.
+import React from 'react';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import type { Text as RNText } from 'react-native';
+import { LAYOUT, SPACE } from './tokens';
+import { Button } from './Button';
+import { Text } from './Text';
+import { web } from './web';
+import { useTheme } from '../app/theme';
+
+export type ScreenProps = {
+  title: string;
+  /** h1 오른쪽(NowPill). */
+  pill?: React.ReactNode;
+  /** AnswerLine. */
+  answer?: React.ReactNode;
+  children?: React.ReactNode;
+  headingRef?: React.Ref<RNText>;
+  scrollRef?: React.Ref<ScrollView>;
+  testID?: string;
+};
+
+export function Screen({ title, pill, answer, children, headingRef, scrollRef, testID }: ScreenProps) {
+  const { width } = useWindowDimensions();
+  const gutter = width < LAYOUT.narrowBelow ? LAYOUT.gutterNarrow : LAYOUT.gutter;
+  return (
+    <ScrollView ref={scrollRef} role="main" testID={testID} style={styles.scroll} contentContainerStyle={[styles.content, { paddingHorizontal: gutter }]}>
+      <View style={styles.h1row}>
+        <Text ref={headingRef} role="heading" {...web({ 'aria-level': 1, tabIndex: -1 })} variant="title" style={styles.h1}>{title}</Text>
+        {pill}
+      </View>
+      {answer}
+      {children}
+    </ScrollView>
+  );
+}
+
+/** 5초 문장(15/500 text1). 화면 view model이 데이터 상태로 만든 글자를 그대로 받는다. */
+export function AnswerLine({ children }: { children: React.ReactNode }) {
+  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true' }}>{children}</Text>;
+}
+
+/** 한국어 오류 화면: h1 + [다시 불러오기]. 콘솔에 쓰지 않는다(7.10절). */
+export function ErrorScreen() {
+  const { theme } = useTheme();
+  const reload = () => {
+    const loc = (globalThis as { location?: { reload?: () => void } }).location;
+    if (loc && typeof loc.reload === 'function') loc.reload();
+  };
+  return (
+    <View role="main" style={[styles.error, { backgroundColor: theme.color.canvas }]} testID="error-screen">
+      <Text role="heading" {...web({ 'aria-level': 1, tabIndex: -1 })} variant="title">화면을 그리는 중 문제가 생겼습니다</Text>
+      <Button tone="primary" label="다시 불러오기" accessibilityLabel="다시 불러오기" onPress={reload} />
+    </View>
+  );
+}
+
+type BoundaryState = { failed: boolean };
+export class ErrorBoundary extends React.Component<{ children?: React.ReactNode }, BoundaryState> {
+  state: BoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): BoundaryState {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? <ErrorScreen /> : this.props.children;
+  }
+}
+
+const styles = StyleSheet.create({
+  scroll: { flex: 1 },
+  content: { width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center', paddingTop: SPACE.lg, paddingBottom: SPACE.xxl, gap: SPACE.md },
+  h1row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: SPACE.sm },
+  h1: { flexShrink: 1 },
+  error: { flex: 1, padding: LAYOUT.gutter, gap: SPACE.lg, justifyContent: 'center', alignItems: 'flex-start' },
+});

@@ -90,7 +90,11 @@ export const MOTION = { sheetMs: 200, shimmerMs: 1200 } as const;
 export const HIT = 44;
 export const LAYOUT = {
   header: 56, tabBar: 56, offlineBanner: 40, gutter: 16, gutterNarrow: 12, narrowBelow: 360, rail: 240, column: 640,
-  railFrom: 1024, panel: 320, panelFrom: 1280, sheetPanel: 400, sheetMaxHeight: 0.85,
+  railFrom: 1024, panel: 320, panelFrom: 1280, sheetPanel: 400, sheetMaxHeight: 0.85, sheetCenterFrom: 600,
+} as const;
+/** 부품 치수(6.2절): 칩·pill 높이 24, 목록 행 56, 탭 위 표시 3, 아이콘 크기. */
+export const SIZE = {
+  chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72,
 } as const;
 
 // 실제로 쓰는 글자·바탕 쌍(M4). tokens-contrast 테스트가 두 테마에서 모두 계산한다. 경로는 Theme 객체 기준.

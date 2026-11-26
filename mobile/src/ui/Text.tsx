@@ -34,11 +34,19 @@ export function textStyle(variant: TextVariant, width: number, weight?: FontWeig
   };
 }
 
-export function Text({ variant = 'body', weight, tone = 'text1', color, style, dataSet, nowrap, ...rest }: TextProps) {
+// h1은 라우트가 바뀔 때 초점을 받아야 해서(3.3절) ref를 넘긴다.
+export const Text = React.forwardRef<RNText, TextProps>(function Text(
+  { variant = 'body', weight, tone = 'text1', color, style, dataSet, nowrap, ...rest }, ref) {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
   const data = nowrap ? { ...dataSet, pdNowrap: 'true' } : dataSet;
   // RN 타입에는 dataSet이 없지만 react-native-web은 data-* 속성으로 내보낸다.
   const webOnly = data ? ({ dataSet: data } as object) : {};
-  return <RNText {...rest} {...webOnly} style={[textStyle(variant, width, weight), { color: color ?? theme.color[tone] }, style]} />;
+  return <RNText ref={ref} {...rest} {...webOnly} style={[textStyle(variant, width, weight), { color: color ?? theme.color[tone] }, style]} />;
+});
+
+const NEGATION = /(\S+ 아님)/;
+/** "실측 아님"·"값 아님" 같은 부정 표현만 한 줄로 묶는다(5.4절). 나머지는 keep-all 규칙으로 줄을 바꾼다. */
+export function keepNegations(text: string, props: Omit<TextProps, 'children' | 'nowrap'>): React.ReactNode[] {
+  return text.split(NEGATION).map((part, i) => (i % 2 ? <Text key={i} {...props} nowrap>{part}</Text> : part));
 }
