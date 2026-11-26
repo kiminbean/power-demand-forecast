@@ -4,7 +4,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SIZE, SPACE } from './tokens';
 import { Text, labelData } from './Text';
-import { web } from './web';
+import { useScrollFocus, web } from './web';
 import { useTheme } from '../app/theme';
 
 export type Column = {
@@ -52,7 +52,21 @@ export function DataTable({ caption, columns, rows, testID, fit = false }: DataT
     </View>
   );
   if (fit) return <View style={styles.fit} testID={testID}>{table}</View>;
-  return <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.scrollContent} testID={testID}>{table}</ScrollView>;
+  return <ScrollingTable caption={caption} testID={testID}>{table}</ScrollingTable>;
+}
+
+/**
+ * 카드 안 가로 스크롤(M1의 유일한 예외). 표가 넘치면 스크롤 상자가 Tab 정지점이 되어 화살표로 옆 칸을 볼 수 있다(F11: 320·390의
+ * 입찰 표에서 axe scrollable-region-focusable). 이름은 표 캡션이다.
+ */
+function ScrollingTable({ caption, testID, children }: { caption: string; testID?: string; children: React.ReactNode }) {
+  const box = useScrollFocus('x');
+  return (
+    <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.scrollContent} testID={testID}
+      onLayout={box.onLayout} onContentSizeChange={box.onContentSizeChange} {...web({ role: 'region', 'aria-label': caption, ...box.focus })}>
+      {children}
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({

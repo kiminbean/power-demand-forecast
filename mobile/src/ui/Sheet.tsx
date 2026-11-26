@@ -6,8 +6,8 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import type { ViewStyle } from 'react-native';
 import { LAYOUT, MOTION, RADIUS, SPACE } from './tokens';
 import { IconButton } from './Button';
-import { Text } from './Text';
-import { domOf, tabStops, web, webStyle } from './web';
+import { Text, labelData } from './Text';
+import { domOf, tabStops, useScrollFocus, web, webStyle } from './web';
 import type { DomEl } from './web';
 import { useTheme } from '../app/theme';
 
@@ -30,6 +30,9 @@ export function Sheet({ title, onClose, children, testID = 'sheet' }: SheetProps
   const closeLatest = useRef(onClose);
   closeLatest.current = onClose;
   const titleId = `pd-sheet-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`;
+  // 본문이 시트 높이를 넘으면 본문 자체가 Tab 정지점이 된다(region, 이름 = 시트 제목). 링크·버튼이 없는 본문(오늘 24시간 가격의
+  // 산출 방식)은 그러지 않으면 키보드로 끝까지 읽을 수 없다(F11: 320×568에서 axe scrollable-region-focusable).
+  const body = useScrollFocus('y');
 
   useEffect(() => {
     const doc = (globalThis as { document?: DocLike }).document;
@@ -75,10 +78,13 @@ export function Sheet({ title, onClose, children, testID = 'sheet' }: SheetProps
         style={[styles.panel, place, { backgroundColor: theme.color.surface }, lift, motion.enter]}
         {...web({ dataSet: width >= LAYOUT.railFrom ? {} : { pdSafe: 'bottom' } })}>
         <View style={[styles.head, { borderBottomColor: theme.color.border }]}>
-          <Text role="heading" {...web({ 'aria-level': 2 })} nativeID={titleId} variant="body" weight="700" style={styles.title}>{title}</Text>
+          {/* 숫자가 든 제목("산출 방식 · 오늘 24시간 가격", "80% 구간")은 이름표라 메타로 둔다(I2). */}
+          <Text role="heading" {...web({ 'aria-level': 2 })} nativeID={titleId} variant="body" weight="700" style={styles.title}
+            dataSet={labelData(title)}>{title}</Text>
           <IconButton pressRef={closeRef} icon="close" accessibilityLabel="닫기" onPress={() => closeLatest.current()} testID="sheet-close" />
         </View>
-        <ScrollView style={styles.body} contentContainerStyle={styles.content}>{children}</ScrollView>
+        <ScrollView style={styles.body} contentContainerStyle={styles.content} onLayout={body.onLayout} onContentSizeChange={body.onContentSizeChange}
+          {...web({ role: 'region', 'aria-labelledby': titleId, ...body.focus })}>{children}</ScrollView>
       </View>
     </View>
   );
@@ -88,8 +94,9 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10 },
   panel: { position: 'absolute', maxHeight: `${Math.round(LAYOUT.sheetMaxHeight * 100)}%` },
   bottom: { left: 0, right: 0, bottom: 0, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet },
+  // 600–639 px에서는 640이 화면보다 넓어 문서가 40 px 넘쳤다(F11 경계 폭 측정): 폭은 화면을 넘지 않고 최대 640.
   center: {
-    left: 0, right: 0, bottom: 0, width: LAYOUT.column, marginHorizontal: 'auto',
+    left: 0, right: 0, bottom: 0, width: '100%', maxWidth: LAYOUT.column, marginHorizontal: 'auto',
     borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet,
   },
   side: { top: 0, right: 0, bottom: 0, width: LAYOUT.sheetPanel, maxHeight: '100%' },

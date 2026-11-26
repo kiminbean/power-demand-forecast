@@ -1,7 +1,8 @@
 // RN 0.73 타입에 없는 웹 전용 prop(dataSet·aria-level·aria-orientation·aria-current·tabIndex·onKeyDown·onClick)을
 // 넘기는 유일한 통로다. react-native-web 0.19.13의 createDOMProps가 이 이름 그대로 DOM 속성으로 내보낸다
 // (F4 의미 탐침 scratchpad/mobile/eval/steps/F4/probe.md에서 확인).
-import type { ViewStyle } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import type { LayoutChangeEvent, ViewStyle } from 'react-native';
 
 export const web = (props: Record<string, unknown>): object => props;
 /** RN 0.73 ViewStyle에 없는 CSS 값(boxShadow, 애니메이션)을 스타일 배열에 넣는다. */
@@ -35,6 +36,26 @@ export function scrollBoxes(root: DomEl | null): ScrollEl[] {
   return boxes
     .filter(el => /^(auto|scroll)$/.test(getComputedStyle(el as unknown as Element).overflowY))
     .sort((a, b) => range(b) - range(a));
+}
+
+/**
+ * 스크롤 상자가 실제로 넘칠 때만 Tab 정지점으로 만든다(axe scrollable-region-focusable, F11 측정): 링크·버튼이 없는 시트 본문(세로),
+ * 카드 안 가로 스크롤 표. onLayout(보이는 크기)과 onContentSizeChange(내용 크기)로 잰다. role·이름은 부르는 쪽이 늘 붙이고 tabIndex만
+ * 바꾼다(role이 바뀌면 RN-web이 div↔section으로 요소를 바꿔 내용을 다시 그린다).
+ */
+export function useScrollFocus(axis: 'x' | 'y') {
+  const sizes = useRef({ view: 0, content: 0 });
+  const [scrolls, setScrolls] = useState(false);
+  const measure = useCallback(() => setScrolls(sizes.current.content > sizes.current.view + 1), []);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    sizes.current.view = axis === 'x' ? e.nativeEvent.layout.width : e.nativeEvent.layout.height;
+    measure();
+  }, [axis, measure]);
+  const onContentSizeChange = useCallback((w: number, h: number) => {
+    sizes.current.content = axis === 'x' ? w : h;
+    measure();
+  }, [axis, measure]);
+  return { onLayout, onContentSizeChange, focus: scrolls ? { tabIndex: 0 } : {} };
 }
 
 /** 라우트가 바뀌면 h1(tabIndex=-1)로 초점을 옮긴다. 초점이 스크롤을 움직이지 않게 한다(복원한 위치를 지킨다). */

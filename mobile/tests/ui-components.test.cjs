@@ -257,7 +257,8 @@ test('TabBar·레일: nav "주요 메뉴" > tablist > tab(aria-selected), 탭 �
 });
 
 test('Sheet: dialog + aria-modal + aria-labelledby, 닫기 버튼, 스크림 클릭, 폭별 자리', () => {
-  for (const [width, expect] of [[390, { left: 0, right: 0, bottom: 0 }], [768, { width: 640 }], [1280, { width: 400, right: 0, top: 0 }]]) {
+  // 600–1023은 아래쪽 640 폭이되 화면보다 넓지 않게(F11: 600 px에서 고정 640이 문서를 40 px 넘쳤다).
+  for (const [width, expect] of [[390, { left: 0, right: 0, bottom: 0 }], [768, { width: '100%', maxWidth: 640 }], [1280, { width: 400, right: 0, top: 0 }]]) {
     const ui = load(width);
     let closed = 0;
     const root = tree(h(ui.Sheet, { title: '산출 방식', onClose: () => { closed += 1; } }, 'body'));
@@ -276,6 +277,21 @@ test('Sheet: dialog + aria-modal + aria-labelledby, 닫기 버튼, 스크림 클
     scrim.props.onClick();
     assert.equal(closed, 2);
   }
+});
+
+test('Sheet 본문: 시트 제목이 이름인 region, 넘칠 때만 Tab 정지점(F11), 숫자 든 제목은 메타(I2)', () => {
+  const ui = load(320);
+  const root = tree(h(ui.Sheet, { title: '산출 방식 · 오늘 24시간 가격', onClose: () => {} }, 'body'));
+  const [dialog] = byRole(root, 'dialog');
+  const [title] = byRole(dialog, 'heading');
+  assert.deepEqual(title.props.dataSet, { pdMeta: 'label' }, '제목의 24는 값이 아니라 이름');
+  const [body] = byRole(dialog, 'region');
+  assert.equal(body.props['aria-labelledby'], title.props.nativeID);
+  assert.equal(body.props.tabIndex, undefined, '넘치기 전(첫 그림)에는 Tab 정지점이 아니다');
+  assert.equal(typeof body.props.onLayout, 'function');
+  assert.equal(typeof body.props.onContentSizeChange, 'function');
+  const plain = tree(h(ui.Sheet, { title: '화면 테마', onClose: () => {} }, 'body'));
+  assert.equal(byRole(plain, 'heading')[0].props.dataSet, undefined);
 });
 
 test('StateView: 불러오는 중 aria-busy, 오류만 다시 시도, 제한 상태에는 재시도 없음, 최종 크기', () => {
