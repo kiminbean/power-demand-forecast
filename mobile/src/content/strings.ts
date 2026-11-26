@@ -1,7 +1,9 @@
 // 숫자가 든 짧은 UI 문구(명세 6.1절). .tsx의 JSX 글자에는 숫자를 직접 쓰지 않고 여기서 가져온다(7.10절).
 // 숫자·시각은 모두 format.ts를 거친다. 긴 설명 글은 public/content/guide.ko.json(guide.ts가 읽는다)에 둔다.
-import { age, clockHour, kstClock, kstDayLabel, kstTime, mw, num, pct, price, tradeHour, tradeHourRange } from '../lib/format';
-import { MINUTE_MS } from '../lib/kst';
+import {
+  age, clockHour, clockPhrase, dayShort, duration, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeHour, tradeHourRange,
+} from '../lib/format';
+import { MINUTE_MS, addDays, daysBetween } from '../lib/kst';
 import { DOCUMENTED_SMP_ACCURACY, WATCH_RATIO } from '../lib/provenance';
 import type { ForecastKind } from '../lib/provenance';
 import type { MethodCardId } from './guide';
@@ -308,7 +310,7 @@ export const LEGEND_EXAMPLE = '예시 · 설명용 고정 값 (오늘 화면에�
 /** 출처와 기준 시각 표(4.4절)의 오늘 행. 기준 글자는 KST 시각만 쓴다. */
 export const SOURCE_ITEMS = Object.freeze({
   'day-ahead': '하루전 SMP', forecast: '기준선 예측', accuracy: '정확도', demand: '수요·예비율', supply: '공급능력', weather: '날씨',
-  market: '시장 일정',
+  market: '시장 일정', bidding: '입찰 계산',
 });
 export const SOURCE_TEXT = Object.freeze({
   accuracy: '프로젝트 벤치마크(walk-forward) · API 모델 정보',
@@ -331,3 +333,106 @@ export const SOURCES_NOTES = Object.freeze([
   '아직 연결되지 않은 자료: 오늘 확정 가격 24시간 전체, KPX 게시 시각, 실제 정산·발전소 자료(공개하지 않음).',
 ]);
 export const LIVE_FACTS_HEADING = '이번 화면의 값';
+
+// ---------------------------------------------------------------- 입찰 화면(F8, 4.2절). 화면 view model(features/bidding/model.ts)이 부른다.
+export const BIDDING_EXAMPLE_NOTE = '시장 값은 실제, 발전소 값은 예시입니다.';
+export const ANSWER_DEADLINE_CHECKING = '입찰 마감 시각을 확인하는 중입니다.';
+export const ANSWER_DEADLINE_MISMATCH = '입찰 마감 시각을 확인하지 못해 남은 시간을 표시하지 않습니다.';
+export const ANSWER_DEADLINE_ERROR = '시장 상태를 확인하지 못해 남은 시간을 표시하지 않습니다.';
+/** 분 내림. 1분이 안 남았으면 "0분"이 아니라 "1분 미만". */
+const leftText = (ms: number) => (ms < MINUTE_MS ? '1분 미만' : duration(ms));
+/** "발전소는 내일 만들 전기를 오늘 오전 10시까지 미리 팝니다. 마감까지 3시간 56분 남았습니다." 시각은 서버의 마감 표기에서. */
+export const answerOpenText = (deadline: number, leftMs: number, imminent: boolean) =>
+  `발전소는 내일 만들 전기를 오늘 ${clockPhrase(deadline)}까지 미리 팝니다. 마감까지 ${leftText(leftMs)} 남았습니다${imminent ? '(마감 임박)' : ''}.`;
+export const answerClosedText = (next: number) => `오늘 입찰은 마감됐습니다. 다음 마감은 내일 ${clockPhrase(next)}입니다.`;
+/** 카운트다운(32/700): "3시간 56분 남음". */
+export const countdownText = (leftMs: number) => `${leftText(leftMs)} 남음`;
+export const deadlineWhenText = (deadline: number, tradingDate: string) =>
+  `마감 ${kstDate(deadline)} ${kstTime(deadline)} · 입찰일 ${kstDayLabel(tradingDate)}`;
+export const nextDeadlineText = (next: number) => `다음 마감 ${kstDate(next)} ${kstTime(next)}`;
+export const DEADLINE_PILL = Object.freeze({ checking: '확인 중', open: '접수 중', imminent: '마감 임박', closed: '마감', unknown: '상태 알 수 없음' });
+/** 시장 상태 조회가 10분(지연)·60분(끊김)을 넘으면 "지연 · 06:04 기준" / "06:04 기준". 카운트다운은 계속 움직인다. */
+export const basisLagText = (at: number, stage: Exclude<Freshness, 'fresh'>) =>
+  (stage === 'stale' ? `지연 · ${kstClock(at)} 기준` : `${kstClock(at)} 기준`);
+export const DEADLINE_CHECKING_TEXT = '시장 상태를 확인하는 중입니다';
+export const DEADLINE_FAILED_TEXT = '시장 상태를 확인하지 못했습니다';
+export const DEADLINE_MISMATCH_TEXT = '서버의 시장 상태와 계산한 마감 시각이 맞지 않아 남은 시간을 표시하지 않습니다';
+/** "실시간시장은 15분 단위입니다 (API 기준) · 다음 구간 06:15 KST" */
+export const rtmLineText = (minutes: number, next: number) => `실시간시장은 ${num(minutes, 0)}분 단위입니다 (API 기준) · 다음 구간 ${kstTime(next)}`;
+/** rtm.status가 active가 아닐 때. 모르는 값은 닫힌 쪽으로 "알 수 없음". */
+export function rtmStatusText(status: string): string {
+  const name = status === 'closed' ? '닫힘' : status === 'inactive' ? '쉬는 중' : status === 'suspended' ? '중단' : '알 수 없음';
+  return `실시간시장 상태: ${name}`;
+}
+export const RTM_NO_INTERVAL = '실시간시장 구간 길이를 받지 못했습니다 (API)';
+export const RTM_PRICE_NOTE = '실시간시장 가격 예측은 검증된 제주 모델이 없어 표시하지 않습니다.';
+/** 산출 방식 시트의 이번 값(마감): API 원문과 서버 시각으로 다시 계산한 남은 시간. */
+export const deadlineApiText = (status: string, deadline: string, tradingDate: string, hours: number | null) =>
+  `API 표기: 하루전시장 ${status} · 마감 ${deadline} · 입찰일 ${tradingDate} · 남은 시간 ${num(hours, 1)}시간`;
+export const deadlineCheckText = (hours: number, tolerance: number) =>
+  `서버 시각으로 다시 계산한 남은 시간 ${num(hours, 1)}시간 (차이가 ${num(tolerance, 1)}시간을 넘으면 남은 시간을 숨깁니다)`;
+
+const CALC_SHORT: Readonly<Record<ForecastKind, string>> = { baseline: '기준선', model: '학습 모델', fallback: 'API 대체값' };
+const CALC_BASIS: Readonly<Record<ForecastKind, string>> = { baseline: '기준선 분위수', model: '학습 모델 분위수', fallback: 'API 대체값' };
+export const calcFooterSource = (kind: ForecastKind) => `출처 API 서버 입찰 계산 · ${CALC_SHORT[kind]}`;
+export const calcSourceText = (kind: ForecastKind) => `API 서버 입찰 계산 (${CALC_BASIS[kind]})`;
+/** 스텝퍼 값: "19h · 18–19시 · 11-27"(320에서는 날짜를 카드 부제로 옮긴다). */
+export const bidHourLabel = (hour: number, tradingDate: string | null) => (tradingDate ? `${tradeHour(hour)} · ${dayShort(tradingDate)}` : tradeHour(hour));
+export const bidDayText = (tradingDate: string) => `입찰일 ${kstDayLabel(tradingDate)}`;
+export const ladderChartLabel = (hour: number) => `${tradeHour(hour)} 입찰 계단`;
+/** "50 MW를 10구간으로 나눠 171.7–244.1원에 내는 계산입니다." */
+export const ladderSentenceText = (totalMw: number, count: number, min: number, max: number) =>
+  `${mw(totalMw)} MW를 ${num(count, 0)}구간으로 나눠 ${price(min)}–${price(max)}원에 내는 계산입니다.`;
+/** "가격이 낮은 구간일수록 낙찰 가능성(추정)이 높습니다 (95%→5%)." */
+export const ladderTrendText = (atMin: number, atMax: number) =>
+  `가격이 낮은 구간일수록 낙찰 가능성(추정)이 높습니다 (${probabilityText(atMin)}→${probabilityText(atMax)}).`;
+export const ladderNotRealText = (kind: ForecastKind) =>
+  `낙찰 가능성은 ${CALC_BASIS[kind]}${kind === 'fallback' ? '으로' : '로'} 계산한 값이며 실제 낙찰 확률이 아닙니다.`;
+export const NO_SEND_NOTE = '이 화면은 KPX에 아무것도 보내지 않습니다.';
+// 숫자로 끝나는 말 뒤의 '과/와': 2·4·5·9(이·사·오·구)로 끝나면 받침이 없다.
+const waGwa = (text: string) => ('2459'.includes(text.slice(-1)) ? '와' : '과');
+/** 가격 근거 공개 줄(7.8절 2): "가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이". */
+export function priceBasisText(forecastDate: string, tradingDate: string, kind: 'baseline' | 'model'): string {
+  const basis = kind === 'baseline'
+    ? `${dayShort(forecastDate)} 기준선(=${dayShort(addDays(forecastDate, -1))} 확정 가격)` : `${dayShort(forecastDate)} 학습 모델 예측`;
+  const gap = Math.abs(daysBetween(forecastDate, tradingDate) ?? 0);
+  const day = dayShort(tradingDate);
+  return `가격 근거: ${basis} · 입찰일 ${day}${waGwa(day)} ${gap === 1 ? '하루' : `${num(gap, 0)}일`} 차이`;
+}
+export const CALC_BUSY_TEXT = '다른 요청을 처리하는 중입니다 · 잠시 뒤 다시 계산해 주세요';
+export const CALC_BAD_REQUEST_TEXT = '계산 조건 오류';
+export const CALC_FAILED_TEXT = '계산 결과를 불러오지 못했습니다';
+export const CALC_UNREADABLE_TEXT = '계산 결과를 읽지 못했습니다';
+export const CALC_EMPTY_TEXT = '계산된 입찰 구간이 없습니다';
+export const RECALC_LABEL = '다시 계산';
+export const bidTableCaption = (hour: number) => `${tradeHour(hour)} 구간별 입찰 계산`;
+export const BID_COLUMNS = Object.freeze({
+  segment: '구간', quantity: '물량(MW, 예시)', price: '가격(원/kWh)', probability: '낙찰 가능성(추정)', revenue: '기대 수입',
+});
+export const calcMethodText = (method: string | null) => `API 계산 방법: ${method ?? '표기 없음'}`;
+export const calcInputText = (tradingDate: string | null, risk: string, capacityMw: number) =>
+  `API 입찰일 ${kstDayLabel(tradingDate)} · 성향 ${risk} · 예시 용량 ${mw(capacityMw)} MW`;
+
+export const MERIT_TOGGLE = Object.freeze({ open: '펼치기', close: '접기' });
+export const meritDemandText = (demandMw: number) => `예시 수요 ${mw(demandMw)} MW`;
+export const meritPriceText = (value: number) => `${num(value, 0)}원`;
+/** 그림 이름이자 요약: 마지막으로 필요한 발전기의 가격이 그 시간 가격이 된다(예시 값). */
+export const meritSummaryText = (demandMw: number, name: string, value: number) =>
+  `${meritDemandText(demandMw)}를 채우는 마지막 발전기(${name})의 가격 ${num(value, 0)}원/kWh가 이 시간 모두의 가격(SMP)이 됩니다.`;
+export const MY_PLANT_TITLE = '내 발전소';
+export const MY_PLANT_BODY = '내 발전소 관리와 실제 입찰 제출은 공개 데모에서 제공하지 않습니다. 이 화면은 자료를 저장하거나 KPX에 보내지 않습니다. '
+  + '위의 예시 발전소로 계산 방식을 볼 수 있습니다.';
+
+export const BIDDING_PANEL_TITLE = '입찰 읽는 법';
+export const BIDDING_TERMS: ReadonlyArray<{ id: GlossaryId; label: string }> = Object.freeze([
+  { id: 'dam', label: '하루전시장' }, { id: 'clearing', label: '낙찰 가능성' }, { id: 'rtm', label: '실시간시장' },
+]);
+export const BIDDING_PANEL_METHOD = Object.freeze([
+  '계단 하나가 구간 하나이고, 높이가 그 구간에 내는 가격입니다.',
+  '계단 위 숫자는 분위수로 계산한 낙찰 가능성(추정)이며 실제 낙찰 확률이 아닙니다.',
+  '호박색 점선 표시는 예시, 빗금 표시는 추정, 표시 없는 칩은 시장 규칙입니다.',
+]);
+export const legendRuleText = (when: string | null) => when ?? '마감 시각 · 서버의 시장 상태 기준';
+export const legendProbabilityText = (value: number | null) =>
+  (value === null ? '낙찰 가능성 · 분위수로 계산한 추정' : `${probabilityText(value)} 낙찰 가능성 (예시 발전소 1구간)`);
+export const legendPlantText = (capacityMw: number) => `${mw(capacityMw)} MW 예시 풍력발전소 (가상)`;

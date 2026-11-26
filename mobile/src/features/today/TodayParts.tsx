@@ -4,6 +4,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { ChipSpec } from './model';
 import { CHIPS } from '../../lib/provenance';
+import type { Chip } from '../../lib/provenance';
 import {
   LEGEND_ESTIMATED, LEGEND_EXAMPLE, PANEL_HEADINGS, TERMS_HEADING, TODAY_PANEL_METHOD, TODAY_TERMS, legendConfirmedText,
   legendForecastText,
@@ -46,16 +47,17 @@ export function AllFailedNotice({ text, onRetry, hero }: { text: string; onRetry
   );
 }
 
-/** ≥ 1280 패널(4.6절): 4상태 범례(이 화면의 실제 값으로, 없으면 표시와 설명만) · 용어 3개 · 산출 방식 요약 3줄. */
-export function TodayPanelBody({ confirmed, forecast, onTerm }: { confirmed: number | null; forecast: number | null; onTerm: (id: GlossaryId) => void }) {
-  const legend = [
-    { chip: CHIPS.confirmedPrice, text: legendConfirmedText(confirmed) },
-    { chip: CHIPS.forecastBaseline, text: legendForecastText(forecast) },
-    { chip: CHIPS.estNotMeasured, text: LEGEND_ESTIMATED },
-    { chip: CHIPS.example, text: LEGEND_EXAMPLE },
-  ];
+export type PanelBodyProps = {
+  legend: ReadonlyArray<{ chip: Chip; text: string }>;
+  terms: ReadonlyArray<{ id: GlossaryId; label: string }>;
+  method: readonly string[];
+  onTerm: (id: GlossaryId) => void;
+  testID: string;
+};
+/** ≥ 1280 "이 화면 읽는 법" 패널 본문(4.6절): 상태 범례(그 화면의 실제 값 예) · 용어 3개 · 산출 방식 요약 3줄. 입찰 화면도 쓴다. */
+export function ReadingPanelBody({ legend, terms, method, onTerm, testID }: PanelBodyProps) {
   return (
-    <View style={styles.panel} testID="today-panel">
+    <View style={styles.panel} testID={testID}>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.legend}</Text>
       {legend.map(l => (
         <View key={l.chip.text} style={styles.legendRow}>
@@ -65,14 +67,24 @@ export function TodayPanelBody({ confirmed, forecast, onTerm }: { confirmed: num
       ))}
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.terms}</Text>
       <View style={styles.terms}>
-        {TODAY_TERMS.filter(t => t.id === 'smp' || t.id === 'reserve' || t.id === 'band').map(t => (
-          <TermLink key={t.id} label={t.label} onPress={() => onTerm(t.id)} />
-        ))}
+        {terms.map(t => <TermLink key={t.id} label={t.label} onPress={() => onTerm(t.id)} />)}
       </View>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.method}</Text>
-      {TODAY_PANEL_METHOD.map(m => <Text key={m} variant="label" tone="text2" dataSet={{ pdMeta: 'method' }}>{m}</Text>)}
+      {method.map(m => <Text key={m} variant="label" tone="text2" dataSet={{ pdMeta: 'method' }}>{m}</Text>)}
     </View>
   );
+}
+
+/** 오늘 패널: 4상태 범례(이 화면의 실제 값으로, 없으면 표시와 설명만) · 용어 3개 · 산출 방식 요약 3줄. */
+export function TodayPanelBody({ confirmed, forecast, onTerm }: { confirmed: number | null; forecast: number | null; onTerm: (id: GlossaryId) => void }) {
+  const legend = [
+    { chip: CHIPS.confirmedPrice, text: legendConfirmedText(confirmed) },
+    { chip: CHIPS.forecastBaseline, text: legendForecastText(forecast) },
+    { chip: CHIPS.estNotMeasured, text: LEGEND_ESTIMATED },
+    { chip: CHIPS.example, text: LEGEND_EXAMPLE },
+  ];
+  const terms = TODAY_TERMS.filter(t => t.id === 'smp' || t.id === 'reserve' || t.id === 'band');
+  return <ReadingPanelBody legend={legend} terms={terms} method={TODAY_PANEL_METHOD} onTerm={onTerm} testID="today-panel" />;
 }
 
 const styles = StyleSheet.create({

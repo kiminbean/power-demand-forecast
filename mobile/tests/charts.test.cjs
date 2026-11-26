@@ -347,7 +347,8 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
     const picked = [];
     const root = tree(h(ui.LadderChart, { hour: views(ui).seg.hours[18], label: '19h · 18–19시 입찰 계단', width: w, onSelect: v => picked.push(v) })).children[0];
     assert.equal(root.props.role, 'img');
-    assert.equal(root.props['aria-label'], '19h · 18–19시 입찰 계단: 10구간, 171.7–244.1원, 낙찰 가능성 95%에서 5%(추정)');
+    // F8: 이름은 6.2절 요약으로 시작하고(하니스 B3가 "10구간"으로 찾는다) 어느 거래시간인지는 뒤에 붙인다.
+    assert.equal(root.props['aria-label'], '10구간, 171.7–244.1원, 낙찰 가능성 95%에서 5%(추정) · 19h · 18–19시 입찰 계단');
     assert.deepEqual(metaTexts(root, 'chart'), expected);
     assert.deepEqual(metaTexts(root, 'axis'), ['0', '50', '100', '150', '200', '250', '0', '10', '20', '30', '40', '50 MW']);
     const bars = byTestId(root, 'ladder-bar');

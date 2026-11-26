@@ -22,8 +22,8 @@ const GUIDE_FAILED = '설명을 불러오지 못했습니다';
 /** 표 보기는 아래쪽 640 시트(768–1023)에서만. 휴대폰과 ≥ 1024 오른쪽 패널(400)은 두 줄 목록이다. */
 const SOURCES_TABLE_FROM = 768;
 
-/** 설명 글이 준비되면 그린다. 읽는 동안 스켈레톤, 실패하면 "설명을 불러오지 못했습니다" + [다시 시도]. */
-function GuideGate({ children }: { children: (content: GuideContent) => React.ReactNode }) {
+/** 설명 글이 준비되면 그린다. 읽는 동안 스켈레톤, 실패하면 "설명을 불러오지 못했습니다" + [다시 시도]. 입찰의 가격 원리 카드도 쓴다. */
+export function GuideGate({ children }: { children: (content: GuideContent) => React.ReactNode }) {
   const guide = useGuide();
   if (guide.status === 'ready' && guide.content) return <>{children(guide.content)}</>;
   if (guide.status === 'error') return <StateView kind="error" text={GUIDE_FAILED} onRetry={guide.retry} />;

@@ -15,6 +15,8 @@ export const CHIPS = Object.freeze({
   forecastModel: chip('forecast', '예측 · 학습 모델'),
   estNotMeasured: chip('estimated', '추정 · 실측 아님'),
   estQuantile: chip('estimated', '추정 · 기준선 분위수'),
+  estModelQuantile: chip('estimated', '추정 · 학습 모델 분위수'),
+  estShort: chip('estimated', '추정'),
   estApiFallback: chip('estimated', '추정 · API 대체값 (모델 예측 아님)'),
   estNotRealtime: chip('estimated', '추정 · 실시간 아님'),
   estBasis: chip('estimated', '추정값 기준'),
@@ -29,6 +31,7 @@ export const CHIPS = Object.freeze({
   marketRule: chip('plain', '시장 규칙 · 서버 시각'),
   locked: chip('plain', '잠김'),
   checkTime: chip('plain', '시각 확인 필요'),
+  simplified: chip('plain', '단순화한 설명'),
 });
 
 /** 보이는 칩 글자(글리프 + 문구). */

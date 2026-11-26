@@ -27,23 +27,26 @@ export const EXAMPLE_STATEMENT = Object.freeze({
   realtimePrice: example({ value: 140, unit: '원/kWh', label: '실시간 가격' }),
 });
 
-/** 가격이 정해지는 원리(메리트 오더) 블록 6개: 싼 발전기부터 쌓아 수요를 채운 마지막 블록의 값이 가격이 된다. */
+/**
+ * 가격이 정해지는 원리(메리트 오더, 4.2절) 예시 발전기 6개, 싼 것부터. 가격은 명세 그대로(풍력 A 0원 · 태양광 B 0원 · 바이오 C 80원 ·
+ * LNG D 150원 · 유류 E 220원 · 유류 F 260원), 공급 가능량은 그림이 읽히도록 정한 예시다. 실제 발전소 이름이 아니다.
+ */
 export const EXAMPLE_MERIT_BLOCKS = Object.freeze(
   [
-    { name: '가', mw: 120, price: 60 },
-    { name: '나', mw: 100, price: 95 },
-    { name: '다', mw: 90, price: 120 },
-    { name: '라', mw: 80, price: 150 },
-    { name: '마', mw: 60, price: 190 },
-    { name: '바', mw: 50, price: 240 },
+    { name: '풍력 A', mw: 100, price: 0 },
+    { name: '태양광 B', mw: 80, price: 0 },
+    { name: '바이오 C', mw: 40, price: 80 },
+    { name: 'LNG D', mw: 200, price: 150 },
+    { name: '유류 E', mw: 120, price: 220 },
+    { name: '유류 F', mw: 80, price: 260 },
   ].map(b => Object.freeze({
-    name: example({ value: `예시 발전기 ${b.name}`, unit: '', label: '발전기' }),
+    name: example({ value: b.name, unit: '', label: '예시 발전기' }),
     capacityMw: example({ value: b.mw, unit: 'MW', label: '공급 가능량' }),
     bidPrice: example({ value: b.price, unit: '원/kWh', label: '입찰 가격' }),
   })),
 );
-/** 위 블록에 맞춘 예시 수요: 가–라(390 MW)로 모자라 마 블록이 가격(190원/kWh)을 정한다. */
-export const EXAMPLE_MERIT_DEMAND_MW = example({ value: 400, unit: 'MW', label: '예시 수요' });
+/** 위 블록에 맞춘 예시 수요: 풍력 A–LNG D(420 MW)로 모자라 유류 E가 마지막으로 필요하고 그 가격(220원/kWh)이 SMP가 된다. */
+export const EXAMPLE_MERIT_DEMAND_MW = example({ value: 450, unit: 'MW', label: '예시 수요' });
 
 /**
  * 예시 용량(50 MW)에 기대는 계산기 값(구간 물량, 기대 수입)을 예시로 표시한다(7.2절).

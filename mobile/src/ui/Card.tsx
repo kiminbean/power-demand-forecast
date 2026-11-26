@@ -108,11 +108,13 @@ export type StateViewProps = {
   text?: string;
   /** 다시 시도가 성공할 수 있을 때만 준다. 제한 상태에서는 주어도 버튼을 그리지 않는다(M8). */
   onRetry?: () => void;
+  /** 버튼 글자(기본 "다시 시도"). 입찰 계산은 "다시 계산"(4.2절). */
+  retryLabel?: string;
   /** 최종 카드 본문과 같은 높이(레이아웃 점프 0). */
   minHeight?: number;
 };
 
-export function StateView({ kind, text, onRetry, minHeight = SIZE.stateMin }: StateViewProps) {
+export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', minHeight = SIZE.stateMin }: StateViewProps) {
   const { theme } = useTheme();
   const announce = useAnnounce();
   const message = text ?? STATE_TEXT[kind];
@@ -136,7 +138,7 @@ export function StateView({ kind, text, onRetry, minHeight = SIZE.stateMin }: St
         <Icon name={STATE_ICON[kind]} size={SIZE.icon} color={theme.color.text2} />
         <Text variant="body" tone="text2" style={styles.grow} dataSet={/\d/.test(message) ? { pdMeta: 'state' } : undefined}>{message}</Text>
       </View>
-      {retry ? <View style={styles.start}><Button label="다시 시도" accessibilityLabel="다시 시도" onPress={retry} /></View> : null}
+      {retry ? <View style={styles.start}><Button label={retryLabel} accessibilityLabel={retryLabel} onPress={retry} /></View> : null}
     </View>
   );
 }

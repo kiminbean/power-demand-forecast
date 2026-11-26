@@ -49,12 +49,12 @@ export function Value({ v, format, size = 'body', showUnit = true, derived = fal
   );
 }
 
-/** 예시 값: text2, 한 단계 작게, 화면 읽기에는 끝에 "(예시)". */
-export function SampleValue({ v, format, size = 'body' }: { v: Example<number>; format: Formatter; size?: Size }) {
+/** 예시 값: text2, 한 단계 작게, 화면 읽기에는 끝에 "(예시)". 단위가 열 머리에 있으면(표) showUnit을 끈다. */
+export function SampleValue({ v, format, size = 'body', showUnit = true }: { v: Example<number>; format: Formatter; size?: Size; showUnit?: boolean }) {
   const shown = SMALLER[size];
   return (
     <Text variant={shown} weight={shown === 'title' ? '700' : '600'} tone="text2" nowrap dataSet={{ pdExample: 'true' }}>
-      {format(v.value)}<UnitText unit={v.unit} size={shown} /><SrOnly> (예시)</SrOnly>
+      {format(v.value)}{showUnit ? <UnitText unit={v.unit} size={shown} /> : null}<SrOnly> (예시)</SrOnly>
     </Text>
   );
 }

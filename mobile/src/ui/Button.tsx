@@ -18,6 +18,8 @@ export type PressBase = {
   /** 비활성 까닭. 이름 뒤에 " · {까닭}"으로 붙고, 까닭이 있으면 Tab으로 닿을 수 있게 남긴다(aria-disabled, 누름 없음). */
   disabledReason?: string;
   busy?: boolean;
+  /** 펼치기·접기 버튼의 aria-expanded(입찰 "가격은 어떻게 정해지나요?", 4.2절). */
+  expanded?: boolean;
   testID?: string;
   pressRef?: React.Ref<View>;
 };
@@ -45,12 +47,12 @@ function useReachableDisabled(reachable: boolean, outer: React.Ref<View> | undef
   }, [reachable, outer]);
 }
 
-function pressProps({ accessibilityLabel, onPress, disabled, disabledReason, busy, testID }: PressBase) {
+function pressProps({ accessibilityLabel, onPress, disabled, disabledReason, busy, expanded, testID }: PressBase) {
   const reachable = Boolean(disabled && disabledReason);
   const name = reachable ? `${accessibilityLabel} · ${disabledReason}` : accessibilityLabel;
   // 진행 중·까닭 있는 비활성에는 누름을 받지 않는다(같은 요청을 겹쳐 보내지 않는다).
   return {
-    role: 'button' as const, 'aria-label': name, 'aria-busy': busy ? true : undefined, testID,
+    role: 'button' as const, 'aria-label': name, 'aria-busy': busy ? true : undefined, 'aria-expanded': expanded, testID,
     disabled: reachable ? undefined : disabled, onPress: busy || reachable ? undefined : onPress,
     reachable,
   };

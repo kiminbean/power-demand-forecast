@@ -87,11 +87,42 @@ export function nowLineFraction(epochMs: number): number | null {
 
 /** 같은 KST 날짜의 'HH:MM'까지 남은 ms(지났으면 음수). 시각 모양이 틀리면 null. */
 export function msUntilKstTime(epochMs: number, hhmm: string): number | null {
-  const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm).trim());
   const key = kstDateKey(epochMs);
-  if (!m || !key || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
-  const start = kstDayStart(key);
-  return start === null ? null : start + Number(m[1]) * HOUR_MS + Number(m[2]) * MINUTE_MS - epochMs;
+  const at = key ? kstAt(key, hhmm) : null;
+  return at === null ? null : at - epochMs;
+}
+
+const DAY_MS = 24 * HOUR_MS;
+
+/** 날짜 키에 n일을 더한다('2026-11-26', −1 → '2026-11-25'). KST는 서머타임이 없어 하루는 늘 24시간이다. */
+export function addDays(dayKey: string, days: number): string | null {
+  const start = kstDayStart(dayKey);
+  return start === null || !Number.isInteger(days) ? null : kstDateKey(start + days * DAY_MS);
+}
+
+/** 두 날짜 키의 날 수 차이(to − from). */
+export function daysBetween(from: string, to: string): number | null {
+  const a = kstDayStart(from);
+  const b = kstDayStart(to);
+  return a === null || b === null ? null : Math.round((b - a) / DAY_MS);
+}
+
+/** 날짜 키(+dayOffset일)의 'HH:MM' KST 시각(epoch ms). 하루전시장 마감 = 입찰일 하루 전 10:00(4.2절). 모양이 틀리면 null. */
+export function kstAt(dayKey: string, hhmm: string, dayOffset = 0): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm).trim());
+  const day = addDays(dayKey, dayOffset);
+  const start = day === null ? null : kstDayStart(day);
+  if (!m || start === null || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return start + Number(m[1]) * HOUR_MS + Number(m[2]) * MINUTE_MS;
+}
+
+/** 실시간시장 다음 구간(4.2절): KST 지금 뒤 첫 interval분 배수(자정 기준). 06:03:57, 15 → 06:15. 간격이 틀리면 null. */
+export function nextIntervalAt(epochMs: number, minutes: number): number | null {
+  const key = kstDateKey(epochMs);
+  const start = key === null ? null : kstDayStart(key);
+  if (start === null || !Number.isInteger(minutes) || minutes <= 0 || minutes > 24 * 60) return null;
+  const step = minutes * MINUTE_MS;
+  return start + (Math.floor((epochMs - start) / step) + 1) * step;
 }
 
 export type ClockSkew = { skewMs: number; plausible: boolean; notable: boolean };

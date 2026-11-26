@@ -17,7 +17,7 @@ import { barAtX, labelLeft, ladderBars, ladderLabelIndices, ladderLayout, ladder
 export type LadderChartProps = {
   /** 한 거래시간의 계산기 결과(adaptSegments). 가격·낙찰 가능성은 추정, 물량은 예시다. */
   hour: HourBidView;
-  /** 접근 이름의 머리(예: "19h · 18–19시 입찰 계단"). */
+  /** 접근 이름의 꼬리(예: "19h · 18–19시 입찰 계단"). 이름은 6.2절 요약("10구간, …")으로 시작한다. */
   label: string;
   /** 고른 구간(0부터). */
   selected?: number | null;
@@ -39,7 +39,7 @@ export function LadderChart({ hour, label, selected = null, onSelect, width: fix
   const shown = new Set(ladderLabelIndices(items.length, windowWidth < LAYOUT.narrowBelow));
   const total = items.reduce((a, it) => a + (it.quantity > 0 ? it.quantity : 0), 0);
   const stats = ladderStats(items);
-  const name = `${label}: ${stats ? ladderSummaryText(stats) : '계산된 구간이 없습니다'}`;
+  const name = `${stats ? ladderSummaryText(stats) : '계산된 구간이 없습니다'} · ${label}`;
   const current = selected !== null && selected >= 0 && selected < items.length ? selected : null;
   const c = theme.color;
 

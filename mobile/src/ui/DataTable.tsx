@@ -13,6 +13,8 @@ export type Column = {
   align?: 'left' | 'right';
   /** 시각·거래시간처럼 메타로 표시할 글자 칸(I2: 숫자는 data-pd-value·meta 안에만). */
   meta?: boolean;
+  /** 머리 칸 제목 아래의 칩(입찰 표의 기대 수입: ┆예시┆ [▨ 추정], 4.2절). */
+  extra?: React.ReactNode;
 };
 export type Row = { key: string; cells: Readonly<Record<string, React.ReactNode>>; current?: boolean };
 export type DataTableProps = { caption: string; columns: readonly Column[]; rows: readonly Row[]; testID?: string };
@@ -33,6 +35,7 @@ export function DataTable({ caption, columns, rows, testID }: DataTableProps) {
           {columns.map(column => (
             <View key={column.key} role="columnheader" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
               <Text variant="label" weight="600" tone="text2" dataSet={labelData(column.title)}>{column.title}</Text>
+              {column.extra ? <View style={styles.extra}>{column.extra}</View> : null}
             </View>
           ))}
         </View>
@@ -56,4 +59,5 @@ const styles = StyleSheet.create({
   line: { borderTopWidth: 1, borderLeftWidth: SIZE.selectedEdge },
   cell: { flex: 1, minWidth: SIZE.cellMin, paddingVertical: SPACE.sm, paddingHorizontal: SPACE.sm, justifyContent: 'center' },
   right: { alignItems: 'flex-end' },
+  extra: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.xs },
 });

@@ -105,6 +105,21 @@ export function kstDayLabel(dayKey: string | null | undefined): string {
   return start === null ? DASH : kstDate(start);
 }
 
+/** 거래일 키 '2026-11-26' → "11-26"(요일 없이: 입찰 스텝퍼 · 가격 근거 줄). */
+export function dayShort(dayKey: string | null | undefined): string {
+  const start = typeof dayKey === 'string' ? kstDayStart(dayKey) : null;
+  const p = start === null ? null : kstParts(start);
+  return p ? `${pad2(p.month)}-${pad2(p.day)}` : DASH;
+}
+
+/** 시각을 말로(문장 속): 10:00 → "오전 10시", 13:30 → "오후 1시 30분". */
+export function clockPhrase(epochMs: number | null | undefined): string {
+  const p = isFiniteNumber(epochMs) ? kstParts(epochMs) : null;
+  if (!p) return DASH;
+  const hour12 = p.hour % 12 === 0 ? 12 : p.hour % 12;
+  return `${p.hour < 12 ? '오전' : '오후'} ${hour12}시${p.minute ? ` ${p.minute}분` : ''}`;
+}
+
 /** 조회 나이. 1분 미만 "방금", "12분 전", "1시간 5분 전". 분은 내림. */
 export function age(ms: number | null | undefined): string {
   if (!isFiniteNumber(ms)) return DASH;

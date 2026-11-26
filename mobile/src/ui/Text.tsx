@@ -54,3 +54,9 @@ const NEGATION = /(\S+ 아님)/;
 export function keepNegations(text: string, props: Omit<TextProps, 'children' | 'nowrap'>): React.ReactNode[] {
   return text.split(NEGATION).map((part, i) => (i % 2 ? <Text key={i} {...props} nowrap>{part}</Text> : part));
 }
+
+const TOGETHER = /(\d[\d.,]*–\d[\d.,]*원?|\d{2}-\d{2}(?:\([가-힣]\))?)/;
+/** 값 범위("171.7–244.1원")와 날짜("11-27(금)")는 값+단위처럼 한 줄로 묶는다(5.4절). 브라우저는 줄표·붙임표 뒤에서 줄을 바꿀 수 있다. */
+export function keepTogether(text: string, props: Omit<TextProps, 'children' | 'nowrap'>): React.ReactNode[] {
+  return text.split(TOGETHER).map((part, i) => (i % 2 ? <Text key={i} {...props} nowrap>{part}</Text> : part));
+}

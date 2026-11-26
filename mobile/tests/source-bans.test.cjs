@@ -15,9 +15,10 @@ const REWRITTEN_IN_PLACE = {
   'App.tsx': '41e5870a0910866b5a8ae880c18d3436f5156890dbb8ed3e509c728c6a521dfd',
   'src/screens/SMPForecastScreen.tsx': 'a6fc68f89e5e1c23b8065e35e3818eccbbfb8be27e746ddbd62ee79a808c3784',
 };
-// 12절 F6 행: "이 단계에서는 입찰·정산 경로가 레거시 화면을 그대로 띄운다". 그 두 가져오기만 App.tsx에 잠시 허용한다.
-// F8(입찰)·F9(정산)가 새 탭으로 바꾸면서 해당 줄을 지운다. 낡은 허용이 남지 않게 아래 테스트가 각 항목이 아직 쓰이는지 본다.
-const TRANSITIONAL_IMPORTS = { 'App.tsx': ['src/screens/BiddingScreen', 'src/screens/SettlementScreen'] };
+// 12절 F6 행: "이 단계에서는 입찰·정산 경로가 레거시 화면을 그대로 띄운다". 그 가져오기만 App.tsx에 잠시 허용한다.
+// F8이 입찰을 새 탭으로 바꾸며 BiddingScreen을 지웠고, F9(정산)가 남은 줄을 지운다. 낡은 허용이 남지 않게 아래 테스트가 각 항목이
+// 아직 쓰이는지 본다.
+const TRANSITIONAL_IMPORTS = { 'App.tsx': ['src/screens/SettlementScreen'] };
 const CODE_FILE = /\.(ts|tsx|js|jsx|cjs|mjs)$/;
 const TEXT_FILE = /\.(ts|tsx|js|jsx|cjs|mjs|json|html|css|svg|txt|md)$/;
 
@@ -227,6 +228,8 @@ test('transitional legacy imports are still used (delete the entry when F8/F9 re
 
 const POSITIVE = [
   ['App.tsx', "import DashboardScreen from './src/screens/DashboardScreen';", ['import']],
+  // F8 뒤로 레거시 입찰 화면은 App.tsx에서도 금지다(번들에서 빠져야 한다).
+  ['App.tsx', "import BiddingScreen from './src/screens/BiddingScreen';", ['import']],
   ['src/features/l11.tsx', "import BiddingScreen from '../screens/BiddingScreen';", ['import']],
   ['src/lib/a.ts', 'export const x = Math.random();', ['math-random']],
   ['src/ui/b.tsx', "export const s = { color: '#1A2B3C' };", ['hex-color']],
@@ -279,7 +282,7 @@ const NEGATIVE = [
   ['src/lib/kst.ts', 'export const h = (ms: number) => new Date(ms).getUTCHours();'],
   ['public/index.html', '<meta name="theme-color" content="#F6F7F9" media="(prefers-color-scheme: light)">'],
   ['App.tsx', "import { TouchableOpacity } from 'react-native';\nimport SMPForecastScreen from './src/screens/SMPForecastScreen';"],
-  ['App.tsx', "import BiddingScreen from './src/screens/BiddingScreen';\nimport SettlementScreen from './src/screens/SettlementScreen';"],
+  ['App.tsx', "import SettlementScreen from './src/screens/SettlementScreen';"],
   ['src/data/types.ts', "import type { DayAheadSMP } from '../services/api';\nexport type { CurrentSMP } from '../services/api';"],
   ['src/data/o.ts', "import { type DayAheadSMP } from '../services/api';"],
   ['src/content/strings.ts', "export const s = '95%→5% · 3시간 56분 · 11-26(목) 10:00 KST';"],

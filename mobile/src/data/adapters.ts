@@ -182,7 +182,13 @@ export function adaptMarketStatus(res: MarketStatus, receivedAt: number): Market
 
 export type SegmentView = { id: number; price: Provenanced<number>; probability: Provenanced<number>; quantity: Example<number>; revenue: Example<number> | null };
 export type HourBidView = { tradeHour: number; baselineQ50: number | null; revenue: Example<number> | null; segments: SegmentView[] };
-export type SegmentsView = { tradingDate: string | null; risk: string; method: string | null; modelUsed: string | null; hours: HourBidView[] };
+export type SegmentsView = {
+  tradingDate: string | null; risk: string; method: string | null; modelUsed: string | null; capacityMw: number;
+  /** 계산기가 쓴 SMP 예측의 종류(같은 응답의 model_used, 7.8절 3). 칩 문구가 여기서 갈린다. */
+  kind: ForecastKind; chip: Chip; hours: HourBidView[];
+};
+// 계산기 분위수의 출처: 기준선이면 "기준선 분위수", 학습 모델이면 "학습 모델 분위수", 대체값(패턴·규칙)이면 모델 예측이 아니다.
+const CALC_CHIP: Readonly<Record<ForecastKind, Chip>> = { baseline: CHIPS.estQuantile, model: CHIPS.estModelQuantile, fallback: CHIPS.estApiFallback };
 
 /**
  * 입찰 계산기 결과. hourly_bids[i].hour는 0부터라 거래시간 = hour + 1(7.8절 6). price_krw_mwh에는 원/kWh 값이 들어 있고
@@ -190,6 +196,8 @@ export type SegmentsView = { tradingDate: string | null; risk: string; method: s
  */
 export function adaptSegments(res: OptimizedSegments, fetchedAt: number): SegmentsView {
   const time = { kind: '조회' as const, kst: kstTime(fetchedAt) };
+  const kind = smpForecastKind({ model_used: res.model_used });
+  const chip = CALC_CHIP[kind];
   const hours = res.hourly_bids.map((bid, i): HourBidView => {
     if (bid.hour < 0 || bid.hour > 23) throw new ApiShapeError('/api/v1/bidding/optimized-segments', `hourly_bids[${i}].hour`, '0–23');
     return {
@@ -198,9 +206,9 @@ export function adaptSegments(res: OptimizedSegments, fetchedAt: number): Segmen
       revenue: bid.expected_revenue === null ? null : exampleFromCalculator(bid.expected_revenue, '천원', '기대 수입'),
       segments: bid.segments.map(seg => ({
         id: seg.segment_id,
-        price: provenanced({ value: seg.price_krw_mwh, unit: '원/kWh', state: 'estimated', chip: CHIPS.estQuantile, source: 'API 서버 입찰 계산', time }),
+        price: provenanced({ value: seg.price_krw_mwh, unit: '원/kWh', state: 'estimated', chip, source: 'API 서버 입찰 계산', time }),
         probability: provenanced({
-          value: seg.clearing_probability * 100, unit: '%', state: 'estimated', chip: CHIPS.estQuantile, source: 'API 서버 입찰 계산', time,
+          value: seg.clearing_probability * 100, unit: '%', state: 'estimated', chip, source: 'API 서버 입찰 계산', time,
           note: '실제 낙찰 확률 아님',
         }),
         quantity: exampleFromCalculator(seg.quantity_mw, 'MW', '구간 물량'),
@@ -208,5 +216,8 @@ export function adaptSegments(res: OptimizedSegments, fetchedAt: number): Segmen
       })),
     };
   });
-  return { tradingDate: parseDayKey(res.trading_date), risk: res.risk_level, method: res.optimization_method, modelUsed: res.model_used, hours };
+  return {
+    tradingDate: parseDayKey(res.trading_date), risk: res.risk_level, method: res.optimization_method, modelUsed: res.model_used,
+    capacityMw: res.capacity_mw, kind, chip, hours,
+  };
 }

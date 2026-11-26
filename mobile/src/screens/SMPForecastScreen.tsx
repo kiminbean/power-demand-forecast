@@ -29,6 +29,7 @@ import { PowerCard } from '../features/today/PowerCard';
 import { PriceCard } from '../features/today/PriceCard';
 import { AllFailedNotice, TermRow, TodayPanelBody } from '../features/today/TodayParts';
 import { LiveFacts, SourcesTable } from '../features/guide/sheets';
+import type { SourceRowItem } from '../features/guide/sheets';
 import { NowPill, ProvenanceChip } from '../ui/Chips';
 import { AnswerLine, Screen } from '../ui/Screen';
 import { TourBanner } from '../ui/Tour';
@@ -225,10 +226,10 @@ export function TodayMethodFacts({ card }: { card: MethodCard }) {
   return <LiveFacts lines={facts.lines} link={facts.link} />;
 }
 
-/** 출처와 기준 시각 시트의 오늘 행(4.4절). 입찰 계산·응답 상태 행은 그 화면 단계(F8·F10)가 더한다. */
-export function TodaySourcesSheet({ row }: { row: SourceRow | null }) {
+/** 출처와 기준 시각 시트(4.4절): 오늘 행 + 다른 화면이 넘기는 행(입찰 계산 F8, 응답 상태 F10). */
+export function TodaySourcesSheet({ row, extra = [] }: { row: SourceRow | null; extra?: readonly SourceRowItem[] }) {
   const { view } = useTodayView(false);
-  return <SourcesTable rows={view.sources} highlight={row} />;
+  return <SourcesTable rows={[...view.sources, ...extra]} highlight={row} />;
 }
 
 /** ≥ 1280 "오늘 화면 읽는 법" 패널 본문(4.6절). */
