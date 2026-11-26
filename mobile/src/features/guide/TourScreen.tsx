@@ -24,7 +24,8 @@ import { settlementView } from '../settlement/model';
 import { SampleStatementCard } from '../settlement/SampleStatementCard';
 import { ChipList, LegendRow } from '../today/TodayParts';
 import { PriceCard } from '../today/PriceCard';
-import { chartLabel, markTourSeen, useTodayView } from '../../screens/SMPForecastScreen';
+import { useTodayView } from '../today/data';
+import { markTourSeen } from '../today/tourSeen';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
 import { ProvenanceChip, SampleRibbon } from '../../ui/Chips';
 import { ChartBleed } from '../../ui/charts/ChartFrame';
@@ -51,7 +52,7 @@ function TourPrice() {
 function TourForecast() {
   const open = useSheets();
   const { now } = useClock();
-  const { view, res } = useTodayView(true);
+  const { view, res, chartLabel } = useTodayView(true);
   const f = view.forecast;
   const a = view.accuracy.state === 'ready' ? view.accuracy : null;
   const title = CARD_TITLES['today-forecast'];
@@ -107,7 +108,7 @@ function TourLegend() {
   const today = useTodayView(false).view;
   const bidding = useBiddingView(false).view;
   const rows = tourLegend({
-    confirmed: today.legend.confirmed, forecast: { kind: today.forecast.state === 'ready' ? today.forecast.kind : null, value: today.legend.forecast },
+    today: today.legend, forecastKind: today.forecast.state === 'ready' ? today.forecast.kind : null,
     probability: bidding.legend.probability, statementTotal: settlementView().total.value,
   });
   return <Card title={TOUR_LEGEND_TITLE} testID="tour-legend">{rows.map(r => <LegendRow key={r.chip.text} chip={r.chip} text={r.text} />)}</Card>;

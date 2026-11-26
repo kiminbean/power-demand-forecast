@@ -2,16 +2,17 @@
 // 이번 방문 값을 만드는 순수 함수다. React·DOM이 없고 컴포넌트는 배치만 한다. tests/view-models.test.cjs가 픽스처로 글자를 고정한다.
 import type { SourceRowItem } from './sheets';
 import type { RouteKey } from '../../app/routes';
-import type { MarketStatus, ModelInfo, RealtimeStatus } from '../../data/types';
+import type { MarketStatus, RealtimeStatus } from '../../data/types';
 import { kstAt, parseApiTime, parseDayKey } from '../../lib/kst';
 import type { ClockSkew } from '../../lib/kst';
 import { CHIPS, forecastChip } from '../../lib/provenance';
 import type { Chip, ForecastKind } from '../../lib/provenance';
-import type { AccuracyCardView, Fetched } from '../today/model';
+import type { AccuracyCardView, Fetched, TodayLegend } from '../today/model';
 import type { PillTone } from '../../ui/tokens';
 import {
   ABOUT_SKEW_IMPLAUSIBLE, ACCURACY_SOURCE, ACCURACY_UNREGISTERED, FORECAST_SUBJECT_SHORT, RS_DATE, RS_DATE_OTHER, RS_ITEMS, RS_OVERALL, RS_PART, RS_SOURCE, SOURCE_PENDING,
-  aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText, apiAccuracyText, legendConfirmedText, legendForecastText, legendProbabilityText, legendStatementText, marketFactsText, rsBasisText,
+  aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText, legendForecastText, legendMeasuredText,
+  legendProbabilityText, legendStatementText, marketFactsText, rsBasisText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 
@@ -55,10 +56,10 @@ export const TERM_WHERE: Readonly<Record<GlossaryId, RouteKey>> = Object.freeze(
 
 export type LegendRow = { chip: Chip; text: string };
 export type TourLegendInput = {
-  /** 지금 거래시간의 확정 가격(오늘 화면 값, 거래시간이 어긋나면 null). */
-  confirmed: number | null;
-  /** 같은 응답의 예측 종류와 지금 거래시간 q50. */
-  forecast: { kind: ForecastKind | null; value: number | null };
+  /** 오늘 화면의 범례 값: 실측 수요, 지금 거래시간의 확정 가격(어긋나면 null), 지금 거래시간 q50(모두 거래시간과 함께). */
+  today: TodayLegend;
+  /** 같은 응답의 예측 종류(받지 않았으면 null). */
+  forecastKind: ForecastKind | null;
   /** 예시 발전소 1구간의 낙찰 가능성(입찰 계산, 추정). */
   probability: number | null;
   statementTotal: number;
@@ -68,12 +69,13 @@ export type TourLegendInput = {
  * 예측이 기준선이 아니면(학습 모델·대체값) 그 종류의 칩과 이름만 쓴다(기준선 문구에 다른 값을 넣지 않는다).
  */
 export function tourLegend(i: TourLegendInput): LegendRow[] {
-  const kind = i.forecast.kind;
+  const kind = i.forecastKind;
   const forecast: LegendRow = kind && kind !== 'baseline'
     ? { chip: forecastChip(kind), text: FORECAST_SUBJECT_SHORT[kind] }
-    : { chip: CHIPS.forecastBaseline, text: legendForecastText(kind === 'baseline' ? i.forecast.value : null) };
+    : { chip: CHIPS.forecastBaseline, text: legendForecastText(kind === 'baseline' ? i.today.forecast : null) };
   return [
-    { chip: CHIPS.confirmedPrice, text: legendConfirmedText(i.confirmed) },
+    // 실측·확정 행: 지금 잰 수요와 KPX 확정 가격을 함께 예로 든다(round 1 멘토: 카드의 "● 실측"을 범례에서도 찾을 수 있게).
+    { chip: CHIPS.measuredConfirmed, text: legendMeasuredText(i.today.demand, i.today.confirmed) },
     forecast,
     { chip: CHIPS.estShort, text: legendProbabilityText(i.probability) },
     { chip: CHIPS.example, text: legendStatementText(i.statementTotal) },
@@ -81,17 +83,16 @@ export function tourLegend(i: TourLegendInput): LegendRow[] {
 }
 
 /**
- * 예측 방법 화면의 정확도(4.4·7.7절): 오늘 화면의 정확도 카드와 같고 여기서만 R²를 더한다. kind는 이번 방문에 받은 예측의 종류다.
- * 받지 않았으면(알아보기로 바로 들어온 방문) 이 화면이 설명하는 기준선의 문서화 수치를 그대로 보인다(수치 줄이 "기준선 자체"라고 밝힌다).
- * 기준선이 아닌 예측을 받았으면 문서화 수치를 쓰지 않는다.
+ * 예측 방법 화면의 정확도(4.4·7.7절): 오늘 화면의 정확도 카드와 같고 여기서만 R²(한 줄 풀이와 함께)를 더한다. kind는 이번 방문에 받은
+ * 예측의 종류다. 받지 않았으면(알아보기로 바로 들어온 방문) 이 화면이 설명하는 기준선의 문서화 수치를 그대로 보인다(수치 줄이 "기준선
+ * 자체"라고 밝힌다). 기준선이 아닌 예측을 받았으면 문서화 수치를 쓰지 않는다. API 수치는 카드 [i] 시트의 "API 표기" 줄에만 있다(D8).
  */
-export function methodAccuracy(kind: ForecastKind | null, info: ModelInfo | null): AccuracyCardView {
+export function methodAccuracy(kind: ForecastKind | null): AccuracyCardView {
   const baseline = kind === null || kind === 'baseline';
   return {
     state: 'ready',
     documented: baseline ? { main: accuracyText(), basis: accuracyBasisText(), example: accuracyExampleText(), r2: accuracyR2Text() } : null,
     unregistered: baseline ? null : ACCURACY_UNREGISTERED,
-    api: info ? apiAccuracyText(info.mape, info.coverage) : null,
     footer: { source: ACCURACY_SOURCE, time: accuracyBasisPeriod() },
   };
 }

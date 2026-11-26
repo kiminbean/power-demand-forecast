@@ -82,6 +82,15 @@ export function tradeHourRange(from: number | null | undefined, to: number | nul
   return `${pad2(from)}–${pad2(to)}h · ${pad2(from - 1)}–${pad2(to)}시`;
 }
 
+/**
+ * 문장·요약·첫 줄의 거래시간(명세 2.3절, round 1 D11): 시각 범위만. 거래시간 H는 (H−1)시–H시다. 7 → "06–07시", (3, 5) → "02–05시".
+ * "07h" 번호는 카드 메타 줄·스텝퍼·표 칸·칩에만 쓴다(tradeHour).
+ */
+export function tradeClockRange(from: number | null | undefined, to: number | null | undefined = from): string {
+  if (!validHour(from) || !validHour(to) || from > to) return DASH;
+  return `${pad2(from - 1)}–${pad2(to)}시`;
+}
+
 /** "06:04" — 시계처럼 초는 버린다(06:03:57 → "06:03"). */
 export function kstClock(epochMs: number | null | undefined): string {
   const p = isFiniteNumber(epochMs) ? kstParts(epochMs) : null;

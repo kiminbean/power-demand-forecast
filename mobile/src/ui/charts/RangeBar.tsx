@@ -1,5 +1,6 @@
 // 수급 범위 막대(명세 4.1·5.3·6.2절): 0…공급능력, 수요 구간은 series.demand 채움, 예비력 구간은 series.reserve 빗금 + 외곽선,
-// 관심 경계(공급능력 ÷ 1.15)는 watch 색 눈금 + 삼각 표지 + 글자. 짝이 맞는 실시간 값일 때만 그린다(화면이 SupplyView로 판단).
+// 경계(공급능력 ÷ 1.15, 예비율 15 %가 되는 수요)는 watch 색 눈금 + 삼각 표지 + 글자 "수요 1,036 MW · 넘으면 예비율 15% 미만"(D9: KPX 경보
+// 단계 낱말 "관심 경계"를 쓰지 않고 수요 수준이라고 밝힌다). 짝이 맞는 실시간 값일 때만 그린다(화면이 SupplyView로 판단).
 // 막대 안에 글자를 두지 않는다(12 px 글자가 파랑 채움 위에서 두 테마 모두 4.5:1을 넘지 못한다): 수요·예비력은 위 줄, 경계는 아래 줄.
 // role=img, 이름 = 식 문장 + 경계 문장. 누르는 기능이 없다.
 import React from 'react';
@@ -12,7 +13,7 @@ import { web } from '../web';
 import { useTheme } from '../../app/theme';
 import type { Provenanced } from '../../data/adapters';
 import { mw } from '../../lib/format';
-import { supplyFormulaText, watchBoundaryText, watchReservePctText } from '../../content/strings';
+import { boundaryRuleText, boundaryText, supplyFormulaText } from '../../content/strings';
 import { Hatch, chartStyles, useChartWidth, useSvgId } from './ChartFrame';
 import { r2, rangeBarGeometry } from './chartMath';
 
@@ -20,7 +21,7 @@ export type RangeBarProps = {
   supply: Provenanced<number>;
   demand: Provenanced<number>;
   reserve: Provenanced<number>;
-  /** 관심 경계 = 공급능력 ÷ 1.15(adaptSupply의 watchBoundary). */
+  /** 경계 = 공급능력 ÷ 1.15(adaptSupply의 watchBoundary): 수요가 이 값을 넘으면 예비율이 15 % 아래다. */
   boundary: Provenanced<number>;
   width?: number;
   testID?: string;
@@ -48,7 +49,7 @@ export function RangeBar({ supply, demand, reserve, boundary, width: fixedWidth,
   const { width, onLayout } = useChartWidth(fixedWidth, true);
   const hatchId = useSvgId('pd-reserve');
   const geo = rangeBarGeometry(supply.value, demand.value, boundary.value, width);
-  const name = `${supplyFormulaText(supply.value, demand.value, reserve.value, SPOKEN_MW)}. ${watchBoundaryText(boundary.value, SPOKEN_MW)}`;
+  const name = `${supplyFormulaText(supply.value, demand.value, reserve.value, SPOKEN_MW)}. ${boundaryText(boundary.value, SPOKEN_MW)}`;
   const barTop = CHART.barTick;
   const svgHeight = CHART.bar + 2 * CHART.barTick + CHART.triangle;
   const inset = CHART.barStroke / 2;
@@ -81,8 +82,8 @@ export function RangeBar({ supply, demand, reserve, boundary, width: fixedWidth,
           <View style={[styles.boundaryRow, { paddingRight: r2(Math.max(0, geo.width - geo.boundaryX - CHART.triangle / 2)) }]}>
             <Swatch kind="watch" hatchId={hatchId} />
             <Text variant="label" tone="text2" style={styles.shrink}>
-              관심 경계 <Value v={boundary} format={mw} size="label" derived />{' '}
-              <Text variant="label" tone="text2" dataSet={{ pdMeta: 'rule' }}>{`(${watchReservePctText()})`}</Text>
+              수요 <Value v={boundary} format={mw} size="label" derived />{' · '}
+              <Text variant="label" tone="text2" nowrap dataSet={{ pdMeta: 'rule' }}>{boundaryRuleText()}</Text>
             </Text>
           </View>
         </View>

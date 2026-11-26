@@ -2,19 +2,19 @@
 // 글자와 상태는 model.ts가 정하고 여기서는 배치만 한다.
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import type { ChipSpec } from './model';
+import type { ChipSpec, TodayLegend } from './model';
 import { CHIPS } from '../../lib/provenance';
 import type { Chip } from '../../lib/provenance';
 import {
-  LEGEND_ESTIMATED, LEGEND_EXAMPLE, PANEL_HEADINGS, TERMS_HEADING, TODAY_PANEL_METHOD, TODAY_TERMS, legendConfirmedText,
-  legendForecastText,
+  LEGEND_ESTIMATED, LEGEND_EXAMPLE, PANEL_HEADINGS, TERMS_HEADING, TODAY_PANEL_METHOD, TODAY_TERMS, legendForecastText,
+  legendMeasuredText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 import { useTheme } from '../../app/theme';
 import { StateView } from '../../ui/Card';
 import { ProvenanceChip } from '../../ui/Chips';
 import { TermLink } from '../../ui/Controls';
-import { Text } from '../../ui/Text';
+import { Text, keepTogether } from '../../ui/Text';
 import { RADIUS, SPACE } from '../../ui/tokens';
 import { web } from '../../ui/web';
 
@@ -35,7 +35,8 @@ export function TermRow({ onOpen, terms = TODAY_TERMS, testID = 'today-terms' }:
 }
 
 /**
- * 세 요청(가격·예측·전력)이 모두 실패(4.1절 "전부 실패"): "지금은 시장 정보를 불러올 수 없습니다 · {원인}" + [다시 시도].
+ * 세 요청(가격·예측·전력)이 모두 실패(4.1절 "전부 실패"): 원인 + [다시 시도]. 값이 하나도 없으면 AnswerLine이 "지금은 시장 정보를
+ * 불러올 수 없습니다."라서 원인만, 이전 값이 남았으면 "지금은 시장 정보를 불러올 수 없습니다 · {원인}"(글자는 model.ts가 정한다).
  * 카드가 하나도 없을 때는 이것이 영웅 자리라서 today-hero(data-state="error")를 단다(M9 측정 표지).
  */
 export function AllFailedNotice({ text, onRetry, hero }: { text: string; onRetry: () => void; hero: boolean }) {
@@ -79,16 +80,16 @@ export function LegendRow({ chip, text }: { chip: Chip; text: string }) {
   return (
     <View style={styles.legendRow}>
       <ProvenanceChip chip={chip} />
-      <Text variant="label" tone="text2" style={styles.grow} dataSet={{ pdMeta: 'legend' }}>{text}</Text>
+      <Text variant="label" tone="text2" style={styles.grow} dataSet={{ pdMeta: 'legend' }}>{keepTogether(text, { variant: 'label', tone: 'text2' })}</Text>
     </View>
   );
 }
 
 /** 오늘 패널: 4상태 범례(이 화면의 실제 값으로, 없으면 표시와 설명만) · 용어 3개 · 산출 방식 요약 3줄. */
-export function TodayPanelBody({ confirmed, forecast, onTerm }: { confirmed: number | null; forecast: number | null; onTerm: (id: GlossaryId) => void }) {
+export function TodayPanelBody({ legend: values, onTerm }: { legend: TodayLegend; onTerm: (id: GlossaryId) => void }) {
   const legend = [
-    { chip: CHIPS.confirmedPrice, text: legendConfirmedText(confirmed) },
-    { chip: CHIPS.forecastBaseline, text: legendForecastText(forecast) },
+    { chip: CHIPS.measuredConfirmed, text: legendMeasuredText(values.demand, values.confirmed) },
+    { chip: CHIPS.forecastBaseline, text: legendForecastText(values.forecast) },
     { chip: CHIPS.estNotMeasured, text: LEGEND_ESTIMATED },
     { chip: CHIPS.example, text: LEGEND_EXAMPLE },
   ];

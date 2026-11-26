@@ -145,27 +145,29 @@ test('0.00 입력(12–14h): 빗금 구간 하나, 선·띠 끊김, 최고·최�
   assert.equal(stats.zeroHours, 3);
   assert.equal(stats.counted, 21);
   assert.equal(strings.forecastSummaryText(stats, 'baseline'),
-    '기준선 예측으로는 08h · 07–08시가 가장 비싸고(212.3원), 03–05h · 02–05시가 가장 쌉니다(102.3원). 하루 평균 168.1원 (0.00 입력 3시간 제외).');
+    '기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). 하루 평균 168.1원 (0.00 입력 3시간 제외).');
   assert.deepEqual(math.widestBand(q50, q10, FORECAST.q90).runs, [{ from: 15, to: 15 }], '0.00 시간(13h 326.4원)의 띠 폭은 보지 않는다');
   assert.deepEqual(math.periodStats(q50).map(p => p.zeroHours), [0, 3, 0]);
   assert.equal(math.forecastStats([0, 0, null]), null, '그릴 값이 없으면 요약 없음');
   assert.equal(strings.forecastSummaryText(null, 'baseline'), '그릴 수 있는 예측 값이 없습니다.');
 });
 
-test('요약 문장(4.1절): 같은 값이 이어진 시간은 구간 라벨 하나, 떨어진 같은 값은 쉼표로', () => {
+test('요약 문장(4.1절, D11 문장은 시각 범위만): 같은 값이 이어진 시간은 구간 라벨 하나, 떨어진 같은 값은 쉼표로', () => {
   const { math, strings } = load();
   const stats = math.forecastStats(FORECAST.q50);
   assert.deepEqual(stats.min.runs, [{ from: 3, to: 5 }]);
   assert.equal(strings.forecastSummaryText(stats, 'baseline'),
-    '기준선 예측으로는 08h · 07–08시가 가장 비싸고(212.3원), 03–05h · 02–05시가 가장 쌉니다(102.3원). 하루 평균 169.2원.');
+    '기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). 하루 평균 169.2원.');
   assert.equal(strings.uncertaintyText(math.widestBand(FORECAST.q50, FORECAST.q10, FORECAST.q90)),
-    '가장 불확실한 시간: 13h · 12–13시 (80% 구간 폭 326.4원)');
+    '가장 불확실한 시간: 12–13시 (80% 구간 폭 326.4원)');
+  // 문장에는 거래시간 번호("07h")를 쓰지 않는다(D11). 번호는 카드 메타 줄·스텝퍼·표 칸·칩에만.
+  assert.doesNotMatch(strings.forecastSummaryText(stats, 'baseline') + strings.uncertaintyText(math.widestBand(FORECAST.q50, FORECAST.q10, FORECAST.q90)), /\d{2}h/);
   // 화면 글자가 같으면(100.04·100.01 → "100.0") 같은 값으로 묶는다. 떨어진 구간은 따로 적는다.
   const q = Array.from({ length: 24 }, () => 150);
   q[2] = 100.04; q[3] = 100.01; q[14] = 99.96; q[20] = 210;
   const s2 = math.forecastStats(q);
   assert.deepEqual(s2.min.runs, [{ from: 3, to: 4 }, { from: 15, to: 15 }]);
-  assert.equal(strings.hourGroupText(s2.min.runs), '03–04h · 02–04시, 15h · 14–15시');
+  assert.equal(strings.hourGroupText(s2.min.runs), '02–04시, 14–15시');
   assert.ok(strings.forecastSummaryText(s2, 'fallback').startsWith('API 대체값으로는 '));
   assert.ok(strings.forecastSummaryText(s2, 'model').startsWith('학습 모델 예측으로는 '));
 });
@@ -173,7 +175,8 @@ test('요약 문장(4.1절): 같은 값이 이어진 시간은 구간 라벨 하
 test('시간대 요약 숫자(4.1절 표 보기): 130.6/102.3/212.3 · 177.1/176.5/178.7 · 203.3/201.3/205.9', () => {
   const { price } = createTsLoader().load(path.join(SRC_ROOT, 'lib/format.ts'));
   const { periodStats } = load().math;
-  assert.deepEqual(periodStats(FORECAST.q50).map(p => [p.from, p.to, p.label]), [[1, 8, '심야'], [9, 17, '주간'], [18, 24, '저녁']]);
+  // 01–08h(00–08시)는 아침 7–8시 오름을 품어 "심야"가 아니라 "밤·아침"(round 1 멘토).
+  assert.deepEqual(periodStats(FORECAST.q50).map(p => [p.from, p.to, p.label]), [[1, 8, '밤·아침'], [9, 17, '주간'], [18, 24, '저녁']]);
   assert.deepEqual(periodStats(FORECAST.q50).map(p => [p.mean, p.min, p.max].map(price).join('/')),
     ['130.6/102.3/212.3', '177.1/176.5/178.7', '203.3/201.3/205.9']);
   assert.deepEqual(periodStats([]).map(p => [p.mean, p.min, p.max]), [[null, null, null], [null, null, null], [null, null, null]]);
@@ -206,7 +209,7 @@ test('계단 차트 계산(4.2절): 누적 물량 x, 0부터 높이, 1·4·7·10
   assert.equal(math.ladderStats([]), null);
 });
 
-test('범위 막대 계산(4.1절): 0…공급능력, 수요 끝, 관심 경계 = 공급능력 ÷ 1.15, 식·경계 문장', () => {
+test('범위 막대 계산(4.1절): 0…공급능력, 수요 끝, 경계 = 공급능력 ÷ 1.15, 식·경계 문장(D9: 수요 수준, KPX 경보 낱말 없음)', () => {
   const { math, strings } = load();
   const g = math.rangeBarGeometry(1191, 664, 1191 / 1.15, 358);
   assert.ok(close(g.demandX, (664 / 1191) * 358) && close(g.boundaryX, 358 / 1.15));
@@ -214,7 +217,9 @@ test('범위 막대 계산(4.1절): 0…공급능력, 수요 끝, 관심 경계 
   assert.equal(math.rangeBarGeometry(1191, NaN, 1000, 358), null);
   assert.equal(math.rangeBarGeometry(500, 664, 434.8, 358).demandX, 358, '수요가 공급능력을 넘어도 막대 밖으로 나가지 않는다');
   assert.equal(strings.supplyFormulaText(1191, 664, 527), '공급능력 1,191 MW − 수요 664 MW = 예비력 527 MW');
-  assert.equal(strings.watchBoundaryText(1191 / 1.15), '관심 경계 1,036 MW (예비율 15%)');
+  assert.equal(strings.boundaryText(1191 / 1.15), '수요가 1,036 MW를 넘으면 예비율 15% 미만');
+  assert.equal(strings.boundaryRuleText(), '넘으면 예비율 15% 미만');
+  assert.doesNotMatch(strings.boundaryText(1191 / 1.15) + strings.TODAY_PANEL_METHOD.join(' '), /관심|경계|주의|심각/);
 });
 
 test('키·라벨 자리: ←/→는 양 끝에서 멈춤, Home·End, 라벨 상자는 차트 밖으로 나가지 않는다', () => {
@@ -240,8 +245,8 @@ test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·�
   const root = stepTree(ui, { confirmed, selectedHour: 7, onSelectHour: () => {} });
   assert.equal(root.props.role, 'img');
   assert.equal(root.props['aria-label'],
-    '기준선 예측 SMP 24시간: 기준선 예측으로는 08h · 07–08시가 가장 비싸고(212.3원), 03–05h · 02–05시가 가장 쌉니다(102.3원). '
-    + '하루 평균 169.2원. 가장 불확실한 시간: 13h · 12–13시 (80% 구간 폭 326.4원). 점은 KPX 확정 가격 07h · 06–07시 115.3원.');
+    '기준선 예측 SMP 24시간: 기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). '
+    + '하루 평균 169.2원. 가장 불확실한 시간: 12–13시 (80% 구간 폭 326.4원). 점은 KPX 확정 가격 06–07시 115.3원.');
   const layer = root.children[0];
   assert.equal(layer.props['aria-hidden'], true);
   const [px, py, pw, ph] = root.props.dataSet.pdPlot.split(' ').map(Number);
@@ -367,14 +372,14 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
   }
 });
 
-test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예비력 빗금, 관심 경계 눈금, 수요는 data-pd-value·계산값은 derived', () => {
+test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예비력 빗금, 경계 눈금(수요 수준), 수요는 data-pd-value·계산값은 derived', () => {
   const ui = load();
   const kpi = ui.adapters.adaptKpis(ui.types.parseKpis(KPIS), FETCHED);
   const sup = ui.adapters.adaptSupply(ui.types.parseKpis(KPIS), ui.types.parsePowerSupply(SUPPLY), FETCHED);
   assert.equal(sup.status, 'paired');
   const root = tree(h(ui.RangeBar, { supply: sup.supply, demand: kpi.demand, reserve: sup.reserve, boundary: sup.watchBoundary, width: 358 })).children[0];
   assert.equal(root.props.role, 'img');
-  assert.equal(root.props['aria-label'], '공급능력 1,191 메가와트 − 수요 664 메가와트 = 예비력 527 메가와트. 관심 경계 1,036 메가와트 (예비율 15%)');
+  assert.equal(root.props['aria-label'], '공급능력 1,191 메가와트 − 수요 664 메가와트 = 예비력 527 메가와트. 수요가 1,036 메가와트를 넘으면 예비율 15% 미만');
   const [demand] = byTestId(root, 'range-demand');
   assert.ok(close(demand.props.width, (664 / 1191) * 358));
   assert.equal(demand.props.fill, ui.tokens.SERIES.demand);
@@ -382,13 +387,14 @@ test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예
   assert.equal(reserve.props.stroke, ui.tokens.SERIES.reserve);
   assert.match(reserve.props.fill, /^url\(#pd-reserve-/);
   assert.ok(close(byTestId(root, 'range-boundary')[0].props.x1, 358 / 1.15));
-  // F7: 예비력(공급능력 − 수요)과 관심 경계(공급능력 ÷ 1.15)는 API 원값이 아니라서 I3 비교 대상(data-pd-value)에서 뺀다.
+  // F7: 예비력(공급능력 − 수요)과 경계(공급능력 ÷ 1.15)는 API 원값이 아니라서 I3 비교 대상(data-pd-value)에서 뺀다.
   const values = all(root, n => n.props.dataSet && n.props.dataSet.pdValue);
   assert.deepEqual(values.map(textOf), ['664 MW']);
   assert.deepEqual(values.map(v => [v.props.dataSet.pdValue, v.props.dataSet.pdRaw]), [['measured', '664']]);
   const derived = all(root, n => n.props.dataSet && n.props.dataSet.pdMeta === 'derived');
   assert.deepEqual(derived.map(textOf), ['527 MW', '1,036 MW']);
   assert.ok(derived.every(d => d.props.dataSet.pdRaw === undefined && d.props.dataSet.pdValue === undefined));
-  assert.match(textOf(root), /관심 경계 1,036 MW \(예비율 15%\)/);
+  assert.match(textOf(root), /수요 1,036 MW · 넘으면 예비율 15% 미만/);
+  assert.doesNotMatch(textOf(root), /관심|경계/, 'KPX 경보 단계 낱말을 쓰지 않는다(D9)');
   all(root, n => n.type === 'Text').forEach(t => assert.ok(flat(t.props.style).fontSize >= 12));
 });

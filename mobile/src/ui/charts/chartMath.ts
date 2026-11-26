@@ -159,12 +159,13 @@ export function widestBand(q50: readonly (number | null)[], q10: readonly (numbe
 }
 
 export const PERIODS = [
-  { id: 'night', label: '심야', from: 1, to: 8 }, { id: 'day', label: '주간', from: 9, to: 17 }, { id: 'evening', label: '저녁', from: 18, to: 24 },
+  // 01–08h(00–08시)는 아침 7–8시 오름을 품어 "심야"가 아니다(round 1 멘토): "밤·아침".
+  { id: 'night', label: '밤·아침', from: 1, to: 8 }, { id: 'day', label: '주간', from: 9, to: 17 }, { id: 'evening', label: '저녁', from: 18, to: 24 },
 ] as const;
 export type PeriodStat = { id: (typeof PERIODS)[number]['id']; label: string; from: number; to: number;
   mean: number | null; min: number | null; max: number | null; zeroHours: number };
 
-/** 시간대 요약(심야 01–08h · 주간 09–17h · 저녁 18–24h): 평균·최저·최고, 0.00 입력 시간 제외. */
+/** 시간대 요약(밤·아침 00–08시 · 주간 08–17시 · 저녁 17–24시 = 거래시간 01–08h · 09–17h · 18–24h): 평균·최저·최고, 0.00 입력 시간 제외. */
 export function periodStats(q50: readonly (number | null)[]): PeriodStat[] {
   const kinds = hourKinds(q50);
   return PERIODS.map(p => {

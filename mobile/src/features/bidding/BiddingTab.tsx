@@ -133,7 +133,7 @@ export default function BiddingTab() {
   const pill = (
     <View style={styles.pills}>
       <NowPill now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.checkTime} /> : null}
+      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
     </View>
   );
   const answer = (

@@ -80,18 +80,30 @@ test('supply pair: 1,191 − 664 = 527 MW, watch boundary 1,036 MW; mismatch →
   assert.deepEqual(a.adaptSupply(kpis, off, FETCHED), { status: 'missing', text: '공급능력 미수신' });
 });
 
-test('market status and model info: server time, skew, trading date, API-stated accuracy line', () => {
+test('market status and model info: server time, skew, trading date, API-stated accuracy lines (D8: 시트의 회색 줄, 기간은 API 설명에서)', () => {
   const market = a.adaptMarketStatus(types.parseMarketStatus(fx('_api_v1_market-status.json')), KST(2026, 11, 26, 6, 0, 57));
   assert.equal(market.serverTime, KST(2026, 11, 26, 6, 3, 57) + 768);
   assert.deepEqual([market.skew.notable, market.skew.plausible, market.tradingDate, market.dam.deadline, market.serverText],
     [true, true, '2026-11-27', '10:00', '서버 시각 06:03 KST']);
   assert.equal(f.kstDayLabel(market.tradingDate), '11-27(금)');
-  const info = a.adaptModelInfo(types.parseModelInfo(fx('_api_v1_model_info.json')));
-  assert.deepEqual([info.apiMape.value, info.apiCoverage.value, info.apiMape.chip.text], [12.68, 72.64, 'API 표기']);
-  assert.equal(s.apiAccuracyText(info.apiMape.value, info.apiCoverage.value),
-    'API 표기: 검증 MAPE 12.68% (최근 150일 재현) · 80% 구간 적중률 72.6% (최근 30일 보류 검증)');
+  const info = types.parseModelInfo(fx('_api_v1_model_info.json'));
+  assert.deepEqual([info.version, info.mape, info.coverage], ['baseline-24h', 12.68, 72.64]);
+  assert.match(info.data_source, /최근 150일 재현 MAPE/);
+  // 기준선: 기간은 API 설명(data_source)에서 읽는다. 적중률은 같은 값으로 "10번 중 7번꼴"(72.64 / 10 → 7, 반올림 1회).
+  assert.deepEqual(s.apiAccuracyLines(info), [
+    'API 표기: 검증 MAPE 12.68% (최근 150일 재현 · 문서 수치와 기간이 다릅니다)',
+    'API 표기: 80% 구간 적중률 72.6% (마지막 30일 보류 검증) · 10번 중 7번꼴로 실제 가격이 띠 안에 들었습니다',
+  ]);
+  // 기준선이 아닌 버전(v4.1 walk-forward)에는 기준선 기간 글자를 붙이지 않고 API 설명을 그대로 옮긴다(integrity round 1).
+  const v41 = { ...info, version: 'v4.1', data_source: '제주 하루전 SMP (제주시범사업 API·EPSIS), 평가 기간 끝 2025-12-18' };
+  assert.deepEqual(s.apiAccuracyLines(v41), ['API 표기: 검증 MAPE 12.68%',
+    'API 표기: 80% 구간 적중률 72.6% · 10번 중 7번꼴로 실제 가격이 띠 안에 들었습니다', `API 설명: ${v41.data_source}`]);
+  assert.deepEqual(s.apiAccuracyLines({ version: 'v3.2', mape: null, coverage: null, data_source: null }), ['API 표기: 검증 수치 없음']);
   assert.equal(s.accuracyText(), '시간마다 평균 11.97원/kWh 빗나갑니다 (MAPE 11.75%)');
-  assert.equal(s.accuracyBasisText(), 'walk-forward 2025-07-22~12-18 · 기준선 자체(학습한 모델 아님)');
+  assert.equal(s.accuracyBasisText(), 'walk-forward 평가(지난 자료만 보고 하루씩 맞혀 봄) · 기준선 자체(학습한 모델 아님)');
+  assert.equal(s.accuracyR2Text(), 'R² 0.203 · 가격이 오르내리는 폭의 약 20%를 설명합니다(1이면 전부)');
+  // 모델 이름 줄에는 API 정확도를 붙이지 않는다(D8, I5): " · 검증 MAPE 12.68%"는 떼어 낸다.
+  assert.equal(s.modelUsedText('기준선 예측 (전날 같은 시간 제주 하루전 가격) · 검증 MAPE 12.68%'), 'API 모델 이름: 기준선 예측 (전날 같은 시간 제주 하루전 가격)');
 });
 
 test('bidding calculator: hour is 0-based, q50 matches the forecast, revenue in thousand won (56.1만원 · 468.6만원)', () => {

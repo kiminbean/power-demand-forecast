@@ -11,7 +11,7 @@ import { createdAtText, forecastDateText, lookupAt, observedLookup, serverTimeTe
 import { exampleFromCalculator } from './examples';
 import type { Example } from './examples';
 import { ApiShapeError } from './types';
-import type { DashboardKpis, DayAheadSmp, MarketStatus, ModelInfo, OptimizedSegments, PowerSupply, SmpForecast } from './types';
+import type { DashboardKpis, DayAheadSmp, MarketStatus, OptimizedSegments, PowerSupply, SmpForecast } from './types';
 
 declare const provenancedBrand: unique symbol;
 
@@ -96,16 +96,6 @@ export function forecastPoint(view: ForecastView, tradeHour: number): ForecastPo
     ? { q10: provenanced({ ...base, value: q10, note: '80% 구간 아래' }), q90: provenanced({ ...base, value: q90, note: '80% 구간 위' }) }
     : null;
   return { tradeHour, kind: 'value', q50: provenanced({ ...base, value: v, note }), band };
-}
-
-export type ModelInfoView = { apiMape: Provenanced<number> | null; apiCoverage: Provenanced<number> | null };
-
-/** API가 밝힌 검증 수치. 문서화 정확도가 아니므로 회색 "API 표기" 줄에만 쓴다(7.7절). */
-export function adaptModelInfo(res: ModelInfo): ModelInfoView {
-  const make = (value: number | null, period: string) => (value === null ? null : provenanced({
-    value, unit: '%', state: 'estimated', chip: CHIPS.apiStated, source: 'API 서버 모델 정보', time: { kind: '평가 기간', kst: period },
-  }));
-  return { apiMape: make(res.mape, '최근 150일 재현'), apiCoverage: make(res.coverage, '최근 30일 보류 검증') };
 }
 
 export type WeatherView = {

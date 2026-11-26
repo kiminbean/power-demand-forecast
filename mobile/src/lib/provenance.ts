@@ -1,5 +1,7 @@
 // 출처 판정(명세 7.1·7.4·7.7절). 문구는 대시보드와 한 글자도 다르지 않게 둔다:
 // 수요·예비율은 src/dashboard/app_v4.py 3352–3366행, 기상은 _fmt_weather_provenance, 단계는 3296–3316행.
+// 예외 하나(round 1 D9, 모바일만): 예비율 단계 이름은 KPX 공식 경보 단계 낱말(준비·관심·주의·경계·심각)을 쓰지 않는다.
+// 대시보드의 관심·주의 자리에 보통·낮음을 쓰고, 판정 문장(verdict)은 대시보드와 같다.
 import type { ChipKind } from '../ui/tokens';
 
 export type Chip = Readonly<{ kind: ChipKind; text: string }>;
@@ -11,6 +13,8 @@ export const CHIPS = Object.freeze({
   confirmedPrice: chip('measured', '확정 가격'),
   confirmedPoint: chip('measured', '확정 가격 1점'),
   measured: chip('measured', '실측'),
+  /** 범례의 실측·확정 행(둘러보기 5단계·≥ 1280 패널): 지금 잰 값과 KPX 확정 가격을 한 표시로 묶어 보인다. */
+  measuredConfirmed: chip('measured', '실측·확정'),
   forecastBaseline: chip('forecast', '예측 · 기준선'),
   forecastModel: chip('forecast', '예측 · 학습 모델'),
   estNotMeasured: chip('estimated', '추정 · 실측 아님'),
@@ -31,6 +35,8 @@ export const CHIPS = Object.freeze({
   marketRule: chip('plain', '시장 규칙 · 서버 시각'),
   locked: chip('plain', '잠김'),
   checkTime: chip('plain', '시각 확인 필요'),
+  /** 서버 시각이 기기 시계와 12시간 넘게 다를 때 NowPill 옆(7.6절): 누구의 시계를 믿는지 밝힌다(round 1 멘토). */
+  clockImplausible: chip('plain', '서버 시각 확인 필요 · 기기 시계 기준'),
   simplified: chip('plain', '단순화한 설명'),
 });
 
@@ -86,7 +92,7 @@ export function demandProvenance(kpis: unknown): DemandProvenance {
 }
 
 export const PAIR_TOLERANCE_MW = 1;
-/** 관심 경계 = 공급능력 ÷ 1.15 (예비율 15 %가 되는 수요). */
+/** 예비율 경계 = 공급능력 ÷ 1.15(예비율 15 %가 되는 수요). 화면에는 "수요 1,036 MW · 넘으면 예비율 15% 미만"으로 쓴다(D9). */
 export const WATCH_RATIO = 1.15;
 export const SUPPLY_MISSING = '공급능력 미수신';
 
@@ -116,12 +122,12 @@ export type ReserveTone = 'ok' | 'watch' | 'caution' | 'danger';
 export type ReserveLevel = Readonly<{ tone: ReserveTone; name: string; verdict: string; label: string }>;
 const LEVELS: ReadonlyArray<{ min: number; tone: ReserveTone; name: string; verdict: string }> = [
   { min: 15, tone: 'ok', name: '정상', verdict: '넉넉합니다' },
-  { min: 10, tone: 'watch', name: '관심', verdict: '여유가 줄고 있습니다' },
-  { min: 5, tone: 'caution', name: '주의', verdict: '여유가 부족합니다' },
+  { min: 10, tone: 'watch', name: '보통', verdict: '여유가 줄고 있습니다' },
+  { min: 5, tone: 'caution', name: '낮음', verdict: '여유가 부족합니다' },
   { min: -Infinity, tone: 'danger', name: '위험', verdict: '공급이 빠듯합니다' },
 ];
 
-/** 예비율 단계(대시보드 7.4절). 앱 기준이며 KPX 공식 경보 단계가 아니다. 판정 여부는 호출하는 쪽이 정한다(③·끊김 아님). */
+/** 예비율 단계(대시보드 7.4절 경계값). 앱 기준이며 KPX 공식 경보 단계가 아니다. 판정 여부는 호출하는 쪽이 정한다(③·끊김 아님). */
 export function reserveLevel(rate: unknown): ReserveLevel | null {
   if (!isFiniteNumber(rate)) return null;
   const level = LEVELS.find(l => rate >= l.min) ?? LEVELS[LEVELS.length - 1];

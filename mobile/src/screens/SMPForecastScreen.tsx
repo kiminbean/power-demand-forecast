@@ -1,8 +1,8 @@
 /**
- * 오늘(명세 4.1절, 경로 / · 라우트 키 smp). 이 파일이 오늘 화면의 자료 입구다: 허용 목록 GET 여섯 개(하루전 확정 가격 · 기준선 예측 ·
- * 모델 정보 · KPI · 수급 · 시장 상태)를 자료 저장소(lib/resource)로 받고, 하루전 가격은 utils/smpPresentation의 isAvailableDayAhead·
- * describeDayAhead로 판정과 KPX 원문 표기를 만든 뒤 순수 함수 features/today/model.ts에 넘긴다. 카드는 배치만 한다.
- * 산출 방식·출처 시트와 ≥ 1280 패널은 useTodayView()로 같은 저장소를 엿본다(새 요청 없음, App.tsx가 시트로 등록한다).
+ * 오늘(명세 4.1절, 경로 / · 라우트 키 smp). 이 파일이 오늘 화면의 자료 입구다: TODAY_ENTRY가 허용 목록 GET 여섯 개(하루전 확정 가격 ·
+ * 기준선 예측 · 모델 정보 · KPI · 수급 · 시장 상태)를 부르는 방법, 하루전 가격 판정(utils/smpPresentation의 isAvailableDayAhead·
+ * describeDayAhead), 기준선 차트의 접근 이름을 정한다. App.tsx가 이것을 features/today/data의 TodayEntryProvider로 넘기고, 오늘 화면·
+ * 둘러보기·시트·패널은 useTodayView로 같은 저장소를 본다(features는 이 파일을 가져오지 않는다, D18). 카드는 배치만 한다.
  * 기존 화면 경로(App.tsx의 `case 'smp': return <SMPForecastScreen`)와 기본 export(필수 prop 없음)는 그대로다.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -12,24 +12,24 @@ import { describeDayAhead, isAvailableDayAhead } from '../utils/smpPresentation'
 import { useClock, useNav, useShellData } from '../app/Shell';
 import type { RefreshResult } from '../app/Shell';
 import { ROUTES, rootState } from '../app/routes';
-import type { MethodCard, SourceRow } from '../app/routes';
+import type { SourceRow } from '../app/routes';
 import { isVisible, watchVisible } from '../app/head';
 import { createClient, ENDPOINTS } from '../data/client';
-import { kstNow, kstParts, parseApiTime } from '../lib/kst';
+import { kstNow, kstParts } from '../lib/kst';
 import { CHIPS } from '../lib/provenance';
 import type { ForecastKind } from '../lib/provenance';
-import { appResources, useRefreshWhileVisible, useResource } from '../lib/resource';
-import type { Resource } from '../lib/resource';
+import { appResources, useRefreshWhileVisible } from '../lib/resource';
 import { TOUR_BANNER } from '../content/strings';
-import { nextBoundaryCheck, todayView } from '../features/today/model';
-import type { Fetched, TodayCardId } from '../features/today/model';
+import { useTodayView } from '../features/today/data';
+import type { TodayEntry } from '../features/today/data';
+import { nextBoundaryCheck } from '../features/today/model';
+import type { TodayCardId } from '../features/today/model';
+import { markTourSeen, tourSeen } from '../features/today/tourSeen';
 import { AccuracyCard } from '../features/today/AccuracyCard';
 import { ForecastCard } from '../features/today/ForecastCard';
 import { PowerCard } from '../features/today/PowerCard';
 import { PriceCard } from '../features/today/PriceCard';
-import { AllFailedNotice, TermRow, TodayPanelBody } from '../features/today/TodayParts';
-import { LiveFacts, SourcesTable } from '../features/guide/sheets';
-import type { SourceRowItem } from '../features/guide/sheets';
+import { AllFailedNotice, TermRow } from '../features/today/TodayParts';
 import { NowPill, ProvenanceChip } from '../ui/Chips';
 import { AnswerLine, Screen } from '../ui/Screen';
 import { TourBanner } from '../ui/Tour';
@@ -41,89 +41,33 @@ const FORECAST_CHART_LABEL: Readonly<Record<ForecastKind, string>> = {
   model: '학습 모델 예측 SMP 24시간',
   fallback: 'API 대체값 24시간 (예측 SMP 아님)',
 };
-export const chartLabel = (kind: ForecastKind) => FORECAST_CHART_LABEL[kind];
 
 // 요청마다 자료 저장소가 만든 10초 중단 신호를 묶은 클라이언트로 부른다.
 const api = (signal: AbortSignal) => createClient({ signal });
-const LOAD = {
-  dayAhead: (signal: AbortSignal) => api(signal).getDayAheadSMP(),
-  forecast: (signal: AbortSignal) => api(signal).getSMPForecast(),
-  modelInfo: (signal: AbortSignal) => api(signal).getModelInfo(),
-  kpis: (signal: AbortSignal) => api(signal).getDashboardKPIs(),
-  powerSupply: (signal: AbortSignal) => api(signal).getPowerSupply(),
-  market: (signal: AbortSignal) => api(signal).getMarketStatus(),
-};
-const VISIBILITY = { isVisible, watchVisible };
 
-/**
- * 오늘 화면의 자료와 view model. fetching이면 처음 마운트에 받고(lib/resource 규칙) 다시 받을 손잡이를 준다. 아니면 엿보기만 한다.
- * 저장소의 조회 시각은 기기 시계라서 서버 시계 차이를 더해 앱 시각으로 바꾼 뒤 넘긴다(나이는 어느 쪽이든 같다).
- */
-export function useTodayView(fetching = false) {
-  const dayAhead = useResource(ENDPOINTS.dayAhead, fetching ? LOAD.dayAhead : undefined);
-  const forecast = useResource(ENDPOINTS.forecast, fetching ? LOAD.forecast : undefined);
-  const modelInfo = useResource(ENDPOINTS.modelInfo, fetching ? LOAD.modelInfo : undefined);
-  const kpis = useResource(ENDPOINTS.kpis, fetching ? LOAD.kpis : undefined);
-  const powerSupply = useResource(ENDPOINTS.powerSupply, fetching ? LOAD.powerSupply : undefined);
-  const market = useResource(ENDPOINTS.marketStatus, fetching ? LOAD.market : undefined);
-  const clock = useClock();
-  const { state } = useNav();
-  const { reportServerTime } = clock;
-  // 시장 상태의 서버 시각으로 기기 시계 차이를 맞춘다(7.5·7.6절). 받은 기기 시각과 짝을 짓는다.
-  useEffect(() => {
-    if (!fetching || !market.data || market.fetchedAt === null) return;
-    const server = parseApiTime(market.data.current_time);
-    if (server !== null) reportServerTime(server, market.fetchedAt);
-  }, [fetching, market.data, market.fetchedAt, reportServerTime]);
-  const skewMs = clock.skew && clock.skew.plausible ? clock.skew.skewMs : 0;
+/** 오늘 화면의 자료 입구(App.tsx → TodayEntryProvider). */
+export const TODAY_ENTRY: TodayEntry = {
+  load: {
+    dayAhead: signal => api(signal).getDayAheadSMP(),
+    forecast: signal => api(signal).getSMPForecast(),
+    modelInfo: signal => api(signal).getModelInfo(),
+    kpis: signal => api(signal).getDashboardKPIs(),
+    powerSupply: signal => api(signal).getPowerSupply(),
+    market: signal => api(signal).getMarketStatus(),
+  },
   // isAvailableDayAhead는 런타임 타입 가드다(status·market_type·값·거래일·거래시간을 다 본다). 파싱 결과는 모양이 같고
   // 문자열 리터럴 타입만 넓어서 옛 타입으로 넘긴다.
-  const dayAheadSmp = dayAhead.data as DayAheadSMP | null;
-  const priceAvailable = isAvailableDayAhead(dayAheadSmp);
-  const kpxText = describeDayAhead(dayAheadSmp);
-  const hour = state.key === 'smp' ? state.hour : null;
-  const view = useMemo(() => {
-    const app = <T,>(r: Resource<T>): Fetched<T> => ({ data: r.data, status: r.status, error: r.error, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + skewMs });
-    return todayView({
-      now: clock.now, dayAhead: app(dayAhead), priceAvailable, kpxText, forecast: app(forecast), modelInfo: app(modelInfo), kpis: app(kpis),
-      powerSupply: app(powerSupply), market: app(market), selectedHour: hour,
-    });
-  }, [clock.now, skewMs, dayAhead, priceAvailable, kpxText, forecast, modelInfo, kpis, powerSupply, market, hour]);
-  return { view, res: { dayAhead, forecast, modelInfo, kpis, powerSupply, market }, skew: clock.skew };
-}
-
-// 오늘 화면의 둘러보기 배너는 첫 방문에만(4.4절). 저장소를 못 쓰면 그 방문 동안만 닫힌 것을 기억한다. 둘러보기를 연 것도 본 것으로 친다.
-const TOUR_SEEN_KEY = 'pd-tour-seen';
-let tourSeenThisVisit = false;
-type StorageLike = { getItem(k: string): string | null; setItem(k: string, v: string): void };
-const storage = (): StorageLike | null => {
-  try {
-    return (globalThis as { localStorage?: StorageLike }).localStorage ?? null;
-  } catch {
-    return null;
-  }
+  judgeDayAhead: quote => {
+    const dayAheadSmp = quote as DayAheadSMP | null;
+    return { available: isAvailableDayAhead(dayAheadSmp), kpxText: describeDayAhead(dayAheadSmp) };
+  },
+  chartLabel: kind => FORECAST_CHART_LABEL[kind],
 };
-function tourSeen(): boolean {
-  if (tourSeenThisVisit) return true;
-  try {
-    const s = storage();
-    return s ? s.getItem(TOUR_SEEN_KEY) === '1' : false;
-  } catch {
-    return false;
-  }
-}
-export function markTourSeen(): void {
-  tourSeenThisVisit = true;
-  try {
-    const s = storage();
-    if (s) s.setItem(TOUR_SEEN_KEY, '1');
-  } catch {
-    // 저장하지 못해도 이번 방문 동안은 닫힌 채로 둔다.
-  }
-}
+
+const VISIBILITY = { isVisible, watchVisible };
 
 export default function SMPForecastScreen() {
-  const { view, res, skew } = useTodayView(true);
+  const { view, res, skew, chartLabel } = useTodayView(true);
   const nav = useNav();
   const clock = useClock();
   const [tourHidden, setTourHidden] = useState(tourSeen);
@@ -192,7 +136,7 @@ export default function SMPForecastScreen() {
   const pill = (
     <View style={styles.pills}>
       <NowPill now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.checkTime} /> : null}
+      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
     </View>
   );
   const failedAll = view.allFailed;
@@ -208,35 +152,12 @@ export default function SMPForecastScreen() {
           <ForecastCard view={view.forecast} chartLabel={chartLabel} now={clock.now} onSelectHour={selectHour} onToNow={toNow}
             onMethod={openMethod('today-forecast')} onSources={openSources('forecast')} onRetry={() => { forecast.reload(); }} />
           <AccuracyCard view={view.accuracy} onMethod={openMethod('today-accuracy')} onSources={openSources('accuracy')}
-            onRetry={() => { forecast.reload(); modelInfo.reload(); }} />
+            onRetry={() => { forecast.reload(); }} />
         </>
       )}
       <TermRow onOpen={id => nav.openSheet({ kind: 'term', id })} />
     </Screen>
   );
-}
-
-const isTodayCard = (card: MethodCard): card is TodayCardId => card.startsWith('today-');
-
-/** 산출 방식 시트의 "이번 화면의 값"(4.1·4.4절: KPX 원문 표기·25.9 % 비율·MW 계산 예비율 차이·모델 원문). */
-export function TodayMethodFacts({ card }: { card: MethodCard }) {
-  const { view } = useTodayView(false);
-  if (!isTodayCard(card)) return null;
-  const facts = view.facts[card];
-  return <LiveFacts lines={facts.lines} link={facts.link} />;
-}
-
-/** 출처와 기준 시각 시트(4.4절): 오늘 행 + 다른 화면이 넘기는 행(입찰 계산 F8, 응답 상태 F10). */
-export function TodaySourcesSheet({ row, extra = [], page }: { row: SourceRow | null; extra?: readonly SourceRowItem[]; page?: boolean }) {
-  const { view } = useTodayView(false);
-  return <SourcesTable rows={[...view.sources, ...extra]} highlight={row} page={page} />;
-}
-
-/** ≥ 1280 "오늘 화면 읽는 법" 패널 본문(4.6절). */
-export function TodayPanel() {
-  const { view } = useTodayView(false);
-  const nav = useNav();
-  return <TodayPanelBody confirmed={view.legend.confirmed} forecast={view.legend.forecast} onTerm={id => nav.openSheet({ kind: 'term', id })} />;
 }
 
 const styles = StyleSheet.create({

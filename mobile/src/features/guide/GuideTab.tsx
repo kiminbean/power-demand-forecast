@@ -16,18 +16,18 @@ import type { GuideTopic } from '../../app/routes';
 import { THEME_OPTIONS } from '../../app/SheetHost';
 import { useTheme } from '../../app/theme';
 import { createClient, ENDPOINTS } from '../../data/client';
-import type { MarketStatus, ModelInfo, RealtimeStatus, SmpForecast } from '../../data/types';
+import type { MarketStatus, RealtimeStatus, SmpForecast } from '../../data/types';
 import { CHIPS, smpForecastKind } from '../../lib/provenance';
 import { useResource } from '../../lib/resource';
 import type { GuideContent } from '../../content/guide';
 import {
   ABOUT_ROW, ABOUT_TITLE, GLOSSARY_TITLES, GUIDE_ANSWER, MODEL_NOT_USED, READING_HEADINGS, RS_FAILED, SIMPLIFIED_NOTE, SOURCES_SHEET_TITLE,
-  TOUR_BANNER, TOUR_NAME, glossaryCountText, rsOverallText, tourCardTitle, tradeHourExampleText,
+  TOUR_BANNER, TOUR_NAME, appUpdatedText, glossaryCountText, rsOverallText, tourCardTitle, tradeHourExampleText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 import { useBiddingSourceRows } from '../bidding/BiddingTab';
 import { AccuracyCard } from '../today/AccuracyCard';
-import { TodaySourcesSheet } from '../../screens/SMPForecastScreen';
+import { TodaySourcesSheet } from '../today/sheets';
 import { Button } from '../../ui/Button';
 import { Card, StateView } from '../../ui/Card';
 import { NowPill, ProvenanceChip, StatusPill } from '../../ui/Chips';
@@ -46,7 +46,7 @@ export function GuidePill() {
   return (
     <View style={styles.pills}>
       <NowPill now={now} fetchedAt={null} skewNotable={skewNotable} />
-      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.checkTime} /> : null}
+      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
     </View>
   );
 }
@@ -142,9 +142,8 @@ export function ReadingBody({ content }: { content: GuideContent }) {
 function MethodScreen() {
   const nav = useNav();
   const forecast = useResource<SmpForecast>(ENDPOINTS.forecast);
-  const info = useResource<ModelInfo>(ENDPOINTS.modelInfo);
   const market = useResource<MarketStatus>(ENDPOINTS.marketStatus);
-  const accuracy = methodAccuracy(forecast.data ? smpForecastKind(forecast.data) : null, info.data);
+  const accuracy = methodAccuracy(forecast.data ? smpForecastKind(forecast.data) : null);
   const facts = marketFacts(market.data);
   return (
     <Screen title={GUIDE_TOPIC_TITLES.method} pill={<GuidePill />} testID="guide-method">
@@ -155,7 +154,7 @@ function MethodScreen() {
             {c.topics.method.body.slice(1).map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
             <Text variant="label" tone="text2" dataSet={{ pdMeta: 'model' }}>{MODEL_NOT_USED}</Text>
             <AccuracyCard view={accuracy} onMethod={() => nav.openSheet({ kind: 'method', card: 'today-accuracy' })}
-              onSources={() => nav.openSheet({ kind: 'sources', row: 'accuracy' })} onRetry={() => { info.reload(); }} />
+              onSources={() => nav.openSheet({ kind: 'sources', row: 'accuracy' })} onRetry={() => { forecast.reload(); }} />
             <Card title={c.simplified.title} chips={<ProvenanceChip chip={CHIPS.simplified} />} testID="method-simplified">
               {c.simplified.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
               {facts ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'facts' }}>{facts}</Text> : null}
@@ -191,7 +190,7 @@ function SourcesScreen() {
   );
 }
 
-/** 앱 정보(?topic=about): 이름·버전 · 읽기 전용 · 시계 차이(120초 넘을 때) · 데이터 출처와 연결 상태 ›. */
+/** 앱 정보(?topic=about): 이름·버전 · 읽기 전용 · 자료 이용 조건 · 화면 갱신일 · 시계 차이(120초 넘을 때) · 데이터 출처와 연결 상태 ›. */
 function AboutScreen() {
   const nav = useNav();
   const { skew } = useClock();
@@ -199,6 +198,7 @@ function AboutScreen() {
     <Screen title={GUIDE_TOPIC_TITLES.about} pill={<GuidePill />} testID="guide-about">
       <Card title={ABOUT_TITLE} testID="about-card">
         <GuideGate>{c => c.topics.about.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}</GuideGate>
+        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'updated' }}>{appUpdatedText()}</Text>
         {aboutClockLines(skew).map(l => <Text key={l} variant="label" tone="text2" dataSet={{ pdMeta: 'clock' }}>{l}</Text>)}
       </Card>
       <List><ListRow title={GUIDE_TOPIC_TITLES.sources} onPress={() => nav.push(topicState('sources'))} last /></List>

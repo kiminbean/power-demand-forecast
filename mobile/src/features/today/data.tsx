@@ -1,0 +1,82 @@
+/**
+ * 오늘 화면의 자료와 view model(명세 4.1·6.3절). 오늘 화면·둘러보기·산출 방식과 출처 시트·≥ 1280 패널이 이 훅 하나로 같은 저장소를 본다.
+ * 자료 입구(허용 목록 GET 여섯 개, 하루전 가격 판정, 차트 접근 이름)는 화면 파일 src/screens/SMPForecastScreen.tsx의 TODAY_ENTRY이고
+ * App.tsx가 TodayEntryProvider로 넘긴다. 그래서 features는 src/screens를 가져오지 않는다(round 1 R8, D18).
+ * 입구가 화면 파일에 남는 까닭: 잠긴 기존 테스트(smp-truthfulness)가 그 파일이 getDayAheadSMP()·isAvailableDayAhead(dayAheadSmp)·
+ * describeDayAhead(dayAheadSmp)·"예측 SMP"를 쓰는지 본다(명세 10절). 공급자가 없으면 조용히 비우지 않고 바로 실패한다.
+ */
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import { todayView } from './model';
+import type { Fetched } from './model';
+import { useClock, useNav } from '../../app/Shell';
+import { ENDPOINTS } from '../../data/client';
+import type { DashboardKpis, DayAheadSmp, MarketStatus, ModelInfo, PowerSupply, SmpForecast } from '../../data/types';
+import { parseApiTime } from '../../lib/kst';
+import type { ForecastKind } from '../../lib/provenance';
+import { useResource } from '../../lib/resource';
+import type { Loader, Resource } from '../../lib/resource';
+
+export type TodayLoaders = Readonly<{
+  dayAhead: Loader<DayAheadSmp>;
+  forecast: Loader<SmpForecast>;
+  modelInfo: Loader<ModelInfo>;
+  kpis: Loader<DashboardKpis>;
+  powerSupply: Loader<PowerSupply>;
+  market: Loader<MarketStatus>;
+}>;
+/** 하루전 가격의 판정(utils/smpPresentation의 isAvailableDayAhead)과 KPX 원문 표기(describeDayAhead). */
+export type DayAheadJudgment = Readonly<{ available: boolean; kpxText: string }>;
+export type TodayEntry = Readonly<{
+  load: TodayLoaders;
+  judgeDayAhead: (quote: DayAheadSmp | null) => DayAheadJudgment;
+  /** 기준선 계단 차트의 접근 이름 머리(요약 문장이 뒤에 붙는다). 예측 종류마다 다르다. */
+  chartLabel: (kind: ForecastKind) => string;
+}>;
+
+const EntryContext = createContext<TodayEntry | null>(null);
+
+/** App.tsx가 화면 파일의 TODAY_ENTRY로 셸 전체를 감싼다(시트·패널·둘러보기도 셸 안에서 그려진다). */
+export function TodayEntryProvider({ value, children }: { value: TodayEntry; children: React.ReactNode }) {
+  return <EntryContext.Provider value={value}>{children}</EntryContext.Provider>;
+}
+
+export function useTodayEntry(): TodayEntry {
+  const entry = useContext(EntryContext);
+  if (!entry) throw new Error('TodayEntryProvider missing: App.tsx must pass TODAY_ENTRY from the Today screen file');
+  return entry;
+}
+
+/**
+ * 오늘 화면의 자료와 view model. fetching이면 처음 마운트에 받고(lib/resource 규칙) 다시 받을 손잡이를 준다. 아니면 엿보기만 한다.
+ * 저장소의 조회 시각은 기기 시계라서 서버 시계 차이를 더해 앱 시각으로 바꾼 뒤 넘긴다(나이는 어느 쪽이든 같다).
+ */
+export function useTodayView(fetching = false) {
+  const entry = useTodayEntry();
+  const { load } = entry;
+  const dayAhead = useResource(ENDPOINTS.dayAhead, fetching ? load.dayAhead : undefined);
+  const forecast = useResource(ENDPOINTS.forecast, fetching ? load.forecast : undefined);
+  const modelInfo = useResource(ENDPOINTS.modelInfo, fetching ? load.modelInfo : undefined);
+  const kpis = useResource(ENDPOINTS.kpis, fetching ? load.kpis : undefined);
+  const powerSupply = useResource(ENDPOINTS.powerSupply, fetching ? load.powerSupply : undefined);
+  const market = useResource(ENDPOINTS.marketStatus, fetching ? load.market : undefined);
+  const clock = useClock();
+  const { state } = useNav();
+  const { reportServerTime } = clock;
+  // 시장 상태의 서버 시각으로 기기 시계 차이를 맞춘다(7.5·7.6절). 받은 기기 시각과 짝을 짓는다.
+  useEffect(() => {
+    if (!fetching || !market.data || market.fetchedAt === null) return;
+    const server = parseApiTime(market.data.current_time);
+    if (server !== null) reportServerTime(server, market.fetchedAt);
+  }, [fetching, market.data, market.fetchedAt, reportServerTime]);
+  const skewMs = clock.skew && clock.skew.plausible ? clock.skew.skewMs : 0;
+  const judged = useMemo(() => entry.judgeDayAhead(dayAhead.data), [entry, dayAhead.data]);
+  const hour = state.key === 'smp' ? state.hour : null;
+  const view = useMemo(() => {
+    const app = <T,>(r: Resource<T>): Fetched<T> => ({ data: r.data, status: r.status, error: r.error, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + skewMs });
+    return todayView({
+      now: clock.now, dayAhead: app(dayAhead), priceAvailable: judged.available, kpxText: judged.kpxText, forecast: app(forecast),
+      modelInfo: app(modelInfo), kpis: app(kpis), powerSupply: app(powerSupply), market: app(market), selectedHour: hour,
+    });
+  }, [clock.now, skewMs, dayAhead, judged, forecast, modelInfo, kpis, powerSupply, market, hour]);
+  return { view, res: { dayAhead, forecast, modelInfo, kpis, powerSupply, market }, skew: clock.skew, chartLabel: entry.chartLabel };
+}

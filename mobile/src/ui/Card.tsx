@@ -8,7 +8,7 @@ import { ProvenanceChip } from './Chips';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { useAnnounce } from './Live';
-import { Text, labelData } from './Text';
+import { Text, keepTogether, labelData } from './Text';
 import { web, webStyle } from './web';
 import { useTheme } from '../app/theme';
 import { CHIPS } from '../lib/provenance';
@@ -68,6 +68,7 @@ export function CardHeader({ title, chips, onMethod, narrow = false }: CardHeade
   );
 }
 
+const META3 = { variant: 'meta', tone: 'text3' } as const;
 /** extra: 같은 카드의 둘째 출처(전력 카드의 "날씨 기상청 초단기실황 (API 서버)"). 시각 뒤에 " · "로 잇는다. */
 export type SourceFooterProps = { source: string; time: string; onSources?: () => void; context?: string; extra?: string };
 /** 출처 · 시각 · [출처 표]. 나이 글자는 부모가 60초마다 새 time으로 다시 그린다(알림 없음). */
@@ -75,7 +76,8 @@ export function SourceFooter({ source, time, onSources, context, extra }: Source
   return (
     <View role="note" style={styles.footer}>
       <Text variant="meta" tone="text3" style={styles.grow} dataSet={{ pdMeta: 'source' }}>
-        {source} · <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'time' }}>{time}</Text>{extra ? ` · ${extra}` : null}
+        {keepTogether(source, META3)} · <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'time' }}>{keepTogether(time, META3)}</Text>
+        {extra ? <>{' · '}{keepTogether(extra, META3)}</> : null}
       </Text>
       {onSources ? <Button tone="ghost" label="출처 표" accessibilityLabel={`출처 표: ${context ?? source}`} onPress={onSources} /> : null}
     </View>

@@ -25,10 +25,13 @@ import BiddingTab, { BiddingMethodFacts, BiddingPanel, useBiddingSourceRows } fr
 import SettlementTab, { SettlementMethodFacts, SettlementPanel } from './src/features/settlement/SettlementTab';
 import GuideTab, { useStatusRows } from './src/features/guide/GuideTab';
 import { MethodSheetBody, TermSheetBody } from './src/features/guide/sheets';
+import { TodayEntryProvider } from './src/features/today/data';
+import { TodayMethodFacts, TodayPanel, TodaySourcesSheet } from './src/features/today/sheets';
 import { TextLink } from './src/ui/Controls';
 import { RefreshButton } from './src/ui/Button';
 import { Icon } from './src/ui/Icon';
-import SMPForecastScreen, { TodayMethodFacts, TodayPanel, TodaySourcesSheet } from './src/screens/SMPForecastScreen';
+// 오늘 화면과 그 자료 입구(TODAY_ENTRY). features는 이 파일을 가져오지 않고 TodayEntryProvider로 입구를 받는다(D18).
+import SMPForecastScreen, { TODAY_ENTRY } from './src/screens/SMPForecastScreen';
 
 // 헤더 버전 표기(P8 전까지 v6.1). src/content/strings.ts의 APP_VERSION과 같아야 한다.
 const HEADER_VERSION = 'v6.1';
@@ -125,8 +128,10 @@ function renderRoute(state: RouteState) {
 export default function App() {
   return (
     <ThemeProvider onDocumentTheme={applyDocumentTheme}>
-      <StatusBar style="auto" />
-      <Shell tabs={TABS} renderRoute={renderRoute} renderHeader={Header} renderPanel={renderPanel} sheets={SHEETS} />
+      <TodayEntryProvider value={TODAY_ENTRY}>
+        <StatusBar style="auto" />
+        <Shell tabs={TABS} renderRoute={renderRoute} renderHeader={Header} renderPanel={renderPanel} sheets={SHEETS} />
+      </TodayEntryProvider>
     </ThemeProvider>
   );
 }

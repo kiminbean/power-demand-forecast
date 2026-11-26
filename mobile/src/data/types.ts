@@ -60,13 +60,17 @@ export function parseForecast(json: unknown): SmpForecast {
   };
 }
 
-export type ModelInfo = { status: string; version: string | null; type: string | null; mape: number | null; coverage: number | null };
+/** data_source: API의 수치 설명(기준선이면 "최근 150일 재현 MAPE · … 마지막 30일 보류 검증"). 정확도 시트의 API 표기 기간에 쓴다(D8). */
+export type ModelInfo = {
+  status: string; version: string | null; type: string | null; mape: number | null; coverage: number | null; data_source: string | null;
+};
 export function parseModelInfo(json: unknown): ModelInfo {
   const c = { endpoint: '/api/v1/model/info' };
   const r = rec(json, c, '$');
   return {
     status: str(r.status, c, 'status'), version: strOrNull(r.version, c, 'version'), type: strOrNull(r.type, c, 'type'),
     mape: numOrNull(r.mape, c, 'mape'), coverage: numOrNull(r.coverage, c, 'coverage'),
+    data_source: strOrNull(r.data_source, c, 'data_source'),
   };
 }
 

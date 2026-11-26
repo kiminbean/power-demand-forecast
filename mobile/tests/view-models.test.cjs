@@ -96,8 +96,8 @@ function project(m, view) {
     forecast: { chips: F.chips.map(chip), legend: F.legend, selected: F.selected, stepLabel: F.stepLabel(F.selected), reading: m.rich.lineText(F.reading),
       summary: F.summary, uncertainty: F.uncertainty, periods: F.periods.map(p => [p.label, p.mean, p.min, p.max]), periodNote: F.periodNote,
       window: [F.window.from, F.window.to], footer: `${F.footer.source} · ${F.footer.time}` },
-    accuracy: { main: A.documented.main, basis: A.documented.basis, example: A.documented.example, api: A.api, footer: `${A.footer.source} · ${A.footer.time}` },
-    facts: Object.fromEntries(Object.entries(view.facts).map(([k, x]) => [k, { lines: x.lines, link: x.link && x.link.url }])),
+    accuracy: { main: A.documented.main, basis: A.documented.basis, example: A.documented.example, footer: `${A.footer.source} · ${A.footer.time}` },
+    facts: Object.fromEntries(Object.entries(view.facts).map(([k, x]) => [k, { lines: x.lines, api: x.api || [], link: x.link && x.link.url }])),
     sources: view.sources.map(r => [r.id, r.item, r.source, r.basis, r.chip ? chip(r.chip) : r.status]),
   };
 }
@@ -163,7 +163,7 @@ function renderToday(m, view, nowMs) {
       onMethod: noop, onSources: noop, onRetry: noop }),
     h(m.AccuracyCard, { view: view.accuracy, onMethod: noop, onSources: noop, onRetry: noop }),
     h(m.TermRow, { onOpen: noop }),
-    h(m.TodayPanelBody, { confirmed: view.legend.confirmed, forecast: view.legend.forecast, onTerm: noop }),
+    h(m.TodayPanelBody, { legend: view.legend, onTerm: noop }),
   ]);
 }
 
@@ -184,18 +184,24 @@ test('명세 F7 행의 기대 문자열이 모두 그 자리에 있다', () => {
   const p = project(m, viewOf(m, 'today-base'));
   const has = (where, ...parts) => parts.forEach(s => assert.ok(where.includes(s), `${s} ∉ ${where}`));
   has(p.price.value, '115.3');
-  has(p.price.hourLine, '07h · 06–07시');
+  has(p.price.hourLine, '06–07시', '거래시간 07h');
   has(p.price.compare.join(' '), '145.2', '29.9');
   has(p.power.demand, '664');
   has(p.power.reserve, '79.5');
   has(p.power.formula, '1,191', '527');
   assert.equal(p.power.boundary, '1,036');
   has(p.power.weather, '11.0', '3.6', '맑음');
-  has(p.forecast.summary, '212.3', '08h · 07–08시', '102.3', '03–05h · 02–05시', '169.2');
-  has(p.forecast.uncertainty, '326.4', '13h · 12–13시');
-  assert.deepEqual(p.forecast.periods, [['심야 01–08h', '130.6', '102.3', '212.3'], ['주간 09–17h', '177.1', '176.5', '178.7'], ['저녁 18–24h', '203.3', '201.3', '205.9']]);
+  // D11: 문장·요약·표의 첫 줄은 시각 범위만, "07h" 번호는 카드 메타 줄(위 hourLine)·스텝퍼·표 칸에만.
+  has(p.forecast.summary, '212.3', '07–08시', '102.3', '02–05시', '169.2');
+  has(p.forecast.uncertainty, '326.4', '12–13시');
+  for (const sentence of [p.answer, p.forecast.summary, p.forecast.uncertainty, ...p.price.compare]) assert.doesNotMatch(sentence, /\d{2}h/, sentence);
+  assert.deepEqual(p.forecast.periods, [['밤·아침 00–08시', '130.6', '102.3', '212.3'], ['주간 08–17시', '177.1', '176.5', '178.7'], ['저녁 17–24시', '203.3', '201.3', '205.9']]);
+  // D8: 카드에는 쉬운 말과 문서화 MAPE 하나만. API 수치(12.68 % 등)는 정확도 시트의 회색 "API 표기" 줄에만 있다.
   assert.equal(p.accuracy.main, '시간마다 평균 11.97원/kWh 빗나갑니다 (MAPE 11.75%)');
-  assert.equal(p.accuracy.basis, 'walk-forward 2025-07-22~12-18 · 기준선 자체(학습한 모델 아님)');
+  assert.equal(p.accuracy.basis, 'walk-forward 평가(지난 자료만 보고 하루씩 맞혀 봄) · 기준선 자체(학습한 모델 아님)');
+  assert.ok(!JSON.stringify(p.accuracy).includes('12.68') && !JSON.stringify(p.accuracy).includes('72.6'));
+  assert.ok(!p.facts['today-forecast'].lines.join(' ').includes('MAPE'), '모델 이름 줄에 API MAPE 없음(I5)');
+  assert.deepEqual(p.facts['today-accuracy'].api.map(l => l.slice(0, 8)), ['API 표기: ', 'API 표기: ']);
   assert.equal(p.answer, '지금 시간 제주 전기 도매가격은 1kWh에 115.3원이고, 낼 수 있는 전력이 쓰는 전력보다 527 MW 더 많습니다.');
   // 25.9 % 비율·MW 계산 예비율 차이는 카드가 아니라 산출 방식 시트에만(4.1절).
   assert.ok(!JSON.stringify([p.price, p.power]).includes('25.9'));
@@ -217,11 +223,11 @@ test('불러오는 중·확정 가격 없음·정시 경계 유예와 지연', (
   const grace = viewOf(m, 'today-hour-boundary-grace');
   assert.equal(grace.price.checking, '다음 거래시간 값 확인 중');
   assert.equal(chipLabel(m, grace.price.chips[0]), '● 확정 가격', '유예 동안 이전 값과 칩 유지');
-  assert.equal(grace.answer, '07h · 06–07시 제주 전기 도매가격은 1kWh에 115.3원이었고, 낼 수 있는 전력이 쓰는 전력보다 527 MW 더 많습니다.');
+  assert.equal(grace.answer, '06–07시 제주 전기 도매가격은 1kWh에 115.3원이었고, 낼 수 있는 전력이 쓰는 전력보다 527 MW 더 많습니다.');
   assert.equal(grace.recheckPrice, false, '정시 뒤에 받은 값이라 다시 받지 않는다');
   const late = viewOf(m, 'today-hour-boundary-stale');
   assert.deepEqual([late.price.checking, late.price.chips[0].lag, late.price.chips[0].text], [null, 'stale', '지연 · 07h 값']);
-  assert.match(late.answer, /^07h · 06–07시 제주 전기 도매가격은 1kWh에 115\.3원이었고/);
+  assert.match(late.answer, /^06–07시 제주 전기 도매가격은 1kWh에 115\.3원이었고/);
   assert.equal(late.forecast.selected, 8, '선택 기본값은 지금 거래시간(08h)');
 });
 
@@ -238,7 +244,7 @@ test('KPI 조회 12분(지연)·61분(끊김): NowPill·칩·AnswerLine 과거�
   const broken = viewOf(m, 'today-kpi-age-61m', { advanceMs: 61 * 60_000, failAfter: true });
   assert.equal(broken.stage, 'broken');
   assert.equal(broken.answer, '06:03 뒤로 새 자료를 받지 못했습니다. 아래 값은 그때 값입니다.');
-  assert.deepEqual([broken.power.level, broken.power.judgeNote], [null, '새 자료를 받지 못해 예비율 단계 판정을 거뒀습니다']);
+  assert.deepEqual([broken.power.level, broken.power.judgeNote], [null, '새 자료를 받지 못해 예비율 단계 판정을 멈췄습니다']);
   assert.deepEqual(broken.power.chips.map(c => [c.lag, chipLabel(m, c)]), [['broken', '06:03 값']]);
   assert.deepEqual([broken.price.chips[0].lag, chipLabel(m, broken.price.chips[0]), broken.price.checking], ['broken', '06:03 값', null],
     '07:04:57: 07h는 바로 앞 거래시간이지만 끊김이라 "확인 중"을 쓰지 않는다');
@@ -254,7 +260,8 @@ test('일부 실패·전부 실패(서버·네트워크): 카드마다 자기 �
   assert.equal(partial.allFailed, null);
   for (const [id, cause] of [['today-all-error-server', '서버 응답 없음'], ['today-all-error-network', '네트워크 연결을 확인해 주세요']]) {
     const v = viewOf(m, id);
-    assert.deepEqual(v.allFailed, { text: `지금은 시장 정보를 불러올 수 없습니다 · ${cause}`, showCards: false }, id);
+    // 값이 하나도 없으면 AnswerLine이 이미 "지금은 시장 정보를 불러올 수 없습니다."라서 안내 상자는 원인만(같은 문장 두 번 금지, round 1).
+    assert.deepEqual(v.allFailed, { text: cause, showCards: false }, id);
     assert.deepEqual([v.answer, v.heroState], ['지금은 시장 정보를 불러올 수 없습니다.', 'error'], id);
   }
 });
@@ -313,7 +320,8 @@ test('예측 대체값·모르는 모델·예측일 어제·0.00 입력(12–14h
   const zero = viewOf(m, 'today-forecast-zero-12-14h', { selectedHour: 13 });
   assert.match(zero.forecast.summary, /\(0\.00 입력 3시간 제외\)\.$/);
   assert.equal(m.rich.lineText(zero.forecast.reading), '기준선 입력 0.00 · 예측 아님');
-  assert.equal(zero.forecast.periodNote, '평균·최저·최고는 0.00 입력 시간을 빼고 계산합니다 (0.00 입력 3시간 제외)');
+  assert.equal(zero.forecast.periodNote, '평균·최저·최고에서 0.00 입력 3시간을 뺐습니다');
+  assert.equal(viewOf(m, 'today-base').forecast.periodNote, null, '0.00 입력 시간이 없으면 각주도 없다(round 1 멘토)');
   assert.ok(!zero.forecast.uncertainty.includes('12–13시'), '0.00 입력 시간은 가장 불확실한 시간에서도 뺀다');
   const day = zero.forecast.periods.find(p => p.label.startsWith('주간'));
   assert.notEqual(day.min, '0.0');
@@ -440,7 +448,7 @@ test('카드 렌더 의미: today-hero data-state, [i] 4개·[출처 표] 4개 �
   assert.equal(all(tables[1], n => n.props.role === 'row').length - 1, 24, 'forceTable은 "24시간 전체 보기"를 누른 상태');
   const current = all(tables[1], n => n.props.role === 'row' && n.props['aria-current'] === 'true');
   assert.equal(current.length, 1);
-  assert.equal(textOf(current[0]).startsWith('07h · 06–07시'), true);
+  assert.equal(textOf(current[0]).startsWith('07h · 06–07시'), true, '표 칸은 거래시간 번호와 시각 범위(D11 허용)');
   const twelve = view.forecast.rows.slice(view.forecast.window.from - 1, view.forecast.window.to);
   assert.deepEqual([twelve.length, twelve[0].hour, twelve[11].hour], [12, 7, 18]);
   const tail = m.model.todayView({ ...input, selectedHour: 20 }).forecast.window;
@@ -573,35 +581,42 @@ test('출처 행(4.4절): 오늘 8행 + 입찰 계산 + 응답 상태 3행, 응�
   }
 });
 
-test('둘러보기 5단계 범례(4.4절): 이번 방문 값(115.3 확정 가격 · 145.2 기준선 예측 · 95% 낙찰 가능성 · 1,716만원 예시), 값이 없으면 표시와 설명만', () => {
+test('둘러보기 5단계 범례(4.4절): 이번 방문 값(664 MW 실측 · 115.3 확정 · 145.2 기준선 예측, 가격은 시각 범위와 · 95% 낙찰 가능성 · 1,716만원 예시), 값이 없으면 표시와 설명만', () => {
   const m = load();
   const g = loadGuide();
   const view = viewOf(m, 'today-base');
   const seg = resolveVariant('bidding-base').responses['/api/v1/bidding/optimized-segments'].body;
   const first = g.adapters.adaptSegments(g.types.parseSegments(seg), 0).hours.find(x => x.tradeHour === 19).segments[0];
   const row = rows => rows.map(r => [g.provenance.chipText(r.chip), r.text]);
-  assert.deepEqual(row(g.guide.tourLegend({ confirmed: view.legend.confirmed, forecast: { kind: view.forecast.kind, value: view.legend.forecast },
-    probability: first.probability.value, statementTotal: 17160000 })), [
-    ['● 확정 가격', '115.3 원/kWh 확정 가격'], ['┅ 예측 · 기준선', '145.2 원/kWh 기준선 예측'], ['▨ 추정', '95% 낙찰 가능성 (예시 발전소 1구간)'],
-    ['┆ 예시', '1,716만원 예시 정산서']]);
-  const none = row(g.guide.tourLegend({ confirmed: null, forecast: { kind: null, value: null }, probability: null, statementTotal: 17160000 }));
+  // round 1 멘토: 실측·확정 행에 카드의 "● 실측"(수요)과 "● 확정 가격"을 함께 들고, 가격은 카드 문장과 같은 꼴("115.3원/kWh")로.
+  assert.deepEqual(row(g.guide.tourLegend({ today: view.legend, forecastKind: view.forecast.kind, probability: first.probability.value, statementTotal: 17160000 })), [
+    ['● 실측·확정', '664 MW 실측 · 115.3원/kWh 확정 (06–07시)'], ['┅ 예측 · 기준선', '145.2원/kWh 기준선 예측 (06–07시)'],
+    ['▨ 추정', '95% 낙찰 가능성 (예시 발전소 1구간)'], ['┆ 예시', '1,716만원 예시 정산서']]);
+  const blank = { demand: null, confirmed: null, forecast: null };
+  const none = row(g.guide.tourLegend({ today: blank, forecastKind: null, probability: null, statementTotal: 17160000 }));
   assert.deepEqual(none.slice(0, 3).map(r => /\d/.test(r[1])), [false, false, false]);
-  assert.deepEqual(row(g.guide.tourLegend({ confirmed: null, forecast: { kind: 'model', value: 150 }, probability: null, statementTotal: 0 }))[1],
+  const priced = { ...blank, forecast: { value: 150, hour: 7 } };
+  assert.deepEqual(row(g.guide.tourLegend({ today: priced, forecastKind: 'model', probability: null, statementTotal: 0 }))[1],
     ['┅ 예측 · 학습 모델', '학습 모델 예측']);
-  assert.deepEqual(row(g.guide.tourLegend({ confirmed: null, forecast: { kind: 'fallback', value: 150 }, probability: null, statementTotal: 0 }))[1],
+  assert.deepEqual(row(g.guide.tourLegend({ today: priced, forecastKind: 'fallback', probability: null, statementTotal: 0 }))[1],
     ['▨ 추정 · API 대체값 (모델 예측 아님)', 'API 대체값']);
+  // 끊김(61분)이면 실측 ●를 거두므로 범례에도 수요 값을 들지 않는다.
+  const broken = viewOf(m, 'today-kpi-age-61m', { advanceMs: 61 * 60_000, failAfter: true });
+  assert.equal(broken.legend.demand, null);
 });
 
 test('예측 방법·앱 정보의 이번 방문 값: 정확도(+ R² 0.203, 기준선이 아니면 등록 안 됨) · 서버 시장 값 · 시계 차이 120초/12시간', () => {
   const m = load();
   const g = loadGuide();
   const info = m.types.parseModelInfo(resolveVariant('today-base').responses['/api/v1/model/info'].body);
-  const base = g.guide.methodAccuracy('baseline', info);
-  assert.deepEqual([base.documented.main, base.documented.r2, base.api, base.footer.time], ['시간마다 평균 11.97원/kWh 빗나갑니다 (MAPE 11.75%)', 'R² 0.203',
-    'API 표기: 검증 MAPE 12.68% (최근 150일 재현) · 80% 구간 적중률 72.6% (최근 30일 보류 검증)', '평가 기간 2025-07-22~12-18']);
-  assert.equal(g.guide.methodAccuracy(null, null).documented.r2, 'R² 0.203');
-  const model = g.guide.methodAccuracy('model', null);
-  assert.deepEqual([model.documented, model.unregistered, model.api], [null, '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다', null]);
+  assert.equal(info.version, 'baseline-24h');
+  const base = g.guide.methodAccuracy('baseline');
+  // D8: R²에는 한 줄 풀이, API 수치는 이 카드가 아니라 [i] 시트의 "API 표기" 줄에만(오늘 view의 facts['today-accuracy'].api).
+  assert.deepEqual([base.documented.main, base.documented.r2, base.api, base.footer.time], ['시간마다 평균 11.97원/kWh 빗나갑니다 (MAPE 11.75%)',
+    'R² 0.203 · 가격이 오르내리는 폭의 약 20%를 설명합니다(1이면 전부)', undefined, '평가 기간 2025-07-22~12-18']);
+  assert.equal(g.guide.methodAccuracy(null).documented.r2, base.documented.r2);
+  const model = g.guide.methodAccuracy('model');
+  assert.deepEqual([model.documented, model.unregistered], [null, '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다']);
   const market = m.types.parseMarketStatus(resolveVariant('today-base').responses['/api/v1/market-status'].body);
   assert.equal(g.guide.marketFacts(market), '이번 방문의 서버 값: 하루전시장 마감 11-26(목) 10:00 KST · 입찰일 11-27(금) · 실시간시장 15분 단위');
   assert.equal(g.guide.marketFacts(null), null);

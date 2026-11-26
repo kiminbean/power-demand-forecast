@@ -15,23 +15,23 @@ import {
   FAIL_CAUSE, FORECAST_DATE_LAG, FORECAST_EMPTY, FORECAST_SUBJECT_SHORT, KPI_LABELS, KPX_LINK_LABEL, LEVEL_NOTE, MODEL_INFO_FAILED,
   NO_JUDGE_BROKEN, NO_JUDGE_EMPTY, NO_JUDGE_UNKNOWN_SOURCE, NO_PRICE_TEXT, SOURCE_ITEMS, SOURCE_PENDING, SOURCE_TEXT, ZERO_INPUT_LABEL,
   accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyText, allFailedText, answerBrokenText, answerStaleText,
-  apiAccuracyText, compareDeltaParts, compareRatioText, dayAheadBasisText, forecastBasisText, forecastLegendText, forecastSourceLine,
+  apiAccuracyLines, compareDeltaParts, compareRatioText, dayAheadBasisText, forecastBasisText, forecastLegendText, forecastSourceLine,
   forecastSummaryText, forecastTimeLine, freshness, hourStaleChipText, hourStepLabel, kpxOriginalText, loadFailedText, lookupAt,
   lookupBasisText, modelInfoFactText, modelUsedText, observedBasisText, observedLookup, periodLabelText, periodNoteText, priceHourLine,
   reserveCalcText, serverBasisText, supplyMissingText, todayAnswerText, uncertaintyText, weatherSourceText,
 } from '../../content/strings';
-import type { AnswerPower, AnswerPrice, Freshness } from '../../content/strings';
+import type { AnswerPower, AnswerPrice, Freshness, LegendValue } from '../../content/strings';
 import type { SourceRow } from '../../app/routes';
 import type { Line, Seg } from '../../ui/Rich';
 
 export type { Line, Seg };
 
 export type Fetched<T> = { data: T | null; fetchedAt: number | null; status: ResourceStatus; error: unknown };
-/** 시각은 모두 앱 시각(기기 시계 + 타당한 서버 시계 차이, KST epoch ms)이다. 화면(SMPForecastScreen)이 바꿔서 넘긴다. */
+/** 시각은 모두 앱 시각(기기 시계 + 타당한 서버 시계 차이, KST epoch ms)이다. useTodayView(data.tsx)가 바꿔서 넘긴다. */
 export type TodayInput = {
   now: number;
   dayAhead: Fetched<DayAheadSmp>;
-  /** isAvailableDayAhead(dayAheadSmp)와 describeDayAhead(dayAheadSmp)(utils/smpPresentation) 결과. 화면이 계산해 넘긴다. */
+  /** isAvailableDayAhead(dayAheadSmp)와 describeDayAhead(dayAheadSmp)(utils/smpPresentation) 결과. 화면 파일의 자료 입구가 판정해 넘긴다. */
   priceAvailable: boolean;
   kpxText: string;
   forecast: Fetched<SmpForecast>;
@@ -75,7 +75,7 @@ export type ForecastCardView =
       state: 'ready'; view: ForecastView; kind: ForecastKind; chips: ChipSpec[];
       confirmed: { tradeHour: number; price: Provenanced<number> } | null; legend: string;
       selected: number; nowHour: number; isNow: boolean; stepLabel: (hour: number) => string;
-      reading: Line; summary: string; uncertainty: string | null; periods: PeriodRow[]; periodNote: string;
+      reading: Line; summary: string; uncertainty: string | null; periods: PeriodRow[]; periodNote: string | null;
       rows: HourRow[]; window: { from: number; to: number }; footer: Footer;
     };
 
@@ -84,12 +84,15 @@ export type AccuracyCardView =
   | { state: 'error'; text: string }
   | {
       state: 'ready'; documented: { main: string; basis: string; example: string; r2?: string } | null; unregistered: string | null;
-      api: string | null; footer: Footer;
+      footer: Footer;
     };
 
-export type MethodFacts = { lines: string[]; link: { label: string; url: string } | null };
+/** api: 회색 "API 표기" 줄(API가 스스로 밝힌 수치, 7.7절·D8). 카드에는 두지 않고 산출 방식 시트에만. */
+export type MethodFacts = { lines: string[]; api?: string[]; link: { label: string; url: string } | null };
 export type TodayCardId = 'today-price' | 'today-power' | 'today-forecast' | 'today-accuracy';
 export type SourceRowView = { id: SourceRow; item: string; source: string; basis: string; chip: ChipSpec | null; status: string | null; link: string | null };
+
+export type TodayLegend = { demand: number | null; confirmed: LegendValue | null; forecast: LegendValue | null };
 
 export type TodayView = {
   heroState: 'loading' | 'ready' | 'unavailable' | 'error';
@@ -105,8 +108,8 @@ export type TodayView = {
   accuracy: AccuracyCardView;
   facts: Record<TodayCardId, MethodFacts>;
   sources: SourceRowView[];
-  /** ≥ 1280 "이 화면 읽는 법" 패널의 4상태 범례에 쓰는 이 화면의 값. */
-  legend: { confirmed: number | null; forecast: number | null };
+  /** ≥ 1280 "이 화면 읽는 법" 패널과 둘러보기 5단계 범례에 쓰는 이 화면의 값(가격은 거래시간과 함께). */
+  legend: TodayLegend;
   /** 거래시간이 어긋났고 가격을 이번 정시(+15초) 전에 받았다: 한 번 다시 받는다(다른 탭에서 정시를 넘겨 돌아온 경우). */
   recheckPrice: boolean;
 };
@@ -237,8 +240,10 @@ function powerCard(c: Ctx, w: PowerFacts | null): PowerCardView {
   const part: SupplyPart = supply.status === 'paired' && kpi.demand
     ? {
         kind: 'paired', supply: supply.supply, demand: kpi.demand, reserve: supply.reserve, boundary: supply.watchBoundary,
-        formula: [{ t: '공급능력 ' }, { v: supply.supply, f: mw, unit: true }, { t: ' − 수요 ' }, { v: kpi.demand, f: mw, unit: true },
-          { t: ' = 예비력 ' }, { v: supply.reserve, f: mw, unit: true, derived: true }],
+        // 이름과 값은 한 줄로 묶어 " − "·" = " 앞에서만 줄이 바뀐다(round 1: "… = 예비력" / "684 MW").
+        formula: [{ g: [{ t: '공급능력 ' }, { v: supply.supply, f: mw, unit: true }] }, { t: ' − ' },
+          { g: [{ t: '수요 ' }, { v: kpi.demand, f: mw, unit: true }] }, { t: ' = ' },
+          { g: [{ t: '예비력 ' }, { v: supply.reserve, f: mw, unit: true, derived: true }] }],
       }
     : { kind: 'missing', text: supplyMissingText(allMeasured && kpi.reserveRate !== null) };
   const wp = weatherProvenance(k.data);
@@ -306,18 +311,19 @@ function forecastCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): For
   };
 }
 
+/**
+ * 정확도 카드(4.1·7.7절, D8): 문서화 수치 하나(MAPE 11.75 %)와 쉬운 말. 카드가 보이는 것은 예측 응답의 종류(기준선인가)에 달렸고
+ * 수치 자체는 문서 값이라서 출처 줄의 시각은 평가 기간이다. API가 밝힌 수치는 산출 방식 시트의 "API 표기" 줄로만 간다(methodFacts).
+ */
 function accuracyCard(c: Ctx): AccuracyCardView {
   const r = c.input.forecast;
   if (r.data === null) return failed(r) ? { state: 'error', text: loadFailedText('예측', c.now) } : { state: 'loading' };
   const kind = adaptForecast(r.data).kind;
-  const m = c.input.modelInfo;
-  const api = m.data !== null ? apiAccuracyText(m.data.mape, m.data.coverage) : failed(m) ? MODEL_INFO_FAILED : null;
-  const at = m.fetchedAt ?? r.fetchedAt;
   return {
     state: 'ready',
     documented: kind === 'baseline' ? { main: accuracyText(), basis: accuracyBasisText(), example: accuracyExampleText() } : null,
-    unregistered: kind === 'baseline' ? null : ACCURACY_UNREGISTERED, api,
-    footer: { source: ACCURACY_SOURCE, time: at === null ? '조회 전' : lookupAt(at) },
+    unregistered: kind === 'baseline' ? null : ACCURACY_UNREGISTERED,
+    footer: { source: ACCURACY_SOURCE, time: accuracyBasisPeriod() },
   };
 }
 
@@ -347,12 +353,14 @@ function methodFacts(c: Ctx, p: PriceFacts | null, cmp: Comparison | null, w: Po
     if (Math.abs(calc - w.kpi.reserveRate.value) >= PCT_DIFF_SHOWN) powerLines.push(reserveCalcText(calc, w.kpi.reserveRate.value));
   }
   const fc = readForecast(c);
-  const m = c.input.modelInfo.data;
+  const mi = c.input.modelInfo;
+  const m = mi.data;
+  const api = m !== null ? apiAccuracyLines(m) : failed(mi) ? [MODEL_INFO_FAILED] : [];
   return {
     'today-price': { lines: pricesLines, link: p && p.sourceUrl ? { label: KPX_LINK_LABEL, url: p.sourceUrl } : null },
     'today-power': { lines: powerLines, link: null },
     'today-forecast': { lines: fc ? [modelUsedText(fc.modelUsed)] : [], link: null },
-    'today-accuracy': { lines: m ? [modelInfoFactText(m.type, m.version)] : [], link: null },
+    'today-accuracy': { lines: m ? [modelInfoFactText(m.type, m.version)] : [], api, link: null },
   };
 }
 
@@ -401,6 +409,11 @@ function sourceRows(c: Ctx, p: PriceFacts | null, w: PowerFacts | null): SourceR
   return rows;
 }
 
+/** 범례의 실측 예: 제주 실측(③)이고 끊기지 않은 수요만(끊기면 실측 ●를 거둔다, 7.6절). */
+function readPowerDemand(w: PowerFacts | null): number | null {
+  return w && w.kpi.provenance.case === 3 && w.kpi.demand && w.stage !== 'broken' ? w.kpi.demand.value : null;
+}
+
 // ---------------------------------------------------------------- 묶기
 export function todayView(input: TodayInput): TodayView {
   const now = input.now;
@@ -415,7 +428,7 @@ export function todayView(input: TodayInput): TodayView {
   const core = [input.dayAhead, input.forecast, input.kpis];
   const everyFailed = core.every(r => r.status === 'error');
   const anyData = core.some(r => r.data !== null);
-  const allFailed = everyFailed ? { text: allFailedText(failCause(core.map(r => r.error))), showCards: anyData } : null;
+  const allFailed = everyFailed ? { text: allFailedText(failCause(core.map(r => r.error)), anyData), showCards: anyData } : null;
 
   let answer: string;
   if (core.every(r => r.data === null && r.status !== 'error')) answer = ANSWER_LOADING;
@@ -427,12 +440,17 @@ export function todayView(input: TodayInput): TodayView {
   const priceView = priceCard(c, p, cmp);
   const forecastView = forecastCard(c, p, cmp);
   const nowPoint = forecastView.state === 'ready' ? forecastPoint(forecastView.view, c.nowHour) : null;
+  const power = readPowerDemand(w);
   return {
     heroState: priceView.state,
     answer, fetchedAt, stage, allFailed,
     price: priceView, power: powerCard(c, w), forecast: forecastView, accuracy: accuracyCard(c),
     facts: methodFacts(c, p, cmp, w), sources: sourceRows(c, p, w),
-    legend: { confirmed: p && !p.mismatch ? p.price.value : null, forecast: nowPoint && nowPoint.q50 ? nowPoint.q50.value : null },
+    legend: {
+      demand: power,
+      confirmed: p && !p.mismatch ? { value: p.price.value, hour: p.tradeHour } : null,
+      forecast: nowPoint && nowPoint.q50 ? { value: nowPoint.q50.value, hour: c.nowHour } : null,
+    },
     recheckPrice: Boolean(p && p.mismatch && input.dayAhead.fetchedAt !== null && input.dayAhead.fetchedAt < hourStartOf(now) + BOUNDARY_RECHECK_MS[0]),
   };
 }

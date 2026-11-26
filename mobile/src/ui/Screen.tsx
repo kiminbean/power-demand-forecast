@@ -5,7 +5,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import type { Text as RNText } from 'react-native';
 import { LAYOUT, SPACE } from './tokens';
 import { Button } from './Button';
-import { Text, labelData } from './Text';
+import { Text, keepTogether, labelData } from './Text';
 import { web } from './web';
 import { useTheme } from '../app/theme';
 
@@ -30,7 +30,7 @@ export function Screen({ title, pill, answer, children, headingRef, scrollRef, t
         {/* 숫자가 든 제목("거래시간(01h–24h)", "둘러보기 2/5")은 이름표라 메타로 둔다(I2). */}
         <Text ref={headingRef} role="heading" {...web({ 'aria-level': 1, tabIndex: -1 })} variant="title" style={styles.h1}
           dataSet={labelData(title)}>{title}</Text>
-        {pill}
+        {pill ? <View style={styles.pill}>{pill}</View> : null}
       </View>
       {answer}
       {children}
@@ -43,7 +43,9 @@ export function Screen({ title, pill, answer, children, headingRef, scrollRef, t
  * (view model이 같은 값·같은 함수로 만든다) 문장 전체를 data-pd-meta="answer"로 둔다(I2: 카드 밖 숫자는 메타 안에만).
  */
 export function AnswerLine({ children }: { children: React.ReactNode }) {
-  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true', pdMeta: 'answer' }}>{children}</Text>;
+  // 글자로 오면 값+단위·시각·짧은 괄호를 한 줄로 묶는다(keepTogether, round 1: "684" / "MW"가 갈라짐).
+  const body = typeof children === 'string' ? keepTogether(children, { variant: 'body', weight: '500' }) : children;
+  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true', pdMeta: 'answer' }}>{body}</Text>;
 }
 
 /** 한국어 오류 화면: h1 + [다시 불러오기]. 콘솔에 쓰지 않는다(7.10절). */
@@ -79,5 +81,8 @@ const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center', paddingTop: SPACE.lg, paddingBottom: SPACE.xxl, gap: SPACE.md },
   h1row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: SPACE.sm },
   h1: { flexShrink: 1 },
+  // NowPill 묶음은 줄 폭을 넘지 않는다: 넘으면 그 안에서 칩이 다음 줄로 내려간다(320에서 시계 칩 "서버 시각 확인 필요 · 기기 시계 기준"이
+  // NowPill 옆에서 화면 밖으로 잘렸다, F13a 측정). RN-web은 flex 항목을 줄이지 않으므로 줄일 수 있게 둔다.
+  pill: { flexShrink: 1, minWidth: 0, maxWidth: '100%' },
   error: { flex: 1, padding: LAYOUT.gutter, gap: SPACE.lg, justifyContent: 'center', alignItems: 'flex-start' },
 });

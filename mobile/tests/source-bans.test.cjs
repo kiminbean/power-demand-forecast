@@ -106,7 +106,10 @@ function importViolations(rel, sf, add) {
     if (target !== null) {
       const bare = target.replace(/\.(tsx?|jsx?)$/, '');
       const transitional = (TRANSITIONAL_IMPORTS[rel] || []).includes(bare);
-      if ((bare === 'src/screens' || bare.startsWith('src/screens/')) && bare !== 'src/screens/SMPForecastScreen' && !transitional) {
+      // 오늘 화면 파일(src/screens/SMPForecastScreen)은 라우트 스위치인 App.tsx만 가져온다(D18, round 1 R8): features·app·ui는
+      // 오늘 자료를 features/today/data의 TodayEntryProvider로 받는다.
+      const screenFile = bare === 'src/screens/SMPForecastScreen';
+      if ((bare === 'src/screens' || bare.startsWith('src/screens/')) && !(screenFile && rel === 'App.tsx') && !transitional) {
         add(node, 'import', specifier);
       }
       if ((bare === 'src/services' || bare.startsWith('src/services/')) && !typeOnly) add(node, 'import', specifier);
@@ -233,6 +236,9 @@ const POSITIVE = [
   ['App.tsx', "import SettlementScreen from './src/screens/SettlementScreen';", ['import']],
   ['src/features/settlement/x.tsx', "import SettlementScreen from '../../screens/SettlementScreen';", ['import']],
   ['src/features/l11.tsx', "import BiddingScreen from '../screens/BiddingScreen';", ['import']],
+  // D18: features는 오늘 화면 파일을 가져오지 않는다(App.tsx만 라우트 스위치로 가져온다).
+  ['src/features/guide/l12.tsx', "import { useTodayView } from '../../screens/SMPForecastScreen';", ['import']],
+  ['src/app/l13.tsx', "import SMPForecastScreen from '../screens/SMPForecastScreen';", ['import']],
   ['src/lib/a.ts', 'export const x = Math.random();', ['math-random']],
   ['src/ui/b.tsx', "export const s = { color: '#1A2B3C' };", ['hex-color']],
   ['src/lib/c.ts', 'export const t = (n: number) => n.toFixed(1);', ['number-format']],

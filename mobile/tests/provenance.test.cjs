@@ -61,14 +61,16 @@ test('supplyPair uses only the current-hour row, within ±1 MW of KPI demand, an
   assert.equal(p.supplyPair(KPIS, null).ok, false);
 });
 
-test('reserveLevel boundaries (≥15 정상, <15 관심, <10 주의, <5 위험)', () => {
+test('reserveLevel boundaries (≥15 정상, <15 보통, <10 낮음, <5 위험): KPX 공식 경보 단계 낱말은 쓰지 않는다(D9)', () => {
   const label = r => (p.reserveLevel(r) || {}).label;
   assert.equal(label(79.5), '정상 · 넉넉합니다');
   assert.equal(label(15), '정상 · 넉넉합니다');
-  assert.equal(label(14.99), '관심 · 여유가 줄고 있습니다');
-  assert.equal(label(10), '관심 · 여유가 줄고 있습니다');
-  assert.equal(label(9.99), '주의 · 여유가 부족합니다');
-  assert.equal(label(5), '주의 · 여유가 부족합니다');
+  assert.equal(label(14.99), '보통 · 여유가 줄고 있습니다');
+  assert.equal(label(10), '보통 · 여유가 줄고 있습니다');
+  assert.equal(label(9.99), '낮음 · 여유가 부족합니다');
+  assert.equal(label(5), '낮음 · 여유가 부족합니다');
+  // KPX 전력수급 위기경보 단계(준비·관심·주의·경계·심각)와 겹치는 이름이 없다.
+  for (const r of [79.5, 12, 7, 1]) assert.doesNotMatch(p.reserveLevel(r).name, /준비|관심|주의|경계|심각/, String(r));
   assert.equal(label(4.99), '위험 · 공급이 빠듯합니다');
   assert.equal(label(-3), '위험 · 공급이 빠듯합니다');
   assert.deepEqual([p.reserveLevel(79.5).tone, p.reserveLevel(12).tone, p.reserveLevel(7).tone, p.reserveLevel(1).tone], ['ok', 'watch', 'caution', 'danger']);

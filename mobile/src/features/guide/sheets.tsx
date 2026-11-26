@@ -9,7 +9,7 @@ import { TERM_WHERE } from './model';
 import { useNav } from '../../app/Shell';
 import { ROUTES, rootState } from '../../app/routes';
 import type { GuideContent, GuideSection, MethodCardId } from '../../content/guide';
-import { LIVE_FACTS_HEADING, SIMPLIFIED_NOTE, SOURCE_HEADINGS, SOURCES_NOTES, whereText } from '../../content/strings';
+import { DETAIL_LABEL, LIVE_FACTS_HEADING, SIMPLIFIED_NOTE, SOURCE_HEADINGS, SOURCES_NOTES, whereText } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 import { useTheme } from '../../app/theme';
 import { StateView } from '../../ui/Card';
@@ -35,11 +35,17 @@ export function GuideGate({ children }: { children: (content: GuideContent) => R
   return <StateView kind="loading" text={GUIDE_LOADING} />;
 }
 
+/** 짝·검증 규칙 한 줄(D7): 뜻과 읽는 법 뒤에 흐린 글자로. */
+function Detail({ text }: { text?: string }) {
+  return text ? <Text variant="meta" tone="text3" testID="guide-detail">{`${DETAIL_LABEL} · ${text}`}</Text> : null;
+}
+
 function Section({ section }: { section: GuideSection }) {
   return (
     <View style={styles.section}>
       <Text variant="body" weight="700">{section.title}</Text>
       {section.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
+      <Detail text={section.detail} />
     </View>
   );
 }
@@ -53,14 +59,18 @@ export function ExternalLink({ label, url }: { label: string; url: string }) {
   );
 }
 
-export type LiveFactsProps = { lines: readonly string[]; link: { label: string; url: string } | null };
-/** 이번 화면의 값(KPX 원문 표기·비율·MW 계산 차이·모델 원문). 숫자가 들어 있어 글자는 메타다. 값이 없으면 그리지 않는다. */
-export function LiveFacts({ lines, link }: LiveFactsProps) {
-  if (!lines.length && !link) return null;
+export type LiveFactsProps = { lines: readonly string[]; api?: readonly string[]; link: { label: string; url: string } | null };
+/**
+ * 이번 화면의 값(KPX 원문 표기·비율·MW 계산 차이·모델 원문). 숫자가 들어 있어 글자는 메타다. api는 API가 스스로 밝힌 수치(정확도)라
+ * 회색 "API 표기" 줄로 따로 그린다(7.7절·D8). 값이 없으면 그리지 않는다.
+ */
+export function LiveFacts({ lines, api = [], link }: LiveFactsProps) {
+  if (!lines.length && !api.length && !link) return null;
   return (
     <View style={styles.section} testID="live-facts">
       <Text variant="label" weight="600" tone="text2">{LIVE_FACTS_HEADING}</Text>
-      {lines.map(line => <Text key={line} variant="label" tone="text2" dataSet={{ pdMeta: 'fact' }}>{line}</Text>)}
+      {lines.map(line => <Text key={line} variant="label" tone="text2" dataSet={{ pdMeta: 'fact' }}>{keepTogether(line, { variant: 'label', tone: 'text2' })}</Text>)}
+      {api.map(line => <Text key={line} variant="meta" tone="text3" dataSet={{ pdMeta: 'api' }}>{keepTogether(line, { variant: 'meta', tone: 'text3' })}</Text>)}
       {link ? <ExternalLink label={link.label} url={link.url} /> : null}
     </View>
   );
@@ -99,6 +109,7 @@ export function TermSheetBody({ id, sheet = true }: { id: GlossaryId; sheet?: bo
           <View style={styles.body} testID={`term-${id}`}>
             {sheet ? <Text variant="body" weight="600">{entry.short}</Text> : null}
             {entry.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
+            <Detail text={entry.detail} />
             {sheet && TERM_WHERE[id] === nav.state.key ? null : <WhereLink id={id} />}
             {sheet && nav.tabs.includes('guide')
               ? <TextLink label="용어 사전 전체" onPress={() => nav.push({ ...rootState('guide'), topic: 'glossary' })} /> : null}

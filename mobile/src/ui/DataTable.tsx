@@ -3,7 +3,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SIZE, SPACE } from './tokens';
-import { Text, labelData } from './Text';
+import { Text, keepTogether, labelData } from './Text';
 import { useScrollFocus, web } from './web';
 import { useTheme } from '../app/theme';
 
@@ -27,8 +27,9 @@ export function DataTable({ caption, columns, rows, testID, fit = false }: DataT
   const { theme } = useTheme();
   const cell = (column: Column, content: React.ReactNode) => (
     <View key={column.key} role="cell" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
+      {/* 글자 칸도 줄바꿈 단위(keepTogether)를 지킨다: "밤·아침 00–" / "08시"처럼 시각 범위가 갈리지 않게(round 1). */}
       {typeof content === 'string'
-        ? <Text variant="label" tone="text1" dataSet={column.meta ? { pdMeta: 'cell' } : undefined}>{content}</Text>
+        ? <Text variant="label" tone="text1" dataSet={column.meta ? { pdMeta: 'cell' } : undefined}>{keepTogether(content, { variant: 'label', tone: 'text1' })}</Text>
         : content}
     </View>
   );

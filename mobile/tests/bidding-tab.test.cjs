@@ -214,13 +214,14 @@ test('계산 기대 문자열: 19h · 18–19시 · 11-27 · 171.7–244.1 · 95
   assert.deepEqual([m.format.price(c.rows[0].price.value), m.format.pct(c.rows[0].probability.value, 0)], ['171.7', '95']);
   const first = m.model.biddingView(inputFor(m, 'bidding-base', { selectedHour: 1 })).calc;
   assert.deepEqual([first.selected, m.format.krwFromThousand(first.rows[0].revenue.value), m.format.price(first.rows[0].price.value)], [1, '56.1만원', '118.1']);
-  assert.equal(c.chartLabel, '19h · 18–19시 입찰 계단');
+  assert.equal(c.chartLabel, '18–19시 입찰 계단', '접근 이름은 문장이라 시각 범위만(D11)');
   // 기대 수입은 표에만: 요약·추세·주의 문장 어디에도 없다.
   assert.ok(![c.summary, c.trend, c.notReal, v.answer].join(' ').includes('만원'));
   const facts = v.facts['bid-ladder'].lines;
-  assert.deepEqual(facts, ['API 계산 방법: Quantile-based Probabilistic Clearing Model', 'API 모델 이름: 기준선 예측 (전날 같은 시간 제주 하루전 가격)',
-    'API 입찰일 11-27(금) · 성향 moderate · 예시 용량 50 MW']);
-  assert.deepEqual(v.facts['bid-deadline'].lines, ['API 표기: 하루전시장 open · 마감 10:00 · 입찰일 2026-11-27 · 남은 시간 3.9시간',
+  // D6: API 원문 낱말은 한국어 이름 뒤 괄호("API 값 …", "API 이름: …")에만. 성향 글자는 세그먼트와 같은 표(RISK_LABELS)에서 온다.
+  assert.deepEqual(facts, ['계산 방법: 분위수 기반 확률 낙찰 모델 (API 이름: Quantile-based Probabilistic Clearing Model)',
+    'API 모델 이름: 기준선 예측 (전날 같은 시간 제주 하루전 가격)', 'API 입찰일 11-27(금) · 성향 균형 (API 값 moderate) · 예시 용량 50 MW']);
+  assert.deepEqual(v.facts['bid-deadline'].lines, ['API 표기: 하루전시장 접수 중 (API 값 open) · 마감 10:00 · 입찰일 2026-11-27 · 남은 시간 3.9시간',
     '서버 시각으로 다시 계산한 남은 시간 3.9시간 (차이가 0.2시간을 넘으면 남은 시간을 숨깁니다)']);
   assert.deepEqual(v.sources.map(r => [r.id, r.item, r.source, r.basis, chipText(m, r.chip)]),
     [['bidding', '입찰 계산', 'API 서버 입찰 계산 (기준선 분위수)', '조회 06:03', '▨ 추정']]);
@@ -492,7 +493,7 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   });
   const ladder = all(root, n => n.props.role === 'img' && String(n.props['aria-label']).startsWith('10구간'));
   assert.equal(ladder.length, 1, '하니스 B3가 "10구간"으로 찾는다');
-  assert.equal(ladder[0].props['aria-label'], '10구간, 171.7–244.1원, 낙찰 가능성 95%에서 5%(추정) · 19h · 18–19시 입찰 계단');
+  assert.equal(ladder[0].props['aria-label'], '10구간, 171.7–244.1원, 낙찰 가능성 95%에서 5%(추정) · 18–19시 입찰 계단');
   const merit = all(root, n => n.type === 'Pressable' && String(n.props['aria-label']).startsWith('가격'));
   assert.deepEqual(merit.map(p => [p.props['aria-label'], p.props['aria-expanded']]), [['가격은 어떻게 정해지나요? 펼치기', false]]);
   assert.equal(all(root, n => n.props.testID === 'merit-body').length, 0, '처음에는 접혀 있다');
@@ -500,9 +501,10 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   assert.equal(textOf(basis), '가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이');
   // 날짜·값 범위는 붙임표·줄표에서 줄이 갈리지 않게 묶는다(5.4절, 320에서 "11-" / "27과"로 갈렸다).
   const nowrap = node => all(node, n => ds(n).pdNowrap === 'true').map(textOf);
-  assert.deepEqual(nowrap(basis), ['11-26', '11-25', '11-27']);
-  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'deadline')[0]), ['11-26(목)', '11-27(금)']);
-  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'summary')[0]), ['171.7–244.1원']);
+  // 짧은 괄호는 통째로 묶는다(round 1: "(MAPE" / "11.75%)"가 갈렸다): 안의 날짜도 함께 한 줄.
+  assert.deepEqual(nowrap(basis), ['11-26', '(=11-25 확정 가격)', '11-27']);
+  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'deadline')[0]), ['11-26(목)', '10:00 KST', '11-27(금)'], '시각도 "10:00" / "KST"로 갈리지 않는다');
+  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'summary')[0]), ['50 MW', '171.7–244.1원'], '값+단위도 한 줄');
   const countdown = all(root, n => n.props.testID === 'bid-countdown')[0];
   assert.deepEqual([textOf(countdown), ds(countdown).pdMeta, flat(countdown.props.style).fontSize], ['3시간 56분 남음', 'countdown', 32]);
   // 스텝퍼는 양 끝에서 멈춘다(입찰에는 돌기 규칙이 없다, 하니스 B2): 01h에서 ‹ 비활성(까닭), 24h에서 › 비활성.
@@ -516,11 +518,35 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   assert.ok(textOf(restricted).includes('잠김'));
 });
 
+test('D6: 보이는 글자에 API 원문 성향·영어 계산 방법이 맨몸으로 없다(한국어 이름 뒤 "API 값"·"API 이름" 괄호에만)', () => {
+  const m = load();
+  const bare = /(?<!API 값 )\b(conservative|moderate|aggressive)\b/;
+  for (const [risk, label] of [['conservative', '보수적'], ['moderate', '균형'], ['aggressive', '공격적']]) {
+    const input = inputFor(m, 'bidding-base');
+    const v = m.model.biddingView({ ...input, risk, calc: { ...input.calc, data: { ...input.calc.data, risk_level: risk } } });
+    const lines = Object.values(v.facts).flatMap(f => f.lines);
+    assert.ok(lines.includes(`API 입찰일 11-27(금) · 성향 ${label} (API 값 ${risk}) · 예시 용량 50 MW`), risk);
+    for (const line of lines) assert.doesNotMatch(line, bare, line);
+    assert.ok(lines.filter(l => /Quantile/.test(l)).every(l => /\(API 이름: Quantile-based Probabilistic Clearing Model\)$/.test(l)), risk);
+    // 카드(마감·계단·가격 원리·내 발전소)에는 영어 API 낱말이 아예 없다: 성향 세그먼트 글자는 같은 표(RISK_LABELS)에서 온다.
+    const root = renderBidding(m, v);
+    assert.doesNotMatch(textOf(root), /\b(conservative|moderate|aggressive|Quantile|open|closed)\b/, risk);
+    const radios = all(root, n => n.props.role === 'radio').map(r => r.props['aria-label'] || textOf(r));
+    assert.deepEqual(radios.filter(l => /보수적|균형|공격적/.test(l)), ['보수적', '균형', '공격적'], risk);
+  }
+  assert.equal(m.strings.calcMethodText('Some New Method'), '계산 방법: 한국어 이름 없음 (API 이름: Some New Method)');
+  assert.equal(m.strings.calcMethodText('constructor'), '계산 방법: 한국어 이름 없음 (API 이름: constructor)', '표의 자기 키만 본다');
+  assert.match(m.strings.calcInputText('2026-11-27', 'toString', 50), /성향 알 수 없음 \(API 값 toString\)/);
+  assert.equal(m.strings.calcMethodText('기준선 분위수'), '계산 방법: 기준선 분위수');
+  assert.equal(m.strings.calcMethodText(null), '계산 방법: API 표기 없음');
+  assert.match(m.strings.deadlineApiText('weird', '10:00', '2026-11-27', 3.9), /^API 표기: 하루전시장 알 수 없음 \(API 값 weird\) · /);
+});
+
 test('표 보기: 구간 10행 + 합계 행, 가격은 값(원값), 낙찰 가능성은 계산값, 물량·기대 수입은 예시, 기대 수입 머리에 ┆예시┆ [▨ 추정]', () => {
   const m = load(390, { forceTable: true });
   const root = renderBidding(m, viewOf(m, 'bidding-base'));
   const table = all(root, n => n.props.role === 'table')[0];
-  assert.equal(table.props['aria-label'], '19h · 18–19시 구간별 입찰 계산');
+  assert.equal(table.props['aria-label'], '18–19시 구간별 입찰 계산');
   const rows = all(table, n => n.props.role === 'row');
   assert.equal(rows.length, 12, '머리 + 10구간 + 합계');
   const heads = all(rows[0], n => n.props.role === 'columnheader');

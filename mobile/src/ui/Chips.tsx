@@ -1,6 +1,6 @@
 // 상태 칩·pill(5.2절). 상태는 색만으로 전하지 않는다: 글자 + 테두리 모양 + 글리프(또는 아이콘)가 같은 정보를 준다.
 // 출처 칩은 외곽선·빗금, 채운 pill은 예비율 단계·접수 상태·수신 상태에만 쓴다.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { RADIUS, SIZE, SPACE } from './tokens';
 import type { PillTone } from './tokens';
@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Text, keepNegations } from './Text';
 import { web } from './web';
+import { isOnline, watchOnline } from '../app/head';
 import { useTheme } from '../app/theme';
 import { CHIPS, chipA11yLabel, chipText } from '../lib/provenance';
 import type { Chip } from '../lib/provenance';
@@ -57,15 +58,20 @@ export function StatusPill({ tone, text, icon }: { tone: PillTone; text: string;
   );
 }
 
-/** h1 행 오른쪽의 KST 시각 + 조회 나이. 글자 그대로 읽히고 live가 아니다(60초 갱신을 다시 알리지 않는다). */
+/**
+ * h1 행 오른쪽의 KST 시각 + 조회 나이. 글자 그대로 읽히고 live가 아니다(60초 갱신을 다시 알리지 않는다).
+ * 오프라인이면 "06:03 조회 · 오프라인"(위 오프라인 띠와 같은 시각, round 1 멘토: "조회 방금"이 띠와 어긋났다).
+ */
 export function NowPill(input: NowPillInput) {
   const { theme } = useTheme();
+  const [online, setOnline] = useState(isOnline);
+  useEffect(() => watchOnline(setOnline), []);
   const stage = input.fetchedAt === null ? 'fresh' : freshness(input.now - input.fetchedAt);
   const tone = stage === 'fresh' ? { bg: theme.color.nowPillBg, text: theme.color.nowPillText } : theme.pill[stage === 'stale' ? 'watch' : 'danger'];
   return (
     <View style={[styles.chip, styles.now, { backgroundColor: tone.bg }]} testID="now-pill" {...web({ dataSet: { pdMeta: 'now', pdStage: stage } })}>
       {stage === 'fresh' ? null : <Icon name={stage === 'stale' ? 'clock' : 'alert'} size={SIZE.chipIcon} color={tone.text} />}
-      <Text variant="meta" weight="600" color={tone.text}>{nowPillText(input)}</Text>
+      <Text variant="meta" weight="600" color={tone.text}>{nowPillText({ ...input, offline: !online })}</Text>
     </View>
   );
 }

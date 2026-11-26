@@ -1,8 +1,8 @@
 // 숫자가 든 짧은 UI 문구(명세 6.1절). .tsx의 JSX 글자에는 숫자를 직접 쓰지 않고 여기서 가져온다(7.10절).
 // 숫자·시각은 모두 format.ts를 거친다. 긴 설명 글은 public/content/guide.ko.json(guide.ts가 읽는다)에 둔다.
 import {
-  MINUS, age, clockHour, clockPhrase, dayShort, duration, krw, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeHour,
-  tradeHourRange,
+  MINUS, age, clockHour, clockPhrase, dayShort, duration, krw, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeClockRange,
+  tradeHour,
 } from '../lib/format';
 import { HOUR_MS, MINUTE_MS, SKEW_PLAUSIBLE_MS, addDays, daysBetween } from '../lib/kst';
 import { DOCUMENTED_SMP_ACCURACY, WATCH_RATIO } from '../lib/provenance';
@@ -28,11 +28,15 @@ export const createdAtText = (createdAt: number | null) => `만든 시각 ${kstT
 export const serverTimeText = (serverTime: number | null) => `서버 시각 ${kstTime(serverTime)}`;
 export const forecastDateText = (dayKey: string | null) => `예측일 ${dayKey ?? '미제공'}`;
 
-export type NowPillInput = { now: number; fetchedAt: number | null; skewNotable?: boolean };
-/** NowPill 글자: "06:04 KST · 조회 1분 전" / "지연 · 06:04 조회 (12분 전)" / "끊김 · 마지막 조회 06:04" / 조회 없는 화면 "06:04 KST". */
-export function nowPillText({ now, fetchedAt, skewNotable = false }: NowPillInput): string {
+export type NowPillInput = { now: number; fetchedAt: number | null; skewNotable?: boolean; offline?: boolean };
+/**
+ * NowPill 글자: "06:04 KST · 조회 1분 전" / "지연 · 06:04 조회 (12분 전)" / "끊김 · 마지막 조회 06:04" / 조회 없는 화면 "06:04 KST".
+ * 오프라인이면 지금 시각 대신 마지막 조회를 앞에 둔다: "06:03 조회 · 오프라인"(오프라인 띠의 "마지막 자료 06:03"과 같은 시각).
+ */
+export function nowPillText({ now, fetchedAt, skewNotable = false, offline = false }: NowPillInput): string {
   const tail = skewNotable ? ' · 서버 시각 기준' : '';
   if (fetchedAt === null) return kstTime(now) + tail;
+  if (offline) return `${kstClock(fetchedAt)} 조회 · 오프라인${tail}`;
   const elapsed = now - fetchedAt;
   const stage = freshness(elapsed);
   if (stage === 'broken') return `끊김 · 마지막 조회 ${kstClock(fetchedAt)}${tail}`;
@@ -61,13 +65,38 @@ export const clockSkewText = (skewMs: number) => `기기 시계와 ${num(Math.ab
 /** 문서화된 정확도(7.7절). 수치는 provenance.ts의 상수 하나에서만 온다. */
 export const accuracyText = () =>
   `시간마다 평균 ${num(DOCUMENTED_SMP_ACCURACY.maeKrwPerKwh, 2)}원/kWh 빗나갑니다 (MAPE ${num(DOCUMENTED_SMP_ACCURACY.mapePct, 2)}%)`;
+/** 평가 방식 한 줄 풀이(D8): 기간은 같은 카드의 출처 줄("평가 기간 …")에 둔다. */
 export const accuracyBasisText = () =>
-  `${DOCUMENTED_SMP_ACCURACY.method} ${DOCUMENTED_SMP_ACCURACY.period} · ${DOCUMENTED_SMP_ACCURACY.basis}`;
-/** 예측 방법 화면에서만 더한다. */
-export const accuracyR2Text = () => `R² ${num(DOCUMENTED_SMP_ACCURACY.r2, 3)}`;
-/** API가 스스로 밝힌 수치는 회색 "API 표기" 줄로만. */
-export const apiAccuracyText = (mape: number | null, coverage: number | null) =>
-  `API 표기: 검증 MAPE ${pct(mape, 2)}% (최근 150일 재현) · 80% 구간 적중률 ${pct(coverage, 1)}% (최근 30일 보류 검증)`;
+  `${DOCUMENTED_SMP_ACCURACY.method} 평가(지난 자료만 보고 하루씩 맞혀 봄) · ${DOCUMENTED_SMP_ACCURACY.basis}`;
+/** 예측 방법 화면에서만 더한다. "약 20%"는 같은 상수(0.203)를 한 번 반올림한 값이다. */
+export const accuracyR2Text = () =>
+  `R² ${num(DOCUMENTED_SMP_ACCURACY.r2, 3)} · 가격이 오르내리는 폭의 약 ${num(DOCUMENTED_SMP_ACCURACY.r2 * 100, 0)}%를 설명합니다(1이면 전부)`;
+/** /model/info의 버전 중 기간 글자("최근 N일 재현", "마지막 N일 보류 검증")가 맞는 것: 기준선(api/v6_routes.py get_model_info). */
+const BASELINE_MODEL_VERSION = 'baseline-24h';
+export type ApiAccuracyInput = { version: string | null; mape: number | null; coverage: number | null; data_source: string | null };
+const daysIn = (text: string, re: RegExp) => {
+  const m = re.exec(text);
+  return m ? num(Number(m[1]), 0) : null;
+};
+/**
+ * API가 스스로 밝힌 정확도(7.7절, D8): 카드가 아니라 산출 방식 시트의 회색 "API 표기" 줄로만. 기간은 API 설명(data_source)에서 읽어
+ * 기준선 버전일 때만 붙이고, 다른 버전은 그 설명을 그대로 옮긴다. 적중률은 "10번 중 N번꼴"로도 쓴다(같은 API 값, 반올림 1회).
+ */
+export function apiAccuracyLines(info: ApiAccuracyInput): string[] {
+  const src = info.data_source ?? '';
+  const baseline = info.version === BASELINE_MODEL_VERSION;
+  const evalDays = baseline ? daysIn(src, /최근 (\d+)일 재현/) : null;
+  const holdDays = baseline ? daysIn(src, /마지막 (\d+)일 보류 검증/) : null;
+  const lines: string[] = [];
+  if (info.mape !== null) lines.push(`API 표기: 검증 MAPE ${pct(info.mape, 2)}%${evalDays ? ` (최근 ${evalDays}일 재현 · 문서 수치와 기간이 다릅니다)` : ''}`);
+  if (info.coverage !== null) {
+    lines.push(`API 표기: 80% 구간 적중률 ${pct(info.coverage, 1)}%${holdDays ? ` (마지막 ${holdDays}일 보류 검증)` : ''}`
+      + ` · 10번 중 ${num(info.coverage / 10, 0)}번꼴로 실제 가격이 띠 안에 들었습니다`);
+  }
+  if (!lines.length) lines.push('API 표기: 검증 수치 없음');
+  if (!baseline && src) lines.push(`API 설명: ${src}`);
+  return lines;
+}
 
 /** 0.00 입력 시간(7.8절 4). */
 export const ZERO_INPUT_LABEL = '기준선 입력 0.00 · 예측 아님';
@@ -87,24 +116,24 @@ export const hourTickText = (hour: number, last: boolean) => `${clockHour(hour)}
 /** 계단 차트 x 눈금: "0 10 … 50 MW"(누적 물량, 마지막에만 단위). */
 export const mwTickText = (value: number, last: boolean) => `${num(value, 0)}${last ? ' MW' : ''}`;
 export const priceTickText = (value: number) => num(value, 0);
-/** 같은 값이 이어진 시간은 한 구간으로: "03–05h · 02–05시". 떨어진 구간은 쉼표로 잇는다. */
-export const hourGroupText = (runs: readonly HourRun[]) => runs.map(r => tradeHourRange(r.from, r.to)).join(', ');
+/** 같은 값이 이어진 시간은 한 구간으로: "02–05시"(문장 속이라 시각 범위만, D11). 떨어진 구간은 쉼표로 잇는다. */
+export const hourGroupText = (runs: readonly HourRun[]) => runs.map(r => tradeClockRange(r.from, r.to)).join(', ');
 
 const FORECAST_SUBJECT: Readonly<Record<ForecastKind, string>> = {
   baseline: '기준선 예측으로는', model: '학습 모델 예측으로는', fallback: 'API 대체값으로는',
 };
-/** "기준선 예측으로는 08h · 07–08시가 가장 비싸고(212.3원), 03–05h · 02–05시가 가장 쌉니다(102.3원). 하루 평균 169.2원." */
+/** "기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). 하루 평균 169.2원." */
 export function forecastSummaryText(stats: ForecastSummaryInput | null, kind: ForecastKind): string {
   if (!stats) return '그릴 수 있는 예측 값이 없습니다.';
   const excluded = stats.zeroHours > 0 ? ` (${zeroInputExcludedText(stats.zeroHours)})` : '';
   return `${FORECAST_SUBJECT[kind]} ${hourGroupText(stats.max.runs)}가 가장 비싸고(${price(stats.max.value)}원), `
     + `${hourGroupText(stats.min.runs)}가 가장 쌉니다(${price(stats.min.value)}원). 하루 평균 ${price(stats.mean)}원${excluded}.`;
 }
-/** "가장 불확실한 시간: 13h · 12–13시 (80% 구간 폭 326.4원)" */
+/** "가장 불확실한 시간: 12–13시 (80% 구간 폭 326.4원)" */
 export const uncertaintyText = (widest: HourGroup) =>
   `가장 불확실한 시간: ${hourGroupText(widest.runs)} (80% 구간 폭 ${price(widest.value)}원)`;
 export const confirmedPointText = (tradeHourValue: number, value: number) =>
-  `점은 KPX 확정 가격 ${tradeHour(tradeHourValue)} ${price(value)}원`;
+  `점은 KPX 확정 가격 ${tradeClockRange(tradeHourValue)} ${price(value)}원`;
 
 export const segmentText = (index: number) => `${num(index + 1, 0)}구간`;
 export const probabilityText = (value: number) => `${pct(value, 0)}%`;
@@ -118,9 +147,14 @@ export const ladderReadingText = (index: number, quantityMw: number, priceValue:
 /** 수급 식: "공급능력 1,191 MW − 수요 664 MW = 예비력 527 MW". 접근 이름에는 unit으로 '메가와트'를 넘긴다. */
 export const supplyFormulaText = (supply: number, demand: number, reserve: number, unit = 'MW') =>
   `공급능력 ${mw(supply)} ${unit} − 수요 ${mw(demand)} ${unit} = 예비력 ${mw(reserve)} ${unit}`;
-/** 관심 경계 = 공급능력 ÷ 1.15. "(예비율 15%)"의 15도 같은 상수에서 나온다. */
+/** 예비율 경계 = 공급능력 ÷ 1.15. "예비율 15%"의 15도 같은 상수에서 나온다. */
 export const watchReservePctText = () => `예비율 ${num((WATCH_RATIO - 1) * 100, 0)}%`;
-export const watchBoundaryText = (boundary: number, unit = 'MW') => `관심 경계 ${mw(boundary)} ${unit} (${watchReservePctText()})`;
+/**
+ * 범위 막대의 경계 표지(D9): KPX 경보 단계 낱말(관심·경계)을 쓰지 않고 수요 수준이라고 밝힌다. 화면 "수요 1,036 MW · 넘으면 예비율 15% 미만",
+ * 접근 이름은 boundaryText("수요가 1,036 메가와트를 넘으면 예비율 15% 미만").
+ */
+export const boundaryRuleText = () => `넘으면 ${watchReservePctText()} 미만`;
+export const boundaryText = (boundary: number, unit = 'MW') => `수요가 ${mw(boundary)} ${unit}를 ${boundaryRuleText()}`;
 
 export const tourProgressText = (step: number, total: number) => `${num(step, 0)} / ${num(total, 0)}`;
 export const TOUR_NAME = '1분 둘러보기';
@@ -167,6 +201,8 @@ export const methodSheetTitle = (card: MethodCardId) => `산출 방식 · ${CARD
 export const SOURCES_SHEET_TITLE = '출처와 기준 시각';
 /** 산출 방식·용어 시트 끝의 표시(7.9절, P7). */
 export const SIMPLIFIED_NOTE = '단순화한 설명 · 도메인 검토 전';
+/** 설명 글의 짝·검증 규칙 한 줄(D7): 뜻과 읽는 법 뒤 흐린 글자로. */
+export const DETAIL_LABEL = '자세히';
 
 export const ANSWER_LOADING = '가격과 전력 정보를 불러오는 중입니다.';
 export const ANSWER_ALL_FAILED = '지금은 시장 정보를 불러올 수 없습니다.';
@@ -200,7 +236,7 @@ function powerSentence(w: AnswerPower): string {
 /** "지금 시간 제주 전기 도매가격은 1kWh에 115.3원이고, 낼 수 있는 전력이 쓰는 전력보다 527 MW 더 많습니다." */
 export function todayAnswerText(p: AnswerPrice, w: AnswerPower): string {
   if (p.kind === 'now' || p.kind === 'hour') {
-    const subject = p.kind === 'now' ? '지금 시간' : tradeHour(p.hour);
+    const subject = p.kind === 'now' ? '지금 시간' : tradeClockRange(p.hour);
     const head = `${subject} 제주 전기 도매가격은 1kWh에 ${price(p.value)}원`;
     const past = p.kind === 'hour';
     if (w.kind === 'paired' || w.kind === 'rate') return `${head}${past ? '이었고' : '이고'}, ${powerSentence(w)}`;
@@ -211,11 +247,15 @@ export function todayAnswerText(p: AnswerPrice, w: AnswerPower): string {
 }
 
 export const loadFailedText = (what: '가격' | '전력' | '예측', now: number) => `${what} 정보를 불러오지 못했습니다 · ${kstTime(now)}`;
-/** 전부 실패 StateView: "지금은 시장 정보를 불러올 수 없습니다 · 서버 응답 없음". */
-export const allFailedText = (cause: string) => `지금은 시장 정보를 불러올 수 없습니다 · ${cause}`;
+/**
+ * 전부 실패 StateView. 값이 하나도 없으면 AnswerLine이 이미 "지금은 시장 정보를 불러올 수 없습니다."라서 원인만 쓴다(같은 문장 두 번 금지).
+ * 이전 값이 남아 있으면(AnswerLine이 그때 값을 말한다) 문장과 원인을 함께: "지금은 시장 정보를 불러올 수 없습니다 · 서버 응답 없음".
+ */
+export const allFailedText = (cause: string, withLead: boolean) => (withLead ? `지금은 시장 정보를 불러올 수 없습니다 · ${cause}` : cause);
 export const FAIL_CAUSE = { network: '네트워크 연결을 확인해 주세요', server: '서버 응답 없음', shape: '서버 응답을 읽지 못했습니다' } as const;
 
-export const priceHourLine = (hour: number) => `거래시간 ${tradeHour(hour)} · 하루전시장`;
+/** 카드 메타 줄(D11): 시각 범위가 먼저, 거래시간 번호는 이 줄에만. "06–07시 · 거래시간 07h · 하루전시장". */
+export const priceHourLine = (hour: number) => `${tradeClockRange(hour)} · 거래시간 ${clockHour(hour)}h · 하루전시장`;
 export const NO_PRICE_TEXT = 'KPX 확정 가격 없음 · 지금 거래시간 값이 아직 없습니다';
 export const BOUNDARY_CHECKING_TEXT = '다음 거래시간 값 확인 중';
 /** 가격 지연 칩: "지연 · 07h 값". */
@@ -242,7 +282,7 @@ export const LEVEL_NOTE = '앱 기준 · KPX 공식 경보 단계 아님';
 export const supplyMissingText = (kpxRate: boolean) => (kpxRate ? '공급능력 미수신 · 예비율은 KPX 발표값입니다' : '공급능력 미수신');
 export const NO_JUDGE_UNKNOWN_SOURCE = '출처를 확인할 수 없어 예비율 단계를 판정하지 않습니다';
 export const NO_JUDGE_EMPTY = '예비율 값이 없어 단계를 판정하지 않습니다';
-export const NO_JUDGE_BROKEN = '새 자료를 받지 못해 예비율 단계 판정을 거뒀습니다';
+export const NO_JUDGE_BROKEN = '새 자료를 받지 못해 예비율 단계 판정을 멈췄습니다';
 export const VALUE_EMPTY = '값 없음';
 /** 산출 방식 시트에만(4.1절): MW로 계산한 예비율과 KPX 발표값이 0.1 %p 이상 다를 때. */
 export const reserveCalcText = (calc: number, kpx: number) =>
@@ -263,9 +303,11 @@ export const hourStepLabel = (hour: number, isNow: boolean) => `${tradeHour(hour
 export const WRAP_FIRST = '(처음으로)';
 export const WRAP_LAST = '(끝으로)';
 export const TO_NOW_LABEL = '지금으로';
-export const periodLabelText = (label: string, from: number, to: number) => `${label} ${clockHour(from)}–${clockHour(to)}h`;
+/** 시간대 요약 행 이름(D11): "밤·아침 00–08시"(거래시간 01–08h). */
+export const periodLabelText = (label: string, from: number, to: number) => `${label} ${tradeClockRange(from, to)}`;
+/** 0.00 입력 시간이 있을 때만 각주를 단다(없으면 null). */
 export const periodNoteText = (zeroHours: number) =>
-  `평균·최저·최고는 0.00 입력 시간을 빼고 계산합니다${zeroHours > 0 ? ` (${zeroInputExcludedText(zeroHours)})` : ''}`;
+  (zeroHours > 0 ? `평균·최저·최고에서 0.00 입력 ${num(zeroHours, 0)}시간을 뺐습니다` : null);
 export const FULL_DAY_LABEL = '24시간 전체 보기';
 export const SHORT_DAY_LABEL = '12시간만 보기';
 export const TABLE_CAPTIONS = Object.freeze({ periods: '시간대 요약', hours: '시간별 기준선 예측' });
@@ -279,17 +321,20 @@ export const forecastSourceLine = (kind: ForecastKind, shortName: string) =>
   (kind === 'baseline' ? FORECAST_SOURCE_LINE[kind] : `${FORECAST_SOURCE_LINE[kind]} (${shortName})`);
 export const forecastTimeLine = (forecastDate: string | null, createdAt: number | null) =>
   `${forecastDateText(forecastDate)} · ${createdAtText(createdAt)}`;
-export const modelUsedText = (modelUsed: string) => `API 모델 이름: ${modelUsed}`;
+/**
+ * 모델 이름 줄(D8): API 이름 끝의 " · 검증 MAPE 12.68%"는 떼어 낸다. API 정확도는 정확도 시트의 회색 "API 표기" 줄에만 둔다(I5·7.7절).
+ */
+export const modelUsedText = (modelUsed: string) => `API 모델 이름: ${modelUsed.replace(/\s*·\s*검증 MAPE [\d.]+%\s*$/, '')}`;
 export const FORECAST_EMPTY = '그릴 수 있는 예측 값이 없습니다';
 
 /** 4.1절: "가격이 100원인 시간이라면 보통 12원쯤 빗나간다는 뜻입니다." (MAPE 11.75 %의 100원 기준). */
 export const accuracyExampleText = () =>
   `가격이 100원인 시간이라면 보통 ${num(DOCUMENTED_SMP_ACCURACY.mapePct, 0)}원쯤 빗나간다는 뜻입니다.`;
 export const ACCURACY_UNREGISTERED = '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다';
-export const ACCURACY_SOURCE = '출처 프로젝트 벤치마크 문서(2026-11-06) · API 서버 모델 정보';
+export const ACCURACY_SOURCE = '출처 프로젝트 벤치마크 문서(2026-11-06)';
 export const MODEL_INFO_FAILED = 'API 표기: 모델 정보를 불러오지 못했습니다';
 export const modelInfoFactText = (type: string | null, version: string | null) =>
-  `API 모델 정보: ${[type, version].filter(Boolean).join(' · ') || '이름 없음'}`;
+  `API 모델 정보: ${type || '이름 없음'}${version ? ` (API 버전 ${version})` : ''}`;
 
 /** 오늘 화면 용어 줄(4.1절). 보이는 글자는 짧게, 시트 제목은 GLOSSARY_TITLES. */
 export const TODAY_TERMS: ReadonlyArray<{ id: GlossaryId; label: string }> = Object.freeze([
@@ -305,11 +350,21 @@ export const PANEL_HEADINGS = Object.freeze({ legend: '숫자 옆 표시', terms
 export const TODAY_PANEL_METHOD = Object.freeze([
   '지금 가격은 KPX가 하루 전에 정한 그 시간의 확정 가격입니다.',
   '24시간 그래프는 어제 같은 시간 가격을 오늘 예측으로 쓴 기준선입니다.',
-  `예비력은 공급능력에서 수요를 뺀 값이고, ${watchReservePctText()} 아래로 내려가면 관심 단계입니다.`,
+  `예비력은 공급능력에서 수요를 뺀 값이고, 수요가 막대 아래 표지를 넘으면 ${watchReservePctText()} 아래로 내려갑니다.`,
 ]);
-/** 4상태 범례(4.6절): 이 화면의 실제 값이 있으면 값과 함께, 없으면 표시와 설명만. */
-export const legendConfirmedText = (value: number | null) => (value === null ? '확정 가격 · KPX가 정한 값' : `${price(value)} 원/kWh 확정 가격`);
-export const legendForecastText = (value: number | null) => (value === null ? '기준선 예측 · 어제 같은 시간 가격' : `${price(value)} 원/kWh 기준선 예측`);
+/** 범례 값(시각 범위와 함께): 둘러보기 5단계·≥ 1280 패널. */
+export type LegendValue = { value: number; hour: number };
+/**
+ * 4상태 범례(4.6절)의 실측·확정 행: 이 화면의 실제 값이 있으면 둘 다 예로 든다("766 MW 실측 · 151.6원/kWh 확정 (18–19시)").
+ * 가격 글자는 카드 문장과 같은 꼴(단위를 붙여 씀)이다. 값이 없으면 표시와 설명만.
+ */
+export function legendMeasuredText(demandMw: number | null, confirmed: LegendValue | null): string {
+  const parts = [demandMw === null ? null : `${mw(demandMw)} MW 실측`,
+    confirmed === null ? null : `${price(confirmed.value)}원/kWh 확정 (${tradeClockRange(confirmed.hour)})`].filter((p): p is string => p !== null);
+  return parts.length ? parts.join(' · ') : '지금 잰 값과 KPX가 정한 확정 가격';
+}
+export const legendForecastText = (f: LegendValue | null) =>
+  (f === null ? '기준선 예측 · 어제 같은 시간 가격' : `${price(f.value)}원/kWh 기준선 예측 (${tradeClockRange(f.hour)})`);
 export const LEGEND_ESTIMATED = '추정 · 계산·가정·대체값 (이 화면에서는 API가 실측을 못 줄 때만)';
 export const LEGEND_EXAMPLE = '예시 · 설명용 고정 값 (오늘 화면에는 없음)';
 
@@ -320,7 +375,7 @@ export const SOURCE_ITEMS = Object.freeze({
 });
 export const SOURCE_TEXT = Object.freeze({
   accuracy: '프로젝트 벤치마크(walk-forward) · API 모델 정보',
-  supply: 'API 서버 수급 자료의 지금 시각 값(수요 ±1 MW 일치 때만)',
+  supply: 'API 서버 수급 자료(지금 시각 값)',
   market: 'API 서버 시장 상태',
 });
 export const SOURCE_HEADINGS = Object.freeze({ item: '항목', source: '출처', basis: '기준 (KST)', status: '상태' });
@@ -372,9 +427,12 @@ export function rtmStatusText(status: string): string {
 }
 export const RTM_NO_INTERVAL = '실시간시장 구간 길이를 받지 못했습니다 (API)';
 export const RTM_PRICE_NOTE = '실시간시장 가격 예측은 검증된 제주 모델이 없어 표시하지 않습니다.';
+/** API 원문 낱말은 한국어 이름 뒤 괄호에만 둔다(D6): "접수 중 (API 값 open)". 모르는 값은 "알 수 없음". */
+const apiWord = (korean: string, raw: string) => `${korean} (API 값 ${raw})`;
+const damStatusText = (status: string) => apiWord(status === 'open' ? DEADLINE_PILL.open : status === 'closed' ? DEADLINE_PILL.closed : '알 수 없음', status);
 /** 산출 방식 시트의 이번 값(마감): API 원문과 서버 시각으로 다시 계산한 남은 시간. */
 export const deadlineApiText = (status: string, deadline: string, tradingDate: string, hours: number | null) =>
-  `API 표기: 하루전시장 ${status} · 마감 ${deadline} · 입찰일 ${tradingDate} · 남은 시간 ${num(hours, 1)}시간`;
+  `API 표기: 하루전시장 ${damStatusText(status)} · 마감 ${deadline} · 입찰일 ${tradingDate} · 남은 시간 ${num(hours, 1)}시간`;
 export const deadlineCheckText = (hours: number, tolerance: number) =>
   `서버 시각으로 다시 계산한 남은 시간 ${num(hours, 1)}시간 (차이가 ${num(tolerance, 1)}시간을 넘으면 남은 시간을 숨깁니다)`;
 
@@ -385,7 +443,7 @@ export const calcSourceText = (kind: ForecastKind) => `API 서버 입찰 계산 
 /** 스텝퍼 값: "19h · 18–19시 · 11-27"(320에서는 날짜를 카드 부제로 옮긴다). */
 export const bidHourLabel = (hour: number, tradingDate: string | null) => (tradingDate ? `${tradeHour(hour)} · ${dayShort(tradingDate)}` : tradeHour(hour));
 export const bidDayText = (tradingDate: string) => `입찰일 ${kstDayLabel(tradingDate)}`;
-export const ladderChartLabel = (hour: number) => `${tradeHour(hour)} 입찰 계단`;
+export const ladderChartLabel = (hour: number) => `${tradeClockRange(hour)} 입찰 계단`;
 /** "50 MW를 10구간으로 나눠 171.7–244.1원에 내는 계산입니다." */
 export const ladderSentenceText = (totalMw: number, count: number, min: number, max: number) =>
   `${mw(totalMw)} MW를 ${num(count, 0)}구간으로 나눠 ${price(min)}–${price(max)}원에 내는 계산입니다.`;
@@ -411,13 +469,25 @@ export const CALC_FAILED_TEXT = '계산 결과를 불러오지 못했습니다';
 export const CALC_UNREADABLE_TEXT = '계산 결과를 읽지 못했습니다';
 export const CALC_EMPTY_TEXT = '계산된 입찰 구간이 없습니다';
 export const RECALC_LABEL = '다시 계산';
-export const bidTableCaption = (hour: number) => `${tradeHour(hour)} 구간별 입찰 계산`;
+export const bidTableCaption = (hour: number) => `${tradeClockRange(hour)} 구간별 입찰 계산`;
 export const BID_COLUMNS = Object.freeze({
   segment: '구간', quantity: '물량(MW, 예시)', price: '가격(원/kWh)', probability: '낙찰 가능성(추정)', revenue: '기대 수입',
 });
-export const calcMethodText = (method: string | null) => `API 계산 방법: ${method ?? '표기 없음'}`;
+/** 입찰 성향(4.2절): 세그먼트 글자와 산출 방식 시트가 같은 표를 쓴다. API 값은 conservative·moderate·aggressive. */
+export const RISK_LABELS = Object.freeze({ conservative: '보수적', moderate: '균형', aggressive: '공격적' });
+// API가 보낸 글자로 표를 찾을 때는 자기 키만 본다("constructor" 같은 값이 Object.prototype의 함수를 읽지 않게).
+const ownName = (table: Readonly<Record<string, string>>, key: string, fallback: string) =>
+  (Object.prototype.hasOwnProperty.call(table, key) ? table[key] : fallback);
+const riskLabel = (risk: string) => ownName(RISK_LABELS, risk, '알 수 없음');
+/** 계산 방법의 한국어 이름(api/ai_bidding_optimizer.py optimization_method). 영어 이름은 괄호 안 "API 이름"으로만(D6). */
+const CALC_METHOD_NAMES: Readonly<Record<string, string>> = { 'Quantile-based Probabilistic Clearing Model': '분위수 기반 확률 낙찰 모델' };
+export function calcMethodText(method: string | null): string {
+  if (method === null) return '계산 방법: API 표기 없음';
+  if (!/[A-Za-z]/.test(method)) return `계산 방법: ${method}`;
+  return `계산 방법: ${ownName(CALC_METHOD_NAMES, method, '한국어 이름 없음')} (API 이름: ${method})`;
+}
 export const calcInputText = (tradingDate: string | null, risk: string, capacityMw: number) =>
-  `API 입찰일 ${kstDayLabel(tradingDate)} · 성향 ${risk} · 예시 용량 ${mw(capacityMw)} MW`;
+  `API 입찰일 ${kstDayLabel(tradingDate)} · 성향 ${apiWord(riskLabel(risk), risk)} · 예시 용량 ${mw(capacityMw)} MW`;
 
 export const MERIT_TOGGLE = Object.freeze({ open: '펼치기', close: '접기' });
 export const meritDemandText = (demandMw: number) => `예시 수요 ${mw(demandMw)} MW`;
@@ -447,7 +517,7 @@ export const legendPlantText = (capacityMw: number) => `${mw(capacityMw)} MW 예
 // 정산은 공개 자료가 아니라서 API를 부르지 않고, 화면의 숫자는 모두 data/examples.ts의 예시 값이다.
 export const SETTLEMENT_ANSWER = '정산은 판 전기값을 KPX가 계산해 주는 과정입니다. 아래 숫자는 계산 방식을 보여 주는 예시입니다.';
 export const SETTLEMENT_RESTRICTED_TITLE = '실제 정산 자료';
-export const SETTLEMENT_RESTRICTED_BODY = '발전소별 실제 정산 자료는 공개 데모에서 제공하지 않습니다. 서버가 공개하지 않는 자료입니다. '
+export const SETTLEMENT_RESTRICTED_BODY = '발전소별 실제 정산 자료는 공개 데모에서 제공하지 않습니다. '
   + '이 서비스의 내부 정산 계산도 KPX 정산이 아닌 모의 계산입니다.';
 /** 정산서 행 이름. ①·②(원문자 U+2460대)는 금지 기호 범위 밖이고, 아래 설명 문장과 그림이 같은 번호로 가리킨다. */
 export const STATEMENT_ROWS = Object.freeze({ dayAhead: '① 하루전시장에서 판 양', deviation: '② 실제 발전과의 차이', total: '합계' });
@@ -490,10 +560,13 @@ export const statementFigureText = (dayAhead: number, deviation: number, total: 
 // ---------------------------------------------------------------- 알아보기(F10, 4.4절). 긴 글은 guide.ko.json, 여기는 숫자가 들거나 상태로 바뀌는 짧은 글만.
 export const GUIDE_ANSWER = '이 앱이 무엇을 보여 주는지, 숫자를 어떻게 읽는지 설명합니다.';
 export const tourCardTitle = (steps: number) => `${TOUR_NAME} · ${num(steps, 0)}단계`;
-export const glossaryCountText = (count: number) => `낱말 ${num(count, 0)}개`;
+export const glossaryCountText = (count: number) => `용어 ${num(count, 0)}개`;
 export const whereText = (tab: string) => `이 앱에서 보는 곳: ${tab}`;
 export const ABOUT_TITLE = `${APP_NAME} (공개 데모) ${APP_VERSION}`;
 export const ABOUT_ROW = `eXeco ${APP_VERSION} 공개 데모`;
+/** 앱 정보의 화면 갱신일. 평가에 넘길 번들을 만들 때 그 날짜로 맞춘다(명세 13절, 뒤에 고치면 sha가 바뀐다). 자료 이용 조건 문장은 guide.ko.json(topics.about). */
+export const APP_UPDATED_AT = '2026-11-26';
+export const appUpdatedText = () => `화면 갱신 ${APP_UPDATED_AT}`;
 export const aboutSkewText = (skewMs: number) => `${clockSkewText(skewMs)} · 서버 시각 기준으로 표시`;
 export const ABOUT_SKEW_IMPLAUSIBLE = `서버 시각이 기기 시계와 ${num(SKEW_PLAUSIBLE_MS / HOUR_MS, 0)}시간 넘게 달라 기기 시계로 표시합니다`;
 export const MODEL_NOT_USED = '학습한 모델(v4.1)은 제주 재검증에서 이 기준선보다 나빠 쓰지 않습니다.';

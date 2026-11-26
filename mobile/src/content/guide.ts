@@ -19,8 +19,9 @@ const PARAGRAPHS_MAX = 12;
 export type TopicId = (typeof TOPIC_IDS)[number];
 export type MethodCardId = (typeof METHOD_CARD_IDS)[number];
 export type LegendKey = (typeof LEGEND_KEYS)[number];
-export type GuideSection = { title: string; body: string[] };
-export type GlossaryEntry = { id: GlossaryId; short: string; body: string[] };
+/** detail: 짝·검증 규칙 같은 구현 설명 한 줄(D7). 뜻과 읽는 법(body) 뒤에 흐린 "자세히" 줄로 그린다. 없어도 된다. */
+export type GuideSection = { title: string; body: string[]; detail?: string };
+export type GlossaryEntry = { id: GlossaryId; short: string; body: string[]; detail?: string };
 export type GuideContent = {
   version: 1; tour: GuideSection[]; glossary: GlossaryEntry[];
   topics: Record<TopicId, GuideSection>; cards: Record<MethodCardId, GuideSection>;
@@ -56,9 +57,12 @@ function paragraphs(v: unknown, path: string): string[] {
   return v.map((p, i) => text(p, `${path}[${i}]`));
 }
 
+/** 있으면 글자 규칙(숫자 없음·길이)을 지켜야 한다. 없으면 키 자체를 두지 않는다. */
+const detail = (v: unknown, path: string): { detail?: string } => (v === undefined ? {} : { detail: text(v, path) });
+
 function section(v: unknown, path: string): GuideSection {
   const r = rec(v, path);
-  return { title: text(r.title, `${path}.title`), body: paragraphs(r.body, `${path}.body`) };
+  return { title: text(r.title, `${path}.title`), body: paragraphs(r.body, `${path}.body`), ...detail(r.detail, `${path}.detail`) };
 }
 
 /** 키 집합이 정확히 같아야 한다(빠진 항목·모르는 항목 모두 실패). */
@@ -79,7 +83,10 @@ export function parseGuide(json: unknown): GuideContent {
   const glossary = (r.glossary as unknown[]).map((g, i): GlossaryEntry => {
     const e = rec(g, `glossary[${i}]`);
     if (typeof e.id !== 'string' || !ids.includes(e.id as GlossaryId)) bad(`glossary[${i}].id`, 'known term id');
-    return { id: e.id as GlossaryId, short: text(e.short, `glossary[${i}].short`, GLOSSARY_SHORT_MAX), body: paragraphs(e.body, `glossary[${i}].body`) };
+    return {
+      id: e.id as GlossaryId, short: text(e.short, `glossary[${i}].short`, GLOSSARY_SHORT_MAX), body: paragraphs(e.body, `glossary[${i}].body`),
+      ...detail(e.detail, `glossary[${i}].detail`),
+    };
   });
   if (new Set(glossary.map(g => g.id)).size !== ids.length) bad('glossary', 'unique ids');
   return {

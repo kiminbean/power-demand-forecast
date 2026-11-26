@@ -4,13 +4,14 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { BidCardView, BidRow } from './model';
+import { RISKS as RISK_KEYS } from '../../app/routes';
 import type { Risk } from '../../app/routes';
 import { useTheme } from '../../app/theme';
 import { EXAMPLE_PLANT } from '../../data/examples';
 import { krwFromThousand, mw, pct, price } from '../../lib/format';
 import { CHIPS } from '../../lib/provenance';
 import {
-  BID_COLUMNS, CARD_TITLES, NO_SEND_NOTE, RECALC_LABEL, bidDayText, bidHourLabel, ladderReadingText,
+  BID_COLUMNS, CARD_TITLES, NO_SEND_NOTE, RECALC_LABEL, RISK_LABELS, bidDayText, bidHourLabel, ladderReadingText,
 } from '../../content/strings';
 import { ChipList } from '../today/TodayParts';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
@@ -32,9 +33,8 @@ const DASH = '—';
 const TOTAL_LABEL = '합계';
 type Mode = 'chart' | 'table';
 const MODES: readonly SegmentOption<Mode>[] = [{ value: 'chart', label: '차트' }, { value: 'table', label: '표' }];
-const RISKS: readonly SegmentOption<Risk>[] = [
-  { value: 'conservative', label: '보수적' }, { value: 'moderate', label: '균형' }, { value: 'aggressive', label: '공격적' },
-];
+// 성향 글자는 산출 방식 시트("성향 균형 (API 값 moderate)")와 같은 표 하나에서 온다(D6).
+const RISKS: readonly SegmentOption<Risk>[] = RISK_KEYS.map(value => ({ value, label: RISK_LABELS[value] }));
 const probability = (v: number) => pct(v, 0);
 
 function rowCells(r: BidRow): Record<string, React.ReactNode> {

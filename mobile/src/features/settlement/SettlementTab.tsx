@@ -31,7 +31,7 @@ export default function SettlementTab() {
   const pill = (
     <View style={styles.pills}>
       <NowPill now={clock.now} fetchedAt={null} skewNotable={clock.skewNotable} />
-      {clock.skew && !clock.skew.plausible ? <ProvenanceChip chip={CHIPS.checkTime} /> : null}
+      {clock.skew && !clock.skew.plausible ? <ProvenanceChip chip={CHIPS.clockImplausible} /> : null}
     </View>
   );
   return (

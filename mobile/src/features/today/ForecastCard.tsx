@@ -18,7 +18,7 @@ import { HourStepper, SegmentedControl } from '../../ui/Controls';
 import type { SegmentOption } from '../../ui/Controls';
 import { DataTable } from '../../ui/DataTable';
 import { RichText } from '../../ui/Rich';
-import { Text } from '../../ui/Text';
+import { Text, keepTogether } from '../../ui/Text';
 import { SPACE } from '../../ui/tokens';
 import { Value } from '../../ui/Values';
 
@@ -88,7 +88,7 @@ export function ForecastCard({ view, chartLabel, now, onSelectHour, onToNow, onM
             { key: 'period', title: PERIOD_COLUMNS.period, meta: true }, { key: 'mean', title: PERIOD_COLUMNS.mean, align: 'right', meta: true },
             { key: 'min', title: PERIOD_COLUMNS.min, align: 'right', meta: true }, { key: 'max', title: PERIOD_COLUMNS.max, align: 'right', meta: true },
           ]} rows={view.periods.map(p => ({ key: p.id, cells: { period: p.label, mean: p.mean, min: p.min, max: p.max } }))} />
-          <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'note' }}>{view.periodNote}</Text>
+          {view.periodNote ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'note' }}>{view.periodNote}</Text> : null}
           <DataTable caption={TABLE_CAPTIONS.hours} columns={[
             // 글자 칸("—", "— (입력 0.00)")은 메타, 값 칸은 Value(data-pd-value)다.
             { key: 'hour', title: HOUR_COLUMNS.hour, meta: true }, { key: 'q50', title: subject, align: 'right', meta: true },
@@ -109,8 +109,10 @@ export function ForecastCard({ view, chartLabel, now, onSelectHour, onToNow, onM
         <RichText line={view.reading} testID="today-reading" />
       </View>
       <View style={styles.group}>
-        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{view.summary}</Text>
-        {view.uncertainty ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{view.uncertainty}</Text> : null}
+        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{keepTogether(view.summary, { variant: 'label', tone: 'text2' })}</Text>
+        {view.uncertainty
+          ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{keepTogether(view.uncertainty, { variant: 'label', tone: 'text2' })}</Text>
+          : null}
       </View>
       <SourceFooter source={view.footer.source} time={view.footer.time} onSources={onSources} context={TITLE} />
     </Card>

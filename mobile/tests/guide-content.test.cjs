@@ -63,7 +63,7 @@ const BANNED = /R[²2]\s*=\s*0\.95|BiLSTM|CatBoost|AI 최적화|AI 추천|신뢰
 test('guide.ko.json: 둘러보기 5단계 제목(4.4절 그대로) · 용어 13개(사전 순서, 한 줄 뜻 60자 이하) · 주제 넷 · 표시별 설명 9개 · 단순화한 설명 넷', () => {
   const m = load();
   const c = content(m);
-  assert.deepEqual(c.tour.map(t => t.title), ['제주 전기값은 시간마다 바뀝니다', '내일 값은 어제 값으로 짐작합니다', '발전소는 하루 전에 팝니다',
+  assert.deepEqual(c.tour.map(t => t.title), ['제주 전기값은 시간마다 바뀝니다', '오늘 값은 어제 같은 시간 값으로 짐작합니다', '발전소는 하루 전에 팝니다',
     '판 만큼 정산 받습니다', '숫자 옆 표시를 보세요']);
   assert.deepEqual(c.glossary.map(g => g.id), Object.keys(m.strings.GLOSSARY_TITLES));
   for (const g of c.glossary) assert.ok(g.short.length <= m.guide.GLOSSARY_SHORT_MAX, g.id);
@@ -73,6 +73,46 @@ test('guide.ko.json: 둘러보기 5단계 제목(4.4절 그대로) · 용어 13�
   // 단순화한 설명(4.4·7.9절, P7): 마감 · 이중 정산 · 가격 원리 · 실시간시장 구간. 숫자는 서버 값으로만 붙는다(JSON에는 숫자 없음).
   assert.deepEqual(c.simplified.body.map(p => p.split(':')[0]), ['하루전시장 마감', '이중 정산', '가격 원리', '실시간시장 구간']);
   assert.doesNotMatch(fs.readFileSync(JSON_FILE, 'utf8'), BANNED);
+});
+
+test('D1: 둘러보기 2단계와 용어 사전 "기준선 예측"·예측 방법·차트 범례가 같은 방법(어제 같은 시간 값 → 오늘)을 말한다', () => {
+  const m = load();
+  const c = content(m);
+  const step2 = c.tour[1];
+  const baseline = c.glossary.find(g => g.id === 'baseline');
+  // 어제 값을 "내일"에 쓰면 48시간 차이가 된다(round 1 멘토 major): 같은 날짜 표현만 허용한다.
+  for (const [label, text] of [['tour[1].title', step2.title], ['tour[1].body', step2.body.join(' ')], ['glossary baseline', baseline.short],
+    ['method', c.topics.method.body[0]], ['chart legend', m.strings.forecastLegendText('baseline')]]) {
+    assert.match(text, /어제 같은 시간/, label);
+    assert.doesNotMatch(text, /내일/, label);
+  }
+  for (const text of [step2.title, step2.body.join(' '), baseline.short, c.topics.method.body[0]]) assert.match(text, /오늘/, text);
+  assert.match(step2.body.join(' '), /학습한 모델이 아닌 단순한 방법이라 평소 얼마나 빗나가는지도 함께 보여 줍니다/);
+});
+
+test('D7: 뜻·읽는 법이 먼저, 짝·검증 규칙은 끝의 흐린 "자세히" 한 줄 — 공급능력 뜻, "KPI 수요"·"±1 MW" 없음, 규칙은 detail에만', () => {
+  const m = load();
+  const c = content(m);
+  const supply = c.glossary.find(g => g.id === 'supply');
+  assert.equal(supply.short, '가동 중이거나 곧 돌릴 수 있는 발전기가 지금 낼 수 있는 최대 전력입니다');
+  assert.match(supply.detail, /이 화면의 수요 값과 거의 같을 때만/);
+  assert.doesNotMatch(supply.body.join(' '), /거의 같을 때만|미수신/);
+  const raw = fs.readFileSync(JSON_FILE, 'utf8');
+  assert.doesNotMatch(raw, /KPI 수요/);
+  assert.doesNotMatch(m.strings.SOURCE_TEXT.supply, /±|일치 때만/);
+  // 산출 방식 시트의 짝·검증 규칙(출처 표기 확인, 같은 응답에서 가져온 모델 이름)은 본문이 아니라 detail에 있다.
+  assert.match(c.cards['today-power'].detail, /출처 표기로 실측인지 확인/);
+  assert.doesNotMatch(c.cards['today-power'].body.join(' '), /출처 표기로 실측인지 확인|거의 같을 때만/);
+  assert.match(c.cards['today-forecast'].detail, /같은 응답에서 가져옵니다/);
+  assert.doesNotMatch(c.cards['today-forecast'].body.join(' '), /같은 응답에서 가져옵니다/);
+  // 예비율 단계 이름은 앱 기준(정상·보통·낮음·위험)이고 KPX 공식 경보 단계가 아니라고 한 번 밝힌다(D9).
+  const reserve = c.glossary.find(g => g.id === 'reserve');
+  assert.match(reserve.body.join(' '), /정상·보통·낮음·위험.*KPX 공식 경보 단계가 아닙니다/);
+  assert.doesNotMatch(raw, /관심 경계|관심 단계|관심 기준/);
+  // 로더: detail도 숫자 없는 글자여야 한다.
+  const bad = JSON.parse(raw);
+  bad.cards['today-power'].detail = '수요 ±1 MW 일치 때만';
+  assert.throws(() => m.guide.parseGuide(bad), /cards\.today-power\.detail no digits/);
 });
 
 test('산출 방식: 모든 카드 id(8개)에 설명 글 · 카드 제목 · 시트 제목이 있다(F10 합격 확인)', () => {
@@ -102,7 +142,7 @@ test('알아보기 첫 화면: h1 · AnswerLine · 둘러보기 입구 [시작�
   const buttons = all(root, n => n.props.role === 'button').map(b => b.props['aria-label']);
   assert.deepEqual(buttons, ['시작하기: 1분 둘러보기']);
   const rows = links(root);
-  assert.deepEqual(rows.map(r => r.props['aria-label']), ['용어 사전, 낱말 13개', '숫자 읽는 법', '예측 방법과 정확도', '데이터 출처와 연결 상태',
+  assert.deepEqual(rows.map(r => r.props['aria-label']), ['용어 사전, 용어 13개', '숫자 읽는 법', '예측 방법과 정확도', '데이터 출처와 연결 상태',
     '화면 테마, 시스템 설정 따름 (기본)', '앱 정보, eXeco v6.1 공개 데모']);
   for (const r of rows) {
     assert.equal(flat(r.props.style).minHeight, 56);
