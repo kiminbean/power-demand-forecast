@@ -1,7 +1,8 @@
 // 숫자가 든 짧은 UI 문구(명세 6.1절). .tsx의 JSX 글자에는 숫자를 직접 쓰지 않고 여기서 가져온다(7.10절).
 // 숫자·시각은 모두 format.ts를 거친다. 긴 설명 글은 public/content/guide.ko.json(guide.ts가 읽는다)에 둔다.
 import {
-  age, clockHour, clockPhrase, dayShort, duration, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeHour, tradeHourRange,
+  MINUS, age, clockHour, clockPhrase, dayShort, duration, krw, kstClock, kstDate, kstDayLabel, kstTime, mw, num, pct, price, tradeHour,
+  tradeHourRange,
 } from '../lib/format';
 import { MINUTE_MS, addDays, daysBetween } from '../lib/kst';
 import { DOCUMENTED_SMP_ACCURACY, WATCH_RATIO } from '../lib/provenance';
@@ -128,7 +129,11 @@ export const tourLabel = (step: number, total: number) => `둘러보기 ${num(st
 export const routeTitle = (screen: string) => `${screen} · ${APP_NAME}`;
 export const tourTitle = (step: number, total: number) => routeTitle(tourLabel(step, total));
 
-/** 용어 사전 12항목의 제목. 숫자가 든 제목이 있어 JSON(숫자 금지)이 아니라 여기 둔다. 뜻풀이는 guide.ko.json. */
+/**
+ * 용어 사전 항목의 제목. 숫자가 든 제목이 있어 JSON(숫자 금지)이 아니라 여기 둔다. 뜻풀이는 guide.ko.json.
+ * 4.4절 목록 12개 + 정산 화면 용어 줄(4.3절)의 "kWh와 MW"(F9). 4.4절 목록에는 없지만 정산서의 "120 MWh × 150원/kWh"를 읽으려면
+ * 단위 풀이가 필요해 13번째로 더했다(F9 증거의 판단 1).
+ */
 export const GLOSSARY_TITLES = Object.freeze({
   smp: 'SMP(계통한계가격)',
   dam: '하루전시장',
@@ -142,6 +147,7 @@ export const GLOSSARY_TITLES = Object.freeze({
   error: '평균 오차(MAE·MAPE)',
   clearing: '낙찰 가능성',
   settlement: '정산',
+  units: 'kWh와 MW',
 });
 export type GlossaryId = keyof typeof GLOSSARY_TITLES;
 
@@ -436,3 +442,47 @@ export const legendRuleText = (when: string | null) => when ?? '마감 시각 ·
 export const legendProbabilityText = (value: number | null) =>
   (value === null ? '낙찰 가능성 · 분위수로 계산한 추정' : `${probabilityText(value)} 낙찰 가능성 (예시 발전소 1구간)`);
 export const legendPlantText = (capacityMw: number) => `${mw(capacityMw)} MW 예시 풍력발전소 (가상)`;
+
+// ---------------------------------------------------------------- 정산 화면(F9, 4.3절). 화면 view model(features/settlement/model.ts)이 부른다.
+// 정산은 공개 자료가 아니라서 API를 부르지 않고, 화면의 숫자는 모두 data/examples.ts의 예시 값이다.
+export const SETTLEMENT_ANSWER = '정산은 판 전기값을 KPX가 계산해 주는 과정입니다. 아래 숫자는 계산 방식을 보여 주는 예시입니다.';
+export const SETTLEMENT_RESTRICTED_TITLE = '실제 정산 자료';
+export const SETTLEMENT_RESTRICTED_BODY = '발전소별 실제 정산 자료는 공개 데모에서 제공하지 않습니다. 서버가 공개하지 않는 자료입니다. '
+  + '이 서비스의 내부 정산 계산도 KPX 정산이 아닌 모의 계산입니다.';
+/** 정산서 행 이름. ①·②(원문자 U+2460대)는 금지 기호 범위 밖이고, 아래 설명 문장과 그림이 같은 번호로 가리킨다. */
+export const STATEMENT_ROWS = Object.freeze({ dayAhead: '① 하루전시장에서 판 양', deviation: '② 실제 발전과의 차이', total: '합계' });
+export const STATEMENT_PERIOD = '하루';
+export const STATEMENT_NOTES = Object.freeze([
+  '①은 하루전 가격, ②는 실시간 가격으로 계산하는 단순화한 예시입니다.',
+  '실제 규칙은 KPX 정산 규정을 따릅니다.',
+]);
+/** 정산 화면 용어 줄(4.3절): 보이는 글자, 시트 제목은 GLOSSARY_TITLES. */
+export const SETTLEMENT_TERMS: ReadonlyArray<{ id: GlossaryId; label: string }> = Object.freeze([
+  { id: 'settlement', label: '정산' }, { id: 'dam', label: '하루전시장' }, { id: 'rtm', label: '실시간시장' }, { id: 'units', label: 'kWh와 MW' },
+]);
+/** 산출 방식 시트의 이번 화면 값(예시): MWh를 kWh로 바꿔 원 단위까지 다시 계산한다(4.3절 "예시 계산은 맞는다"). */
+// 정산 문장 속 값과 단위("1 MWh")·연산자와 값("× 150원/kWh")은 줄바꿈하지 않는 빈칸(U+00A0)으로 붙인다(5.4절 값+단위 NoWrap).
+// 문장 하나가 Text 하나라 SampleValue의 nowrap을 쓸 수 없다. 화면 읽기에는 보통 빈칸과 같다.
+const NB = '\u00A0';
+export const unitFactText = (kwhPerMwh: number) =>
+  `단위: 1${NB}MWh =${NB}${num(kwhPerMwh, 0)}${NB}kWh (가격이 kWh당이라 MWh로 적은 양을 kWh로 바꿔 곱합니다)`;
+export const statementFactText = (label: string, mwh: number, kwh: number, unitPrice: number, won: number) =>
+  `${label}: ${num(mwh, 0)}${NB}MWh =${NB}${num(kwh, 0)}${NB}kWh, ×${NB}${num(unitPrice, 0)}원/kWh =${NB}${num(won, 0)}원 (${krw(won, 0)})`;
+/** "합계: 18,000,000원 − 840,000원 = 17,160,000원 (1,716만원)". */
+export const statementTotalFactText = (first: number, second: number, total: number) =>
+  `합계: ${num(first, 0)}원 ${second < 0 ? MINUS : '+'}${NB}${num(Math.abs(second), 0)}원 =${NB}${num(total, 0)}원 (${krw(total, 0)})`;
+
+export const SETTLEMENT_PANEL_TITLE = '정산 읽는 법';
+/** 읽는 법 세 줄(4.6절). 셋째 줄의 환산 수는 data/examples.ts의 KWH_PER_MWH에서 받는다. */
+export const settlementPanelMethod = (kwhPerMwh: number): readonly string[] => [
+  '①은 하루전시장에서 판 양에 하루전 가격을 곱한 돈입니다.',
+  '②는 실제로 만든 양과 판 양의 차이에 실시간 가격을 곱한 돈입니다. 덜 만들면 음수라서 빠집니다.',
+  `①${NB}+${NB}②가 그날 받는 돈입니다. 가격이 kWh당이라 1${NB}MWh는 ${num(kwhPerMwh, 0)}${NB}kWh로 바꿔 곱합니다.`,
+];
+/** 4상태 범례의 예시 행. 둘러보기 5단계의 "┆1,716만원 예시 정산서┆"와 같은 글자. */
+export const legendStatementText = (won: number) => `${krw(won, 0)} 예시 정산서`;
+export const LEGEND_LOCKED = '실제 정산 자료 · 공개 데모에서 제공하지 않음';
+/** ①+② 식 그림(≥ 1280 패널)의 칸 이름과 그림 이름(요약). */
+export const STATEMENT_FIGURE_LABELS = Object.freeze({ dayAhead: '① 하루전', deviation: '② 실시간 차이', total: '합계' });
+export const statementFigureText = (dayAhead: number, deviation: number, total: number) =>
+  `예시 정산서 그림: ① 하루전 ${krw(dayAhead, 0)} + ② 실시간 차이 ${krw(deviation, 0)} = 합계 ${krw(total, 0)}`;

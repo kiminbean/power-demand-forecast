@@ -23,10 +23,11 @@ export function ChipList({ chips }: { chips: readonly ChipSpec[] }) {
   return <>{chips.map((c, i) => <ProvenanceChip key={'lag' in c ? `lag${i}` : `${c.chip.text}${i}`} {...c} />)}</>;
 }
 
-/** 용어 줄(4.1절): 각 높이 44, 줄바꿈 허용. 누르면 ?sheet=term&id=… */
-export function TermRow({ onOpen, terms = TODAY_TERMS }: { onOpen: (id: GlossaryId) => void; terms?: typeof TODAY_TERMS }) {
+type TermRowProps = { onOpen: (id: GlossaryId) => void; terms?: typeof TODAY_TERMS; testID?: string };
+/** 용어 줄(4.1절): 각 높이 44, 줄바꿈 허용. 누르면 ?sheet=term&id=… 정산 화면(4.3절)도 자기 용어로 쓴다. */
+export function TermRow({ onOpen, terms = TODAY_TERMS, testID = 'today-terms' }: TermRowProps) {
   return (
-    <View style={styles.terms} testID="today-terms">
+    <View style={styles.terms} testID={testID}>
       <Text variant="label" weight="600" tone="text2">{TERMS_HEADING}</Text>
       {terms.map(t => <TermLink key={t.id} label={t.label} onPress={() => onOpen(t.id)} />)}
     </View>
@@ -53,9 +54,11 @@ export type PanelBodyProps = {
   method: readonly string[];
   onTerm: (id: GlossaryId) => void;
   testID: string;
+  /** 산출 방식 요약 앞의 그림(정산: ①+② 식을 그림으로, 4.3절). */
+  figure?: React.ReactNode;
 };
-/** ≥ 1280 "이 화면 읽는 법" 패널 본문(4.6절): 상태 범례(그 화면의 실제 값 예) · 용어 3개 · 산출 방식 요약 3줄. 입찰 화면도 쓴다. */
-export function ReadingPanelBody({ legend, terms, method, onTerm, testID }: PanelBodyProps) {
+/** ≥ 1280 "이 화면 읽는 법" 패널 본문(4.6절): 상태 범례(그 화면의 실제 값 예) · 용어 3개 · 산출 방식 요약 3줄. 입찰·정산 화면도 쓴다. */
+export function ReadingPanelBody({ legend, terms, method, onTerm, testID, figure }: PanelBodyProps) {
   return (
     <View style={styles.panel} testID={testID}>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.legend}</Text>
@@ -70,6 +73,7 @@ export function ReadingPanelBody({ legend, terms, method, onTerm, testID }: Pane
         {terms.map(t => <TermLink key={t.id} label={t.label} onPress={() => onTerm(t.id)} />)}
       </View>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.method}</Text>
+      {figure}
       {method.map(m => <Text key={m} variant="label" tone="text2" dataSet={{ pdMeta: 'method' }}>{m}</Text>)}
     </View>
   );

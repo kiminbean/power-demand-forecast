@@ -15,9 +15,9 @@ export type Formatter = (value: number) => string;
 type AnyUnit = Unit | ExampleUnit;
 
 // 붙여 쓰는 단위("115.3원/kWh", "79.5%")와 띄어 쓰는 단위("664 MW").
-const UNIT_GAP: Readonly<Record<AnyUnit, string>> = { '원/kWh': '', '%': '', '°C': '', MW: ' ', MWh: ' ', 'm/s': ' ', 천원: ' ', '': '' };
+const UNIT_GAP: Readonly<Record<AnyUnit, string>> = { '원/kWh': '', '%': '', '°C': '', MW: ' ', MWh: ' ', 'm/s': ' ', 천원: ' ', 원: '', '': '' };
 const UNIT_SPOKEN: Readonly<Record<AnyUnit, string>> = {
-  '원/kWh': '원/킬로와트시', '%': '퍼센트', '°C': '도', MW: '메가와트', MWh: '메가와트시', 'm/s': '미터/초', 천원: '천 원', '': '',
+  '원/kWh': '원/킬로와트시', '%': '퍼센트', '°C': '도', MW: '메가와트', MWh: '메가와트시', 'm/s': '미터/초', 천원: '천 원', 원: '원', '': '',
 };
 /** 접근 이름용 읽기 형태: "664 메가와트". */
 export const spokenValue = (text: string, unit: AnyUnit) => (UNIT_SPOKEN[unit] ? `${text} ${UNIT_SPOKEN[unit]}` : text);

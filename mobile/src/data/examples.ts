@@ -2,7 +2,7 @@
 // Example<T>는 이 파일 안에서만 만들 수 있는 브랜드라 Provenanced<T>(실제 API 값) 자리에 넣을 수 없다.
 declare const exampleBrand: unique symbol;
 
-export type ExampleUnit = 'MW' | 'MWh' | '원/kWh' | '천원' | '';
+export type ExampleUnit = 'MW' | 'MWh' | '원/kWh' | '천원' | '원' | '';
 export type ExampleFields<T> = { value: T; unit: ExampleUnit; label: string };
 export type Example<T> = Readonly<ExampleFields<T>> & { readonly [exampleBrand]: true };
 
@@ -18,13 +18,28 @@ export const EXAMPLE_PLANT = Object.freeze({
 
 /**
  * 예시 정산서(이중 정산): 하루전 낙찰 120 MWh × 150원/kWh + 실시간 편차 −6 MWh × 140원/kWh.
- * 계산은 정산 화면(F9)이 format.ts를 거쳐 한다(1,800만원 − 84만원 = 1,716만원).
+ * 금액은 아래 EXAMPLE_STATEMENT_AMOUNTS가 이 값으로 계산하고, 화면 글자는 format.ts를 거친다(1,800만원 − 84만원 = 1,716만원).
  */
 export const EXAMPLE_STATEMENT = Object.freeze({
   dayAheadMwh: example({ value: 120, unit: 'MWh', label: '하루전 낙찰량' }),
   dayAheadPrice: example({ value: 150, unit: '원/kWh', label: '하루전 가격' }),
   realtimeDeviationMwh: example({ value: -6, unit: 'MWh', label: '실시간 편차' }),
   realtimePrice: example({ value: 140, unit: '원/kWh', label: '실시간 가격' }),
+});
+
+/** 1 MWh = 1,000 kWh. 가격이 원/kWh라서 MWh로 적은 양은 kWh로 바꿔 곱한다(예시가 아니라 단위 환산). */
+export const KWH_PER_MWH = 1000;
+const wonOf = (mwh: Example<number>, unitPrice: Example<number>) => mwh.value * KWH_PER_MWH * unitPrice.value;
+const dayAheadWon = wonOf(EXAMPLE_STATEMENT.dayAheadMwh, EXAMPLE_STATEMENT.dayAheadPrice);
+const deviationWon = wonOf(EXAMPLE_STATEMENT.realtimeDeviationMwh, EXAMPLE_STATEMENT.realtimePrice);
+/**
+ * 예시 정산서의 금액(원, 정산 화면 F9): 입력이 모두 예시라 결과도 예시다. 120,000 kWh × 150 = 18,000,000원,
+ * −6,000 kWh × 140 = −840,000원, 합 17,160,000원(4.3절). 정산 화면의 숫자는 모두 이 파일에서 나온다.
+ */
+export const EXAMPLE_STATEMENT_AMOUNTS = Object.freeze({
+  dayAhead: example({ value: dayAheadWon, unit: '원', label: '하루전시장 정산금' }),
+  deviation: example({ value: deviationWon, unit: '원', label: '실시간 차이 정산금' }),
+  total: example({ value: dayAheadWon + deviationWon, unit: '원', label: '예시 정산 합계' }),
 });
 
 /**

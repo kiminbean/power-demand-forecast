@@ -17,21 +17,22 @@ import type { SheetRegistry } from './src/app/SheetHost';
 import { applyDocumentTheme } from './src/app/head';
 import type { RouteKey, RouteState, SourceRow } from './src/app/routes';
 import { ThemeProvider } from './src/app/theme';
-import { BIDDING_PANEL_TITLE, GLOSSARY_TITLES, SOURCES_SHEET_TITLE, TODAY_PANEL_TITLE, methodSheetTitle } from './src/content/strings';
+import {
+  BIDDING_PANEL_TITLE, GLOSSARY_TITLES, SETTLEMENT_PANEL_TITLE, SOURCES_SHEET_TITLE, TODAY_PANEL_TITLE, methodSheetTitle,
+} from './src/content/strings';
 import BiddingTab, { BiddingMethodFacts, BiddingPanel, useBiddingSourceRows } from './src/features/bidding/BiddingTab';
+import SettlementTab, { SettlementMethodFacts, SettlementPanel } from './src/features/settlement/SettlementTab';
 import { MethodSheetBody, TermSheetBody } from './src/features/guide/sheets';
 import { RefreshButton } from './src/ui/Button';
 import { Icon } from './src/ui/Icon';
 import SMPForecastScreen, { TodayMethodFacts, TodayPanel, TodaySourcesSheet } from './src/screens/SMPForecastScreen';
-import SettlementScreen from './src/screens/SettlementScreen';
 
 // 헤더 버전 표기(P8 전까지 v6.1). src/content/strings.ts의 APP_VERSION과 같아야 한다.
 const HEADER_VERSION = 'v6.1';
 // 버전 글자의 숫자는 값이 아니라 이름이다(I2: data-pd-meta). web()은 헤더 VM 테스트에서 {}라서 부르지 않고 객체로 둔다.
 const VERSION_DATA: object = { dataSet: { pdMeta: 'version' } };
-// 탭 3개(알아보기는 F10). 오늘(F7)·입찰(F8)은 새 화면(자기 h1 행)이고, 정산은 아직 레거시라 셸이 h1 행을 둘러 준다(F9가 뺀다).
+// 탭 3개(알아보기는 F10). 오늘(F7)·입찰(F8)·정산(F9) 모두 새 화면(자기 h1 행)이라 셸의 레거시 틀은 더 쓰지 않는다.
 const TABS: readonly RouteKey[] = ['smp', 'bidding', 'settlement'];
-const LEGACY: readonly RouteKey[] = ['settlement'];
 
 /** 출처와 기준 시각 표(4.4절): 오늘 행 + 입찰 계산 행. 응답 상태 행은 F10이 더한다. */
 function SourcesSheet({ row }: { row: SourceRow | null }) {
@@ -42,15 +43,19 @@ function SourcesSheet({ row }: { row: SourceRow | null }) {
 const SHEETS: SheetRegistry = {
   method: {
     title: s => methodSheetTitle(s.card),
-    render: s => <MethodSheetBody card={s.card} facts={<><TodayMethodFacts card={s.card} /><BiddingMethodFacts card={s.card} /></>} />,
+    render: s => (
+      <MethodSheetBody card={s.card}
+        facts={<><TodayMethodFacts card={s.card} /><BiddingMethodFacts card={s.card} /><SettlementMethodFacts card={s.card} /></>} />
+    ),
   },
   sources: { title: () => SOURCES_SHEET_TITLE, render: s => <SourcesSheet row={s.row} /> },
   term: { title: s => GLOSSARY_TITLES[s.id], render: s => <TermSheetBody id={s.id} /> },
 };
-// ≥ 1280 "이 화면 읽는 법" 패널(4.6절). 레거시 화면에는 없다.
+// ≥ 1280 "이 화면 읽는 법" 패널(4.6절): 화면마다 제목이 다르다(정산은 ①+② 식 그림, 4.3절).
 const renderPanel = (state: RouteState): PanelContent | null => {
   if (state.key === 'smp') return { title: TODAY_PANEL_TITLE, body: <TodayPanel /> };
-  return state.key === 'bidding' ? { title: BIDDING_PANEL_TITLE, body: <BiddingPanel /> } : null;
+  if (state.key === 'bidding') return { title: BIDDING_PANEL_TITLE, body: <BiddingPanel /> };
+  return state.key === 'settlement' ? { title: SETTLEMENT_PANEL_TITLE, body: <SettlementPanel /> } : null;
 };
 // 셸이 테마 팔레트를 넘기지 않을 때(헤더 VM 테스트)의 옛 색.
 const LEGACY_PALETTE: HeaderPalette = {
@@ -95,7 +100,7 @@ function renderRoute(state: RouteState) {
     case 'bidding':
       return <BiddingTab />;
     case 'settlement':
-      return <SettlementScreen />;
+      return <SettlementTab />;
     default:
       return null;
   }
@@ -105,7 +110,7 @@ export default function App() {
   return (
     <ThemeProvider onDocumentTheme={applyDocumentTheme}>
       <StatusBar style="auto" />
-      <Shell tabs={TABS} legacy={LEGACY} renderRoute={renderRoute} renderHeader={Header} renderPanel={renderPanel} sheets={SHEETS} />
+      <Shell tabs={TABS} renderRoute={renderRoute} renderHeader={Header} renderPanel={renderPanel} sheets={SHEETS} />
     </ThemeProvider>
   );
 }

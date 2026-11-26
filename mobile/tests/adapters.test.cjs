@@ -205,7 +205,8 @@ const GUIDE_OK = () => {
 };
 
 test('guide loader: shape (keys, kinds, lengths, no digits), relative URL, one request per base, retry after failure', async () => {
-  assert.equal(guide.parseGuide(GUIDE_OK()).glossary.length, 12);
+  // 4.4절 목록 12개 + 정산 화면 용어 줄(4.3절)의 "kWh와 MW"(F9).
+  assert.equal(guide.parseGuide(GUIDE_OK()).glossary.length, 13);
   const broken = [
     j => { j.version = 2; }, j => { j.tour.pop(); }, j => { j.glossary[0].id = 'nope'; }, j => { j.glossary[1].id = j.glossary[0].id; },
     j => { j.glossary[0].short = '가'.repeat(61); }, j => { delete j.cards['bid-merit']; }, j => { j.topics.extra = j.topics.about; },

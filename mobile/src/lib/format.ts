@@ -43,10 +43,11 @@ export const mw = (v: number | null | undefined) => num(v, 0);
 export const pct = (v: number | null | undefined, decimals = 1) => num(v, decimals);
 
 /** 원 → 만원·억원(1억 이상은 소수 둘째 자리 억원). 반올림 1회. */
-export function krw(won: number | null | undefined): string {
+export function krw(won: number | null | undefined, decimals = 1): string {
   if (!isFiniteNumber(won)) return DASH;
   const abs = Math.abs(won);
-  const man = num(abs / 1e4, 1);
+  // 만원 자릿수: 입찰 기대 수입은 소수 첫째 자리("468.6만원"), 정산 예시처럼 만원 단위로 떨어지는 금액은 0("1,716만원", 4.3절).
+  const man = num(abs / 1e4, decimals);
   const body = Number(man.replace(/,/g, '')) >= 1e4 ? `${num(abs / 1e8, 2)}억원` : `${man}만원`;
   return won < 0 && !isZeroText(body) ? MINUS + body : body;
 }

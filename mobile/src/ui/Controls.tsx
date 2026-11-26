@@ -124,7 +124,8 @@ const styles = StyleSheet.create({
   },
   segmentV: { flexDirection: 'column', alignSelf: 'stretch' },
   segItemV: { alignItems: 'flex-start' },
-  term: { minHeight: HIT, minWidth: HIT, justifyContent: 'center', alignSelf: 'flex-start' },
+  // 44보다 짧은 글자("정산")는 상자 가운데에 둔다: 왼쪽에 붙이면 다음 링크와의 간격만 넓어 보인다(F9 정산 용어 줄).
+  term: { minHeight: HIT, minWidth: HIT, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
   underline: { textDecorationLine: 'underline' },
   listRow: { minHeight: SIZE.listRow, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, borderBottomWidth: 1, paddingVertical: SPACE.sm },
   grow: { flex: 1, minWidth: 0 },
