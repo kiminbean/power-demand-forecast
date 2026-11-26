@@ -1,5 +1,5 @@
 // 입력 컨트롤(6.2절): 시간 스텝퍼, 세그먼트(radiogroup), 용어 링크, 목록 행. 모두 상자 ≥ 44(M2), 한국어 이름.
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { HIT, RADIUS, SIZE, SPACE } from './tokens';
 import { IconButton } from './Button';

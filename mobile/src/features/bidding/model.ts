@@ -19,7 +19,7 @@ import {
   SOURCE_PENDING, SOURCE_TEXT, answerClosedText, answerOpenText, basisLagText, bidTableCaption, calcFooterSource, calcInputText,
   calcMethodText, calcSourceText, countdownText, deadlineApiText, deadlineCheckText, deadlineWhenText, freshness, ladderChartLabel,
   ladderNotRealText, ladderSentenceText, ladderTrendText, lookupAt, lookupBasisText, meritSummaryText, modelUsedText, nextCountdownText, nextDeadlineText,
-  priceBasisText, rtmLineText, rtmStatusText, serverTimeText,
+  priceBasisPendingText, priceBasisText, rtmLineText, rtmStatusText, serverTimeText,
 } from '../../content/strings';
 import type { Risk, RouteState } from '../../app/routes';
 import type { ChipSpec, Fetched, Footer, MethodFacts, SourceRowView } from '../today/model';
@@ -45,8 +45,10 @@ export type BiddingInput = {
   now: number;
   market: Fetched<MarketStatus>;
   calc: Fetched<OptimizedSegments> & { busy: boolean };
-  /** 오늘 화면이 받아 둔 기준선 예측(엿보기). 입찰 경로는 시장 상태·입찰 계산만 요청한다(6.3절). 없으면 가격 근거 줄을 확인할 수 없다. */
+  /** 기준선 예측(가격 근거 줄). 입찰 화면이 같은 저장소로 받는다(round 1 D5, 오늘 화면이 받아 두었으면 그 값). */
   forecast: SmpForecast | null;
+  /** 예측을 받지 못했다(값도 없음): 가격 근거 줄 대신 "가격 근거 확인 전 · …"을 쓴다. */
+  forecastFailed?: boolean;
   /** 지금 계산 결과를 받을 때 엿본 예측일(그 뒤 예측일이 바뀌면 오래된 입력). */
   calcForecastDate: string | null;
   risk: Risk | null;
@@ -235,11 +237,13 @@ function calcError(error: unknown): BidCardView {
 /**
  * 가격 근거 공개 줄(7.8절 2): 계산의 입찰일이 기준선 예측일과 다르고, 보이는 시간의 계산기 q50이 같은 예측의 q50과 0.05 안이면
  * "가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이". 백엔드가 D+1 기준선을 주면(P5) 저절로 사라진다.
- * 예측은 엿본 것뿐이라 오늘 화면을 거치지 않은 방문에서는 확인할 수 없어 쓰지 않는다.
+ * 예측을 받지 못했으면 확인할 수 없다는 것을 그대로 쓴다(round 1 D5): "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27".
+ * 받는 중이면 아무것도 쓰지 않는다(받으면 줄이 생긴다).
  */
-function priceBasis(seg: SegmentsView, hour: HourBidView, forecast: SmpForecast | null): string | null {
+function priceBasis(seg: SegmentsView, hour: HourBidView, forecast: SmpForecast | null, failed: boolean): string | null {
   const kind = seg.kind;
-  if (!forecast || kind === 'fallback' || smpForecastKind(forecast) !== kind) return null;
+  if (!forecast) return failed && kind !== 'fallback' && seg.tradingDate ? priceBasisPendingText(kind, seg.tradingDate) : null;
+  if (kind === 'fallback' || smpForecastKind(forecast) !== kind) return null;
   const fd = parseDayKey(forecast.forecast_date);
   if (!fd || !seg.tradingDate || fd === seg.tradingDate) return null;
   const mine = hour.baselineQ50;
@@ -274,7 +278,7 @@ function calcCard(input: BiddingInput, stale: boolean): { view: BidCardView; seg
       summary: stats ? ladderSentenceText(totalMw, stats.count, stats.minPrice, stats.maxPrice) : null,
       // 가격이 낮을수록 낙찰 가능성이 높을 때만 그렇게 말한다(계산기가 그렇게 만들지만 응답으로 확인한다).
       trend: stats && falling && stats.probAtMin > stats.probAtMax ? ladderTrendText(stats.probAtMin, stats.probAtMax) : null,
-      notReal: ladderNotRealText(seg.kind), basis: priceBasis(seg, hour, input.forecast),
+      notReal: ladderNotRealText(seg.kind), basis: priceBasis(seg, hour, input.forecast, input.forecastFailed === true),
       rows: hour.segments.map(s => ({ id: s.id, segment: num(s.id, 0), quantity: s.quantity, price: s.price, probability: s.probability, revenue: s.revenue })),
       total: { quantity: exampleFromCalculator(totalMw, 'MW', '합계 물량'), revenue: hour.revenue },
       tableCaption: bidTableCaption(hour.tradeHour), footer,
@@ -301,7 +305,7 @@ function sourceRow(r: Fetched<OptimizedSegments>, seg: SegmentsView | null): Sou
     const source = calcSourceText(seg.kind);
     return { id: 'bidding', item, source, basis: lookupBasisText(r.fetchedAt), chip: { chip: CHIPS.estShort, source }, status: null, link: null };
   }
-  const basis = r.status === 'error' ? SOURCE_PENDING.error : r.status === 'idle' ? SOURCE_PENDING.idle : SOURCE_PENDING.loading;
+  const basis = r.status === 'error' ? SOURCE_PENDING.error : r.status === 'idle' ? SOURCE_PENDING.calcIdle : SOURCE_PENDING.loading;
   return { id: 'bidding', item, source: calcSourceText('baseline'), basis, chip: null, status: null, link: null };
 }
 

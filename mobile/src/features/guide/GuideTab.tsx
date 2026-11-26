@@ -1,14 +1,14 @@
 /**
  * 알아보기(명세 4.4절, 경로 /guide · 라우트 키 guide). 하위 상태는 하나만(routes.ts): 둘러보기 단계(?tour=, TourScreen.tsx) > 용어 한 개
  * (?term=) > 주제(?topic=). 첫 화면은 둘러보기 입구와 목록 6행이고 요청이 없다. 긴 글은 guide.ko.json(처음 필요할 때 한 번)에서,
- * 숫자는 화면 값과 strings.ts에서만 온다. 요청은 "데이터 출처와 연결 상태"의 /realtime-status 하나뿐이고(6.3절), 다른 값(예측 종류·
- * 모델 정보·시장 상태·시계 차이·출처 표의 오늘·입찰 행)은 이번 방문의 저장소를 엿보기만 한다. 출처와 기준 시각 시트도 응답 상태 행을
- * 엿보기만 해서(useStatusRows) 알아보기를 거치지 않은 방문에서는 "이번 방문에서 아직 조회하지 않음"이다.
+ * 숫자는 화면 값과 strings.ts에서만 온다. 요청은 "데이터 출처와 연결 상태"와 출처 시트뿐이다(6.3절, round 1 D15): /realtime-status와
+ * 출처 표의 오늘 행 자료 중 이번 방문에 아직 없는 것(TodaySourcesSheet). 입찰 계산은 부르지 않는다(서버가 한 번에 하나만 계산한다).
+ * 그 밖의 값(예측 종류·시장 상태·시계 차이)은 이번 방문의 저장소를 엿보기만 한다.
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GuideGate, TermSheetBody, WhereLink } from './sheets';
-import { aboutClockLines, marketFacts, methodAccuracy, statusView } from './model';
+import { aboutClockLines, marketFacts, methodAccuracy, sourcesChip, statusView } from './model';
 import { TourScreen } from './TourScreen';
 import { useClock, useNav } from '../../app/Shell';
 import { GUIDE_TOPIC_TITLES, ROUTES, TOUR_STEPS, rootState } from '../../app/routes';
@@ -21,19 +21,20 @@ import { CHIPS, smpForecastKind } from '../../lib/provenance';
 import { useResource } from '../../lib/resource';
 import type { GuideContent } from '../../content/guide';
 import {
-  ABOUT_ROW, ABOUT_TITLE, GLOSSARY_TITLES, GUIDE_ANSWER, MODEL_NOT_USED, READING_HEADINGS, RS_FAILED, SIMPLIFIED_NOTE, SOURCES_SHEET_TITLE,
-  TOUR_BANNER, TOUR_NAME, appUpdatedText, glossaryCountText, rsOverallText, tourCardTitle, tradeHourExampleText,
+  ABOUT_ROW, ABOUT_TITLE, GLOSSARY_TITLES, GUIDE_ANSWER, MODEL_NOT_USED, READING_HEADINGS, RS_FAILED, SIMPLIFIED_NOTE, SOURCE_PENDING,
+  SOURCES_SHEET_TITLE, TOUR_BANNER, TOUR_NAME, appUpdatedText, glossaryCountText, tourCardTitle, tradeHourExampleText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 import { useBiddingSourceRows } from '../bidding/BiddingTab';
 import { AccuracyCard } from '../today/AccuracyCard';
+import { useTodayView } from '../today/data';
 import { TodaySourcesSheet } from '../today/sheets';
 import { Button } from '../../ui/Button';
 import { Card, StateView } from '../../ui/Card';
 import { NowPill, ProvenanceChip, StatusPill } from '../../ui/Chips';
 import { ListRow, TextLink } from '../../ui/Controls';
 import { AnswerLine, Screen } from '../../ui/Screen';
-import { Text } from '../../ui/Text';
+import { Text, keepTogether } from '../../ui/Text';
 import { LAYOUT, RADIUS, SPACE } from '../../ui/tokens';
 
 const GLOSSARY_IDS = Object.keys(GLOSSARY_TITLES) as GlossaryId[];
@@ -131,7 +132,7 @@ export function ReadingBody({ content }: { content: GuideContent }) {
       </Card>
       <Card title={READING_HEADINGS.time} testID="reading-time">
         <Text variant="body" tone="text2">{L.time}</Text>
-        <Text variant="label" weight="600" dataSet={{ pdMeta: 'example' }}>{tradeHourExampleText()}</Text>
+        <Text variant="label" weight="600" dataSet={{ pdMeta: 'example' }}>{keepTogether(tradeHourExampleText(), { variant: 'label', weight: '600' })}</Text>
       </Card>
       <TopicLink topic="glossary" />
     </>
@@ -157,7 +158,7 @@ function MethodScreen() {
               onSources={() => nav.openSheet({ kind: 'sources', row: 'accuracy' })} onRetry={() => { forecast.reload(); }} />
             <Card title={c.simplified.title} chips={<ProvenanceChip chip={CHIPS.simplified} />} testID="method-simplified">
               {c.simplified.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}
-              {facts ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'facts' }}>{facts}</Text> : null}
+              {facts ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'facts' }}>{keepTogether(facts, { variant: 'label', tone: 'text2' })}</Text> : null}
               <Text variant="meta" tone="text3">{SIMPLIFIED_NOTE}</Text>
             </Card>
           </>
@@ -167,21 +168,22 @@ function MethodScreen() {
   );
 }
 
-/** 출처 표의 응답 상태 3행(엿보기만): 출처와 기준 시각 시트가 쓴다. */
+/** 출처 표의 응답 상태 3행: 출처와 기준 시각 시트가 쓴다. 이번 방문에 아직 없으면 받는다(D15). */
 export function useStatusRows() {
-  return statusView(useResource<RealtimeStatus>(ENDPOINTS.realtimeStatus)).rows;
+  return statusView(useResource<RealtimeStatus>(ENDPOINTS.realtimeStatus, loadStatus)).rows;
 }
 
-/** 데이터 출처와 연결 상태(?topic=sources): 출처 시트와 같은 표 + /realtime-status 전체 상태. 이 화면만 응답 상태를 받는다. */
+/** 데이터 출처와 연결 상태(?topic=sources): 출처 시트와 같은 표 + /realtime-status 전체 상태. 머리 칩은 표와 같은 말을 한다(D15). */
 function SourcesScreen() {
   const rs = useResource(ENDPOINTS.realtimeStatus, loadStatus);
   const status = statusView(rs);
   const rows = [...useBiddingSourceRows(), ...status.rows];
+  const failed = useTodayView(false).view.sources.some(r => r.basis === SOURCE_PENDING.error);
+  const chip = sourcesChip(status.overall, failed);
   return (
     <Screen title={GUIDE_TOPIC_TITLES.sources} pill={<GuidePill />} testID="guide-sources">
       <GuideGate>{c => c.topics.sources.body.map((p, i) => (i ? <Text key={p} variant="label" tone="text2">{p}</Text> : <AnswerLine key={p}>{p}</AnswerLine>))}</GuideGate>
-      <Card title={SOURCES_SHEET_TITLE} testID="sources-card"
-        chips={status.overall ? <StatusPill tone={status.overall.tone} text={rsOverallText(status.overall.text)} /> : undefined}>
+      <Card title={SOURCES_SHEET_TITLE} testID="sources-card" chips={chip ? <StatusPill tone={chip.tone} text={chip.text} /> : undefined}>
         {rs.status === 'error' && !rs.data ? <StateView kind="error" text={RS_FAILED} onRetry={() => { rs.reload(); }} /> : null}
         <TodaySourcesSheet row={null} extra={rows} page />
       </Card>
@@ -198,7 +200,7 @@ function AboutScreen() {
     <Screen title={GUIDE_TOPIC_TITLES.about} pill={<GuidePill />} testID="guide-about">
       <Card title={ABOUT_TITLE} testID="about-card">
         <GuideGate>{c => c.topics.about.body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}</GuideGate>
-        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'updated' }}>{appUpdatedText()}</Text>
+        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'updated' }}>{keepTogether(appUpdatedText(), { variant: 'label', tone: 'text2' })}</Text>
         {aboutClockLines(skew).map(l => <Text key={l} variant="label" tone="text2" dataSet={{ pdMeta: 'clock' }}>{l}</Text>)}
       </Card>
       <List><ListRow title={GUIDE_TOPIC_TITLES.sources} onPress={() => nav.push(topicState('sources'))} last /></List>

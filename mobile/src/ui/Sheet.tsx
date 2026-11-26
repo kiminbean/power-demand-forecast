@@ -1,7 +1,8 @@
 // 시트(6.2절): 휴대폰은 아래 시트(최대 85 %, 위 모서리 20), 600–1023은 아래쪽 640 폭, ≥ 1024는 오른쪽 패널 400.
 // role=dialog + aria-modal + aria-labelledby, 초점 가둠(Tab·Shift+Tab), Esc, 스크림 클릭, 닫히면 연 요소로 초점 복귀.
 // 열고 닫는 것과 히스토리(3.3절)는 SheetHost(F6)가 맡는다: 이 부품은 열린 동안만 그려진다. RN Modal은 쓰지 않는다.
-import React, { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import type React from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import { LAYOUT, MOTION, RADIUS, SPACE } from './tokens';

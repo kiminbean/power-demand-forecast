@@ -1,6 +1,6 @@
 // 상태 칩·pill(5.2절). 상태는 색만으로 전하지 않는다: 글자 + 테두리 모양 + 글리프(또는 아이콘)가 같은 정보를 준다.
 // 출처 칩은 외곽선·빗금, 채운 pill은 예비율 단계·접수 상태·수신 상태에만 쓴다.
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { RADIUS, SIZE, SPACE } from './tokens';
 import type { PillTone } from './tokens';

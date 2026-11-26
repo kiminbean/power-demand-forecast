@@ -1,7 +1,7 @@
 // 가격은 어떻게 정해지나요?(명세 4.2·7.1·7.9절, 처음에는 접힘): 펼치면 예시 발전기 6개(examples.ts)를 싼 순서로 쌓은 정적 그림과
 // 예시 수요선, 설명 글(guide.ko.json의 bid-merit, 숫자 없음), 그림의 글 대안 6행 목록. 모두 예시라 ┆예시┆ 칩을 달고, 그림은 예시 글자색
 // (7.1절)으로 그리며, 숫자는 메타·SampleValue로만 보인다. 실제 발전소 이름은 쓰지 않는다.
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { meritExample } from './model';
@@ -16,7 +16,7 @@ import { Card } from '../../ui/Card';
 import { ProvenanceChip } from '../../ui/Chips';
 import { ChartLabel, LABEL_HEIGHT, chartStyles, useChartWidth } from '../../ui/charts/ChartFrame';
 import { labelLeft, ladderBars, ladderLayout, mwTicks, niceScale, r2, tickBox, yOf } from '../../ui/charts/chartMath';
-import { Text } from '../../ui/Text';
+import { Text, keepTogether } from '../../ui/Text';
 import { CHART, SPACE } from '../../ui/tokens';
 import { SampleValue } from '../../ui/Values';
 import { web } from '../../ui/web';
@@ -97,7 +97,7 @@ export function MeritOrderCard({ onMethod }: { onMethod: () => void }) {
       {open ? (
         <View style={styles.body} testID="merit-body">
           {summary && marginal >= 0 ? <MeritChart marginal={marginal} summary={summary} /> : null}
-          {summary ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{summary}</Text> : null}
+          {summary ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'summary' }}>{keepTogether(summary, { variant: 'label', tone: 'text2' })}</Text> : null}
           <GuideGate>{content => content.cards['bid-merit'].body.map(p => <Text key={p} variant="body" tone="text2">{p}</Text>)}</GuideGate>
           <View style={styles.list} testID="merit-list">
             {EXAMPLE_MERIT_BLOCKS.map(b => (

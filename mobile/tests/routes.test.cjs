@@ -194,6 +194,26 @@ for (const [name, make] of Object.entries(ROUTERS)) {
     assert.deepStrictEqual(seen, ['push /mobile/settlement', 'pop /mobile/bidding']);
   });
 
+  test(`${name} 라우터: 하위 상태(둘러보기·용어·주제)에서 지금 탭을 다시 누르면 그 탭의 첫 화면(새 항목), 첫 화면에서는 맨 위만`, () => {
+    for (const sub of ['/mobile/guide?tour=3', '/mobile/guide?term=smp', '/mobile/guide?topic=sources']) {
+      const { router, settle } = make(sub);
+      router.start();
+      const seen = [];
+      router.subscribe((state, kind) => seen.push(`${kind} ${buildUrl(state, router.base)}`));
+      assert.equal(routes.pressTab(router, 'guide'), 'pushed', sub);
+      assert.deepStrictEqual(seen, ['push /mobile/guide'], sub);
+      assert.equal(routes.pressTab(router, 'guide'), 'top', `${sub}: 첫 화면에서 다시 누르면 맨 위로만`);
+      router.back();
+      settle();
+      assert.equal(urlOf(router), sub, '뒤로는 하위 상태로 돌아간다');
+    }
+    // 오늘·입찰의 거래시간·성향 선택은 하위 상태가 아니다: 다시 눌러도 히스토리 없음(G2).
+    const { router } = make('/mobile/bidding?hour=19&risk=aggressive');
+    router.start();
+    assert.equal(routes.pressTab(router, 'bidding'), 'top');
+    assert.equal(urlOf(router), '/mobile/bidding?hour=19&risk=aggressive');
+  });
+
   test(`${name} 라우터: 연 시트는 뒤로로 닫힘(탭 그대로), Esc 두 번도 한 번만 뒤로, 딥링크 시트는 쿼리만 뺌`, () => {
     const { router, settle } = make('/mobile/bidding');
     router.start();

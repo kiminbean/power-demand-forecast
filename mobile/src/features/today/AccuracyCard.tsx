@@ -27,7 +27,7 @@ export function AccuracyCard({ view, onMethod, onSources, onRetry }: AccuracyCar
         <View style={styles.group}>
           <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{keepTogether(d.main, { variant: 'body', weight: '700' })}</Text>
           <Text variant="body" tone="text2" dataSet={{ pdMeta: 'documented' }}>{d.example}</Text>
-          <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{d.basis}</Text>
+          <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{keepTogether(d.basis, { variant: 'meta', tone: 'text3' })}</Text>
           {d.r2 ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'documented' }}>{keepTogether(d.r2, { variant: 'label', tone: 'text2' })}</Text> : null}
         </View>
       ) : <Text variant="body" tone="text2">{view.unregistered}</Text>}

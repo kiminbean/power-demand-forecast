@@ -5,7 +5,8 @@
  * 가상 발전소, 기대 수입은 쓰지 않는다) · 4 SampleStatementCard · 5 이번 방문 값의 표시 범례(값이 없으면 표시와 설명만).
  * 1–3단계는 그 화면과 같은 저장소 키로 받는다(5분 안에 받은 값이 있으면 요청 없음). 5단계는 엿보기만 한다.
  */
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
+import type React from 'react';
 import { View } from 'react-native';
 import { tourLegend } from './model';
 import { GuideGate } from './sheets';
@@ -66,10 +67,10 @@ function TourForecast() {
   }
   return (
     <Card title={title} chips={<ChipList chips={f.chips} />} onMethod={open.method('today-forecast')} testID="tour-forecast">
-      <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{f.legend}</Text>
+      <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{keepTogether(f.legend, { variant: 'meta', tone: 'text2' })}</Text>
       <ChartBleed><StepChart forecast={f.view} label={chartLabel(f.kind)} now={now} dots={f.dots} /></ChartBleed>
-      {a && a.documented ? <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{a.documented.main}</Text> : null}
-      {a && a.documented ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{a.documented.basis}</Text> : null}
+      {a && a.documented ? <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{keepTogether(a.documented.main, { variant: 'body', weight: '700' })}</Text> : null}
+      {a && a.documented ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{keepTogether(a.documented.basis, { variant: 'meta', tone: 'text3' })}</Text> : null}
       {a && a.unregistered ? <Text variant="body" tone="text2">{a.unregistered}</Text> : null}
       <SourceFooter source={f.footer.source} time={f.footer.time} onSources={open.sources('forecast')} context={title} />
     </Card>
@@ -90,7 +91,7 @@ function TourBidding() {
         {c.state === 'ready' ? (
           <>
             {c.summary ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{keepTogether(c.summary, { variant: 'body' })}</Text> : null}
-            {c.trend ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{c.trend}</Text> : null}
+            {c.trend ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{keepTogether(c.trend, { variant: 'body' })}</Text> : null}
             <Text variant="meta" tone="text3">{c.notReal}</Text>
           </>
         ) : c.state === 'loading' ? <StateView kind="loading" />

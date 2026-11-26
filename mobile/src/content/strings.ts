@@ -399,8 +399,11 @@ export const accuracyBasisPeriod = () => `평가 기간 ${DOCUMENTED_SMP_ACCURAC
 export const observedBasisText = (fetchedAt: number) => `관측 시각 미제공 · 조회 ${kstClock(fetchedAt)}`;
 export const lookupBasisText = (fetchedAt: number) => `조회 ${kstClock(fetchedAt)}`;
 export const serverBasisText = (serverTime: number | null) => `서버 시각 ${kstClock(serverTime)}`;
+// idle은 표를 연 화면이 받기 시작하기 전 한 순간뿐이다(round 1 D15: 표를 열면 받는다). 입찰 계산은 표가 부르지 않는다(서버가 한 번에
+// 하나만 계산한다): 받기 전이면 calcIdle.
 export const SOURCE_PENDING = Object.freeze({
   loading: '불러오는 중', error: '불러오지 못함', missing: '미수신', none: '이 응답에 없음', idle: '이번 방문에서 아직 조회하지 않음',
+  calcIdle: '입찰 화면을 열면 계산합니다',
 });
 export const SOURCES_NOTES = Object.freeze([
   'KPX가 게시 시각을 넘겨주지 않아 조회 시각만 표시합니다.',
@@ -492,6 +495,9 @@ export function priceBasisText(forecastDate: string, tradingDate: string, kind: 
   const day = dayShort(tradingDate);
   return `가격 근거: ${basis} · 입찰일 ${day}${waGwa(day)} ${gap === 1 ? '하루' : `${num(gap, 0)}일`} 차이`;
 }
+/** 기준선 예측을 받지 못해 근거를 확인할 수 없을 때(round 1 D5): "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27". */
+export const priceBasisPendingText = (kind: 'baseline' | 'model', tradingDate: string) =>
+  `가격 근거 확인 전 · 서버 ${kind === 'baseline' ? '기준선' : '학습 모델'} 예측 사용 · 입찰일 ${dayShort(tradingDate)}`;
 export const CALC_BUSY_TEXT = '다른 요청을 처리하는 중입니다 · 잠시 뒤 다시 계산해 주세요';
 export const CALC_BAD_REQUEST_TEXT = '계산 조건 오류';
 export const CALC_FAILED_TEXT = '계산 결과를 불러오지 못했습니다';
@@ -620,4 +626,6 @@ export const RS_ITEMS = Object.freeze({ smp: '응답 상태 · SMP', supply: '�
 export const RS_SOURCE = 'API 서버 응답 상태(realtime-status)';
 export const rsBasisText = (at: number | null) => (at === null ? '응답 시각 미제공' : `응답 시각 ${kstClock(at)}`);
 export const rsOverallText = (overall: string) => `API 서버: ${overall}`;
+/** 표의 행을 하나라도 불러오지 못했을 때의 머리 칩(D15, 서버가 "모두 응답"이어도). */
+export const SOURCES_PARTLY_FAILED = '일부 자료를 불러오지 못함';
 export const RS_FAILED = '응답 상태를 불러오지 못했습니다';

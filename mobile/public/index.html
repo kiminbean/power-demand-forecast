@@ -10,7 +10,9 @@
   <title>%WEB_TITLE%</title>
   <script>
     try { var t = localStorage.getItem('pd-theme');
-      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+      if (t === 'light' || t === 'dark') { document.documentElement.setAttribute('data-theme', t);
+        var c = t === 'dark' ? '#0B1220' : '#F6F8FB', m = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < m.length; i++) m[i].setAttribute('content', c); } } catch (e) {}
   </script>
   <style id="expo-reset">
     :root { --pd-canvas:#F6F8FB; --pd-surface:#FFFFFF; --pd-border:#E2E8F0; --pd-text:#0F172A; --pd-text3:#56657A; --pd-focus:#2563EB; --pd-hatch:rgba(100,116,139,.22); color-scheme: light; }
@@ -49,5 +51,24 @@
     <p class="pd-boot-slow">연결이 느립니다. 잠시 기다리거나 새로고침해 주세요.</p>
     <div class="pd-boot-tabs"></div>
   </div></div>
+  <!-- round 1 D3(명세 8.1·9절): 이 경로가 처음 그릴 때 보내는 GET만 번들을 받는 동안 미리 시작한다(번들 요청 뒤, setTimeout 0).
+       앱(src/data/client.ts)이 URL마다 한 번 꺼내 쓰고, 없거나 연결이 실패했거나 5분 지났으면 보통 요청을 보낸다. -->
+  <script>
+    (function (w) { try {
+      var p = location.pathname, b = p === '/mobile' || p.indexOf('/mobile/') === 0 ? '/mobile/' : '/', r = p.indexOf(b) === 0 ? p.slice(b.length) : '';
+      var a = location.search.slice(1).split('&'), q = function (n) {
+        for (var i = 0, k, v; i < a.length; i++) { k = a[i].indexOf('=');
+          try { if (decodeURIComponent(k < 0 ? a[i] : a[i].slice(0, k)) !== n) continue; v = decodeURIComponent(k < 0 ? '' : a[i].slice(k + 1)); } catch (e) { continue; }
+          return v; }
+        return null; };
+      var t = ['smp/day-ahead', 'smp-forecast', 'dashboard/kpis', 'power-supply', 'market-status'], k = q('risk'), u = [], f = {}, o;
+      if (r === 'bidding') u = ['market-status', 'smp-forecast', 'bidding/optimized-segments?capacity_mw=50&risk_level=' + (/^(conservative|moderate|aggressive)$/.test(k) ? k : 'moderate')];
+      else if (r === 'guide') u = q('topic') === 'sources' && q('tour') === null && q('term') === null ? t.concat('realtime-status') : [];
+      else if (r !== 'settlement') u = t.concat('model/info');
+      if (!u.length || !w.fetch) return;
+      o = w.__PD_PREFETCH__ = { t: Date.now(), r: f, x: false };
+      setTimeout(function () { for (var i = 0; i < u.length && !o.x; i++) (f['/api/v1/' + u[i]] = fetch('/api/v1/' + u[i])).catch(function () {}); }, 0);
+    } catch (e) {} })(window);
+  </script>
 </body>
 </html>

@@ -162,7 +162,7 @@ export function SampleBidCard({ view, risk, onRisk, onHour, onRetry, onMethod, o
       ) : null}
       <View style={styles.group}>
         {view.summary ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{keepTogether(view.summary, { variant: 'body' })}</Text> : null}
-        {view.trend ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{view.trend}</Text> : null}
+        {view.trend ? <Text variant="body" dataSet={{ pdMeta: 'summary' }}>{keepTogether(view.trend, { variant: 'body' })}</Text> : null}
         <Text variant="meta" tone="text3">{view.notReal}</Text>
         {view.basis ? (
           <View style={styles.basis} testID="bid-basis">

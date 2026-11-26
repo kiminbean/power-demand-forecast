@@ -48,20 +48,46 @@ export class ApiNetworkError extends Error {
 
 export type FetchResponseLike = { ok: boolean; status: number; json(): Promise<unknown> };
 export type FetchLike = (url: string, init: { method: 'GET'; signal?: AbortSignal }) => Promise<FetchResponseLike>;
+/**
+ * index.html이 번들을 받는 동안 미리 시작한 첫 화면 GET(round 1 D3, 명세 8.1·9절): 시작 시각 t, URL → 응답 약속 r, 닫힘 x.
+ * 그 스크립트는 경로마다 그 화면이 처음 그릴 때 보내는 요청만 시작한다(tests/shell-html이 ENDPOINTS·예시 용량과 맞춰 본다).
+ */
+export type PrefetchTable = { t: number; r: Record<string, Promise<FetchResponseLike> | undefined>; x?: boolean };
+/** 미리 받은 응답을 쓰는 나이 한도: 자료 저장소의 새로 받기 주기(lib/resource REFRESH_EVERY_MS, 5분)와 같다. */
+export const PREFETCH_MAX_AGE_MS = 5 * 60_000;
 /** signal: 이 클라이언트의 모든 요청에 붙는 중단 신호(자료 저장소가 요청마다 10초 신호를 묶은 클라이언트를 만든다). */
-export type ClientOptions = { baseUrl?: string; fetchImpl?: FetchLike; signal?: AbortSignal };
+export type ClientOptions = { baseUrl?: string; fetchImpl?: FetchLike; signal?: AbortSignal; prefetch?: () => PrefetchTable | null; now?: () => number };
 
 const isAbort = (error: unknown) => typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError';
+const globalPrefetch = () => (globalThis as { __PD_PREFETCH__?: PrefetchTable }).__PD_PREFETCH__ ?? null;
+
+/**
+ * 미리 시작한 요청을 URL마다 한 번만 꺼낸다(꺼내면 지운다). 처음 부를 때 표를 닫아 아직 시작하지 않은 미리 받기를 막는다(같은 GET이
+ * 두 번 나가지 않게). 없거나 5분 넘었으면 null이라서 보통 요청을 보낸다.
+ */
+export function takePrefetch(table: PrefetchTable | null, url: string, now: number): Promise<FetchResponseLike> | null {
+  if (!table || typeof table !== 'object' || !table.r) return null;
+  table.x = true;
+  const p = Object.prototype.hasOwnProperty.call(table.r, url) ? table.r[url] : undefined;
+  delete table.r[url];
+  const age = now - table.t;
+  return p && typeof p.then === 'function' && age >= 0 && age < PREFETCH_MAX_AGE_MS ? p : null;
+}
 
 export function createClient(options: ClientOptions = {}) {
   const base = (options.baseUrl ?? API_URL).replace(/\/+$/, '');
   const doFetch: FetchLike = options.fetchImpl ?? ((url, init) => fetch(url, init));
+  const prefetch = options.prefetch ?? (options.fetchImpl ? () => null : globalPrefetch);
+  const now = options.now ?? Date.now;
 
   // Content-Type을 붙이지 않는다: GET 본문이 없고, 붙이면 다른 출처 설정에서 사전 요청이 생긴다.
   async function get<T>(path: string, parse: (json: unknown) => T, signal: AbortSignal | undefined = options.signal): Promise<T> {
     let response: FetchResponseLike;
+    const url = base + path;
+    const early = takePrefetch(prefetch(), url, now());
     try {
-      response = await doFetch(base + path, { method: 'GET', signal });
+      // 미리 받은 응답은 상태(503 포함)를 그대로 쓴다(재시도 규칙이 같다). 연결이 실패했으면 바로 보통 요청으로 다시 받는다.
+      response = await (early ? early.catch(() => doFetch(url, { method: 'GET', signal })) : doFetch(url, { method: 'GET', signal }));
     } catch (error) {
       if (isAbort(error)) throw error;
       throw new ApiNetworkError(path);

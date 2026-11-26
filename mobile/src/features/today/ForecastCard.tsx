@@ -84,7 +84,7 @@ export function ForecastCard({ view, chartLabel, now, onSelectHour, onToNow, onM
       <SegmentedControl label="보기 방식" options={MODES} value={mode} onChange={setMode} />
       {mode === 'chart' ? (
         <View style={styles.group}>
-          <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{view.legend}</Text>
+          <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{keepTogether(view.legend, { variant: 'meta', tone: 'text2' })}</Text>
           <ChartBleed>
             <StepChart forecast={view.view} label={chartLabel(view.kind)} now={now} dots={view.dots}
               selectedHour={view.selected} onSelectHour={onSelectHour} />

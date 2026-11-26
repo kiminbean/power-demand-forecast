@@ -11,7 +11,8 @@ const loader = createTsLoader();
 const load = rel => loader.load(path.join(SRC_ROOT, rel));
 const types = load('data/types.ts');
 const a = load('data/adapters.ts');
-const { createClient, ENDPOINTS, ApiHttpError, ApiNetworkError } = load('data/client.ts');
+const client_ = load('data/client.ts');
+const { createClient, ENDPOINTS, ApiHttpError, ApiNetworkError } = client_;
 const ex = load('data/examples.ts');
 const f = load('lib/format.ts');
 const s = load('content/strings.ts');
@@ -193,6 +194,44 @@ test('client errors: 503 retryable, 404 not, network → ApiNetworkError, abort 
   await assert.rejects(aborted.getMarketStatus(), e => e === abort);
   const garbage = createClient({ baseUrl: '', fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('NaN'); } }) });
   await assert.rejects(garbage.getMarketStatus(), types.ApiShapeError);
+});
+
+test('client prefetch (round 1 D3): index.html이 미리 받은 응답을 URL마다 한 번만, 연결 실패·5분 초과·없음은 보통 요청', async () => {
+  const bodies = { [ENDPOINTS.dayAhead]: fx('_api_v1_smp_day-ahead.json'), [ENDPOINTS.marketStatus]: fx('_api_v1_market-status.json'),
+    [ENDPOINTS.kpis]: fx('_api_v1_dashboard_kpis.json'), [ENDPOINTS.forecast]: fx('_api_v1_smp-forecast.json') };
+  const { calls, impl } = fakeFetch(url => okJson(bodies[url]));
+  const T0 = 1_000_000;
+  let now = T0 + 4_000;
+  const failed = Promise.reject(new TypeError('Failed to fetch'));
+  failed.catch(() => {});
+  const table = {
+    t: T0, x: false,
+    r: { [ENDPOINTS.marketStatus]: Promise.resolve(okJson(bodies[ENDPOINTS.marketStatus])), [ENDPOINTS.dayAhead]: failed,
+      [ENDPOINTS.kpis]: Promise.resolve({ ok: false, status: 503, json: async () => ({}) }) },
+  };
+  const client = createClient({ baseUrl: '', fetchImpl: impl, prefetch: () => table, now: () => now });
+  // 1) 미리 받은 응답을 쓰면 요청이 없다. 꺼낸 자리는 지워지고, 처음 꺼낼 때 표가 닫혀 아직 시작하지 않은 미리 받기를 막는다.
+  assert.equal((await client.getMarketStatus()).dam.status, 'open');
+  assert.deepEqual([calls.length, table.x, ENDPOINTS.marketStatus in table.r], [0, true, false]);
+  // 2) 같은 URL을 다시 부르면 보통 요청(한 번만 쓴다).
+  await client.getMarketStatus();
+  assert.deepEqual(calls.map(c => c.url), [ENDPOINTS.marketStatus]);
+  // 3) 연결이 실패한 미리 받기는 곧바로 보통 요청 하나로 받는다.
+  assert.equal((await client.getDayAheadSMP()).trade_hour, 7);
+  assert.deepEqual(calls.map(c => c.url), [ENDPOINTS.marketStatus, ENDPOINTS.dayAhead]);
+  // 4) 미리 받은 503은 그 응답 그대로(재시도는 자료 저장소의 규칙: 1.5초 뒤 한 번), 그 자리에서 다시 보내지 않는다.
+  await assert.rejects(client.getDashboardKPIs(), e => e instanceof ApiHttpError && e.status === 503);
+  assert.equal(calls.length, 2);
+  // 5) 시작한 지 5분(자료 저장소의 새로 받기 주기)이 넘은 미리 받기는 쓰지 않는다. 표에 없는 URL도 보통 요청.
+  table.r[ENDPOINTS.forecast] = Promise.resolve(okJson(bodies[ENDPOINTS.forecast]));
+  now = T0 + client_.PREFETCH_MAX_AGE_MS;
+  await client.getSMPForecast();
+  assert.deepEqual([calls.length, calls.at(-1).url, ENDPOINTS.forecast in table.r], [3, ENDPOINTS.forecast, false]);
+  assert.equal(client_.PREFETCH_MAX_AGE_MS, load('lib/resource.ts').REFRESH_EVERY_MS);
+  // 6) 주입한 fetch(테스트)는 전역 미리 받기를 보지 않는다. 표가 없거나 모양이 틀려도 보통 요청.
+  assert.equal(client_.takePrefetch(null, ENDPOINTS.dayAhead, now), null);
+  assert.equal(client_.takePrefetch({ t: T0 }, ENDPOINTS.dayAhead, now), null);
+  assert.equal(client_.takePrefetch({ t: T0 + 10, r: { a: Promise.resolve(1) } }, 'a', T0), null, '기기 시계가 거꾸로 가면 쓰지 않는다');
 });
 
 test('examples: the only home of invented values, frozen, 50 MW virtual plant and 1,716만원 sample statement', () => {

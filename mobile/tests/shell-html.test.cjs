@@ -5,6 +5,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const { createTsLoader, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const TEMPLATE_PATH = path.join(ROOT, 'public', 'index.html');
@@ -100,7 +102,8 @@ test('template: skeleton lives inside #root, noscript outside, no fixed overlay 
   assert.ok(body.indexOf('<noscript>') >= 0 && body.indexOf('<noscript>') < body.indexOf('<div id="root">'));
   assert.match(body, /<noscript>[^<]*JavaScript[^<]*<\/noscript>/);
   assert.match(body, /<div id="root"><div class="pd-boot" aria-busy="true">/);
-  const root = body.slice(body.indexOf('<div id="root">'));
+  // #root 뒤에는 미리 받기 주석과 script만 온다(round 1 D3). 그 앞까지가 #root다.
+  const root = body.slice(body.indexOf('<div id="root">'), body.indexOf('<!--'));
   for (const cls of ['pd-boot-bar', 'pd-boot-card', 'pd-boot-msg', 'pd-boot-slow', 'pd-boot-tabs']) {
     assert.ok(root.includes(`class="${cls}"`), cls);
   }
@@ -121,14 +124,122 @@ test('template: slow-connection line appears once after 12 s even with reduced m
   assert.ok(template.indexOf('.pd-boot-slow { opacity') > template.indexOf('prefers-reduced-motion'));
 });
 
-test('template: inline theme script only applies a stored light/dark choice', () => {
-  const scripts = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-  assert.equal(scripts.length, 1);
+const inlineScripts = () => [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+
+test('template: inline theme script only applies a stored light/dark choice, and paints both theme-color metas with it', () => {
+  const scripts = inlineScripts();
+  assert.equal(scripts.length, 2, '머리의 테마 script + body 끝의 미리 받기 script(round 1 D3)');
   const s = scripts[0];
+  assert.ok(template.indexOf(s) < template.indexOf('</head>'), '테마는 첫 그림 전에(머리)');
   assert.match(s, /^\s*try \{/);
   assert.match(s, /catch \(e\) \{\}\s*$/);
-  assert.match(s, /localStorage\.getItem\('pd-theme'\)/);
-  assert.match(s, /if \(t === 'light' \|\| t === 'dark'\) document\.documentElement\.setAttribute\('data-theme', t\);/);
+  // 저장한 선택을 흉내 내 실제로 돌려 본다: light·dark면 data-theme과 두 theme-color 메타가 그 테마의 canvas, 그 밖이면 아무것도 안 한다
+  // (round 1 layout_a11y: OS 어둡게 + 앱 "밝게"에서 번들이 뜰 때까지 브라우저 막대만 어두웠다).
+  for (const [stored, canvas] of [['light', SHELL_TOKENS.light.canvas], ['dark', SHELL_TOKENS.dark.canvas], [null, null], ['system', null], ['x', null]]) {
+    const metaEls = metas(template, 'theme-color').map(m => ({ content: m.content, setAttribute(name, v) { this[name] = v; } }));
+    const attrs = {};
+    const ctx = {
+      localStorage: { getItem: key => (key === 'pd-theme' ? stored : null) },
+      document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, querySelectorAll: sel => (sel === 'meta[name="theme-color"]' ? metaEls : []) },
+    };
+    vm.runInNewContext(s, ctx);
+    assert.deepEqual(attrs, canvas ? { 'data-theme': stored } : {}, String(stored));
+    assert.deepEqual(metaEls.map(m => m.content), canvas ? [canvas, canvas] : [SHELL_TOKENS.light.canvas, SHELL_TOKENS.dark.canvas], String(stored));
+  }
+  const throwing = { localStorage: { getItem: () => { throw new Error('denied'); } }, document: {} };
+  assert.doesNotThrow(() => vm.runInNewContext(s, throwing), '저장소를 못 쓰면 조용히 시스템 테마');
+});
+
+// ---------------------------------------------------------------- 미리 받기(round 1 D3, 명세 8.1·9절)
+const loader = createTsLoader();
+const loadSrc = rel => loader.load(path.join(SRC_ROOT, rel));
+const routes = loadSrc('app/routes.ts');
+const { ENDPOINTS, createClient } = loadSrc('data/client.ts');
+const { riskOf } = loadSrc('features/bidding/model.ts');
+
+/**
+ * 미리 받을 GET(명세 6.3·8.1절): 그 경로가 처음 그릴 때 보내는 요청을 앱 코드(경로 해석·ENDPOINTS·성향·예시 용량)로 다시 만든다.
+ * 오늘 = TODAY_ENTRY 여섯, 입찰 = 시장 상태·예측·계산(성향), 알아보기 › 출처 = D15. 시트(?sheet=)가 더 보내는 GET은 미리 받지 않는다
+ * (앱이 보통 요청으로 받는다. 미리 받지 않은 것은 겹치지 않는다).
+ */
+async function prefetchPlan(url) {
+  const u = new URL(url, 'http://local.test');
+  const state = routes.parseLocation(u.pathname, u.search, routes.detectBase(null, u.pathname)).state;
+  const seen = [];
+  const client = createClient({ baseUrl: '', fetchImpl: async x => { seen.push(x); throw new Error('stop'); } });
+  await client.getOptimizedSegments(riskOf(state)).catch(() => {});
+  const calc = seen[0];
+  const sources = [ENDPOINTS.dayAhead, ENDPOINTS.forecast, ENDPOINTS.kpis, ENDPOINTS.powerSupply, ENDPOINTS.marketStatus];
+  // 오늘: TODAY_ENTRY 여섯. 모델 정보는 첫 화면 카드에 쓰이지 않아(정확도 시트의 API 표기 줄) 맨 뒤다: 번들이 소켓 하나를 쓰는 동안
+  // 여섯째 요청은 앞의 하나가 끝나기를 기다린다(HTTP/1.1 호스트당 6).
+  if (state.key === 'smp') return [...sources, ENDPOINTS.modelInfo];
+  if (state.key === 'bidding') return [ENDPOINTS.marketStatus, ENDPOINTS.forecast, calc];
+  if (state.key === 'guide' && state.topic === 'sources') return [...sources, ENDPOINTS.realtimeStatus];
+  return [];
+}
+
+/** body 끝 script를 가짜 window·location·fetch·setTimeout으로 돌려 시작한 GET과 표를 본다. */
+function runPrefetch(url, { withFetch = true } = {}) {
+  const u = new URL(url, 'http://local.test');
+  const started = [];
+  const timers = [];
+  const window = {};
+  const fetch = x => {
+    started.push(x);
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+  };
+  if (withFetch) window.fetch = fetch;
+  vm.runInNewContext(inlineScripts()[1], {
+    window, fetch, location: { pathname: u.pathname, search: u.search }, Date: { now: () => 1234 }, setTimeout: fn => timers.push(fn), decodeURIComponent,
+  });
+  const queuedBeforeTimer = started.length;
+  timers.forEach(fn => fn());
+  return { started, queuedBeforeTimer, table: window.__PD_PREFETCH__ };
+}
+
+const PREFETCH_URLS = [
+  '/mobile/', '/mobile', '/mobile/?hour=8&sheet=sources', '/mobile/foo', '/mobile/bidding/', '/', '/bidding', '/guide?topic=sources',
+  '/mobile/bidding', '/mobile/bidding?risk=aggressive', '/mobile/bidding?risk=conservative&hour=3', '/mobile/bidding?risk=yolo',
+  '/mobile/bidding?risk=%E0&risk=conservative', '/mobile/bidding?risk=aggressive&risk=moderate', '/mobile/bidding?sheet=sources',
+  '/mobile/settlement', '/mobile/settlement?sheet=sources', '/mobile/guide', '/mobile/guide?topic=sources', '/mobile/guide?topic=sources&row=x',
+  '/mobile/guide?topic=glossary', '/mobile/guide?topic=method', '/mobile/guide?tour=2', '/mobile/guide?term=smp',
+];
+
+test('prefetch script: per route it starts exactly the GETs that route sends on first render, after the bundle request (setTimeout 0)', async () => {
+  const s = inlineScripts()[1];
+  assert.ok(template.indexOf(s) > template.indexOf('<div id="root">'), 'body 끝: 번들 script(export가 바로 뒤에 붙인다)보다 먼저 파싱되지만 GET은 다음 작업에서');
+  assert.ok(!s.includes('/_expo') && !s.includes('favicon'), 'public_server.py가 바꾸는 문자열을 쓰지 않는다');
+  for (const url of PREFETCH_URLS) {
+    const want = await prefetchPlan(url);
+    const { started, queuedBeforeTimer, table } = runPrefetch(url);
+    // 미리 받기는 앱이 처음 그릴 때 보내는 GET의 부분집합이어야 한다(겹치지 않는다). 여기서는 계획과 정확히 같은지 본다.
+    assert.deepEqual(started, want, url);
+    assert.equal(queuedBeforeTimer, 0, `${url}: 파싱 중에는 아무것도 보내지 않는다(번들 요청이 먼저 소켓을 잡게)`);
+    if (want.length) {
+      assert.deepEqual(Object.keys(table.r), want, url);
+      assert.deepEqual([table.t, table.x], [1234, false], url);
+    } else assert.equal(table, undefined, `${url}: 보낼 것이 없으면 표도 없다`);
+  }
+  // 오늘은 영웅 카드(M9 content)를 정하는 하루전 가격을 먼저 시작한다.
+  assert.equal(runPrefetch('/mobile/').started[0], ENDPOINTS.dayAhead);
+});
+
+test('prefetch script: closed table (app already asked) starts nothing; no fetch, no table; never throws', () => {
+  const u = new URL('/mobile/', 'http://local.test');
+  const timers = [];
+  const started = [];
+  const window = { fetch: x => { started.push(x); return Promise.resolve({}); } };
+  vm.runInNewContext(inlineScripts()[1], { window, fetch: window.fetch, location: { pathname: u.pathname, search: u.search }, Date, setTimeout: fn => timers.push(fn), decodeURIComponent });
+  window.__PD_PREFETCH__.x = true; // 앱이 먼저 꺼냈다(client.ts takePrefetch가 닫는다)
+  timers.forEach(fn => fn());
+  assert.deepEqual(started, [], '같은 GET이 두 번 나가지 않는다');
+  assert.equal(runPrefetch('/mobile/', { withFetch: false }).table, undefined);
+  assert.doesNotThrow(() => vm.runInNewContext(inlineScripts()[1], { window: {}, location: null }));
+  // 앱이 쓰는 표 모양: client.ts의 takePrefetch가 그대로 꺼낸다.
+  const { table } = runPrefetch('/mobile/bidding?risk=aggressive');
+  const { takePrefetch } = loadSrc('data/client.ts');
+  assert.ok(takePrefetch(table, ENDPOINTS.marketStatus, 1234 + 5000));
+  assert.equal(table.x, true);
 });
 
 test('app.json: web fields of section 8.2, no fields that make Expo add duplicate metas', () => {
@@ -163,5 +274,6 @@ test('installed Expo CLI turns the template into the expected shell head and scr
   assert.equal(metas(html, 'description').length, 1);
   assert.equal(count(html, `<script src="/${BUNDLE}" defer></script>`), 1);
   assert.ok(html.indexOf(`<script src="/${BUNDLE}"`) > html.indexOf('class="pd-boot-tabs"'), '번들은 스켈레톤 뒤, body 끝에 붙는다');
+  assert.ok(html.indexOf(`<script src="/${BUNDLE}"`) > html.indexOf('__PD_PREFETCH__'), '번들 script는 미리 받기 script 바로 뒤(D3)');
   assert.equal(count(html, '<script src='), 1);
 });

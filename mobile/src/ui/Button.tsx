@@ -1,6 +1,7 @@
 // 누르는 것의 공통 규칙(6.2절): role=button, 한국어 이름은 타입에서 필수, DOM 상자 ≥ 44×44(M2),
 // 비활성은 aria-disabled, 진행 중 aria-busy. RN-web은 hitSlop을 DOM에 반영하지 않으므로 상자 자체를 키운다.
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
+import type React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import type { View } from 'react-native';
 import { HIT, RADIUS, SIZE, SPACE } from './tokens';

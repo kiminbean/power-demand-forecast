@@ -68,6 +68,20 @@ export function useTodayEntry(): TodayEntry {
 }
 
 /**
+ * 출처와 기준 시각 표의 오늘 행이 쓰는 자료(round 1 D15): 이 표를 여는 화면(알아보기 › 데이터 출처와 연결 상태, 출처 시트)은 이번 방문에
+ * 아직 받지 않았거나 실패했거나 5분 지난 것만 같은 저장소로 받는다(lib/resource 규칙, 같은 키는 한 번에 하나). 모델 정보는 표에 없어
+ * 받지 않는다. 값은 useTodayView(false)가 엿본다.
+ */
+export function useSourceRowsLoad(): void {
+  const { load } = useTodayEntry();
+  useResource(ENDPOINTS.dayAhead, load.dayAhead);
+  useResource(ENDPOINTS.forecast, load.forecast);
+  useResource(ENDPOINTS.kpis, load.kpis);
+  useResource(ENDPOINTS.powerSupply, load.powerSupply);
+  useResource(ENDPOINTS.marketStatus, load.market);
+}
+
+/**
  * 오늘 화면의 자료와 view model. fetching이면 처음 마운트에 받고(lib/resource 규칙) 다시 받을 손잡이를 준다. 아니면 엿보기만 한다.
  * 저장소의 조회 시각은 기기 시계라서 서버 시계 차이를 더해 앱 시각으로 바꾼 뒤 넘긴다(나이는 어느 쪽이든 같다).
  */

@@ -41,8 +41,8 @@ const VERSION_DATA: object = { dataSet: { pdMeta: 'version' } };
 const TABS: readonly RouteKey[] = ['smp', 'bidding', 'settlement', 'guide'];
 
 /**
- * 출처와 기준 시각 표(4.4절): 오늘 행 + 입찰 계산 행 + 응답 상태 3행. 시트는 엿보기만 한다(응답 상태는 알아보기 › 데이터 출처와
- * 연결 상태가 받는다, 6.3절): 그리로 가는 링크를 둔다.
+ * 출처와 기준 시각 표(4.4절): 오늘 행 + 입찰 계산 행 + 응답 상태 3행. 열면 이번 방문에 아직 없는 오늘 행 자료와 응답 상태를 받는다
+ * (round 1 D15, 6.3절. 입찰 계산은 부르지 않는다). 전체 응답 상태가 있는 "데이터 출처와 연결 상태"로 가는 링크를 둔다.
  */
 function SourcesSheet({ row }: { row: SourceRow | null }) {
   const nav = useNav();

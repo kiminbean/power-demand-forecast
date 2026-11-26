@@ -248,9 +248,13 @@ export interface RouterApi {
 export type RouterOptions = { initialUrl?: string; base?: string; host?: HistoryHost };
 export type CreateRouter = (options?: RouterOptions) => RouterApi;
 
-/** 탭 누름: 지금 탭이면 히스토리를 건드리지 않고 'top'(셸이 맨 위로 올린다, iOS 방식), 아니면 그 탭의 첫 상태를 새 항목으로. */
+/**
+ * 탭 누름: 지금 탭의 첫 화면이면 히스토리를 건드리지 않고 'top'(셸이 맨 위로 올린다, iOS 방식). 다른 탭이거나 지금 탭의 하위 상태
+ * (알아보기의 둘러보기·용어·주제)면 그 탭의 첫 상태를 새 항목으로(round 1: iOS·Android 탭 막대처럼 다시 누르면 첫 화면으로 돌아간다).
+ */
 export function pressTab(router: RouterApi, key: RouteKey): 'top' | 'pushed' {
-  if (router.current().key === key) return 'top';
+  const s = router.current();
+  if (s.key === key && !hasSubState(s)) return 'top';
   router.push(rootState(key));
   return 'pushed';
 }

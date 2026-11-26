@@ -40,7 +40,8 @@ const empty = { data: null, fetchedAt: null, status: 'idle', error: null };
 
 /**
  * 변형 → BiddingInput. 화면(BiddingTab)과 같게: 파싱 → 시장 상태 서버 시각으로 시계 차이 → 앱 시각. status_sequence는 저장소 규칙의
- * 결과로 푼다(503 한 번은 1.5초 뒤 다시 보내 성공, 두 번이면 오류). withForecast: 오늘 화면이 받아 둔 예측을 엿볼 수 있는 방문.
+ * 결과로 푼다(503 한 번은 1.5초 뒤 다시 보내 성공, 두 번이면 오류). withForecast: 기준선 예측을 받은 뒤(round 1 D5 뒤로는 입찰 화면도
+ * 같은 저장소로 받는다. 거짓이면 받는 중), forecastFailed: 변형의 예측 응답이 실패했다.
  */
 function inputFor(m, id, { withForecast = false, advanceMs = 0, failAfter = false, ...rest } = {}) {
   const v = resolveVariant(id);
@@ -61,7 +62,8 @@ function inputFor(m, id, { withForecast = false, advanceMs = 0, failAfter = fals
   const app = r => ({ ...r, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + offset, status: failAfter && r.data !== null ? 'error' : r.status });
   return {
     now: device + advanceMs + offset, market: app(res.market), calc: { ...app(res.calc), busy: false },
-    forecast: withForecast ? res.forecast.data : null, calcForecastDate: null, risk: null, selectedHour: null, recheck: 'idle', staleRetried: false,
+    forecast: withForecast ? res.forecast.data : null, forecastFailed: res.forecast.status === 'error', calcForecastDate: null, risk: null,
+    selectedHour: null, recheck: 'idle', staleRetried: false,
     ...rest,
   };
 }
@@ -230,6 +232,9 @@ test('계산 기대 문자열: 19h · 18–19시 · 11-27 · 171.7–244.1 · 95
     '서버 시각으로 다시 계산한 남은 시간 3.9시간 (차이가 0.2시간을 넘으면 남은 시간을 숨깁니다)']);
   assert.deepEqual(v.sources.map(r => [r.id, r.item, r.source, r.basis, chipText(m, r.chip)]),
     [['bidding', '입찰 계산', 'API 서버 입찰 계산 (기준선 분위수)', '조회 06:03', '▨ 추정']]);
+  // round 1 D15: 출처 표는 계산을 부르지 않는다(서버가 한 번에 하나만 계산한다). 받기 전이면 어디서 계산되는지를 쓴다.
+  const pendingCalc = st => viewOf(m, 'bidding-base', { calc: { ...empty, status: st, busy: false } }).sources[0].basis;
+  assert.deepEqual(['idle', 'loading', 'error'].map(pendingCalc), ['입찰 화면을 열면 계산합니다', '불러오는 중', '불러오지 못함']);
 });
 
 test('가격 근거 줄(7.8절 2): 엿본 예측이 있고 입찰일과 다르며 q50이 0.05 안일 때만, D+1 기준선(P5)이면 사라진다', () => {
@@ -240,7 +245,13 @@ test('가격 근거 줄(7.8절 2): 엿본 예측이 있고 입찰일과 다르�
     assert.equal(viewOf(m, 'bidding-price-basis-present', { withForecast: true, selectedHour: hour }).calc.basis, present.basis, `${hour}h`);
   }
   assert.equal(viewOf(m, 'bidding-price-basis-absent', { withForecast: true }).calc.basis, null, 'D+1 기준선: q50이 달라 줄이 없다');
-  assert.equal(viewOf(m, 'bidding-price-basis-present').calc.basis, null, '예측을 받지 않은 방문(입찰 경로만): 확인할 수 없어 쓰지 않는다');
+  // round 1 D5: 입찰 화면이 예측을 같은 저장소로 받는다. 받는 중이면 줄이 없고(받으면 생긴다), 받지 못했으면 확인할 수 없다는 것을 쓴다.
+  assert.equal(viewOf(m, 'bidding-price-basis-present').calc.basis, null, '예측을 받는 중: 아직 쓰지 않는다');
+  assert.equal(viewOf(m, 'bidding-price-basis-present', { forecastFailed: true }).calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27');
+  assert.equal(viewOf(m, 'bidding-price-basis-present', { withForecast: true, forecastFailed: true }).calc.basis, present.basis,
+    '앞서 받은 예측이 있으면(다시 받기만 실패) 그 예측으로 확인한다');
+  assert.equal(m.strings.priceBasisPendingText('model', '2026-11-28'), '가격 근거 확인 전 · 서버 학습 모델 예측 사용 · 입찰일 11-28');
+  assert.equal(viewOf(m, 'bidding-price-basis-forecast-error').calc.basis, '가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27', '변형(B6): 예측 502');
   // 날짜 뒤 '과/와'와 날 수: 11-22와, 11-28과, 이틀이면 "2일 차이".
   assert.equal(m.strings.priceBasisText('2026-11-21', '2026-11-22', 'baseline'), '가격 근거: 11-21 기준선(=11-20 확정 가격) · 입찰일 11-22와 하루 차이');
   assert.equal(m.strings.priceBasisText('2026-11-26', '2026-11-28', 'model'), '가격 근거: 11-26 학습 모델 예측 · 입찰일 11-28과 2일 차이');
@@ -510,6 +521,9 @@ test('카드 렌더 의미: [i] 셋 · [출처 표] 둘 · 성향 radio 셋 · �
   assert.deepEqual(nowrap(basis), ['11-26', '(=11-25 확정 가격)', '11-27']);
   assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'deadline')[0]), ['11-26(목)', '10:00 KST', '11-27(금)'], '시각도 "10:00" / "KST"로 갈리지 않는다');
   assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'summary')[0]), ['50 MW', '171.7–244.1원'], '값+단위도 한 줄');
+  // F13c 갈림 탐침: 320에서 실시간시장 줄이 "06:15" / "KST"로, 추세 문장의 괄호가 갈릴 수 있었다(keepTogether 밖이었다).
+  assert.deepEqual(nowrap(all(root, n => ds(n).pdMeta === 'rtm')[0]), ['06:15 KST']);
+  assert.ok(nowrap(all(root, n => ds(n).pdMeta === 'summary')[1]).includes('(95%→5%)'));
   const countdown = all(root, n => n.props.testID === 'bid-countdown')[0];
   assert.deepEqual([textOf(countdown), ds(countdown).pdMeta, flat(countdown.props.style).fontSize], ['3시간 56분 남음', 'countdown', 32]);
   // 스텝퍼는 양 끝에서 멈춘다(입찰에는 돌기 규칙이 없다, 하니스 B2): 01h에서 ‹ 비활성(까닭), 24h에서 › 비활성.

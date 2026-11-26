@@ -11,8 +11,8 @@ import type { AccuracyCardView, Fetched, TodayLegend } from '../today/model';
 import type { PillTone } from '../../ui/tokens';
 import {
   ABOUT_SKEW_IMPLAUSIBLE, ACCURACY_SOURCE, ACCURACY_UNREGISTERED, FORECAST_SUBJECT_SHORT, RS_DATE, RS_DATE_OTHER, RS_ITEMS, RS_OVERALL, RS_PART, RS_SOURCE, SOURCE_PENDING,
-  aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText, legendForecastText, legendMeasuredText,
-  legendProbabilityText, legendStatementText, marketFactsText, rsBasisText,
+  SOURCES_PARTLY_FAILED, aboutSkewText, accuracyBasisPeriod, accuracyBasisText, accuracyExampleText, accuracyR2Text, accuracyText, legendForecastText,
+  legendMeasuredText, legendProbabilityText, legendStatementText, marketFactsText, rsBasisText, rsOverallText,
 } from '../../content/strings';
 import type { GlossaryId } from '../../content/strings';
 
@@ -46,6 +46,15 @@ export function statusView(r: Fetched<RealtimeStatus>): StatusView {
       status: date ? `${status} · ${date}` : status, tone: statusTone(part ? part.status : null), link: null };
   });
   return { rows, overall: { text: overallText(d.overall_status), tone: statusTone(d.overall_status), at } };
+}
+
+/**
+ * "데이터 출처와 연결 상태" 카드의 머리 칩(round 1 D15): 서버 응답 상태(/realtime-status 전체)를 쓰되, 표의 행을 하나라도 불러오지
+ * 못했으면 초록 "API 서버: 모두 응답" 대신 그 사실을 말한다(칩과 표가 엇갈리지 않게). 응답 상태를 모르면 칩이 없다.
+ */
+export function sourcesChip(overall: StatusView['overall'], rowFailed: boolean): { text: string; tone: PillTone } | null {
+  if (!overall) return null;
+  return rowFailed && overall.tone === 'ok' ? { text: SOURCES_PARTLY_FAILED, tone: 'watch' } : { text: rsOverallText(overall.text), tone: overall.tone };
 }
 
 /** 용어 사전 항목의 "이 앱에서 보는 곳 ›"(4.4절). */

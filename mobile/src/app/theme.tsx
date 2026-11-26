@@ -1,6 +1,7 @@
 // 테마 선택(명세 8.4절): 시스템(기본)·밝게·어둡게. 레이아웃과 데이터 색은 두 테마에서 같다.
 // 문서(data-theme·color-scheme·theme-color 메타)에 쓰는 일은 F6의 head.web.ts가 맡고, 여기서는 적용할 값만 계산한다.
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
 import { useColorScheme } from 'react-native';
 import { THEMES } from '../ui/tokens';
 import type { Theme, ThemeName } from '../ui/tokens';

@@ -2,7 +2,8 @@
 // routes.ts(openSheet·closeSheet), 초점 가둠·Esc·스크림은 Sheet가 맡는다. 여기서는 연 요소를 기록해 두었다가 닫힌 뒤 돌려준다:
 // Safari는 버튼을 눌러도 초점을 주지 않아 열 때 document.activeElement가 body일 수 있으므로 마지막으로 누른 요소도 함께 본다(F4 증거).
 // 화면 테마 시트(4.4·8.4절)는 셸 설정이라 여기에 붙박이로 둔다. 산출 방식·출처·용어 시트는 그 화면 단계가 registry로 넘긴다.
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { SheetKind, SheetState } from './routes';
 import { useTheme } from './theme';

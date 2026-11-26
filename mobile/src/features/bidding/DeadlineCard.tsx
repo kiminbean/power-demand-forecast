@@ -47,7 +47,7 @@ export function DeadlineCard({ view, onMethod, onSources, onRetry }: DeadlineCar
         {view.pill ? <StatusPill tone={view.pill.tone} text={view.pill.text} /> : null}
       </View>
       <View style={styles.group}>
-        {view.rtm ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'rtm' }}>{view.rtm}</Text> : null}
+        {view.rtm ? <Text variant="label" tone="text2" dataSet={{ pdMeta: 'rtm' }}>{keepTogether(view.rtm, { variant: 'label', tone: 'text2' })}</Text> : null}
         <Text variant="meta" tone="text3">{RTM_PRICE_NOTE}</Text>
       </View>
       {view.footer ? <SourceFooter source={view.footer.source} time={view.footer.time} onSources={onSources} context={TITLE} /> : null}

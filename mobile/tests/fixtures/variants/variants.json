@@ -756,6 +756,19 @@
       ]
     },
     {
+      "id": "bidding-price-basis-forecast-error",
+      "screen": "bidding",
+      "sweep": "B6",
+      "state": "가격 근거 확인 전(기준선 예측 502)",
+      "spec": "7.8 2 · round 1 D5",
+      "inject": [
+        {
+          "route": "/api/v1/smp-forecast",
+          "status": 502
+        }
+      ]
+    },
+    {
       "id": "bidding-calc-empty",
       "screen": "bidding",
       "sweep": "B6",

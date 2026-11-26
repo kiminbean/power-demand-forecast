@@ -1,6 +1,7 @@
 // 차트 공용 부품(F5): 폭 재기, 그림 위에 겹쳐 쓰는 12 px 라벨, 빗금 무늬, 카드 폭으로 넓히기, 키·누름을 받는 틀.
 // 차트는 응답자(responder)·터치 처리기를 달지 않는다: 세로로 끌면 페이지가 스크롤되고, 탭은 브라우저 click으로만 받는다.
-import React, { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
+import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { Pattern, Rect } from 'react-native-svg';

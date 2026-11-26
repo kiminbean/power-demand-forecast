@@ -115,7 +115,7 @@
 
 ### 2.4 round 1 수정 결정 (오케스트레이터 승인, 수정 단계 F13a–F13c)
 
-round 1 평가(평균 8.53, 멘토 MEN-COPY 불합격, 결함 54건, 보고서 5.4절)를 받아 정한 명세 변경이다. 결정 원문은 `scratchpad/mobile/eval/round1/FIX_PLAN_r1.md`(D1–D18), 결함 원문은 `eval/round1/LENSES_r1.json`. 운영·공개 서버·허용 목록·백엔드는 바꾸지 않는다. 아래는 F13a(구조 + 문구)와 F13b(배치 + 차트 + 초점)가 반영한 것이고, 각 줄의 본문 위치를 고쳤다.
+round 1 평가(평균 8.53, 멘토 MEN-COPY 불합격, 결함 54건, 보고서 5.4절)를 받아 정한 명세 변경이다. 결정 원문은 `scratchpad/mobile/eval/round1/FIX_PLAN_r1.md`(D1–D18), 결함 원문은 `eval/round1/LENSES_r1.json`. 운영·공개 서버·허용 목록·백엔드는 바꾸지 않는다. 아래는 F13a(구조 + 문구), F13b(배치 + 차트 + 초점), F13c(첫 로드 + 자료 + 하니스)가 반영한 것이고, 각 줄의 본문 위치를 고쳤다.
 
 | 결정 | 바꾼 것 | 반영한 곳 |
 |---|---|---|
@@ -135,6 +135,13 @@ round 1 평가(평균 8.53, 멘토 MEN-COPY 불합격, 결함 54건, 보고서 5
 | D14 (F13b) | 600–1023 탭 칸은 카드 열과 같은 x·폭(최대 640 − 좌우 16), 768–1023 가격·전력 카드 두 칸(같은 높이), 날씨는 모든 폭에서 범위 막대 아래 자기 줄, ≥ 1280 패널이 없는 화면도 패널 폭을 비워 본문 열 x가 탭마다 같다, 정산 ①+② 그림은 모든 폭에서 예시 정산서 카드 안(①·합계 호박색 채움, ② 진한 칸, 패널에서는 뺌) | 3.4 · 4.1 · 4.3 · 4.6절 |
 | D17 (F13b) | 오늘 글 밀도: 요약·불확실성은 본문 크기 한 문단, 범위 막대 이름표는 이름만("수요"·"예비력", 값은 수급 식에), 둘러보기 배너는 제목 한 줄 + 버튼이고 차트 뒤, y 눈금 4칸 이하. 출처 칩·KST·출처 줄은 그대로(측정과 30 % 목표의 남은 몫은 F13b 증거) | 4.1절 |
 | 낮음(접근성, F13b) | 탭은 Space로도 열림, 스크롤 상자 `scroll-padding-block: 8px`·초점 대상 `scroll-margin-block: 8px`(초점 링이 스크롤 끝에서 잘리지 않게), 시트가 열린 동안 헤더·본문·탭 막대 `inert`, 강제 색 모드에서 고른 세그먼트·지금 탭·선택 행에 `Highlight` 외곽선, 차트 끝 라벨은 라벨 상자의 그 끝에 flex로 붙임(`alignItems`, WCAG 1.4.12 글자 간격에서 안쪽으로 자라 잘리지 않게), 가로 모드 노치는 헤더·띠·본문·탭 막대 안쪽에 x 안전 영역(바탕은 화면 끝까지) | 3.4 · 6.2 · 8.1 · 8.3절 |
+| D3 (F13c) | `index.html` body 끝 인라인 script가 그 경로가 처음 그릴 때 보내는 GET만 번들을 받는 동안 미리 시작한다(오늘 6개 · 입찰 3개 · 알아보기 › 출처 6개, 시트가 더하는 GET은 미리 받지 않음, `setTimeout 0`으로 번들 요청 뒤, `window.__PD_PREFETCH__`). `client.ts`가 URL마다 한 번 꺼내 쓰고(처음 꺼낼 때 표를 닫아 늦은 미리 받기를 막는다), 없거나 연결이 실패했거나 5분 지났으면 보통 요청. 받은 응답은 상태(503 포함) 그대로라 재시도 규칙이 같다. 경로별 요청 수는 그대로(중복 0). 스크립트에 `/_expo`를 쓰지 않는다 | 6.3 · 8.1 · 9절, `tests/shell-html`·`tests/adapters` |
+| D5 (F13c) | 입찰 화면이 기준선 예측(`/api/v1/smp-forecast`)도 같은 저장소로 받는다(오늘과 같은 키, 5분 안이면 다시 보내지 않음). 그래서 바로 들어와도 가격 근거 줄이 있고, 예측을 받지 못하면 "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27". 둘러보기 3단계는 그 줄이 없어 받지 않는다 | 4.2 · 6.3 · 7.8절, `tests/bidding-tab`, 변형 `bidding-price-basis-forecast-error` |
+| D15 (F13c) | 출처와 기준 시각 표(알아보기 › 데이터 출처와 연결 상태, 출처 시트)를 열면 이번 방문에 아직 없거나 실패했거나 5분 지난 행 자료(하루전 가격 · 예측 · KPI · 수급 · 시장 상태)와 `/realtime-status`를 같은 저장소로 한 번 받는다. 입찰 계산은 부르지 않고 받기 전이면 "입찰 화면을 열면 계산합니다". 카드 머리 칩은 표의 행을 하나라도 불러오지 못했으면 초록 "API 서버: 모두 응답" 대신 "일부 자료를 불러오지 못함" | 4.4 · 6.3절, `tests/view-models`·`tests/bidding-tab` |
+| D16 (F13c, 스크래치 하니스) | `sweep.py`: B5는 본문(`[role=main]`) 안 정확한 이름 "가격은 어떻게 정해지나요? 펼치기"로 펼치고 `aria-expanded=true`·그림 이름을 확인(열기·닫기 두 상태), B6는 가격 근거 줄 있음·없음·확인 전 글자를 확인, `i2`(I3)는 같은 페이지 응답으로 파생 값(예비력·경계·차이·최고·최저·평균·80% 폭·시간대 요약·시간별 24행·입찰 10행 + 합계·가격 근거 줄)을 다시 계산해 맞춘다, `throttle --delay PATH=MS`, G2에 하위 상태 다시 누르기 | 11.4 · 11.5절 |
+| 낮음(F13c) | 부트 theme-color: 저장한 선택이 밝게·어둡게면 인라인 테마 script가 두 theme-color 메타를 그 테마 canvas로(번들이 뜨기 전 약 4.6초 동안 브라우저 막대만 OS 색이던 것). 지금 탭을 하위 상태(둘러보기·용어·주제)에서 다시 누르면 그 탭의 첫 화면(새 히스토리 항목, h1 초점) | 3.3 · 8.1 · 8.4절, `tests/routes`·`tests/shell-html` |
+| 번들(F13c) | 한도 640,000 B 안에 D3·D5·D15를 넣으려고, React 기본 가져오기가 타입에만 쓰이던 모듈 10곳의 `import React, { … }`를 `import { … }` + `import type React`로(Babel이 모듈마다 붙이던 interop 도우미 약 470 B씩). 문구는 옮기지 않았다 | 9절 |
+| 줄바꿈(F13c 측정) | 갈림 탐침(24상태 × 6폭, `keepTogether`와 같은 단위가 두 줄에 걸리는지 DOM Range로)이 찾은 빠진 곳을 같은 도우미로 묶었다: 입찰 실시간시장 줄("00:30" / "KST", 320), 오늘·둘러보기 2단계 차트 범례의 짧은 괄호("(▲ 위쪽" / "잘림)", 360), 판독 줄의 80% 구간 범위("85.9–" / "130.6원", 320: 두 값 + 줄표 + 단위를 RichText 묶음 `g`로), 정확도 기간 줄의 "(학습한 모델 아님)"(430), 계통 순위 요약의 "(유류 E)"(320). 같은 꼴이라 함께 묶은 곳: 가격 카드 메타 줄, 계단 추세 문장(카드·둘러보기 3단계), 둘러보기 2단계 정확도 줄, 예측 방법 화면의 서버 값 줄, 숫자 읽는 법 예시, 앱 정보 갱신일. 글자는 그대로 | 6.3절, `tests/view-models`·`tests/bidding-tab` |
 
 ---
 
@@ -165,7 +172,7 @@ round 1 평가(평균 8.53, 멘토 MEN-COPY 불합격, 결함 54건, 보고서 5
 
 | 동작 | 히스토리 | 브라우저 뒤로 |
 |---|---|---|
-| 탭 누름 | 지금 탭이 아니면 `pushState({pd:1})`. 지금 탭이면 스크롤을 맨 위로(iOS 방식), 히스토리 변화 없음 | 이전 탭·상태 |
+| 탭 누름 | 지금 탭이 아니면 `pushState({pd:1})`. 지금 탭의 첫 화면이면 스크롤을 맨 위로(iOS 방식), 히스토리 변화 없음. 지금 탭의 하위 상태(알아보기의 둘러보기·용어·주제)면 그 탭의 첫 화면을 `pushState`(iOS·Android 탭 막대처럼, round 1. h1 초점·화면 알림은 라우트 변경과 같다). 오늘·입찰의 `?hour=`·`?risk=`는 하위 상태가 아니다 | 이전 탭·상태 |
 | 둘러보기 단계·주제·용어 열기 | `pushState`(쿼리 포함) | 이전 단계 또는 주제 닫기 |
 | 시트 열기 | `pushState`, URL에 `?sheet=…`, `state.pdSheet = true` | **시트를 먼저 닫는다**(탭은 그대로) |
 | 시트 닫기(닫기 버튼·스크림·Esc) | 우리가 넣은 항목이면 `history.back()`, 딥링크로 들어온 시트면 `replaceState`로 쿼리만 뺀다 | — |
@@ -347,6 +354,7 @@ AnswerLine (오늘):
 
 - 마감 시각 = 입찰일(`trading_date`) 하루 전 10:00 KST = `Date.UTC(Y, M−1, D−1, 1, 0, 0)`. 카운트다운 = 마감 − `kstNow()`, 분 단위 내림(06:03:57 → "3시간 56분"), 30초마다 갱신, live로 알리지 않는다.
 - RTM 다음 구간 = KST 지금 뒤 첫 `interval_minutes` 배수(06:03:57 → 06:15). API의 `next_interval` 문자열은 쓰지 않는다. `rtm.status`가 `active`가 아니면 "실시간시장 상태: {한국어}"로 바꾼다.
+- 이 화면의 요청(6.3절): 시장 상태 · 기준선 예측 · 입찰 계산. 기준선 예측은 가격 근거 줄(7.8절 2)에 쓴다. 오늘 화면과 같은 저장소 키라 5분 안에 받았으면 다시 보내지 않는다. round 1 D5 전에는 엿보기만 해서 입찰로 바로 들어오면(딥링크·새로고침) 그 줄이 없었다. 받는 중이면 줄이 없고(받으면 생긴다), 받지 못하면 "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 11-27"(학습 모델이면 "서버 학습 모델 예측 사용", 대체값 계산이면 줄 없음). 헤더 새로고침은 예측이 5분 지났거나 실패했을 때만 다시 받는다(결과 알림에는 넣지 않는다).
 - 입찰 계산 호출: `GET /api/v1/bidding/optimized-segments?capacity_mw=50&risk_level={conservative|moderate|aggressive}`(서버 검증값 그대로). 한 번에 하나만(single-flight), 성향별 5분 캐시, **자동 폴링 없음**. 스텝퍼는 캐시된 `hourly_bids`(24시간이 한 응답에 있다)를 읽고 새로 요청하지 않는다. 성향을 바꿀 때만 요청한다. 503(서버가 동시 1건만 허용)은 1.5초 뒤 **한 번만** 자동 재시도, 그래도 503이면 "다른 요청을 처리하는 중입니다 · 잠시 뒤 [다시 계산]". 400은 "계산 조건 오류"(정상 경로에서는 생기지 않음). 응답의 `trading_date`가 `/market-status`의 `dam.trading_date`와 다르거나 그사이 `forecast_date`가 바뀌면 오래된 입력으로 보고 한 번 다시 계산한다(스켈레톤 유지).
 - LadderChart(round 1 D12): x = 누적 물량 0–50 MW(구간당 5 MW), y = 가격 0부터(원/kWh, 맨 위 눈금은 50 단위 올림, 기준선·띠도 담는다), 계단은 채우지 않고 ▨ 추정 칩과 같은 빗금 + `borderStrong` 1.5 px 외곽선(10개 단색 자홍 막대가 한 덩어리로 읽혔고 자홍은 오늘 차트의 예측 색이었다), 그 시간 기준선(계산기 입력 q50)은 자홍 점선, q10–q90은 옅은 띠(8 % + 1 px 테두리, 대체값이면 없음), 고른 구간만 `primary`로 채운다. 각 계단 위에 낙찰 가능성 % 글자(12 px), 단위 줄 오른쪽에 "막대 위 % = 낙찰 가능성(추정)". 360 미만에서는 1·4·7·10구간 글자만 보이고 표에는 전부 있다. **불투명도로 확률을 나타내지 않는다.** 차트 위 범례(12 `text2`) "점선 = 기준선 205.9원 · 띠 = 80% 구간 175.2–239.3원 · 빗금 막대 = 입찰 가격(추정)". 계단을 누르거나 ←/→로 고르면 차트 아래 판독 칩(`well`) "4구간 · 5 MW · 134.5원 · 낙찰 가능성 62% (추정)"(위에 두면 처음 고를 때 누른 차트가 밀린다). 끝 x 눈금("50 MW")은 라벨 상자 오른쪽 끝에 flex로 붙인다(`alignItems: flex-end`, 첫 눈금은 `flex-start`): WCAG 1.4.12 글자 간격에서 틀 안쪽으로 자란다. `textAlign: right`만으로는 상자보다 길어진 글자가 오른쪽으로 넘쳐(넘치는 줄은 시작 쪽 정렬) 틀 밖 4 px가 잘렸다(F13b 측정).
 - 성향 줄은 계산 중·오류·빈 값·준비 모든 상태에서 카드의 같은 자리(발전소 줄 다음 "거래시간·성향" 칸, 성향은 그 칸의 마지막, round 1 D4: 상태마다 자리가 달라 성향을 바꾸면 세그먼트가 다시 만들어져 초점이 body로 떨어졌다).
@@ -418,6 +426,7 @@ AnswerLine (오늘):
 
   - `/realtime-status`(서버가 걸러 주는 모양): `overall_status` ∈ `all_connected`→"모두 응답" · `partial`→"일부 응답" · `disconnected`→"응답 없음"; `smp_api|power_supply_api|weather_api.status` ∈ `connected`→"응답 정상" · `no_data`→"자료 없음" · `error`→"오류" · `unknown`→"알 수 없음"; 선택 `smp_api.data_date_status` ∈ `current_date`→"오늘 자료" · `historical`→"과거 날짜 자료" · `future`→"미래 날짜 자료" · `unknown`→"날짜 미상". 목록 밖 값은 "알 수 없음"(닫힌 쪽으로 실패). 이 행들에는 "연결됨"이라는 말을 쓰지 않는다.
   - 각주: "KPX가 게시 시각을 넘겨주지 않아 조회 시각만 표시합니다." "아직 연결되지 않은 자료: 오늘 확정 가격 24시간 전체, KPX 게시 시각, 실제 정산·발전소 자료(공개하지 않음)."
+  - 표를 열면 받는다(round 1 D15): 이 화면과 출처 시트는 이번 방문에 아직 없거나 실패했거나 5분 지난 행 자료(하루전 가격 · 기준선 예측 · KPI · 수급 · 시장 상태)와 `/realtime-status`를 같은 저장소로 한 번 받아 행마다 자기 조회 시각을 채운다(전에는 엿보기만 해서 오늘을 거치지 않은 방문에서 모든 행이 "이번 방문에서 아직 조회하지 않음"인데 머리 칩은 초록 "API 서버: 모두 응답"이었다). 모델 정보는 표에 없어 받지 않는다. "아직 조회하지 않음"은 받기 시작하기 전 한 순간뿐이고 실패는 "불러오지 못함"이다. 입찰 계산은 서버가 한 번에 하나만 계산하므로 표가 부르지 않는다: 받기 전이면 "입찰 화면을 열면 계산합니다". 카드 머리 칩은 서버 응답 상태를 쓰되 표의 행을 하나라도 불러오지 못했으면 "일부 자료를 불러오지 못함"(관심 색), 응답 상태를 모르면 칩이 없다.
 - **화면 테마** (`?sheet=theme`): radiogroup "시스템 설정 따름(기본) / 밝게 / 어둡게", 고르면 바로 적용, "이 기기에만 저장됩니다"(8.4절).
 - **앱 정보** (`?topic=about`): "eXeco 제주 전력시장 (공개 데모) v6.1", "공개 데모는 읽기 전용입니다. 자료를 저장하거나 KPX에 보내지 않습니다.", 자료 이용 조건 "값은 KPX(한국전력거래소)와 기상청이 공개한 자료를 API 서버가 공공데이터포털과 KPX 누리집에서 받아 온 것입니다. 자료의 이용 조건은 각 제공처를 따릅니다.", 화면 갱신일 "화면 갱신 2026-11-26"(`strings.ts`의 `APP_UPDATED_AT`, 평가에 넘길 번들을 만들 때 그 날짜로 맞춘다, 13절; 개인 연락처는 두지 않는다, round 1 멘토·계획 결정), 시계 차이가 120초를 넘으면 "기기 시계와 N분 차이 · 서버 시각 기준으로 표시", "데이터 출처와 연결 상태 ›".
 - **산출 방식 시트** (`?sheet=method&card=`): `today-price` · `today-power` · `today-forecast` · `today-accuracy` · `bid-deadline` · `bid-ladder` · `bid-merit` · `settle-sample`. 본문은 JSON(제목 → 뜻과 읽는 법 문단 → 끝의 흐린 "자세히 · …" 한 줄 `detail`: 짝·검증 규칙 같은 구현 설명, round 1 D7), 살아 있는 값(KPX 원문 표기, 25.9 % 비율, MW 계산 예비율 차이, 모델 문자열 `model_used` 원문에서 끝의 " · 검증 MAPE x%"를 뗀 것)은 화면 view model이 넘긴다. API 원문 낱말은 한국어 이름 뒤 괄호에만 둔다(D6): "성향 균형 (API 값 moderate)", "계산 방법: 분위수 기반 확률 낙찰 모델 (API 이름: Quantile-based Probabilistic Clearing Model)", "하루전시장 접수 중 (API 값 open)". API가 밝힌 정확도는 `today-accuracy` 시트의 회색 "API 표기" 줄로만(7.7절). 시트 끝 "단순화한 설명 · 도메인 검토 전"은 그대로(P7).
@@ -593,9 +602,10 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
 
 - `src/data/client.ts`: 허용 목록 중 **쓰는 것만** 감싼다. 메서드 이름은 옛 `api.ts`와 같게: `getDayAheadSMP()` · `getSMPForecast()` · `getModelInfo()` · `getDashboardKPIs()` · `getPowerSupply()` · `getMarketStatus()` · `getOptimizedSegments(risk)` · `getRealtimeStatus()`. 기준 URL은 `src/config/environment.ts` 규칙(웹은 같은 출처 상대 경로)을 그대로 쓴다. GET에 `Content-Type`을 붙이지 않는다. **`console.*`를 쓰지 않는다**(처리한 실패는 상태로 보여 준다). 응답은 `types.ts`의 모양 검사기를 통과해야 하고, 틀리면 `ApiShapeError`로 실패한다(조용히 0이나 기본값으로 바꾸지 않는다). 옛 `src/services/api.ts`는 가져오지 않는다(형식 `import type`만 허용).
 - `src/lib/resource.ts`(`useResource`, 약 120줄): 키별 `{data, fetchedAt, status, error}`. 처음 마운트, 새로고침 버튼, 화면이 보일 때 5분마다(`document.visibilityState === 'visible'`), 숨었다 보이면 5분 넘은 것만. `AbortController` 10초. 네트워크 오류·502·503에만 1.5초 뒤 1회 재시도, 4xx는 재시도 없음. 실패해도 마지막 좋은 값은 남기고 지연으로 표시. 같은 키는 한 번에 하나만 요청(중복 제거).
-- 오늘의 첫 로드 요청: `day-ahead` · `smp-forecast` · `model/info` · `dashboard/kpis` · `power-supply` · `market-status`(시계 차이용, 작음). 입찰: `market-status` · `optimized-segments`. 알아보기 › 출처: `realtime-status`. 정산: 없음.
+- 오늘의 첫 로드 요청: `day-ahead` · `smp-forecast` · `model/info` · `dashboard/kpis` · `power-supply` · `market-status`(시계 차이용, 작음). 입찰: `market-status` · `smp-forecast`(가격 근거 줄, round 1 D5) · `optimized-segments`. 알아보기 › 출처와 출처 시트: `realtime-status` + 이번 방문에 아직 없는 `day-ahead` · `smp-forecast` · `dashboard/kpis` · `power-supply` · `market-status`(D15, 입찰 계산은 부르지 않는다). 정산·알아보기 첫 화면: 없음. 같은 키는 저장소가 한 번만 보낸다(오늘에서 넘어오면 다시 보내지 않는다).
+- 첫 로드 미리 받기(round 1 D3, 8.1절): `index.html`이 그 경로의 첫 그림 GET을 번들과 함께 시작하고 `window.__PD_PREFETCH__ = { t, r: {URL: 응답 약속}, x }`에 둔다. `client.ts`의 `takePrefetch`가 요청 URL마다 한 번 꺼내 쓴다(꺼내면 지우고, 처음 꺼낼 때 `x = true`로 닫아 아직 시작하지 않은 미리 받기를 막는다). 없거나, 연결 자체가 실패했거나(그 자리에서 보통 요청 하나), 시작한 지 5분(`REFRESH_EVERY_MS`)이 지났으면 보통 요청을 보낸다. 받은 응답은 HTTP 상태(503 포함) 그대로 쓰므로 재시도 규칙(1.5초 뒤 한 번)이 같다. 주입한 `fetchImpl`(테스트)은 미리 받기를 보지 않는다.
 - `src/lib/format.ts`(숫자·시각이 글자가 되는 **유일한** 곳): `price(v)`→"115.3"(단위 "원/kWh"), `mw(v)`→"1,191", `pct(v, 1)`→"79.5", `krwFromThousand(v)`→"468.6만원"(1억 이상 "1.23억원", 반올림 1회), `krw(v)`(만·억), `delta(v)`→"+3.2"/"−17.2"("+-" 불가), `tradeHour(h)`→"07h · 06–07시"(메타 줄·스텝퍼·표 칸), `tradeHourRange(a, b)`→"03–05h · 02–05시", `tradeClockRange(a, b = a)`→"02–05시"·"06–07시"(문장·요약·첫 줄, round 1 D11), `kstTime(t)`→"06:04 KST", `kstDate(t)`→"11-26(목)", `age(ms)`→"1분 전", `duration(ms)`→"3시간 56분"(분 내림). null·NaN·±Infinity는 언제나 "—"(기존 `formatNullableNumber`를 써서 같은 규칙), 진짜 0은 "0.0".
-- 줄바꿈 단위(round 1, 멘토·parity): 화면에 그리는 문장은 `src/ui/Text.tsx`의 `keepTogether` 하나를 거쳐 값 범위·시각 범위("07–08시")·날짜·"06:04 KST"·16자 이하 괄호("(MAPE 11.75%)", "(평소 오차 약 12원)", F13b에서 요약 문단의 "(80% 구간 폭 326.4원)"까지 14 → 16자)·값+단위("684 MW")·"관측 시각 미제공"을 `data-pd-nowrap`으로 묶는다(AnswerLine, SourceFooter, RichText의 메타 조각, 정확도·요약·범례·시트 값 줄). 글자 자체는 바꾸지 않는다(빈칸 그대로).
+- 줄바꿈 단위(round 1, 멘토·parity): 화면에 그리는 문장은 `src/ui/Text.tsx`의 `keepTogether` 하나를 거쳐 값 범위·시각 범위("07–08시")·날짜·"06:04 KST"·16자 이하 괄호("(MAPE 11.75%)", "(평소 오차 약 12원)", F13b에서 요약 문단의 "(80% 구간 폭 326.4원)"까지 14 → 16자)·값+단위("684 MW")·"관측 시각 미제공"을 `data-pd-nowrap`으로 묶는다(AnswerLine, SourceFooter, RichText의 메타 조각, 정확도·요약·범례·시트 값 줄). 글자 자체는 바꾸지 않는다(빈칸 그대로). 두 `Value`로 그리는 범위(판독 줄의 "116.9–174.6원")는 RichText 묶음 `g` 하나로 감싼다. F13c 갈림 탐침(`scratchpad/mobile/eval/steps/F13c/split_probe.py`: 오늘·입찰·정산·알아보기·둘러보기·시트 24상태 × 6폭에서 위 단위가 두 줄에 걸리는지 DOM Range로 잰다)이 0이어야 한다. 이름표와 값 사이("조회" / "06:04 KST", "입찰일" / "11-27")는 줄이 바뀌어도 된다.
 - `src/lib/kst.ts`: 7.5절. `src/lib/provenance.ts`: 7.4절. `src/data/adapters.ts`: 응답 → `Provenanced<T>`(7.2절). `src/data/examples.ts`: 지어낸 값의 유일한 집(7.9절).
 - 각 화면의 `features/<tab>/model.ts`는 (응답들, 지금 시각) → 화면 문자열·구조를 만드는 **순수 함수**다. 컴포넌트는 배치만 한다. 픽스처 재생 테스트는 이 함수를 검사한다.
 
@@ -699,7 +709,7 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
 ### 7.8 실행 중 일관성 검사 (각각 픽스처 단위 테스트)
 
 1. **비교 문장·확정 가격 점**: `normalized(dayAhead.trade_day) === forecast.forecast_date`이고 `q50[trade_hour − 1]`이 유한하며 0.00 입력이 아닐 때만. 아니면 PriceCard는 자기 사실만.
-2. **입찰 가격 근거 공개 줄**: `optimized.trading_date !== forecast.forecast_date`이고 보이는 시간의 `|hourly_bids[h].smp_forecast.q50 − forecast.q50[h]| ≤ 0.05`이면 "가격 근거: {forecast_date} 기준선(={전날} 확정 가격) · 입찰일 {trading_date}와 하루 차이"(alert 아이콘 + 글자). 백엔드가 D+1 기준선을 주면(P5) 저절로 사라진다.
+2. **입찰 가격 근거 공개 줄**: `optimized.trading_date !== forecast.forecast_date`이고 보이는 시간의 `|hourly_bids[h].smp_forecast.q50 − forecast.q50[h]| ≤ 0.05`이면 "가격 근거: {forecast_date} 기준선(={전날} 확정 가격) · 입찰일 {trading_date}와 하루 차이"(alert 아이콘 + 글자). 백엔드가 D+1 기준선을 주면(P5) 저절로 사라진다. 예측은 입찰 화면이 직접 받는다(round 1 D5). 받지 못하면(값도 없음) "가격 근거 확인 전 · 서버 기준선 예측 사용 · 입찰일 {trading_date}"이고, 받는 중이면 줄이 없다.
 3. **모델 문자열**은 그 시리즈를 그린 같은 `/smp-forecast` 응답의 `model_used`에서 가져온다(`/model/info`에서 가져오지 않는다). 끝의 " · 검증 MAPE x%"는 떼어 보인다: API 정확도는 "API 표기" 줄에만(I5, round 1 D8).
 4. **0.00 입력 시간**: `q50 === 0`인 시간은 선을 끊고 중립 빗금 열 + 라벨 "기준선 입력 0.00 · 예측 아님"(한 번), 표 "— (입력 0.00)", 판독 줄 "기준선 입력 0.00 · 예측 아님", 최고·최저·평균·시간대 요약에서 빼고 "0.00 입력 N시간 제외". 띠도 그리지 않는다(대시보드 13.2·14.2 J3).
 5. **단위**: API `price_krw_mwh`에는 원/kWh 값이 들어 있다(118.1은 kWh당). `expected_revenue`는 천 원 단위다. 두 변환은 `format.ts`에만 있고 스냅숏으로 테스트한다(구간 1 · 0h → 56.1만원, 19h 합계 → 468.6만원).
@@ -771,7 +781,9 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
   <title>%WEB_TITLE%</title>
   <script>
     try { var t = localStorage.getItem('pd-theme');
-      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+      if (t === 'light' || t === 'dark') { document.documentElement.setAttribute('data-theme', t);
+        var c = t === 'dark' ? '#0B1220' : '#F6F8FB', m = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < m.length; i++) m[i].setAttribute('content', c); } } catch (e) {}
   </script>
   <style id="expo-reset">
     :root { --pd-canvas:#F6F8FB; --pd-surface:#FFFFFF; --pd-border:#E2E8F0; --pd-text:#0F172A; --pd-text3:#56657A; --pd-focus:#2563EB; --pd-hatch:rgba(100,116,139,.22); color-scheme: light; }
@@ -810,6 +822,25 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
     <p class="pd-boot-slow">연결이 느립니다. 잠시 기다리거나 새로고침해 주세요.</p>
     <div class="pd-boot-tabs"></div>
   </div></div>
+  <!-- round 1 D3(명세 8.1·9절): 이 경로가 처음 그릴 때 보내는 GET만 번들을 받는 동안 미리 시작한다(번들 요청 뒤, setTimeout 0).
+       앱(src/data/client.ts)이 URL마다 한 번 꺼내 쓰고, 없거나 연결이 실패했거나 5분 지났으면 보통 요청을 보낸다. -->
+  <script>
+    (function (w) { try {
+      var p = location.pathname, b = p === '/mobile' || p.indexOf('/mobile/') === 0 ? '/mobile/' : '/', r = p.indexOf(b) === 0 ? p.slice(b.length) : '';
+      var a = location.search.slice(1).split('&'), q = function (n) {
+        for (var i = 0, k, v; i < a.length; i++) { k = a[i].indexOf('=');
+          try { if (decodeURIComponent(k < 0 ? a[i] : a[i].slice(0, k)) !== n) continue; v = decodeURIComponent(k < 0 ? '' : a[i].slice(k + 1)); } catch (e) { continue; }
+          return v; }
+        return null; };
+      var t = ['smp/day-ahead', 'smp-forecast', 'dashboard/kpis', 'power-supply', 'market-status'], k = q('risk'), u = [], f = {}, o;
+      if (r === 'bidding') u = ['market-status', 'smp-forecast', 'bidding/optimized-segments?capacity_mw=50&risk_level=' + (/^(conservative|moderate|aggressive)$/.test(k) ? k : 'moderate')];
+      else if (r === 'guide') u = q('topic') === 'sources' && q('tour') === null && q('term') === null ? t.concat('realtime-status') : [];
+      else if (r !== 'settlement') u = t.concat('model/info');
+      if (!u.length || !w.fetch) return;
+      o = w.__PD_PREFETCH__ = { t: Date.now(), r: f, x: false };
+      setTimeout(function () { for (var i = 0; i < u.length && !o.x; i++) (f['/api/v1/' + u[i]] = fetch('/api/v1/' + u[i])).catch(function () {}); }, 0);
+    } catch (e) {} })(window);
+  </script>
 </body>
 </html>
 ```
@@ -819,6 +850,8 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
 - 파비콘 링크를 손으로 쓰지 않는다. export가 `href="/favicon.ico"`를 넣는다(서버가 이 문자열만 고친다). F2에서 export된 `index.html`에 정확히 하나 있는지 확인하고, 없으면 그 문자열 그대로 템플릿에 더한다.
 - 확대를 막지 않는다(`maximum-scale`·`user-scalable` 없음). 옛 `shrink-to-fit`과 잘못된 `httpEquiv` 메타는 없앤다.
 - round 1 접근성(F13b): 스크롤 상자의 `scroll-padding-block`과 초점 대상의 `scroll-margin-block`(8 px)은 Tab이 스크롤해 보여 준 요소의 초점 링(2 + 2 px)이 상자 끝에서 잘리지 않게 한다. 강제 색 모드(Windows 고대비)에서는 배경으로만 그린 선택(고른 세그먼트·지금 탭의 3 px 표시·선택 행)이 사라지므로 `Highlight` 외곽선으로 보인다.
+- 머리 테마 script(F13c): 저장한 선택이 `light`·`dark`면 `data-theme`과 함께 두 theme-color 메타를 그 테마 canvas로 바꾼다(round 1: OS 어둡게 + 앱 "밝게"에서 번들이 뜰 때까지 약 4.6초 동안 밝은 스켈레톤 위 브라우저 막대만 어두웠다). 앱이 뜨면 `head.web.ts`가 같은 값을 다시 쓴다(8.4절).
+- body 끝 미리 받기 script(F13c, round 1 D3, 6.3·9절): 그 경로가 처음 그릴 때 보내는 GET만 시작한다. 오늘(모르는 경로 포함) = 하루전 가격 · 예측 · KPI · 수급 · 시장 상태 · 모델 정보(첫 화면 카드에 쓰지 않아 맨 뒤), 입찰 = 시장 상태 · 예측 · 입찰 계산(`?risk=`가 세 값 중 하나면 그것, 아니면 균형, 예시 용량 50 MW), 알아보기 `?topic=sources`(`tour`·`term` 키가 없을 때) = 출처 표의 다섯 + 응답 상태, 정산·그 밖의 알아보기 = 없음. 기준 경로는 3.2절의 경로 규칙(`/mobile`·`/mobile/…`이면 `/mobile/`)이고 쿼리는 `routes.ts`처럼 이름이 같은 첫 쌍을 쓰며 깨진 % 인코딩 쌍은 건너뛴다. 시트(`?sheet=`)가 더하는 GET은 미리 받지 않는다(앱이 보통 요청으로 받는다). `fetch`는 `setTimeout 0` 뒤에 시작한다: 파서가 바로 뒤의 번들 `<script defer>` 요청을 먼저 내 HTTP/1.1 호스트당 6개 연결에서 번들이 자리를 잃지 않는다(F13c 최종 측정: 번들 도착 4.79–4.82초, API 6개는 0.63–2.25초에 끝, 하루전 가격이 1.03초 걸린 회차도 content 5,058 ms). 앱이 먼저 꺼내 표가 닫혔으면(`x`) 아무것도 시작하지 않는다. 실패한 약속에는 빈 `catch`를 붙여 처리되지 않은 거부가 콘솔에 남지 않는다. `public_server.py`가 고치는 두 문자열(`src="/_expo/`·`href="/favicon.ico"`)을 쓰지 않는다. `tests/shell-html`이 경로 24개에 대해 이 script를 VM에서 돌려 `routes.ts`·`ENDPOINTS`·`riskOf`·예시 용량으로 다시 만든 계획과 같은지 본다.
 
 ### 8.2 `mobile/app.json`
 
@@ -831,7 +864,7 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
 ### 8.4 테마 (OS 따름 + 앱 안 선택)
 
 - `src/app/theme.tsx`: `mode` ∈ `system`(기본) · `light` · `dark`를 localStorage `pd-theme`에서 읽는다(try/catch, 실패하면 `system`). `scheme = mode === 'system' ? useColorScheme() : mode`. RN-web의 `useColorScheme`은 `prefers-color-scheme` 변화를 바로 따른다.
-- 고르면: `document.documentElement`의 `data-theme` 설정(시스템이면 제거), `style.colorScheme`, 두 theme-color 메타의 `content`를 고른 `canvas`로(시스템이면 원래 값으로 되돌림) 바꾼다(`head.web.ts`). OS 변화는 `system`일 때만 반영한다.
+- 고르면: `document.documentElement`의 `data-theme` 설정(시스템이면 제거), `style.colorScheme`, 두 theme-color 메타의 `content`를 고른 `canvas`로(시스템이면 원래 값으로 되돌림) 바꾼다(`head.web.ts`). OS 변화는 `system`일 때만 반영한다. 다시 방문했을 때 번들이 뜨기 전에도 같은 값이도록 `index.html` 머리 테마 script가 저장한 `light`·`dark`로 두 메타를 먼저 바꾼다(F13c, 8.1절).
 - 레이아웃은 두 테마에서 같고, 데이터 색은 바뀌지 않는다.
 
 ### 8.5 제목과 언어
@@ -848,10 +881,13 @@ mobile/tests/                            새 테스트·픽스처·도우미 (�
 | 새 앱 코드(소스맵 귀속) | ≈ 160 KB 이하 | F6·F8·F11에서 `sourcemap_sizes.py` |
 | 번들 안 한글 이스케이프 `\uXXXX` 수 | 기록(목표 2,500 이하) | 단계마다 |
 | Slow 4G content | 3회 모두 ≤ 6.0 s | F8·F11, 최종 평가 |
+| Slow 4G content, 미리 받기 뒤(round 1 D3 수락) | 있는 그대로 3회 모두 ≤ 5.4 s, `/api/v1/smp/day-ahead`를 Playwright로 +1,200 ms 붙잡은 3회(서버 캐시가 찬 첫 방문자 흉내, round 1 실측 1,125–1,685 ms) 모두 ≤ 6.0 s | F13c, 최종 평가 |
+| 첫 그림 GET | 번들을 받는 동안 끝난다(미리 받기, 8.1절). 경로별 요청 수·종류는 6.3절 그대로, 같은 GET 두 번 0 | F13c(`probe_requests.py`), 최종 평가 |
 | 첫 페인트 | 스켈레톤이 번들 도착 전에 보임 | F2·F11 |
 
 - 줄이는 수단(이 순서): 레거시 화면을 가져오지 않기(입찰 계열 ≈ 133 KB, 정산 12 KB, 앨런 33 KB), 금지 모듈(7.10절)로 RN-web의 `Animated`·`Modal`·`Switch`·`FlatList` 제외, 긴 문구를 JSON으로, 웹폰트·이미지 없음.
 - M9가 F11에서 떨어지면: 소스맵으로 뜻밖의 모듈을 찾고 → 문구를 더 JSON으로 → 기본 컴포넌트를 줄인다. 서버 압축(P3)은 진짜 해법이지만 이번 범위 밖이다.
+- round 1에서 M9의 여유가 31 ms였던 까닭(F13c): 첫 GET 여섯이 번들을 받고 실행한 뒤(≈ 4.8 s)에야 시작해, 서버 캐시가 찬 `day-ahead` 하나(1,125 ms)가 게이트를 정했다. 그래서 GET을 번들과 겹친다(미리 받기, 6.3·8.1절). 번들 한도 640,000 B는 그대로이고, 모듈마다 Babel이 붙이는 interop 도우미(`import React, { … }`가 타입에만 쓰는 기본 가져오기를 품을 때 약 470 B)를 빼서 자리를 만든다(F13c 10곳). 측정은 F13c 증거와 보고서.
 - 같은 화면에서 쓰지 않는 요청은 보내지 않는다(6.3절 목록). 계산기는 폴링하지 않는다.
 
 ---
@@ -926,12 +962,14 @@ $PY -I $SM/eval/tools_v2/sweep.py tz         # timezone_id UTC / America/Los_Ang
 $PY -I $SM/eval/tools_v2/sweep.py rotate     # 390×844 → 844×390 → 390×844
 $PY -I $SM/eval/tools_v2/sweep.py keyboard   # Tab 순회, 포커스 링, 탭·세그먼트 화살표, 시트 가둠·Esc·복귀
 $PY -I $SM/eval/tools_v2/sweep.py throttle   # M9: DevTools Slow 4G 냉시작 3회
-$PY -I $SM/eval/tools_v2/sweep.py i2         # 숫자-칩-출처 DOM 스캔, data-pd-raw와 같은 분 API 값 비교(I3)
+$PY -I $SM/eval/tools_v2/sweep.py throttle --delay /api/v1/smp/day-ahead=1200   # F13c: 그 경로를 붙잡았다 보냄(서버 캐시가 찬 첫 방문자)
+$PY -I $SM/eval/tools_v2/sweep.py i2         # 숫자-칩-출처 DOM 스캔, data-pd-raw와 같은 분 API 값 비교 + 파생 값 다시 계산(I3)
 zsh $SM/eval/tools_v2/run_gate_checks_v2.sh http://127.0.0.1:10104/mobile/   # I1–I5 기계 검사 묶음
 ```
 
 - round 0의 `metrics.js`·`probe.js`·`find_main.js`·axe 4.10.2를 그대로 쓰고, content 표지만 `timing_v2.js`로 바꾼다(`[data-testid="today-hero"]`의 `data-state`가 `loading`이 아니게 된 순간; 옛 표지 "예측 SMP ("도 함께 기록해 기준선 비교에 쓴다).
 - `Value`는 `data-pd-raw`에 API 원값을 둔다. `i2`는 보이는 글자가 원값을 규칙대로 한 번 반올림한 것과 같은지, 원값이 같은 분에 같은 출처로 받은 API 값과 같은지 본다.
+- `i2`의 파생 값(F13c, round 1 D16: 원값만 보던 I3가 오늘 13개·입찰 0개였다): 같은 페이지가 받은 응답으로 `format.ts`(십진 반올림 한 번·천 단위 쉼표·빼기 기호)와 `chartMath`(0.00 입력 제외 최고·최저·평균, 화면 글자가 같은 시간 묶음, 가장 넓은 80% 구간)·7.4·7.8절 규칙을 파이썬으로 다시 계산해 화면 글자(공백 무시)와 맞춘다. 오늘(390, 차트 + 표 보기 + 24시간 전체): 비교 문장의 차이, 수급 식·경계·AnswerLine의 예비력(짝이 아니면 "공급능력 미수신"), 요약의 최고·최저·평균, 가장 불확실한 시간, 시간대 요약 3행, 시간별 행 카드(값 시간마다 q50과 q10–q90). 입찰(바로 들어옴, 표 보기, 19h): 계단 요약·추세·범례, 구간 행 10개(물량·가격·낙찰 가능성·기대 수입) + 합계, 가격 근거 줄(있음·없음·확인 전). `gates`의 I3는 파생 불일치 0도 요구한다. 양성·음성 대조는 `eval/steps/F13c/i3_control.py`(값을 하나씩 비틀면 그 검사만 떨어진다).
 - 안전: 같은 출처 GET·HEAD만 통과, 다른 출처·쓰기 요청은 막고 기록. 목록에 없는 것은 누르지 않는다.
 - 출력: `INDEX.md`(상태마다 컨테이너별 넘침, 12 px 미만 글자, 44 px 미만 대상, 대비 실패, 이름 없는 요소, h1 수, 콘솔 오류, 실패 요청, axe 영향도별 수), `shots/<폭>-<테마>/<상태>.png`, `metrics/*.json`.
 - 평가용 sweep의 판정 기준은 1.2·1.3절 표다.
@@ -943,7 +981,7 @@ zsh $SM/eval/tools_v2/run_gate_checks_v2.sh http://127.0.0.1:10104/mobile/   # I
 | ID | 경로 | 동작 · 주입 | 확인 |
 |---|---|---|---|
 | G1 | 4경로 | 냉시작, 스크롤 위·중간·끝 | M1–M7, 모든 스크롤 컨테이너 넘침 0 |
-| G2 | 각 탭 | 지금 탭 다시 누름 | 맨 위로, 히스토리 변화 없음 |
+| G2 | 각 탭 | 지금 탭 다시 누름 | 맨 위로, 히스토리 변화 없음. 알아보기의 둘러보기·용어·주제에서는 그 탭의 첫 화면(히스토리 +1, h1 초점, F13c) |
 | G3 | 오늘→입찰 | 브라우저 뒤로 / 시트 연 채 뒤로 | 이전 탭 / 시트만 닫힘 |
 | G4 | 모든 경로·시트 URL | 새로고침(딥링크) | 같은 상태, 헤더 ←는 앱 안 부모로 |
 | G5 | `/mobile/foo`, `/mobile` | 진입 | 오늘 + URL 교체 / `/mobile/`로 |
@@ -956,8 +994,8 @@ zsh $SM/eval/tools_v2/run_gate_checks_v2.sh http://127.0.0.1:10104/mobile/   # I
 | T1–T4 | 오늘 | 차트/표 각각, 스텝퍼 01h에서 ‹·24h에서 ›·[지금으로], 차트 누름·←/→/Home/End, [24시간 전체 보기] | 판독 줄·표 선택 행·URL `?hour=` 함께 바뀜 |
 | T5–T8 | 오늘 | [i] 4개, [출처 표] 4개, TermLink 5개, TourBanner [둘러보기]·[닫기] | 시트 의미·가둠·복귀, 배너는 덮개 아님 |
 | T9 | 오늘 | 픽스처: 불러오는 중(8초 지연), 확정 가격 없음, 정시 경계 유예(HH:01)와 지연(HH:06), KPI 12분·61분, 일부 실패, 전부 실패, 수요 출처 ②④⑤⑥, 공급능력 짝 불일치, 기상 file·default·none, 예측 대체값·모르는 모델, 예측일 어제, 0.00 입력(12–14h), 시계 차이 +3분·+13시간 | 4.1절 상태표와 AnswerLine 표 그대로 |
-| B1–B5 | 입찰 | 성향 3개, 스텝퍼 양 끝, 계단 누름·←/→, 차트/표, 가격 원리 펼치기·접기, [i] 3개, [출처 표] | 요청은 성향 바꿀 때만 |
-| B6 | 입찰 | 픽스처·시계: 확인 중, 접수 중, 마감 임박(09:20), 마감(10:01), 불일치, 오류, 지연, 계산기 503 1회(자동 재시도 성공)·2회(수동), 500, 8초 지연, 가격 근거 줄 있음·없음 | 4.2절 상태표 |
+| B1–B5 | 입찰 | 성향 3개, 스텝퍼 양 끝, 계단 누름·←/→, 차트/표, 가격 원리 펼치기·접기(본문 안 정확한 이름 "가격은 어떻게 정해지나요? 펼치기", F13c), [i] 3개, [출처 표] | 요청은 성향 바꿀 때만. 펼치면 `aria-expanded=true`와 그림 "예시 수요 …", 접으면 `false`와 본문 없음 |
+| B6 | 입찰 | 픽스처·시계: 확인 중, 접수 중, 마감 임박(09:20), 마감(10:01), 불일치, 오류, 지연, 계산기 503 1회(자동 재시도 성공)·2회(수동), 500, 8초 지연, 가격 근거 줄 있음·없음·확인 전(예측 502, F13c) | 4.2절 상태표. 바로 들어온 화면의 가격 근거 글자를 확인한다(F13c, 전에는 캡처만) |
 | S1–S2 | 정산 | 냉시작, [i], TermLink 4개 | 이 경로의 네트워크 요청 0 |
 | A1–A6 | 알아보기 | 목록 6행, 둘러보기 1→5·이전·건너뛰기·3단계에서 뒤로·`?tour=4` 딥링크, 용어 12개(`?term=`), 읽는 법·예측 방법·출처(`realtime-status` 전체 응답·일부·없음, 각 status 값)·앱 정보(시계 차이), 테마 시트 3개, 문구 JSON 404 | 4.4절 |
 
@@ -982,7 +1020,7 @@ zsh $SM/eval/tools_v2/run_gate_checks_v2.sh http://127.0.0.1:10104/mobile/   # I
 | **F5 차트** | StepChart · LadderChart · RangeBar · 계산 함수 | `src/ui/charts/{StepChart,LadderChart,RangeBar}.tsx`, `src/ui/charts/chartMath.ts`, 테스트 | 06:04 지금선 x = 6.067/24 × 폭, 계단 경계, y 0부터, 0.00 입력 구간, 동률 구간 라벨, 360 미만 확률 라벨 솎기. 탐침 갤러리에서 296·358·398·608 폭, 축 글자 ≥ 12, 차트 위 세로 스와이프가 페이지를 스크롤(CDP 터치), 키보드 선택, 계열 3:1(두 테마) | 캡처, 스와이프 로그 |
 | **F6 라우터 · 셸 · App** | 3절 전부. `App.tsx` 재작성(훅 없는 Header 유지, `case 'smp': return <SMPForecastScreen />`). 이 단계에서는 입찰·정산 경로가 레거시 화면을 그대로 띄우고 탭은 3개(알아보기는 F10에서 추가) | `src/app/{routes,router,router.web,Shell,SheetHost,head,head.web}.ts(x)`, `App.tsx`, 테스트 `routes`·`header-palette` | 기존 헤더 테스트 무수정 통과, G2–G6 통과, 라우트마다 제목·h1 초점·live 알림, 정산에서 새로고침 비활성, 1024 레일, NowPill 갱신 | 번들 바이트(기록만), G 상태 캡처 |
 | **F7 오늘** | 4.1절 전부 | `src/screens/SMPForecastScreen.tsx`(같은 자리 재작성), `src/features/today/*`, `public/content/guide.ko.json`의 `today-*` 항목, `tests/view-models.test.cjs`(오늘), `tests/fixtures/round0/expected-today.json` | 기대 문자열 일치(115.3 · 07h · 06–07시 · 145.2 · 29.9 · 664 · 79.5 · 1,191 · 527 · 1,036 · 11.0 · 3.6 · 맑음 · 212.3/08h · 07–08시 · 102.3/03–05h · 02–05시 · 169.2 · 326.4/13h · 12–13시 · 시간대 요약 · 정확도 줄), smp-truthfulness 무수정 통과, 390×844 첫 화면 규칙(상자 측정), T1–T9, `/` I2 스캔 0 | 캡처, 첫 화면 상자 좌표 |
-| **F8 입찰** | 4.2절 전부. `App.tsx`의 `bidding`을 새 탭으로 → 레거시 입찰·KPX·RTM·등록·발전소 도구·webview 스텁이 번들에서 빠짐 | `src/features/bidding/*`, 테스트(마감 상태 기계: 06:03:57 · 09:20 · 09:59:30 · 10:00:30 · 불일치 · 오류, 계산기 single-flight·503 1회 재시도·폴링 없음, 기대 문자열 3시간 56분 · 11-26(목) 10:00 KST · 11-27(금) · 06:15 · 171.7–244.1 · 95%→5% · 468.6만원 · 56.1만원 · 가격 근거 줄) | **번들 ≤ 680,000 B**, `throttle` 3회 기록, 입찰 경로 요청은 `market-status`·`optimized-segments`뿐, `/power-plants` 0, B1–B6 | 소스맵 귀속 표, throttle JSON |
+| **F8 입찰** | 4.2절 전부. `App.tsx`의 `bidding`을 새 탭으로 → 레거시 입찰·KPX·RTM·등록·발전소 도구·webview 스텁이 번들에서 빠짐 | `src/features/bidding/*`, 테스트(마감 상태 기계: 06:03:57 · 09:20 · 09:59:30 · 10:00:30 · 불일치 · 오류, 계산기 single-flight·503 1회 재시도·폴링 없음, 기대 문자열 3시간 56분 · 11-26(목) 10:00 KST · 11-27(금) · 06:15 · 171.7–244.1 · 95%→5% · 468.6만원 · 56.1만원 · 가격 근거 줄) | **번들 ≤ 680,000 B**, `throttle` 3회 기록, 입찰 경로 요청은 `market-status`·`optimized-segments`뿐(F13c D5 뒤로는 `smp-forecast`도, 6.3절), `/power-plants` 0, B1–B6 | 소스맵 귀속 표, throttle JSON |
 | **F9 정산** | 4.3절 | `src/features/settlement/*`, 테스트(산수·예시 출처) | 정산 경로 요청 0, 숫자는 모두 `examples.ts`에서, S1–S2, 레거시 정산 화면 번들 제외 | 번들 바이트 |
 | **F10 알아보기 · 시트 · 문구** | 4.4절 전부, 4번째 탭, 산출 방식·출처·용어·테마 시트, `guide.ko.json` 완성, `alanApi.ts`의 `getLocalResponse` 지어낸 숫자를 "앨런 서비스에 연결하지 못했습니다"로 바꿈(그 밖은 그대로) | `src/features/guide/*`, `public/content/guide.ko.json`, `src/services/alan/alanApi.ts`, 테스트 `guide-content`, `view-models`(출처 행·응답 상태 매핑·둘러보기 5단계 범례) | smp-truthfulness의 앨런 검사 무수정 통과, **번들 ≤ 640,000 B**, A1–A6, 모든 카드 id에 산출 방식 항목 | 캡처, 번들 바이트 |
 | **F11 전수 점검** | 11.5절 목록 전부 실행하고 고친다(작은 수정, `src/ui`·`src/app`·`features`). 모든 스크롤 컨테이너, 회전, 키보드, 줄인 움직임, 테마 6조합, 시간대 3개, throttle | 여러 곳 소량 | 1.2·1.3절 게이트 표 **전부 통과**, 번들 ≤ 640,000 B, Slow 4G 3회 ≤ 6.0 s | 게이트 표(값 + 파일 경로), `$SM/eval/steps/F11/INDEX.md` |

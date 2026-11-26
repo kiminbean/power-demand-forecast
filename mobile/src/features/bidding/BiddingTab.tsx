@@ -1,11 +1,11 @@
 /**
- * 입찰(명세 4.2절, 경로 /bidding · 라우트 키 bidding). 이 파일이 입찰 화면의 자료 입구다: 허용 목록 GET 두 개(시장 상태 · 입찰 계산)만
- * 보낸다(6.3절). 시장 상태는 오늘 화면과 같은 저장소 키라 함께 쓰고, 기준선 예측은 오늘 화면이 받아 둔 것을 엿보기만 한다(가격 근거
- * 줄, 7.8절 2). 입찰 계산은 성향마다 저장소 키를 따로 두어 5분 동안 다시 쓰고 한 번에 하나만 보낸다(calculator.ts). 폴링하지 않는다.
- * 순수 함수 model.ts가 글자·상태를 만들고 카드는 배치만 한다. 산출 방식·출처 시트와 ≥ 1280 패널은 useBiddingView()로 같은 저장소를
- * 엿본다(새 요청 없음, App.tsx가 시트로 등록한다).
+ * 입찰(명세 4.2절, 경로 /bidding · 라우트 키 bidding). 이 파일이 입찰 화면의 자료 입구다: 허용 목록 GET 세 개(시장 상태 · 기준선 예측 ·
+ * 입찰 계산)만 보낸다(6.3절). 시장 상태와 기준선 예측은 오늘 화면과 같은 저장소 키라 함께 쓴다(5분 안에 받았으면 다시 보내지 않는다).
+ * 예측은 가격 근거 줄(7.8절 2)에 쓴다: round 1 D5 전에는 엿보기만 해서 입찰로 바로 들어오면 그 줄이 없었다. 입찰 계산은 성향마다 저장소
+ * 키를 따로 두어 5분 동안 다시 쓰고 한 번에 하나만 보낸다(calculator.ts). 폴링하지 않는다. 순수 함수 model.ts가 글자·상태를 만들고 카드는
+ * 배치만 한다. 산출 방식·출처 시트, ≥ 1280 패널, 둘러보기 3단계는 useBiddingView()로 같은 저장소를 엿본다(예측은 받지 않는다).
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useClock, useNav, useShellData } from '../../app/Shell';
 import type { RefreshResult } from '../../app/Shell';
@@ -37,6 +37,7 @@ import { Text } from '../../ui/Text';
 import { SPACE } from '../../ui/tokens';
 
 const loadMarket = (signal: AbortSignal) => createClient({ signal }).getMarketStatus();
+const loadForecast = (signal: AbortSignal) => createClient({ signal }).getSMPForecast();
 const VISIBILITY = { isVisible, watchVisible };
 // 계산 결과를 받을 때 엿본 기준선 예측일(그 뒤 예측일이 바뀌면 오래된 입력). 응답 객체는 바뀌지 않아 객체를 열쇠로 기억한다.
 const CALC_FORECAST_DATE = new WeakMap<object, string | null>();
@@ -46,16 +47,17 @@ const AT_REST: BiddingFlow = { recheck: 'idle', staleRetried: false };
 
 /**
  * 입찰 화면의 자료와 view model. fetching이면 처음 마운트에 받고(lib/resource 규칙) 다시 받을 손잡이를 준다. 아니면 엿보기만 한다.
+ * withForecast(입찰 화면만)면 가격 근거 줄의 기준선 예측도 받는다(D5). 둘러보기 3단계는 그 줄을 그리지 않아 받지 않는다.
  * 저장소의 조회 시각은 기기 시계라서 서버 시계 차이를 더해 앱 시각으로 바꾼 뒤 넘긴다(나이는 어느 쪽이든 같다).
  */
-export function useBiddingView(fetching = false, flow: BiddingFlow = AT_REST) {
+export function useBiddingView(fetching = false, flow: BiddingFlow = AT_REST, withForecast = false) {
   const nav = useNav();
   const clock = useClock();
   const risk = riskOf(nav.state);
   const hour = nav.state.key === 'bidding' ? nav.state.hour : null;
   const market = useResource(ENDPOINTS.marketStatus, fetching ? loadMarket : undefined);
   const calc = useResource(calcKey(risk), fetching ? calcLoader(risk) : undefined);
-  const forecast = useResource<SmpForecast>(ENDPOINTS.forecast);
+  const forecast = useResource<SmpForecast>(ENDPOINTS.forecast, fetching && withForecast ? loadForecast : undefined);
   const { reportServerTime } = clock;
   // 시장 상태의 서버 시각으로 기기 시계 차이를 맞춘다(7.5·7.6절). 받은 기기 시각과 짝을 짓는다.
   useEffect(() => {
@@ -70,11 +72,11 @@ export function useBiddingView(fetching = false, flow: BiddingFlow = AT_REST) {
   const view = useMemo(() => {
     const app = <T,>(r: Resource<T>) => ({ data: r.data, status: r.status, error: r.error, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + skewMs });
     return biddingView({
-      now: clock.now, market: app(market), calc: { ...app(calc), busy: calc.busy }, forecast: forecast.data, calcForecastDate, risk,
-      selectedHour: hour, recheck: flow.recheck, staleRetried: flow.staleRetried,
+      now: clock.now, market: app(market), calc: { ...app(calc), busy: calc.busy }, forecast: forecast.data,
+      forecastFailed: forecast.status === 'error', calcForecastDate, risk, selectedHour: hour, recheck: flow.recheck, staleRetried: flow.staleRetried,
     });
-  }, [clock.now, skewMs, market, calc, forecast.data, calcForecastDate, risk, hour, flow.recheck, flow.staleRetried]);
-  return { view, market, calc, risk, skew: clock.skew };
+  }, [clock.now, skewMs, market, calc, forecast.data, forecast.status, calcForecastDate, risk, hour, flow.recheck, flow.staleRetried]);
+  return { view, market, calc, forecast, risk, skew: clock.skew };
 }
 
 export default function BiddingTab() {
@@ -84,9 +86,10 @@ export default function BiddingTab() {
   // 오래된 입력으로 한 번 다시 계산한 성향(계산 저장소 키). 성향마다 한 번.
   const [staleFor, setStaleFor] = useState<string | null>(null);
   const key = calcKey(riskOf(nav.state));
-  const { view, market, calc, risk, skew } = useBiddingView(true, { recheck, staleRetried: staleFor === key });
+  const { view, market, calc, forecast, risk, skew } = useBiddingView(true, { recheck, staleRetried: staleFor === key }, true);
   const reloadMarket = market.reload;
   const reloadCalc = calc.reload;
+  const reloadForecast = forecast.reload;
 
   // 서버 상태와 계산이 어긋나면 즉시 한 번 다시 조회하고, 그래도 다르면 남은 시간을 숨긴다(4.2절 불일치). 맞으면 되돌린다.
   useEffect(() => {
@@ -114,14 +117,16 @@ export default function BiddingTab() {
   const marketAge = useCallback(() => market.fetchedAt, [market.fetchedAt]);
   useRefreshWhileVisible(() => { reloadMarket(); }, marketAge, VISIBILITY);
 
-  // 헤더 새로고침: 시장 상태는 늘, 계산은 성향별 5분 기억이 지났거나 실패했을 때만(서버가 한 번에 하나만 계산한다).
+  // 헤더 새로고침: 시장 상태는 늘, 계산은 성향별 5분 기억이 지났거나 실패했을 때만(서버가 한 번에 하나만 계산한다). 기준선 예측도
+  // 5분이 지났거나 실패했을 때만(가격 근거 줄, 결과 알림에는 넣지 않는다).
   const refresh = useCallback(async (): Promise<RefreshResult> => {
-    const due = shouldLoadOnMount(appResources.get(key), appResources.now());
-    const [m, c] = await Promise.all([reloadMarket(), due ? reloadCalc() : Promise.resolve(true)]);
+    const due = (k: string) => shouldLoadOnMount(appResources.get(k), appResources.now());
+    if (due(ENDPOINTS.forecast)) reloadForecast();
+    const [m, c] = await Promise.all([reloadMarket(), due(key) ? reloadCalc() : Promise.resolve(true)]);
     const offset = skew && skew.plausible ? skew.skewMs : 0;
     const shown = appResources.get(ENDPOINTS.marketStatus).fetchedAt;
     return m && c ? { ok: true, at: kstNow(skew) } : { ok: false, shownAt: shown === null ? null : shown + offset };
-  }, [key, reloadMarket, reloadCalc, skew]);
+  }, [key, reloadMarket, reloadCalc, reloadForecast, skew]);
   useShellData(useMemo(() => ({ refresh, fetchedAt: view.fetchedAt }), [refresh, view.fetchedAt]));
 
   // 거래시간·성향 선택은 URL에 남는다(같은 항목을 고친다, 3.1절). 성향을 바꾸면 그 성향의 계산을 받는다(5분 안이면 기억한 값).

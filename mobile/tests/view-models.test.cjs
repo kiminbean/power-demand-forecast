@@ -330,7 +330,7 @@ test('예측 대체값·모르는 모델·예측일 어제·0.00 입력(12–14h
   assert.deepEqual([empty.forecast.state, empty.forecast.text], ['empty', '그릴 수 있는 예측 값이 없습니다']);
 });
 
-test('출처 표 행: 받는 중·실패·이번 방문에 조회하지 않음(시트는 엿보기만)을 구분한다', () => {
+test('출처 표 행: 받는 중·실패·아직 조회하지 않음(표를 연 화면이 받기 시작하기 전 한 순간, round 1 D15)을 구분한다', () => {
   const m = load();
   const { input } = inputFor(m, 'today-base');
   const idle = { data: null, fetchedAt: null, status: 'idle', error: null };
@@ -411,6 +411,18 @@ test('카드 렌더: 모든 T9 변형 × 390 차트·표 / 320 / 768에서 표�
       assertI2(root, `${id}@${width}${forceTable ? ' 표' : ''}`);
     }
   }
+});
+
+test('줄바꿈 단위(F13c 갈림 탐침): 차트 범례의 짧은 괄호·80%, 판독 줄의 80% 구간 범위, 가격 카드 메타 줄의 시각 범위는 한 줄 조각', () => {
+  const m = load();
+  const { input } = inputFor(m, 'today-base');
+  const root = renderToday(m, m.model.todayView(input), input.now);
+  const nowrapOf = node => all(node, n => ds(n).pdNowrap === 'true').map(textOf);
+  // 360에서 "(▲ 위쪽" / "잘림)", 320에서 판독 줄 "116.9–" / "174.6원"으로 갈렸다(F13c split_probe).
+  const legend = nowrapOf(all(root, n => ds(n).pdMeta === 'legend')[0]);
+  assert.ok(legend.includes('(어제 같은 시간 가격)') && legend.includes('80%'), legend.join(' | '));
+  assert.ok(nowrapOf(all(root, n => n.props.testID === 'today-reading')[0]).includes('116.9–174.6원'), '범위는 두 값과 줄표·단위를 한 묶음으로');
+  assert.ok(nowrapOf(all(root, n => ds(n).pdMeta === 'hour')[0]).includes('06–07시'));
 });
 
 test('카드 렌더 의미: today-hero data-state, [i] 4개·[출처 표] 4개 이름, 용어 링크 5개, 스텝퍼, 표 12행/24행, 44 px', () => {
@@ -583,6 +595,16 @@ const rsOf = (g, id) => {
 };
 const statusOf = (g, id) => g.guide.statusView(rsOf(g, id)).rows.map(r => [r.item, r.status, r.tone]);
 
+test('출처 카드 머리 칩(round 1 D15): 서버 응답 상태를 쓰되 표의 행을 하나라도 불러오지 못했으면 초록 "모두 응답" 대신 그 사실', () => {
+  const g = loadGuide();
+  const chip = (id, failed) => g.guide.sourcesChip(g.guide.statusView(rsOf(g, id)).overall, failed);
+  assert.deepEqual(chip('guide-rs-base', false), { text: 'API 서버: 모두 응답', tone: 'ok' });
+  assert.deepEqual(chip('guide-rs-base', true), { text: '일부 자료를 불러오지 못함', tone: 'watch' }, '칩과 표가 엇갈리지 않게');
+  assert.deepEqual(chip('guide-rs-partial', true), { text: 'API 서버: 일부 응답', tone: 'watch' }, '서버가 이미 좋지 않다고 하면 서버 상태 그대로');
+  assert.deepEqual(chip('guide-rs-disconnected', false), { text: 'API 서버: 응답 없음', tone: 'danger' });
+  assert.equal(chip('guide-rs-error', true), null, '응답 상태를 모르면 칩이 없다(카드의 오류 안내가 말한다)');
+});
+
 test('응답 상태 매핑(4.4절): status·data_date_status·overall_status → 한국어, 목록 밖·빠진 부분은 "알 수 없음", 응답 시각은 timestamp(KST), "연결됨" 없음', () => {
   const g = loadGuide();
   const base = g.guide.statusView(rsOf(g, 'guide-rs-base'));
@@ -601,7 +623,7 @@ test('응답 상태 매핑(4.4절): status·data_date_status·overall_status →
   assert.deepEqual(odd.rows.map(r => [r.status, r.tone, r.basis]), [['알 수 없음 · 날짜 알 수 없음', 'neutral', '응답 시각 미제공'],
     ['알 수 없음', 'neutral', '응답 시각 미제공'], ['알 수 없음', 'neutral', '응답 시각 미제공']]);
   assert.deepEqual([odd.overall.text, odd.overall.tone], ['알 수 없음', 'neutral']);
-  // 값이 없으면 받는 중 · 실패(502) · 이번 방문에 조회하지 않음(시트는 엿보기만), 상태 글자는 비운다.
+  // 값이 없으면 받는 중 · 실패(502) · 아직 조회하지 않음(표를 연 화면이 받기 시작하기 전 한 순간, D15), 상태 글자는 비운다.
   const pending = s => g.guide.statusView({ data: null, fetchedAt: null, status: s, error: null }).rows.map(r => [r.basis, r.status]);
   assert.deepEqual([pending('idle')[0], pending('loading')[0], g.guide.statusView(rsOf(g, 'guide-rs-error')).rows[0]].map(r => (Array.isArray(r) ? r : [r.basis, r.status])),
     [['이번 방문에서 아직 조회하지 않음', null], ['불러오는 중', null], ['불러오지 못함', null]]);

@@ -10,7 +10,7 @@ import { CARD_TITLES } from '../../content/strings';
 import { Card, SourceFooter, StateView } from '../../ui/Card';
 import { RichText } from '../../ui/Rich';
 import type { Line } from '../../ui/Rich';
-import { Text } from '../../ui/Text';
+import { Text, keepTogether } from '../../ui/Text';
 import { SPACE } from '../../ui/tokens';
 import { Value, spokenValue } from '../../ui/Values';
 
@@ -47,7 +47,7 @@ export function PriceCard({ view, onMethod, onSources, onRetry, fill = false }: 
         <View role="group" aria-label={name}>
           <Value v={view.price} format={price} size="display" />
         </View>
-        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'hour' }}>{view.hourLine}</Text>
+        <Text variant="label" tone="text2" dataSet={{ pdMeta: 'hour' }}>{keepTogether(view.hourLine, { variant: 'label', tone: 'text2' })}</Text>
         {view.checking ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'checking' }}>{view.checking}</Text> : null}
       </View>
       {/* 비교 두 문장은 한 문단으로 흐르게 둔다(같은 글자·크기, 390에서 세 줄 → 두 줄). */}

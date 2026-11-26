@@ -283,7 +283,8 @@ function readingLine(fc: ForecastView, point: ForecastPoint, confirmed: Confirme
   else if (point.kind === 'missing' || !point.q50) segs.push({ t: `${subject} —` });
   else {
     segs.push({ t: `${subject} ` }, { v: point.q50, f: price }, { t: '원' });
-    if (point.band) segs.push({ t: ' · ' }, { m: BAND_LABEL, tag: 'label' }, { t: ' ' }, { v: point.band.q10, f: price }, { t: '–' }, { v: point.band.q90, f: price }, { t: '원' });
+    // 범위는 한 줄 묶음(g): 두 값 사이 줄표 뒤에서 줄이 바뀌지 않게(F13c 갈림 탐침: 320에서 "85.9–" / "130.6원").
+    if (point.band) segs.push({ t: ' · ' }, { m: BAND_LABEL, tag: 'label' }, { t: ' ' }, { g: [{ v: point.band.q10, f: price }, { t: '–' }, { v: point.band.q90, f: price }, { t: '원' }] });
   }
   if (confirmed && confirmed.tradeHour === point.tradeHour) segs.push({ t: ` · ${CONFIRMED_LABEL} ` }, { v: confirmed.price, f: price }, { t: '원' });
   return segs;
