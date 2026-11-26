@@ -38,6 +38,12 @@ export function watchOnline(listener: (online: boolean) => void): () => void {
   };
 }
 
+/** 화면이 보이는가(배경 탭에서는 5분 새로고침을 건너뛴다, 6.3절). */
+export function isVisible(): boolean {
+  const d = doc();
+  return !d || d.visibilityState !== 'hidden';
+}
+
 /** 숨었던 탭이 다시 보일 때 부른다(배경 탭에서 늦게 돈 타이머가 남긴 지난 시각을 바로잡는다). */
 export function watchVisible(listener: () => void): () => void {
   const d = doc();

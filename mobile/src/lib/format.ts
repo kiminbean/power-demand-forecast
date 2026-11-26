@@ -13,9 +13,21 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const isZeroText = (text: string) => !/[1-9]/.test(text);
 
+/**
+ * API가 보낸 십진 값을 그대로 반올림한다(0.5는 0에서 먼 쪽): 58.05 → 58.1, 2.675 → 2.68. toFixed는 이진 근삿값(58.0499…)을
+ * 반올림해 "58.0"이 되어 I3(화면 값 = API 값을 한 번 반올림)과 어긋난다. 지수 표기로 자릿수를 옮기면 십진 글자 그대로 계산된다.
+ * 아주 크거나 작은 값(글자가 이미 지수 표기)은 손대지 않는다.
+ */
+function roundDecimal(value: number, decimals: number): number {
+  const text = String(Math.abs(value));
+  if (text.includes('e')) return value;
+  const rounded = Math.round(Number(`${text}e${decimals}`));
+  return Math.sign(value) * Number(`${rounded}e-${decimals}`);
+}
+
 /** 소수 decimals자리로 한 번 반올림하고 정수부에 천 단위 쉼표를 넣는다. 반올림 결과가 0이면 부호를 떼어 '0.0'. */
 export function num(value: number | null | undefined, decimals = 1): string {
-  const raw = formatNullableNumber(value, decimals);
+  const raw = formatNullableNumber(isFiniteNumber(value) ? roundDecimal(value, decimals) : value, decimals);
   if (raw === DASH) return DASH;
   const negative = raw.startsWith('-');
   const [int, frac] = (negative ? raw.slice(1) : raw).split('.');

@@ -39,6 +39,21 @@ test('6.3 examples: price, MW, percent, money, delta', () => {
   assert.equal(f.num(-0.04, 1), '0.0');
 });
 
+test('API 십진 값을 그대로 한 번 반올림(0.5는 0에서 먼 쪽): toFixed의 이진 근삿값 반올림과 다르다 (F7, I3 라이브 검사에서 발견)', () => {
+  // (58.05).toFixed(1) === '58.0', (2.675).toFixed(2) === '2.67', (1.005).toFixed(2) === '1.00'
+  assert.equal(f.price(58.05), '58.1');
+  assert.equal(f.num(2.675, 2), '2.68');
+  assert.equal(f.num(1.005, 2), '1.01');
+  assert.equal(f.price(-58.05), '−58.1');
+  assert.equal(f.price(0.05), '0.1');
+  assert.equal(f.price(0.04999), '0.0');
+  assert.equal(f.delta(-0.05), '−0.1');
+  assert.equal(f.price(0.1 + 0.2), '0.3');
+  assert.equal(f.mw(1035.5), '1,036');
+  assert.equal(f.num(1e21, 1), formatNullableNumber(1e21, 1), '지수 표기 값은 그대로 둔다');
+  assert.equal(f.price(Number.NaN), '—');
+});
+
 test('6.3 examples: trade hour labels use two digits (07h · 06–07시)', () => {
   assert.equal(f.tradeHour(7), '07h · 06–07시');
   assert.equal(f.tradeHour(1), '01h · 00–01시');

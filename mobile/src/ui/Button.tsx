@@ -6,7 +6,7 @@ import type { View } from 'react-native';
 import { HIT, RADIUS, SIZE, SPACE } from './tokens';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { webStyle } from './web';
 import { useTheme } from '../app/theme';
 
@@ -69,7 +69,7 @@ export function Button(props: ButtonProps) {
   return (
     <Pressable ref={ref} {...press} style={[styles.button, tone === 'ghost' ? styles.ghost : null, box, reachable ? styles.inert : null]}>
       {icon ? <Icon name={icon} size={SIZE.buttonIcon} color={fg} /> : null}
-      <Text variant="body" weight="600" color={fg}>{label}</Text>
+      <Text variant="body" weight="600" color={fg} dataSet={labelData(label)}>{label}</Text>
     </Pressable>
   );
 }

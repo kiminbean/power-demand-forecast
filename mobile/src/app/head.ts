@@ -10,3 +10,4 @@ export function applyDocumentTheme(_theme: DocumentTheme): void {
 export const isOnline = (): boolean => true;
 export const watchOnline = (_listener: (online: boolean) => void): (() => void) => () => undefined;
 export const watchVisible = (_listener: () => void): (() => void) => () => undefined;
+export const isVisible = (): boolean => true;

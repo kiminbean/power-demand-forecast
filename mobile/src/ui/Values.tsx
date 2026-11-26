@@ -21,6 +21,8 @@ const UNIT_SPOKEN: Readonly<Record<AnyUnit, string>> = {
 };
 /** 접근 이름용 읽기 형태: "664 메가와트". */
 export const spokenValue = (text: string, unit: AnyUnit) => (UNIT_SPOKEN[unit] ? `${text} ${UNIT_SPOKEN[unit]}` : text);
+/** 값 뒤에 붙는 단위 글자(간격 포함): "원/kWh"·"%"는 붙여, "MW"·"m/s"는 띄어 쓴다. */
+export const unitText = (unit: AnyUnit) => (unit ? UNIT_GAP[unit] + unit : '');
 
 type Size = 'display' | 'title' | 'body' | 'label';
 // 값 옆 단위는 한 단계 작게(5.4절): 32 옆 15, 20 옆 13, 15·13 옆 13.
@@ -32,12 +34,16 @@ function UnitText({ unit, size }: { unit: AnyUnit; size: Size }) {
   return <Text variant={UNIT_VARIANT[size]} weight={size === 'display' ? '500' : '400'} tone="text2" dataSet={{ pdMeta: 'unit' }}>{UNIT_GAP[unit] + unit}</Text>;
 }
 
-export type ValueProps = { v: Provenanced<number>; format: Formatter; size?: Size; showUnit?: boolean };
-/** 실제 값. data-pd-value="{상태}", data-pd-raw=API 원값(I2·I3 검사가 보이는 글자와 비교한다). */
-export function Value({ v, format, size = 'body', showUnit = true }: ValueProps) {
+export type ValueProps = {
+  v: Provenanced<number>; format: Formatter; size?: Size; showUnit?: boolean;
+  /** API 값으로 계산한 값(예비력 = 공급능력 − 수요, 관심 경계 = 공급능력 ÷ 1.15). API 원값이 아니라서 data-pd-meta="derived". */
+  derived?: boolean;
+};
+/** 실제 값. data-pd-value="{상태}", data-pd-raw=API 원값(I2·I3 검사가 보이는 글자와 비교한다). 계산값은 derived로 표시한다. */
+export function Value({ v, format, size = 'body', showUnit = true, derived = false }: ValueProps) {
   return (
     <Text variant={size} weight={size === 'display' || size === 'title' ? '700' : '600'} nowrap
-      dataSet={{ pdValue: v.state, pdRaw: String(v.value) }}>
+      dataSet={derived ? { pdMeta: 'derived' } : { pdValue: v.state, pdRaw: String(v.value) }}>
       {format(v.value)}{showUnit ? <UnitText unit={v.unit} size={size} /> : null}
     </Text>
   );
@@ -53,15 +59,21 @@ export function SampleValue({ v, format, size = 'body' }: { v: Example<number>; 
   );
 }
 
-type BlockProps = { label: string; v: Provenanced<number>; format: Formatter; chip?: React.ReactNode; testID?: string };
+type BlockProps = {
+  label: string; v: Provenanced<number>; format: Formatter; chip?: React.ReactNode; testID?: string;
+  /** 라벨과 값을 한 줄에(들어가지 않으면 줄바꿈). 4.1절 전력 카드 "쓰는 전력(수요)  664 MW". */
+  inline?: boolean;
+};
 
-function Block({ label, v, format, chip, testID, size }: BlockProps & { size: 'display' | 'title' }) {
+function Block({ label, v, format, chip, testID, size, inline = false }: BlockProps & { size: 'display' | 'title' }) {
   // 라벨 → 값+단위 → 칩을 한 문자열로 읽히게 묶는다(role=group은 이름을 가질 수 있는 역할).
   const name = `${label} ${spokenValue(format(v.value), v.unit)}, ${chipA11yLabel(v.chip, v.source)}`;
+  const labelText = <Text variant="label" weight="600" tone="text2">{label}</Text>;
   return (
     <View role="group" aria-label={name} testID={testID} style={styles.block}>
-      <Text variant="label" weight="600" tone="text2">{label}</Text>
-      <Value v={v} format={format} size={size} />
+      {inline
+        ? <View style={styles.inline}>{labelText}<Value v={v} format={format} size={size} /></View>
+        : <>{labelText}<Value v={v} format={format} size={size} /></>}
       {chip ?? <ProvenanceChip chip={v.chip} source={v.source} />}
     </View>
   );
@@ -74,4 +86,5 @@ export const HeroValue = (props: BlockProps) => <Block {...props} size="display"
 
 const styles = StyleSheet.create({
   block: { gap: SPACE.xs, alignItems: 'flex-start' },
+  inline: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: SPACE.sm, rowGap: SPACE.xs },
 });

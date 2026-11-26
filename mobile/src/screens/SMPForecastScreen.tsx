@@ -1,603 +1,243 @@
 /**
- * SMP Forecast Screen - Page 1
- * Figma: iPhone 16 Pro - 11 (id: 2:100)
- * Design: SMP 예측 with 24-hour chart and hourly table
- * Uses real API data from backend
+ * 오늘(명세 4.1절, 경로 / · 라우트 키 smp). 이 파일이 오늘 화면의 자료 입구다: 허용 목록 GET 여섯 개(하루전 확정 가격 · 기준선 예측 ·
+ * 모델 정보 · KPI · 수급 · 시장 상태)를 자료 저장소(lib/resource)로 받고, 하루전 가격은 utils/smpPresentation의 isAvailableDayAhead·
+ * describeDayAhead로 판정과 KPX 원문 표기를 만든 뒤 순수 함수 features/today/model.ts에 넘긴다. 카드는 배치만 한다.
+ * 산출 방식·출처 시트와 ≥ 1280 패널은 useTodayView()로 같은 저장소를 엿본다(새 요청 없음, App.tsx가 시트로 등록한다).
+ * 기존 화면 경로(App.tsx의 `case 'smp': return <SMPForecastScreen`)와 기본 export(필수 prop 없음)는 그대로다.
  */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import type { DayAheadSMP } from '../services/api';
+import { describeDayAhead, isAvailableDayAhead } from '../utils/smpPresentation';
+import { useClock, useNav, useShellData } from '../app/Shell';
+import type { RefreshResult } from '../app/Shell';
+import { ROUTES, rootState } from '../app/routes';
+import type { MethodCard, SourceRow } from '../app/routes';
+import { isVisible, watchVisible } from '../app/head';
+import { createClient, ENDPOINTS } from '../data/client';
+import { kstNow, kstParts, parseApiTime } from '../lib/kst';
+import { CHIPS } from '../lib/provenance';
+import type { ForecastKind } from '../lib/provenance';
+import { appResources, useRefreshWhileVisible, useResource } from '../lib/resource';
+import type { Resource } from '../lib/resource';
+import { TOUR_BANNER } from '../content/strings';
+import { nextBoundaryCheck, todayView } from '../features/today/model';
+import type { Fetched, TodayCardId } from '../features/today/model';
+import { AccuracyCard } from '../features/today/AccuracyCard';
+import { ForecastCard } from '../features/today/ForecastCard';
+import { PowerCard } from '../features/today/PowerCard';
+import { PriceCard } from '../features/today/PriceCard';
+import { AllFailedNotice, TermRow, TodayPanelBody } from '../features/today/TodayParts';
+import { LiveFacts, SourcesTable } from '../features/guide/sheets';
+import { NowPill, ProvenanceChip } from '../ui/Chips';
+import { AnswerLine, Screen } from '../ui/Screen';
+import { TourBanner } from '../ui/Tour';
+import { SPACE } from '../ui/tokens';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  Platform,
-  Image,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-
-import { colors as themeColors } from '../theme/colors';
-import { apiService, DayAheadSMP, SMPForecast, ModelInfo } from '../services/api';
-import { describeDayAhead, formatNullableNumber, isAvailableDayAhead } from '../utils/smpPresentation';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Design colors from Figma
-const colors = {
-  primary: themeColors.navy,
-  secondary: themeColors.info,
-  background: themeColors.bg,
-  cardBg: themeColors.surface,
-  smpCardBg: themeColors.info,
-  text: themeColors.text.primary,
-  textSecondary: themeColors.text.secondary,
-  textMuted: themeColors.text.secondary,
-  orange: themeColors.warning,
-  green: themeColors.accent,
-  border: themeColors.border.primary
+/** 기준선 계단 차트의 접근 이름 머리(요약 문장이 뒤에 붙는다). 예측 종류마다 이름이 다르다. */
+const FORECAST_CHART_LABEL: Readonly<Record<ForecastKind, string>> = {
+  baseline: '기준선 예측 SMP 24시간',
+  model: '학습 모델 예측 SMP 24시간',
+  fallback: 'API 대체값 24시간 (예측 SMP 아님)',
 };
+const chartLabel = (kind: ForecastKind) => FORECAST_CHART_LABEL[kind];
 
-// SMP hourly data type
-interface SMPHourlyData {
-  hour: string;
-  price: number;
-  rangeMin: number;
-  rangeMax: number;
+// 요청마다 자료 저장소가 만든 10초 중단 신호를 묶은 클라이언트로 부른다.
+const api = (signal: AbortSignal) => createClient({ signal });
+const LOAD = {
+  dayAhead: (signal: AbortSignal) => api(signal).getDayAheadSMP(),
+  forecast: (signal: AbortSignal) => api(signal).getSMPForecast(),
+  modelInfo: (signal: AbortSignal) => api(signal).getModelInfo(),
+  kpis: (signal: AbortSignal) => api(signal).getDashboardKPIs(),
+  powerSupply: (signal: AbortSignal) => api(signal).getPowerSupply(),
+  market: (signal: AbortSignal) => api(signal).getMarketStatus(),
+};
+const VISIBILITY = { isVisible, watchVisible };
+
+/**
+ * 오늘 화면의 자료와 view model. fetching이면 처음 마운트에 받고(lib/resource 규칙) 다시 받을 손잡이를 준다. 아니면 엿보기만 한다.
+ * 저장소의 조회 시각은 기기 시계라서 서버 시계 차이를 더해 앱 시각으로 바꾼 뒤 넘긴다(나이는 어느 쪽이든 같다).
+ */
+export function useTodayView(fetching = false) {
+  const dayAhead = useResource(ENDPOINTS.dayAhead, fetching ? LOAD.dayAhead : undefined);
+  const forecast = useResource(ENDPOINTS.forecast, fetching ? LOAD.forecast : undefined);
+  const modelInfo = useResource(ENDPOINTS.modelInfo, fetching ? LOAD.modelInfo : undefined);
+  const kpis = useResource(ENDPOINTS.kpis, fetching ? LOAD.kpis : undefined);
+  const powerSupply = useResource(ENDPOINTS.powerSupply, fetching ? LOAD.powerSupply : undefined);
+  const market = useResource(ENDPOINTS.marketStatus, fetching ? LOAD.market : undefined);
+  const clock = useClock();
+  const { state } = useNav();
+  const { reportServerTime } = clock;
+  // 시장 상태의 서버 시각으로 기기 시계 차이를 맞춘다(7.5·7.6절). 받은 기기 시각과 짝을 짓는다.
+  useEffect(() => {
+    if (!fetching || !market.data || market.fetchedAt === null) return;
+    const server = parseApiTime(market.data.current_time);
+    if (server !== null) reportServerTime(server, market.fetchedAt);
+  }, [fetching, market.data, market.fetchedAt, reportServerTime]);
+  const skewMs = clock.skew && clock.skew.plausible ? clock.skew.skewMs : 0;
+  // isAvailableDayAhead는 런타임 타입 가드다(status·market_type·값·거래일·거래시간을 다 본다). 파싱 결과는 모양이 같고
+  // 문자열 리터럴 타입만 넓어서 옛 타입으로 넘긴다.
+  const dayAheadSmp = dayAhead.data as DayAheadSMP | null;
+  const priceAvailable = isAvailableDayAhead(dayAheadSmp);
+  const kpxText = describeDayAhead(dayAheadSmp);
+  const hour = state.key === 'smp' ? state.hour : null;
+  const view = useMemo(() => {
+    const app = <T,>(r: Resource<T>): Fetched<T> => ({ data: r.data, status: r.status, error: r.error, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + skewMs });
+    return todayView({
+      now: clock.now, dayAhead: app(dayAhead), priceAvailable, kpxText, forecast: app(forecast), modelInfo: app(modelInfo), kpis: app(kpis),
+      powerSupply: app(powerSupply), market: app(market), selectedHour: hour,
+    });
+  }, [clock.now, skewMs, dayAhead, priceAvailable, kpxText, forecast, modelInfo, kpis, powerSupply, market, hour]);
+  return { view, res: { dayAhead, forecast, modelInfo, kpis, powerSupply, market }, skew: clock.skew };
 }
 
-// 기기 로컬 날짜(YYYY-MM-DD). 네이티브 Hermes에서는 toLocaleDateString 로케일 지원이 보장되지 않는다.
-const localDateString = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-// Transform API data to hourly format
-const transformSMPData = (forecast: SMPForecast): SMPHourlyData[] => {
-  const { q10, q50, q90 } = forecast;
-  return q50.map((price, i) => ({
-    hour: `${String(i).padStart(2, '0')}시`,
-    price: Math.round(price * 10) / 10,
-    rangeMin: Math.round(q10[i]),
-    rangeMax: Math.round(q90[i]),
-  }));
+// 오늘 화면의 둘러보기 배너는 첫 방문에만(4.4절). 저장소를 못 쓰면 그 방문 동안만 닫힌 것을 기억한다.
+const TOUR_SEEN_KEY = 'pd-tour-seen';
+let tourSeenThisVisit = false;
+type StorageLike = { getItem(k: string): string | null; setItem(k: string, v: string): void };
+const storage = (): StorageLike | null => {
+  try {
+    return (globalThis as { localStorage?: StorageLike }).localStorage ?? null;
+  } catch {
+    return null;
+  }
 };
-
-
-// Simple Line Chart Component
-function SMPChart({ data }: { data: SMPHourlyData[] }) {
-  const maxPrice = Math.max(...data.map(d => d.price));
-  const minPrice = Math.min(...data.map(d => d.price));
-  const range = maxPrice - minPrice || 1;
-
-  return (
-    <View style={styles.chartContainer}>
-      {/* Y-axis and Chart Area Row */}
-      <View style={styles.chartRow}>
-        <View style={styles.chartYAxis}>
-          <Text style={styles.chartAxisLabel}>{Math.round(maxPrice + 10)}</Text>
-          <Text style={styles.chartAxisLabel}>{Math.round((maxPrice + minPrice) / 2)}</Text>
-          <Text style={styles.chartAxisLabel}>{Math.round(minPrice - 10)}</Text>
-        </View>
-        <View style={styles.chartArea}>
-          {/* Chart background grid */}
-          <View style={styles.chartGrid}>
-            <View style={styles.chartGridLine} />
-            <View style={styles.chartGridLine} />
-            <View style={styles.chartGridLine} />
-          </View>
-          {/* Area fill */}
-          <View style={styles.chartFill}>
-            {data.map((item, index) => {
-              const height = ((item.price - minPrice + 10) / (range + 20)) * 100;
-              return (
-                <View
-                  key={index}
-                  style={[
-                    styles.chartBar,
-                    { height: `${height}%` },
-                  ]}
-                />
-              );
-            })}
-          </View>
-          {/* Current time indicator */}
-          <View style={[styles.currentTimeIndicator, { left: '75%' }]}>
-            <View style={styles.currentTimeLine} />
-          </View>
-        </View>
-      </View>
-      {/* X-axis aligned with chart area */}
-      <View style={styles.chartXAxisRow}>
-        <View style={styles.chartYAxisSpacer} />
-        <View style={styles.chartXAxis}>
-          <Text style={styles.chartAxisLabel}>00시</Text>
-          <Text style={styles.chartAxisLabel}>06시</Text>
-          <Text style={styles.chartAxisLabel}>12시</Text>
-          <Text style={styles.chartAxisLabel}>18시</Text>
-        </View>
-      </View>
-    </View>
-  );
+function tourSeen(): boolean {
+  if (tourSeenThisVisit) return true;
+  try {
+    const s = storage();
+    return s ? s.getItem(TOUR_SEEN_KEY) === '1' : false;
+  } catch {
+    return false;
+  }
 }
-
+function markTourSeen(): void {
+  tourSeenThisVisit = true;
+  try {
+    const s = storage();
+    if (s) s.setItem(TOUR_SEEN_KEY, '1');
+  } catch {
+    // 저장하지 못해도 이번 방문 동안은 닫힌 채로 둔다.
+  }
+}
 
 export default function SMPForecastScreen() {
-  const [smpData, setSmpData] = useState<SMPHourlyData[]>([]);
-  const [dayAheadSmp, setDayAheadSmp] = useState<DayAheadSMP | null>(null);
-  const dayAheadRequestId = useRef(0);
-  const [currentSMP, setCurrentSMP] = useState(71.2);
-  const [highSMP, setHighSMP] = useState({ price: 102, hour: 18 });
-  const [lowSMP, setLowSMP] = useState({ price: 71, hour: 12 });
-  const [lastUpdate, setLastUpdate] = useState('오전 10:48');
-  // 검증된 신뢰도·MAPE가 없으면 null로 두고 "재검증 전"을 표시한다(예전 하드코딩 92%·v3.1 MAPE 4.23% 제거).
-  const [confidence, setConfidence] = useState<number | null>(null);
-  const [avgPrice, setAvgPrice] = useState(73);
-  const [modelInfo, setModelInfo] = useState('모델 정보 확인 중');
-  const [forecastDate, setForecastDate] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  const { view, res, skew } = useTodayView(true);
+  const nav = useNav();
+  const clock = useClock();
+  const [tourHidden, setTourHidden] = useState(tourSeen);
+  const { dayAhead, forecast, modelInfo, kpis, powerSupply, market } = res;
 
-  // Fetch SMP forecast data from API
-  const fetchSMPData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const reloadPrice = dayAhead.reload;
+  const reloadForecast = forecast.reload;
+  const reloadAll = useCallback(() => Promise.all([dayAhead.reload(), forecast.reload(), kpis.reload(), modelInfo.reload(), powerSupply.reload(), market.reload()]),
+    [dayAhead.reload, forecast.reload, kpis.reload, modelInfo.reload, powerSupply.reload, market.reload]);
+  // 헤더 새로고침: 가격·예측·전력이 모두 새로 오면 "06:09 KST 기준으로 새로 불러왔습니다", 아니면 보이는 값의 시각과 함께 실패를 알린다.
+  const refresh = useCallback(async (): Promise<RefreshResult> => {
+    const [d, f, k] = await reloadAll();
+    const offset = skew && skew.plausible ? skew.skewMs : 0;
+    const shown = [ENDPOINTS.dayAhead, ENDPOINTS.kpis].map(key => appResources.get(key).fetchedAt).filter((t): t is number => t !== null);
+    return d && f && k ? { ok: true, at: kstNow(skew) } : { ok: false, shownAt: shown.length ? Math.min(...shown) + offset : null };
+  }, [reloadAll, skew]);
+  useShellData(useMemo(() => ({ refresh, fetchedAt: view.fetchedAt }), [refresh, view.fetchedAt]));
 
-    // 하루전 가격과 예측은 서로 독립적으로 조회한다.
-    const requestId = ++dayAheadRequestId.current;
-    setDayAheadSmp(null);
-    void apiService.getDayAheadSMP()
-      .then(data => { if (requestId === dayAheadRequestId.current) setDayAheadSmp(data); })
-      .catch(() => { if (requestId === dayAheadRequestId.current) setDayAheadSmp(null); });
+  // 화면이 보이는 동안 5분마다, 숨었다 보이면 5분 넘은 것만(6.3절).
+  const oldest = useCallback(() => {
+    const list = [dayAhead.fetchedAt, kpis.fetchedAt].filter((t): t is number => t !== null);
+    return list.length ? Math.min(...list) : null;
+  }, [dayAhead.fetchedAt, kpis.fetchedAt]);
+  useRefreshWhileVisible(() => { reloadAll(); }, oldest, VISIBILITY);
 
-    try {
-      // Fetch forecast and model info in parallel
-      const [forecast, model] = await Promise.all([
-        apiService.getSMPForecast(),
-        apiService.getModelInfo(),
-      ]);
-
-      if (![forecast.q10, forecast.q50, forecast.q90].every(values => Array.isArray(values) && values.length === 24 && values.every(Number.isFinite))) {
-        throw new Error('Invalid SMP forecast');
-      }
-
-      // Transform data
-      const transformedData = transformSMPData(forecast);
-      setSmpData(transformedData);
-
-      // Calculate current hour SMP
-      const now = new Date();
-      const hour = now.getHours();
-      setCurrentHour(hour);
-      setCurrentSMP(Math.round(forecast.q50[hour] * 10) / 10);
-      setForecastDate(typeof forecast.forecast_date === 'string' ? forecast.forecast_date : null);
-
-      // Find high/low
-      const prices = forecast.q50;
-      const maxPrice = Math.max(...prices);
-      const minPrice = Math.min(...prices);
-      const maxHour = prices.indexOf(maxPrice);
-      const minHour = prices.indexOf(minPrice);
-      setHighSMP({ price: Math.round(maxPrice), hour: maxHour });
-      setLowSMP({ price: Math.round(minPrice), hour: minHour });
-
-      // Set confidence and average
-      setConfidence(typeof forecast.confidence === 'number' && Number.isFinite(forecast.confidence) ? Math.round(forecast.confidence * 100) : null);
-      setAvgPrice(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
-
-      // Set model info
-      if (model.version) {
-        const metric = typeof model.mape === 'number' ? `MAPE ${model.mape}%` : 'MAPE 재검증 전';
-        setModelInfo(`${model.type || 'BiLSTM+Attention'} ${model.version} | ${metric}`);
-      }
-
-      // Update time
-      const minutes = now.getMinutes();
-      const ampm = hour < 12 ? '오전' : '오후';
-      const hour12 = hour % 12 || 12;
-      setLastUpdate(`${ampm} ${hour12}:${String(minutes).padStart(2, '0')}`);
-
-    } catch (error) {
-      console.log('SMP forecast unavailable:', error);
-      setSmpData([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
+  // 거래시간 경계(4.1절): 정시 뒤 HH:00:15와 HH:02:00에 가격을 다시 받는다(자정에는 예측도). 보이지 않으면 건너뛴다.
   useEffect(() => {
-    fetchSMPData();
-
-    // Auto refresh every 5 minutes
-    const interval = setInterval(() => fetchSMPData(), 5 * 60 * 1000);
-    return () => { clearInterval(interval); dayAheadRequestId.current++; };
-  }, [fetchSMPData]);
-
-  const onRefresh = () => fetchSMPData(true);
-  const dayAheadCard = (
-    <View style={styles.chartSection}>
-      <Text style={styles.sectionTitle}>{describeDayAhead(dayAheadSmp)}</Text>
-      <Text>{formatNullableNumber(isAvailableDayAhead(dayAheadSmp) ? dayAheadSmp.current_smp : null)} 원/kWh</Text>
-    </View>
-  );
-
-  // Show loading spinner on initial load
-  if (loading && smpData.length === 0) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color={colors.secondary} />
-        <Text style={styles.loadingText}>SMP 데이터 로딩중...</Text>
-      </View>
-    );
-  }
-
-  if (smpData.length === 0) {
-    return (
-      <ScrollView contentContainerStyle={styles.loadingContainer} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {dayAheadCard}
-        <Text style={styles.loadingText}>SMP 예측 데이터 없음</Text>
-      </ScrollView>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+    const offset = skew && skew.plausible ? skew.skewMs : 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const plan = () => {
+      const now = Date.now() + offset;
+      const at = nextBoundaryCheck(now);
+      timer = setTimeout(() => {
+        if (isVisible()) {
+          reloadPrice();
+          const p = kstParts(at);
+          if (p && p.hour === 0) reloadForecast();
         }
-      >
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <View style={styles.titleRow}>
-            <Text style={styles.pageTitle}>SMP 예측</Text>
-            <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-              <Text style={styles.refreshIcon}>↻</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.subtitle}>{modelInfo}</Text>
-        </View>
+        plan();
+      }, Math.max(0, at - now));
+    };
+    plan();
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [skew, reloadPrice, reloadForecast]);
+  // 다른 탭에 있다가 정시를 넘겨 돌아왔으면 한 번 다시 받는다.
+  useEffect(() => {
+    if (view.recheckPrice) reloadPrice();
+  }, [view.recheckPrice, reloadPrice]);
 
-        {dayAheadCard}
+  const selectHour = useCallback((hour: number) => nav.replace({ ...nav.state, hour }), [nav]);
+  const toNow = useCallback(() => nav.replace({ ...nav.state, hour: null }), [nav]);
+  const openMethod = (card: TodayCardId) => () => nav.openSheet({ kind: 'method', card });
+  const openSources = (row: SourceRow) => () => nav.openSheet({ kind: 'sources', row });
+  const showTour = nav.tabs.includes('guide') && !tourHidden;
+  const closeTour = () => {
+    markTourSeen();
+    setTourHidden(true);
+  };
+  const startTour = () => {
+    closeTour();
+    nav.push({ ...rootState('guide'), tour: 1 });
+  };
 
-        {/* Current SMP Card */}
-        <View style={styles.smpCard}>
-          <View style={styles.smpCardLeft}>
-            <Text style={styles.smpCardLabel}>예측 SMP ({currentHour}시)</Text>
-            <Text style={styles.smpCardValue}>{currentSMP}</Text>
-            <Text style={styles.smpCardUnit}>원/kWh</Text>
-            {forecastDate && (
-              <Text style={styles.smpCardUnit}>
-                예측일 {forecastDate}{forecastDate !== localDateString(new Date()) ? ' (입력 지연)' : ''}
-              </Text>
-            )}
-          </View>
-          <View style={styles.smpCardRight}>
-            <View style={styles.smpHighLow}>
-              <Text style={styles.highLowIcon}>↗</Text>
-              <Text style={styles.highLowText}>최고 {highSMP.price} ({highSMP.hour}시)</Text>
-            </View>
-            <View style={styles.smpHighLow}>
-              <Text style={styles.highLowIcon}>↘</Text>
-              <Text style={styles.highLowText}>최저 {lowSMP.price} ({lowSMP.hour}시)</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 24 Hour Chart */}
-        <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>24시간 예측</Text>
-          <SMPChart data={smpData} />
-        </View>
-
-        {/* Update Time & Stats */}
-        <Text style={styles.updateTime}>업데이트 {lastUpdate}</Text>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>신뢰도</Text>
-            <Text style={[styles.statValue, { color: colors.orange }]}>{confidence != null ? `${confidence}%` : '재검증 전'}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>평균</Text>
-            <Text style={[styles.statValue, { color: colors.orange }]}>{avgPrice}</Text>
-          </View>
-        </View>
-
-        {/* Hourly Detail Table */}
-        <View style={styles.tableSection}>
-          <Text style={styles.sectionTitle}>시간대별 상세</Text>
-
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, styles.colHour]}>시간</Text>
-            <Text style={[styles.tableHeaderText, styles.colPrice]}>예측 입찰가</Text>
-            <Text style={[styles.tableHeaderText, styles.colRange]}>범위</Text>
-          </View>
-
-          {/* Table Rows */}
-          {smpData.slice(0, 6).map((item, index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={[styles.tableCell, styles.colHour]}>{item.hour}</Text>
-              <Text style={[styles.tableCell, styles.colPrice, styles.priceCell]}>
-                {item.price.toFixed(1)}
-              </Text>
-              <Text style={[styles.tableCell, styles.colRange]}>
-                {item.rangeMin}~{item.rangeMax}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Bottom padding for scroll */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+  const pill = (
+    <View style={styles.pills}>
+      <NowPill now={clock.now} fetchedAt={view.fetchedAt} skewNotable={clock.skewNotable} />
+      {skew && !skew.plausible ? <ProvenanceChip chip={CHIPS.checkTime} /> : null}
     </View>
   );
+  const failedAll = view.allFailed;
+  return (
+    <Screen title={ROUTES.smp.heading} pill={pill} answer={<AnswerLine>{view.answer}</AnswerLine>} testID="today-screen">
+      {failedAll ? <AllFailedNotice text={failedAll.text} onRetry={() => { reloadAll(); }} hero={!failedAll.showCards} /> : null}
+      {failedAll && !failedAll.showCards ? null : (
+        <>
+          <PriceCard view={view.price} onMethod={openMethod('today-price')} onSources={openSources('day-ahead')} onRetry={() => { dayAhead.reload(); }} />
+          <PowerCard view={view.power} onMethod={openMethod('today-power')} onSources={openSources('demand')}
+            onRetry={() => { kpis.reload(); powerSupply.reload(); }} />
+          {showTour ? <TourBanner title={TOUR_BANNER.title} body={TOUR_BANNER.body} onStart={startTour} onDismiss={closeTour} /> : null}
+          <ForecastCard view={view.forecast} chartLabel={chartLabel} now={clock.now} onSelectHour={selectHour} onToNow={toNow}
+            onMethod={openMethod('today-forecast')} onSources={openSources('forecast')} onRetry={() => { forecast.reload(); }} />
+          <AccuracyCard view={view.accuracy} onMethod={openMethod('today-accuracy')} onSources={openSources('accuracy')}
+            onRetry={() => { forecast.reload(); modelInfo.reload(); }} />
+        </>
+      )}
+      <TermRow onOpen={id => nav.openSheet({ kind: 'term', id })} />
+    </Screen>
+  );
+}
+
+const isTodayCard = (card: MethodCard): card is TodayCardId => card.startsWith('today-');
+
+/** 산출 방식 시트의 "이번 화면의 값"(4.1·4.4절: KPX 원문 표기·25.9 % 비율·MW 계산 예비율 차이·모델 원문). */
+export function TodayMethodFacts({ card }: { card: MethodCard }) {
+  const { view } = useTodayView(false);
+  if (!isTodayCard(card)) return null;
+  const facts = view.facts[card];
+  return <LiveFacts lines={facts.lines} link={facts.link} />;
+}
+
+/** 출처와 기준 시각 시트의 오늘 행(4.4절). 입찰 계산·응답 상태 행은 그 화면 단계(F8·F10)가 더한다. */
+export function TodaySourcesSheet({ row }: { row: SourceRow | null }) {
+  const { view } = useTodayView(false);
+  return <SourcesTable rows={view.sources} highlight={row} />;
+}
+
+/** ≥ 1280 "오늘 화면 읽는 법" 패널 본문(4.6절). */
+export function TodayPanel() {
+  const { view } = useTodayView(false);
+  const nav = useNav();
+  return <TodayPanelBody confirmed={view.legend.confirmed} forecast={view.legend.forecast} onTerm={id => nav.openSheet({ kind: 'term', id })} />;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  scrollView: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-
-  // Title Section
-  titleSection: {
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  refreshIcon: {
-    fontSize: 18,
-    color: colors.textSecondary,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-
-  // SMP Card
-  smpCard: {
-    backgroundColor: colors.smpCardBg,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  smpCardLeft: {
-    flex: 1,
-  },
-  smpCardLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
-  },
-  smpCardValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    lineHeight: 56,
-  },
-  smpCardUnit: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  smpCardRight: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  smpHighLow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  highLowIcon: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    marginRight: 4,
-  },
-  highLowText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
-  },
-
-  // Chart Section
-  chartSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  chartContainer: {
-    height: 180,
-  },
-  chartRow: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  chartYAxis: {
-    width: 35,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingRight: 8,
-    paddingBottom: 5,
-  },
-  chartYAxisSpacer: {
-    width: 35,
-  },
-  chartArea: {
-    flex: 1,
-    position: 'relative',
-  },
-  chartGrid: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'space-between',
-  },
-  chartGridLine: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  chartFill: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  chartBar: {
-    flex: 1,
-    backgroundColor: '#FCD34D',
-    marginHorizontal: 0.5,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-  },
-  currentTimeIndicator: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 2,
-  },
-  currentTimeLine: {
-    flex: 1,
-    backgroundColor: themeColors.danger,
-    width: 2,
-  },
-  chartXAxisRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-  },
-  chartXAxis: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  chartAxisLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
-  },
-
-  // Update Time
-  updateTime: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.cardBg,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-
-  // Table Section
-  tableSection: {
-    marginBottom: 24,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    paddingHorizontal: 16,
-  },
-  tableHeaderText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  tableCell: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  colHour: {
-    width: 60,
-  },
-  colPrice: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  colRange: {
-    width: 80,
-    textAlign: 'right',
-  },
-  priceCell: {
-    color: colors.orange,
-    fontWeight: '600',
-  },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
 });

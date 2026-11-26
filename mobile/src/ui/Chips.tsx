@@ -14,7 +14,8 @@ import type { Chip } from '../lib/provenance';
 import { freshness, nowPillText, staleChipText } from '../content/strings';
 import type { NowPillInput } from '../content/strings';
 
-export type ChipProps = { chip: Chip; source?: string | null } | { lag: 'stale' | 'broken'; at: number };
+/** lag의 text: 조회 나이가 아닌 지연(가격 거래시간 불일치 "지연 · 07h 값", "예측일 지연")에 쓰는 글자. 없으면 조회 시각으로 만든다. */
+export type ChipProps = { chip: Chip; source?: string | null } | { lag: 'stale' | 'broken'; at: number; text?: string };
 
 // 누를 수 없는 표지라 role=img + 긴 이름을 준다(글리프 "●"를 "검은 원"으로 읽지 않게). 보이는 글자는 늘 있다.
 export function ProvenanceChip(props: ChipProps) {
@@ -22,7 +23,7 @@ export function ProvenanceChip(props: ChipProps) {
   if ('lag' in props) {
     // 지연은 관심 색 + clock, 끊김은 위험 색 + alert, 끊김에서는 실측 글리프를 거둔다(7.6절).
     const tone = theme.pill[props.lag === 'stale' ? 'watch' : 'danger'];
-    const text = staleChipText(props.at, props.lag);
+    const text = props.text ?? staleChipText(props.at, props.lag);
     return (
       <View role="img" aria-label={`상태: ${text}`} style={[styles.chip, { backgroundColor: tone.bg }]} {...web({ dataSet: { pdChip: props.lag } })}>
         <Icon name={props.lag === 'stale' ? 'clock' : 'alert'} size={SIZE.chipIcon} color={tone.text} />

@@ -63,7 +63,7 @@ export function RangeBar({ supply, demand, reserve, boundary, width: fixedWidth,
             </View>
             <View style={styles.item}>
               <Swatch kind="reserve" hatchId={hatchId} />
-              <Text variant="label" tone="text2">예비력 <Value v={reserve} format={mw} size="label" /></Text>
+              <Text variant="label" tone="text2">예비력 <Value v={reserve} format={mw} size="label" derived /></Text>
             </View>
           </View>
           <Svg width={width} height={svgHeight}>
@@ -81,7 +81,7 @@ export function RangeBar({ supply, demand, reserve, boundary, width: fixedWidth,
           <View style={[styles.boundaryRow, { paddingRight: r2(Math.max(0, geo.width - geo.boundaryX - CHART.triangle / 2)) }]}>
             <Swatch kind="watch" hatchId={hatchId} />
             <Text variant="label" tone="text2" style={styles.shrink}>
-              관심 경계 <Value v={boundary} format={mw} size="label" />{' '}
+              관심 경계 <Value v={boundary} format={mw} size="label" derived />{' '}
               <Text variant="label" tone="text2" dataSet={{ pdMeta: 'rule' }}>{`(${watchReservePctText()})`}</Text>
             </Text>
           </View>

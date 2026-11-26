@@ -3,7 +3,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SIZE, SPACE } from './tokens';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { web } from './web';
 import { useTheme } from '../app/theme';
 
@@ -32,14 +32,14 @@ export function DataTable({ caption, columns, rows, testID }: DataTableProps) {
         <View role="row" style={[styles.row, { backgroundColor: theme.color.well }]}>
           {columns.map(column => (
             <View key={column.key} role="columnheader" style={[styles.cell, column.align === 'right' ? styles.right : null]}>
-              <Text variant="label" weight="600" tone="text2">{column.title}</Text>
+              <Text variant="label" weight="600" tone="text2" dataSet={labelData(column.title)}>{column.title}</Text>
             </View>
           ))}
         </View>
         {rows.map(row => (
-          // 선택 행은 aria-current로 알린다(aria-selected는 table의 row에 허용되지 않는다).
-          <View key={row.key} role="row" style={[styles.row, styles.line, { borderTopColor: theme.color.border },
-            row.current ? { backgroundColor: theme.color.well } : null]} {...web(row.current ? { 'aria-current': 'true' } : {})}>
+          // 선택 행은 aria-current로 알리고 well 바탕 + 왼쪽 2 px primary로 보인다(4.1절). aria-selected는 table의 row에 허용되지 않는다.
+          <View key={row.key} role="row" style={[styles.row, styles.line, { borderTopColor: theme.color.border, borderLeftColor: 'transparent' },
+            row.current ? { backgroundColor: theme.color.well, borderLeftColor: theme.color.primary } : null]} {...web(row.current ? { 'aria-current': 'true' } : {})}>
             {columns.map(column => cell(column, row.cells[column.key] ?? null))}
           </View>
         ))}
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   scrollContent: { minWidth: '100%' },
   table: { flex: 1 },
   row: { flexDirection: 'row' },
-  line: { borderTopWidth: 1 },
+  line: { borderTopWidth: 1, borderLeftWidth: SIZE.selectedEdge },
   cell: { flex: 1, minWidth: SIZE.cellMin, paddingVertical: SPACE.sm, paddingHorizontal: SPACE.sm, justifyContent: 'center' },
   right: { alignItems: 'flex-end' },
 });

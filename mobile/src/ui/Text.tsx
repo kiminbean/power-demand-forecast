@@ -45,6 +45,10 @@ export const Text = React.forwardRef<RNText, TextProps>(function Text(
   return <RNText ref={ref} {...rest} {...webOnly} style={[textStyle(variant, width, weight), { color: color ?? theme.color[tone] }, style]} />;
 });
 
+/** 숫자가 든 이름 글자(카드 제목 "오늘 24시간 가격", 버튼 "24시간 전체 보기", 열 머리 "80% 구간")는 값이 아니라 이름이라
+ * data-pd-meta="label"로 둔다. I2 검사(scan_i2.js)는 값·메타·칩·예시 밖의 숫자를 잡는다. */
+export const labelData = (text: string): Record<string, string> | undefined => (/\d/.test(text) ? { pdMeta: 'label' } : undefined);
+
 const NEGATION = /(\S+ 아님)/;
 /** "실측 아님"·"값 아님" 같은 부정 표현만 한 줄로 묶는다(5.4절). 나머지는 keep-all 규칙으로 줄을 바꾼다. */
 export function keepNegations(text: string, props: Omit<TextProps, 'children' | 'nowrap'>): React.ReactNode[] {

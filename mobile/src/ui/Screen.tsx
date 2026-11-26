@@ -36,9 +36,12 @@ export function Screen({ title, pill, answer, children, headingRef, scrollRef, t
   );
 }
 
-/** 5초 문장(15/500 text1). 화면 view model이 데이터 상태로 만든 글자를 그대로 받는다. */
+/**
+ * 5초 문장(15/500 text1). 화면 view model이 데이터 상태로 만든 글자를 그대로 받는다. 숫자는 바로 아래 카드 값과 같은 포맷 결과라서
+ * (view model이 같은 값·같은 함수로 만든다) 문장 전체를 data-pd-meta="answer"로 둔다(I2: 카드 밖 숫자는 메타 안에만).
+ */
 export function AnswerLine({ children }: { children: React.ReactNode }) {
-  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true' }}>{children}</Text>;
+  return <Text variant="body" weight="500" dataSet={{ pdAnswer: 'true', pdMeta: 'answer' }}>{children}</Text>;
 }
 
 /** 한국어 오류 화면: h1 + [다시 불러오기]. 콘솔에 쓰지 않는다(7.10절). */

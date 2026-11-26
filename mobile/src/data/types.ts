@@ -27,9 +27,10 @@ const numOrNull = (v: unknown, c: Ctx, p: string): number | null => (v === undef
 const intOrNull = (v: unknown, c: Ctx, p: string): number | null => (v === undefined || v === null ? null : int(v, c, p));
 const series = (v: unknown, c: Ctx, p: string): (number | null)[] => arr(v, c, p).map((x, i) => numOrNull(x, c, `${p}[${i}]`));
 
+/** market_type은 오늘 화면의 isAvailableDayAhead(utils/smpPresentation)가 'day_ahead'인지 본다(없으면 확정 가격 없음). */
 export type DayAheadSmp = {
   status: string; current_smp: number | null; trade_day: string | null; trade_hour: number | null;
-  data_source: string | null; source_url: string | null;
+  market_type: string | null; data_source: string | null; source_url: string | null;
 };
 export function parseDayAhead(json: unknown): DayAheadSmp {
   const c = { endpoint: '/api/v1/smp/day-ahead' };
@@ -37,6 +38,7 @@ export function parseDayAhead(json: unknown): DayAheadSmp {
   return {
     status: str(r.status, c, 'status'), current_smp: numOrNull(r.current_smp, c, 'current_smp'),
     trade_day: strOrNull(r.trade_day, c, 'trade_day'), trade_hour: intOrNull(r.trade_hour, c, 'trade_hour'),
+    market_type: strOrNull(r.market_type, c, 'market_type'),
     data_source: strOrNull(r.data_source, c, 'data_source'), source_url: strOrNull(r.source_url, c, 'source_url'),
   };
 }

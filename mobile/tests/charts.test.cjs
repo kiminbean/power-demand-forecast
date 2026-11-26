@@ -366,7 +366,7 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
   }
 });
 
-test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예비력 빗금, 관심 경계 눈금, 값은 data-pd-value', () => {
+test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예비력 빗금, 관심 경계 눈금, 수요는 data-pd-value·계산값은 derived', () => {
   const ui = load();
   const kpi = ui.adapters.adaptKpis(ui.types.parseKpis(KPIS), FETCHED);
   const sup = ui.adapters.adaptSupply(ui.types.parseKpis(KPIS), ui.types.parsePowerSupply(SUPPLY), FETCHED);
@@ -381,9 +381,13 @@ test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예
   assert.equal(reserve.props.stroke, ui.tokens.SERIES.reserve);
   assert.match(reserve.props.fill, /^url\(#pd-reserve-/);
   assert.ok(close(byTestId(root, 'range-boundary')[0].props.x1, 358 / 1.15));
+  // F7: 예비력(공급능력 − 수요)과 관심 경계(공급능력 ÷ 1.15)는 API 원값이 아니라서 I3 비교 대상(data-pd-value)에서 뺀다.
   const values = all(root, n => n.props.dataSet && n.props.dataSet.pdValue);
-  assert.deepEqual(values.map(textOf), ['664 MW', '527 MW', '1,036 MW']);
-  assert.deepEqual(values.map(v => v.props.dataSet.pdValue), ['measured', 'measured', 'measured']);
+  assert.deepEqual(values.map(textOf), ['664 MW']);
+  assert.deepEqual(values.map(v => [v.props.dataSet.pdValue, v.props.dataSet.pdRaw]), [['measured', '664']]);
+  const derived = all(root, n => n.props.dataSet && n.props.dataSet.pdMeta === 'derived');
+  assert.deepEqual(derived.map(textOf), ['527 MW', '1,036 MW']);
+  assert.ok(derived.every(d => d.props.dataSet.pdRaw === undefined && d.props.dataSet.pdValue === undefined));
   assert.match(textOf(root), /관심 경계 1,036 MW \(예비율 15%\)/);
   all(root, n => n.type === 'Text').forEach(t => assert.ok(flat(t.props.style).fontSize >= 12));
 });

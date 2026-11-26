@@ -71,6 +71,33 @@ export function adaptForecast(res: SmpForecast): ForecastView {
   };
 }
 
+export type ForecastPoint = {
+  tradeHour: number;
+  kind: 'value' | 'zero' | 'missing';
+  q50: Provenanced<number> | null;
+  band: { q10: Provenanced<number>; q90: Provenanced<number> } | null;
+};
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * 거래시간 하나의 예측 값(판독 줄·표). 시리즈와 같은 칩·출처·시각을 물려받는다. 0.00 입력은 값으로 내보내지 않고(7.8절 4),
+ * 띠는 띠가 있는 예측(기준선·학습 모델)에서 두 분위수가 다 있을 때만 준다.
+ */
+export function forecastPoint(view: ForecastView, tradeHour: number): ForecastPoint {
+  const i = tradeHour - 1;
+  const v = Number.isInteger(tradeHour) && tradeHour >= 1 && tradeHour <= 24 ? view.q50.value[i] : null;
+  if (!finite(v)) return { tradeHour, kind: 'missing', q50: null, band: null };
+  if (v === 0) return { tradeHour, kind: 'zero', q50: null, band: null };
+  const { unit, state, chip, source, time, note } = view.q50;
+  const base = { unit, state, chip, source, time };
+  const q10 = view.band ? view.band.q10[i] : null;
+  const q90 = view.band ? view.band.q90[i] : null;
+  const band = finite(q10) && finite(q90)
+    ? { q10: provenanced({ ...base, value: q10, note: '80% 구간 아래' }), q90: provenanced({ ...base, value: q90, note: '80% 구간 위' }) }
+    : null;
+  return { tradeHour, kind: 'value', q50: provenanced({ ...base, value: v, note }), band };
+}
+
 export type ModelInfoView = { apiMape: Provenanced<number> | null; apiCoverage: Provenanced<number> | null };
 
 /** API가 밝힌 검증 수치. 문서화 정확도가 아니므로 회색 "API 표기" 줄에만 쓴다(7.7절). */

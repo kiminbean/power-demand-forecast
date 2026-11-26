@@ -48,7 +48,8 @@ export class ApiNetworkError extends Error {
 
 export type FetchResponseLike = { ok: boolean; status: number; json(): Promise<unknown> };
 export type FetchLike = (url: string, init: { method: 'GET'; signal?: AbortSignal }) => Promise<FetchResponseLike>;
-export type ClientOptions = { baseUrl?: string; fetchImpl?: FetchLike };
+/** signal: 이 클라이언트의 모든 요청에 붙는 중단 신호(자료 저장소가 요청마다 10초 신호를 묶은 클라이언트를 만든다). */
+export type ClientOptions = { baseUrl?: string; fetchImpl?: FetchLike; signal?: AbortSignal };
 
 const isAbort = (error: unknown) => typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError';
 
@@ -57,7 +58,7 @@ export function createClient(options: ClientOptions = {}) {
   const doFetch: FetchLike = options.fetchImpl ?? ((url, init) => fetch(url, init));
 
   // Content-Type을 붙이지 않는다: GET 본문이 없고, 붙이면 다른 출처 설정에서 사전 요청이 생긴다.
-  async function get<T>(path: string, parse: (json: unknown) => T, signal?: AbortSignal): Promise<T> {
+  async function get<T>(path: string, parse: (json: unknown) => T, signal: AbortSignal | undefined = options.signal): Promise<T> {
     let response: FetchResponseLike;
     try {
       response = await doFetch(base + path, { method: 'GET', signal });

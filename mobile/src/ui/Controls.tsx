@@ -9,25 +9,37 @@ import { Text } from './Text';
 import { domOf, keyOf, prevent, rovingIndex, web } from './web';
 import { useTheme } from '../app/theme';
 import { tradeHour } from '../lib/format';
+import { WRAP_FIRST, WRAP_LAST } from '../content/strings';
 
 export const FIRST_TRADE_HOUR = 1;
 export const LAST_TRADE_HOUR = 24;
 
-export type HourStepperProps = { hour: number; onChange: (hour: number) => void; min?: number; max?: number };
+export type HourStepperProps = {
+  hour: number; onChange: (hour: number) => void; min?: number; max?: number;
+  /** 오늘 화면(4.1절): 24h 다음은 01h, 01h 이전은 24h로 돌며 "(처음으로)"·"(끝으로)"를 함께 알린다. 없으면 양 끝에서 멈춘다. */
+  wrap?: boolean;
+  /** 값 글자(기본 "07h · 06–07시"). 오늘 화면은 지금 거래시간에 " · 지금"을 붙인다. 알림도 같은 글자다. */
+  label?: (hour: number) => string;
+};
 /** 거래시간 ‹ ›. 바뀐 값은 셸 live region 하나로 알린다(값에 aria-live를 따로 두지 않는다, M5 "polite 1개"). */
-export function HourStepper({ hour, onChange, min = FIRST_TRADE_HOUR, max = LAST_TRADE_HOUR }: HourStepperProps) {
+export function HourStepper({ hour, onChange, min = FIRST_TRADE_HOUR, max = LAST_TRADE_HOUR, wrap = false, label = tradeHour }: HourStepperProps) {
   const announce = useAnnounce();
   const move = (step: number) => {
-    const next = hour + step;
-    if (next < min || next > max) return;
+    let next = hour + step;
+    let note = '';
+    if (next < min || next > max) {
+      if (!wrap) return;
+      next = next < min ? max : min;
+      note = ` ${next === min ? WRAP_FIRST : WRAP_LAST}`;
+    }
     onChange(next);
-    announce(tradeHour(next));
+    announce(`${label(next)}${note}`);
   };
   return (
     <View style={styles.stepper}>
-      <IconButton icon="back" accessibilityLabel="이전 거래시간" onPress={() => move(-1)} disabled={hour <= min} disabledReason="첫 거래시간입니다" />
-      <Text variant="body" weight="600" style={styles.stepValue} dataSet={{ pdMeta: 'hour' }}>{tradeHour(hour)}</Text>
-      <IconButton icon="chev" accessibilityLabel="다음 거래시간" onPress={() => move(1)} disabled={hour >= max} disabledReason="마지막 거래시간입니다" />
+      <IconButton icon="back" accessibilityLabel="이전 거래시간" onPress={() => move(-1)} disabled={!wrap && hour <= min} disabledReason="첫 거래시간입니다" />
+      <Text variant="body" weight="600" style={styles.stepValue} dataSet={{ pdMeta: 'hour' }}>{label(hour)}</Text>
+      <IconButton icon="chev" accessibilityLabel="다음 거래시간" onPress={() => move(1)} disabled={!wrap && hour >= max} disabledReason="마지막 거래시간입니다" />
     </View>
   );
 }
@@ -68,11 +80,20 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
   );
 }
 
-/** 용어 시트를 여는 링크. 시각적으로 작아도 상자는 44. */
+/**
+ * 용어 시트를 여는 링크. 시각적으로 작아도 상자는 44. react-native-web 0.19.13은 role=link인 div에서 Enter를 브라우저 링크
+ * 클릭에 맡기는데 div에는 클릭이 생기지 않아 열리지 않는다(F6 탐침): Enter를 직접 받는다(링크라서 Space로는 열지 않는다).
+ * 라벨에 숫자가 있을 수 있어("80% 구간") 글자를 data-pd-meta="term"으로 둔다(I2).
+ */
 export function TermLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const onKeyDown = (e: unknown) => {
+    if (keyOf(e) !== 'Enter') return;
+    prevent(e);
+    onPress();
+  };
   return (
-    <Pressable role="link" aria-label={`용어 풀이: ${label}`} onPress={onPress} style={styles.term}>
-      <Text variant="body" weight="500" tone="link" style={styles.underline}>{label}</Text>
+    <Pressable role="link" aria-label={`용어 풀이: ${label}`} onPress={onPress} style={styles.term} {...web({ onKeyDown })}>
+      <Text variant="body" weight="500" tone="link" style={styles.underline} dataSet={{ pdMeta: 'term' }}>{label}</Text>
     </Pressable>
   );
 }

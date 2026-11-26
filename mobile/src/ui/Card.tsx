@@ -8,7 +8,7 @@ import { ProvenanceChip } from './Chips';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { useAnnounce } from './Live';
-import { Text } from './Text';
+import { Text, labelData } from './Text';
 import { web, webStyle } from './web';
 import { useTheme } from '../app/theme';
 import { CHIPS } from '../lib/provenance';
@@ -47,27 +47,35 @@ export function Card({ title, chips, onMethod, ribbon, children, testID, state }
 }
 
 export type CardHeaderProps = Pick<CardProps, 'title' | 'chips' | 'onMethod'> & { narrow?: boolean };
-/** 제목(h2 · 15/700) · 칩 · [i](44×44, link 색). */
+/**
+ * 제목(h2 · 15/700) · 칩 · [i](44×44, link 색). 머리 줄은 칩 높이(24)만 차지하고 [i]의 44×44 상자는 위아래로 10씩 카드 안쪽 여백과
+ * 머리 아래 간격(12)으로 내민다: DOM 상자는 그대로 44(M2)이고, 다른 누름 대상과 겹치지 않으며, 카드마다 20 px을 아낀다(4.1절 첫 화면).
+ */
 export function CardHeader({ title, chips, onMethod, narrow = false }: CardHeaderProps) {
   const { theme } = useTheme();
   return (
     <View style={styles.head}>
       <View style={[styles.titleRow, narrow ? styles.stack : null]}>
-        <Text role="heading" {...web({ 'aria-level': 2 })} variant="body" weight="700">{title}</Text>
+        <Text role="heading" {...web({ 'aria-level': 2 })} variant="body" weight="700" dataSet={labelData(title)}>{title}</Text>
         {chips ? <View style={styles.chips}>{chips}</View> : null}
       </View>
-      {onMethod ? <IconButton icon="info" color={theme.color.link} accessibilityLabel={`산출 방식 보기: ${title}`} onPress={onMethod} /> : null}
+      {onMethod ? (
+        <View style={styles.overhang}>
+          <IconButton icon="info" color={theme.color.link} accessibilityLabel={`산출 방식 보기: ${title}`} onPress={onMethod} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
-export type SourceFooterProps = { source: string; time: string; onSources?: () => void; context?: string };
+/** extra: 같은 카드의 둘째 출처(전력 카드의 "날씨 기상청 초단기실황 (API 서버)"). 시각 뒤에 " · "로 잇는다. */
+export type SourceFooterProps = { source: string; time: string; onSources?: () => void; context?: string; extra?: string };
 /** 출처 · 시각 · [출처 표]. 나이 글자는 부모가 60초마다 새 time으로 다시 그린다(알림 없음). */
-export function SourceFooter({ source, time, onSources, context }: SourceFooterProps) {
+export function SourceFooter({ source, time, onSources, context, extra }: SourceFooterProps) {
   return (
     <View role="note" style={styles.footer}>
       <Text variant="meta" tone="text3" style={styles.grow} dataSet={{ pdMeta: 'source' }}>
-        {source} · <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'time' }}>{time}</Text>
+        {source} · <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'time' }}>{time}</Text>{extra ? ` · ${extra}` : null}
       </Text>
       {onSources ? <Button tone="ghost" label="출처 표" accessibilityLabel={`출처 표: ${context ?? source}`} onPress={onSources} /> : null}
     </View>
@@ -121,11 +129,12 @@ export function StateView({ kind, text, onRetry, minHeight = SIZE.stateMin }: St
     );
   }
   const retry = kind === 'restricted' ? undefined : onRetry;
+  // 오류 글자에는 KST 시각이 들어간다("… · 06:04 KST"): 숫자가 있으면 메타로 둔다(I2).
   return (
     <View style={[styles.state, { minHeight }]} {...web({ dataSet: { pdState: kind } })}>
       <View style={styles.row}>
         <Icon name={STATE_ICON[kind]} size={SIZE.icon} color={theme.color.text2} />
-        <Text variant="body" tone="text2" style={styles.grow}>{message}</Text>
+        <Text variant="body" tone="text2" style={styles.grow} dataSet={/\d/.test(message) ? { pdMeta: 'state' } : undefined}>{message}</Text>
       </View>
       {retry ? <View style={styles.start}><Button label="다시 시도" accessibilityLabel="다시 시도" onPress={retry} /></View> : null}
     </View>
@@ -135,7 +144,8 @@ export function StateView({ kind, text, onRetry, minHeight = SIZE.stateMin }: St
 const styles = StyleSheet.create({
   card: { borderRadius: RADIUS.card, borderWidth: CARD_BORDER, gap: SPACE.md, width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.sm },
-  titleRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.sm, minHeight: HIT },
+  titleRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.sm, minHeight: SIZE.chip },
+  overhang: { marginVertical: -(HIT - SIZE.chip) / 2 },
   stack: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, maxWidth: '100%' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, minHeight: HIT },

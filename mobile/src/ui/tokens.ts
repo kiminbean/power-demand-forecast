@@ -95,6 +95,8 @@ export const LAYOUT = {
 /** 부품 치수(6.2절): 칩·pill 높이 24, 목록 행 56, 탭 위 표시 3, 아이콘 크기. */
 export const SIZE = {
   chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72,
+  /** 표의 선택 행 왼쪽 표시(4.1절 "왼쪽 2 px primary"). */
+  selectedEdge: 2,
 } as const;
 
 /**

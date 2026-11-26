@@ -45,6 +45,10 @@ export type ShellHeaderProps = {
 
 export type Nav = {
   state: RouteState;
+  /** 감지한 기준 경로('/mobile/' 또는 '/'). 상대 자원(content/guide.ko.json)의 주소에 쓴다. */
+  base: string;
+  /** 셸이 쓰는 탭. 아직 없는 탭(F6–F9의 알아보기)으로 가는 입구(둘러보기 배너·용어 사전 링크)는 그리지 않는다. */
+  tabs: readonly RouteKey[];
   /** 새 히스토리 항목(둘러보기 단계·주제·용어). */
   push(next: RouteState): void;
   /** 같은 항목을 고친다(거래시간·성향 선택이 URL에 남는다). */
@@ -61,7 +65,7 @@ export type ShellData = { refresh: () => Promise<RefreshResult>; fetchedAt: numb
 
 const noop = () => undefined;
 // 공급자 밖(VM 렌더 테스트·오류 화면)에서도 그릴 수 있게 아무것도 하지 않는 기본값을 둔다(useAnnounce·useTheme과 같은 규칙).
-const NavContext = createContext<Nav>({ state: rootState('smp'), push: noop, replace: noop, openSheet: noop, closeSheet: noop });
+const NavContext = createContext<Nav>({ state: rootState('smp'), base: '/', tabs: [], push: noop, replace: noop, openSheet: noop, closeSheet: noop });
 const ClockContext = createContext<Clock | null>(null);
 const DataContext = createContext<(data: ShellData | null) => void>(noop);
 
@@ -242,11 +246,13 @@ function ShellBody({ tabs, legacy = NO_KEYS, renderRoute, renderHeader, renderPa
 
   const navValue = useMemo<Nav>(() => ({
     state: shown,
+    base: router.base,
+    tabs,
     push: next => router.push(next),
     replace: next => router.replace(next),
     openSheet: sheet => openSheet(router, sheet),
     closeSheet: () => closeSheet(router),
-  }), [router, shown]);
+  }), [router, shown, tabs]);
   const focusScreen = useCallback(() => {
     focusHeading(domOf(contentRef));
   }, []);
