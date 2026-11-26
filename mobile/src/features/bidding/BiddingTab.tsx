@@ -146,7 +146,7 @@ export default function BiddingTab() {
     <Screen title={ROUTES.bidding.heading} pill={pill} answer={answer} testID="bidding-screen">
       <DeadlineCard view={view.deadline} onMethod={openMethod('bid-deadline')} onSources={openSources('market')} onRetry={() => { reloadMarket(); }} />
       <SampleBidCard view={view.calc} risk={risk} onRisk={selectRisk} onHour={selectHour} onRetry={() => { reloadCalc(); }}
-        onMethod={openMethod('bid-ladder')} onSources={openSources('bidding')} />
+        onMethod={openMethod('bid-ladder')} onSources={openSources('bidding')} closed={view.deadline.phase === 'closed'} />
       <MeritOrderCard onMethod={openMethod('bid-merit')} />
       <RestrictedCard title={MY_PLANT_TITLE} body={MY_PLANT_BODY} testID="bid-restricted" />
     </Screen>

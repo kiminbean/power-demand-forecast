@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
-const SVG = { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
+const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
 const fixture = name => require(`./fixtures/round0/${name}`);
 const FORECAST = fixture('_api_v1_smp-forecast.json');
 const DAY_AHEAD = fixture('_api_v1_smp_day-ahead.json');
@@ -242,7 +242,7 @@ function stepTree(ui, props) {
 test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·음영, 눈금 글자, 12 px, data-pd-meta', () => {
   const ui = load();
   const { confirmed } = views(ui);
-  const root = stepTree(ui, { confirmed, selectedHour: 7, onSelectHour: () => {} });
+  const root = stepTree(ui, { dots: [confirmed], selectedHour: 7, onSelectHour: () => {} });
   assert.equal(root.props.role, 'img');
   assert.equal(root.props['aria-label'],
     '기준선 예측 SMP 24시간: 기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). '
@@ -250,13 +250,14 @@ test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·�
   const layer = root.children[0];
   assert.equal(layer.props['aria-hidden'], true);
   const [px, py, pw, ph] = root.props.dataSet.pdPlot.split(' ').map(Number);
-  assert.equal(root.props.dataSet.pdScale, '0 400', 'y축 0부터');
+  // round 1 D10: y 위쪽은 기준선(최고 212.3)과 확정 가격으로 정한다(띠 q90 342는 넣지 않는다), 칸은 4 이하.
+  assert.equal(root.props.dataSet.pdScale, '0 300', 'y축 0부터, 띠가 아니라 기준선·확정 가격으로');
   const [nowLine] = byTestId(root, 'step-now-line');
   assert.ok(close((nowLine.props.x1 - px) / pw, NOW_FRACTION, 1e-4), `지금선 ${nowLine.props.x1}`);
   assert.ok(close(nowLine.props.y1, py) && close(nowLine.props.y2, py + ph));
   assert.ok(close(byTestId(root, 'step-past')[0].props.width, nowLine.props.x1 - px), '지난 시간 음영 = 지금선 왼쪽');
   assert.deepEqual(metaTexts(root, 'now'), ['지금 06:04']);
-  assert.deepEqual(metaTexts(root, 'axis'), ['0', '100', '200', '300', '400', '00', '06', '12', '18', '24시']);
+  assert.deepEqual(metaTexts(root, 'axis'), ['0', '100', '200', '300', '00', '06', '12', '18', '24시']);
   assert.deepEqual(metaTexts(root, 'unit'), ['원/kWh']);
   const texts = all(root, n => n.type === 'Text');
   texts.forEach(t => assert.ok(flat(t.props.style).fontSize >= 12, `글자 ${textOf(t)} ${flat(t.props.style).fontSize}`));
@@ -264,7 +265,17 @@ test('StepChart: role=img 요약 이름, 안쪽 aria-hidden, 지금선·pill·�
   const line = byTestId(root, 'step-line')[0];
   assert.equal(line.props.strokeDasharray, '6 4', '예측은 점선');
   assert.equal(line.props.stroke, ui.tokens.SERIES.smp);
-  assert.equal(byTestId(root, 'step-band')[0].props.fill, ui.tokens.SERIES.band);
+  const [band] = byTestId(root, 'step-band');
+  assert.deepEqual([band.props.fill, band.props.stroke, ui.tokens.SERIES.band], [ui.tokens.SERIES.band, ui.tokens.SERIES.bandEdge, 'rgba(192,38,211,.08)'],
+    '띠는 8 % 면 + 1 px 테두리(D10)');
+  // 띠가 그림 위(300)를 넘는 시간마다 맨 위에 ▲ 하나, 띠 경로는 그림 안에서 잘린다.
+  const over = FORECAST.q90.slice(0, 24).filter((v, i) => FORECAST.q50[i] > 0 && v > 300).length;
+  assert.ok(over > 0, '양성 대조: 스냅숏의 띠는 300을 넘는다');
+  const marks = byTestId(root, 'step-clipped');
+  assert.equal(marks.length, over);
+  marks.forEach(mk => assert.match(mk.props.d, new RegExp(`L[\\d.]+ ${py}L`), '▲ 꼭짓점은 그림 맨 위'));
+  const ys = [...band.props.d.matchAll(/[MV]([-\d.]+)(?: ([-\d.]+))?/g)].map(m => Number(m[2] ?? m[1])).filter(Number.isFinite);
+  assert.ok(Math.min(...ys.filter(y => y > 1)) >= py - 0.01, '띠는 그림 위로 나가지 않는다');
   const [dot] = byTestId(root, 'step-confirmed');
   assert.ok(close(dot.props.cx, px + (6.5 / 24) * pw), '확정 가격 점은 지금 거래시간 가운데');
   assert.equal(dot.props.fill, ui.tokens.THEMES.light.color.text1);
@@ -316,7 +327,11 @@ test('StepChart 상태: 예측일 어제 → 지금선 없음, 대체값 → 띠
   assert.equal(flat(z.props.style).height, 220, '각주 줄이 생겨도 차트 높이는 그대로');
   // 확정 가격 시간이 0.00 입력이면 점을 그리지 않는다.
   const { price } = views(ui).confirmed;
-  assert.equal(byTestId(stepTree(ui, { forecast: zeroForecast(ui), confirmed: { tradeHour: 13, price } }), 'step-confirmed').length, 0);
+  assert.equal(byTestId(stepTree(ui, { forecast: zeroForecast(ui), dots: [{ tradeHour: 13, price }] }), 'step-confirmed').length, 0);
+  // 이번 방문에서 받은 확정 가격은 거래시간마다 점 하나(D10): 06–07시·07–08시 두 점, 이름에 둘 다.
+  const two = stepTree(ui, { dots: [{ tradeHour: 7, price }, { tradeHour: 8, price }] });
+  assert.equal(byTestId(two, 'step-confirmed').length, 2);
+  assert.match(two.props['aria-label'], /점은 KPX 확정 가격 06–07시 115\.3원, 07–08시 115\.3원\.$/);
 });
 
 test('StepChart 폭별 크기: 296×200 · 358×220 · 398×230 · 608×260, 모든 라벨이 상자 안', () => {
@@ -346,7 +361,7 @@ test('재기 전 첫 그림 폭: 넓힌 차트 = 카드 폭(296·358·398·608),
   }
 });
 
-test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만), 단색 막대(불투명도 없음), 키·누름', () => {
+test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만), 빗금 + 외곽선 막대(불투명도 없음), 기준선 점선·80% 띠, 단위 옆 % 뜻, 키·누름', () => {
   for (const [windowWidth, w, expected] of [[390, 358, ['95%', '88%', '77%', '65%', '53%', '42%', '31%', '20%', '9%', '5%']], [320, 296, ['95%', '65%', '31%', '5%']]]) {
     const ui = load(windowWidth);
     const picked = [];
@@ -358,10 +373,22 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
     assert.deepEqual(metaTexts(root, 'axis'), ['0', '50', '100', '150', '200', '250', '0', '10', '20', '30', '40', '50 MW']);
     const bars = byTestId(root, 'ladder-bar');
     assert.equal(bars.length, 10);
+    const light = ui.tokens.THEMES.light;
     bars.forEach(b => {
-      assert.equal(b.props.fill, ui.tokens.SERIES.smp);
+      // round 1 D12: ▨ 추정 칩과 같은 빗금 + 외곽선(오늘 차트의 예측 자홍이 아니다).
+      assert.match(b.props.fill, /^url\(#pd-est-/);
+      assert.equal(b.props.stroke, light.color.borderStrong);
       assert.equal(b.props.opacity ?? b.props.fillOpacity, undefined, '불투명도로 확률을 나타내지 않는다');
     });
+    const hour = views(ui).seg.hours[18];
+    const [baseline] = byTestId(root, 'ladder-baseline');
+    assert.deepEqual([baseline.props.stroke, baseline.props.strokeDasharray], [ui.tokens.SERIES.smp, '6 4'], '그 시간 기준선은 자홍 점선');
+    const [px2, py2, pw2, ph2] = root.props.dataSet.pdPlot.split(' ').map(Number);
+    assert.ok(close(baseline.props.y1, py2 + ((250 - hour.baselineQ50) / 250) * ph2), `기준선 ${hour.baselineQ50}`);
+    assert.ok(close(baseline.props.x1, px2) && close(baseline.props.x2, px2 + pw2));
+    const [band] = byTestId(root, 'ladder-band');
+    assert.ok(close(band.props.y, py2 + ((250 - hour.baselineBand.q90) / 250) * ph2) && band.props.fill === ui.tokens.SERIES.band);
+    assert.deepEqual(metaTexts(root, 'caption'), ['막대 위 % = 낙찰 가능성(추정)']);
     all(root, n => n.type === 'Text').forEach(t => assert.ok(flat(t.props.style).fontSize >= 12));
     const key = k => ({ key: k, preventDefault: () => {} });
     root.props.onKeyDown(key('ArrowRight'));
@@ -369,6 +396,18 @@ test('LadderChart: 요약 이름, 확률 글자(360 미만 1·4·7·10구간만)
     const [px, , pw] = root.props.dataSet.pdPlot.split(' ').map(Number);
     root.props.onClick({ clientX: px + pw * 0.35, currentTarget: { getBoundingClientRect: () => ({ left: 0 }) } });
     assert.deepEqual(picked, [0, 9, 3], '고른 것이 없을 때 → 는 1구간');
+    // 고른 구간만 primary로 채운다.
+    const chosen = tree(h(ui.LadderChart, { hour, label: 'x', width: w, selected: 3, onSelect: () => {} })).children[0];
+    const [sel] = byTestId(chosen, 'ladder-bar-selected');
+    assert.deepEqual([sel.props.fill, sel.props.stroke, byTestId(chosen, 'ladder-bar').length], [light.color.primary, light.color.primary, 9]);
+    // 끝 x 눈금("50 MW")은 상자 오른쪽 끝에 flex로 붙인다: 글자 간격을 넓혀 상자보다 길어져도 틀 안쪽(왼쪽)으로 자란다(WCAG 1.4.12).
+    // textAlign만으로는 넘친 글자가 오른쪽으로 나갔다(F13b 측정). 두 "0"(y 눈금은 오른쪽, x 첫 눈금은 가운데)도 정렬과 붙임이 같다.
+    const ends = all(root, n => n.type === 'View' && flat(n.props.style).position === 'absolute').filter(v => textOf(v) === '50 MW' || textOf(v) === '0');
+    const end = ends.find(v => textOf(v) === '50 MW');
+    assert.equal(flat(all(end, n => n.type === 'Text')[0].props.style).textAlign, 'right');
+    assert.equal(flat(end.props.style).alignItems, 'flex-end');
+    const items = { left: 'flex-start', center: 'center', right: 'flex-end' };
+    assert.ok(ends.length === 3 && ends.every(v => flat(v.props.style).alignItems === items[flat(all(v, n => n.type === 'Text')[0].props.style).textAlign]));
   }
 });
 
@@ -388,11 +427,11 @@ test('RangeBar: role=img 식+경계 이름, 0…공급능력, 수요 채움·예
   assert.match(reserve.props.fill, /^url\(#pd-reserve-/);
   assert.ok(close(byTestId(root, 'range-boundary')[0].props.x1, 358 / 1.15));
   // F7: 예비력(공급능력 − 수요)과 경계(공급능력 ÷ 1.15)는 API 원값이 아니라서 I3 비교 대상(data-pd-value)에서 뺀다.
-  const values = all(root, n => n.props.dataSet && n.props.dataSet.pdValue);
-  assert.deepEqual(values.map(textOf), ['664 MW']);
-  assert.deepEqual(values.map(v => [v.props.dataSet.pdValue, v.props.dataSet.pdRaw]), [['measured', '664']]);
+  // round 1 D17: 수요·예비력 값은 바로 위 수급 식에 있어 막대 이름표는 이름만(수요 · 예비력), 경계만 값을 쓴다.
+  assert.equal(all(root, n => n.props.dataSet && n.props.dataSet.pdValue).length, 0);
+  assert.match(textOf(root), /^수요예비력/);
   const derived = all(root, n => n.props.dataSet && n.props.dataSet.pdMeta === 'derived');
-  assert.deepEqual(derived.map(textOf), ['527 MW', '1,036 MW']);
+  assert.deepEqual(derived.map(textOf), ['1,036 MW']);
   assert.ok(derived.every(d => d.props.dataSet.pdRaw === undefined && d.props.dataSet.pdValue === undefined));
   assert.match(textOf(root), /수요 1,036 MW · 넘으면 예비율 15% 미만/);
   assert.doesNotMatch(textOf(root), /관심|경계/, 'KPX 경보 단계 낱말을 쓰지 않는다(D9)');

@@ -11,7 +11,8 @@ const chip = (kind: ChipKind, text: string): Chip => Object.freeze({ kind, text 
 // 4상태 문법(7.1절). "●"는 지금 잰 값과 확정 가격에만, 시장 규칙·정확도·제한은 글리프 없는 일반 칩.
 export const CHIPS = Object.freeze({
   confirmedPrice: chip('measured', '확정 가격'),
-  confirmedPoint: chip('measured', '확정 가격 1점'),
+  /** 차트의 확정 가격 점(round 1 D10): 서버가 지금 시간 값만 주므로 그렇게 밝힌다("1점"은 점수처럼 읽혔다). */
+  confirmedPoint: chip('measured', '확정 가격 · 지금 시간만'),
   measured: chip('measured', '실측'),
   /** 범례의 실측·확정 행(둘러보기 5단계·≥ 1280 패널): 지금 잰 값과 KPX 확정 가격을 한 표시로 묶어 보인다. */
   measuredConfirmed: chip('measured', '실측·확정'),

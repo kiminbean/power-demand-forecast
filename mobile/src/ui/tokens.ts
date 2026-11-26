@@ -8,8 +8,10 @@ export type PillTone = 'ok' | 'watch' | 'caution' | 'danger' | 'neutral';
 export type ChipTone = { text: string; bg: string; border: string | null; borderStyle: 'solid' | 'dashed' | 'dotted'; hatch: string | null };
 
 // 데이터 색은 두 테마에서 같다(5.3절, 대시보드 SERIES). 경보 빨강은 공개 화면에 쓰지 않아 두지 않는다.
+// 80% 띠는 8 % 면 + 1 px 테두리(round 1 D10): 13 % 면이 그림을 덮어 기준선 점선이 묻혔다.
 export const SERIES = {
-  demand: '#3B82F6', supply: '#64748B', reserve: '#16A34A', smp: '#C026D3', band: 'rgba(192,38,211,.13)', watch: '#B45309',
+  demand: '#3B82F6', supply: '#64748B', reserve: '#16A34A', smp: '#C026D3', band: 'rgba(192,38,211,.08)', bandEdge: 'rgba(192,38,211,.45)',
+  watch: '#B45309',
 } as const;
 
 export type Theme = {
@@ -18,7 +20,11 @@ export type Theme = {
   chip: Record<ChipKind, ChipTone>;
   pill: Record<PillTone, { text: string; bg: string }>;
   series: typeof SERIES;
-  chart: { pastShade: string; zeroHatch: string };
+  /**
+   * exampleFill: 예시 그림(정산 ①+② 폭포)의 채움. 예시 칩과 같은 호박색이고 테마마다 밝기만 다르다(round 1 parity).
+   * exampleMark: ② 진한 칸. 밝은 테마는 예시 글자색, 어두운 테마는 그 글자색(#FCD34D)이 어두운 바탕 위 밝은 덩어리로 읽혀 한 단계 짙게(F13b 측정).
+   */
+  chart: { pastShade: string; zeroHatch: string; exampleFill: string; exampleMark: string };
 };
 
 const light: Theme = {
@@ -41,7 +47,7 @@ const light: Theme = {
   },
   series: SERIES,
   // 지난 시간 음영 = text3 6 %, 0.00 입력 빗금 = text3 22 %(5.3절)
-  chart: { pastShade: 'rgba(86,101,122,.06)', zeroHatch: 'rgba(86,101,122,.22)' },
+  chart: { pastShade: 'rgba(86,101,122,.06)', zeroHatch: 'rgba(86,101,122,.22)', exampleFill: 'rgba(217,119,6,.30)', exampleMark: '#92400E' },
 };
 
 // dark는 그림자 대신 면 단계로 구분하고, 시트는 1 px borderStrong 테두리를 쓴다(5.1절).
@@ -64,7 +70,7 @@ const dark: Theme = {
     danger: { text: '#F87171', bg: '#37293B' }, neutral: { text: '#CBD5E1', bg: '#1A2439' },
   },
   series: SERIES,
-  chart: { pastShade: 'rgba(148,163,184,.06)', zeroHatch: 'rgba(148,163,184,.22)' },
+  chart: { pastShade: 'rgba(148,163,184,.06)', zeroHatch: 'rgba(148,163,184,.22)', exampleFill: 'rgba(245,158,11,.30)', exampleMark: '#F59E0B' },
 };
 
 export const THEMES: Readonly<Record<ThemeName, Theme>> = { light, dark };
@@ -88,13 +94,21 @@ export const RADIUS = { card: 14, control: 10, pill: 999, sheet: 20 } as const;
 export const MOTION = { sheetMs: 200, shimmerMs: 1200 } as const;
 /** 모든 상호작용 요소의 DOM 상자 최소 크기(M2). */
 export const HIT = 44;
+/**
+ * rowCardsBelow: 이 폭 아래에서는 카드 안 표(오늘 시간별·입찰 구간별)를 행 카드로 쌓는다(round 1 D2, 휴대폰 = 600 미만, 4.6절).
+ * twoUpFrom–railFrom: 오늘의 가격·전력 카드를 두 칸으로(round 1 D14, 태블릿).
+ */
 export const LAYOUT = {
   header: 56, tabBar: 56, offlineBanner: 40, gutter: 16, gutterNarrow: 12, narrowBelow: 360, rail: 240, column: 640,
-  railFrom: 1024, panel: 320, panelFrom: 1280, sheetPanel: 400, sheetMaxHeight: 0.85, sheetCenterFrom: 600,
+  railFrom: 1024, panel: 320, panelFrom: 1280, sheetPanel: 400, sheetMaxHeight: 0.85, sheetCenterFrom: 600, rowCardsBelow: 600, twoUpFrom: 768,
 } as const;
-/** 부품 치수(6.2절): 칩·pill 높이 24, 목록 행 56, 탭 위 표시 3, 아이콘 크기. */
+/** 부품 치수(6.2절): 칩·pill 높이 24, 목록 행 56, 탭 위 표시 3, 아이콘 크기. cellMinNarrow: 360 미만 시간대 요약 표(4칸이 272 px에 든다). */
 export const SIZE = {
-  chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72,
+  chip: 24, listRow: 56, tabMark: 3, dot: 8, icon: 22, chipIcon: 14, buttonIcon: 20, skeletonLine: 12, stateMin: 96, cellMin: 72, cellMinNarrow: 56,
+  /** 행 카드의 시간·구간 칸 폭(행 카드 왼쪽 열, "06–07시"·"10구간"이 한 줄). */
+  rowHead: 68,
+  /** 넘치는 표의 오른쪽 가장자리 흐림 폭. */
+  edgeFade: 24,
   /** 표의 선택 행 왼쪽 표시(4.1절 "왼쪽 2 px primary"). */
   selectedEdge: 2,
 } as const;
@@ -103,10 +117,14 @@ export const SIZE = {
  * 차트 치수(4.1·4.2·6.2절). 차트 폭은 카드 폭(296·358·398·608)이고 높이는 그 폭 구간으로 고른다.
  * glyph는 12 px 시스템 글꼴의 글자 폭 추정값이다. 실제보다 넉넉하게 잡아 라벨 상자가 글자보다 좁아지지 않게 한다.
  */
+/**
+ * stepIntervals: 오늘 차트의 y 칸 수 상한(round 1 D10: y 위쪽은 기준선·확정 가격으로 정해 눈금이 적다). clipMark: 띠가 그림 위로 넘친
+ * 시간의 ▲ 표시 높이. barStrokeLadder: 입찰 계단 외곽선(D12, 막대를 채우지 않고 빗금 + 외곽선).
+ */
 export const CHART = {
   edge: 12, tickGap: 4, topRow: 26, xRow: 24, xLabelTop: 6, noteRow: 22, ladderTop: 40, labelGap: 2,
   line: 2, axis: 1, grid: 1, nowLine: 1.5, dash: '6 4', dotR: 5, dotRing: 2, selMark: 3, barGap: 1,
-  pill: 20, pillTop: 3, pillPad: 8, hatch: 6, hatchLine: 2, swatch: 12, yIntervals: 5,
+  pill: 20, pillTop: 3, pillPad: 8, hatch: 6, hatchLine: 2, swatch: 12, yIntervals: 5, stepIntervals: 4, clipMark: 6, barStrokeLadder: 1.5,
   glyph: { hangul: 12.5, wide: 11.5, space: 3.5, other: 7.5 },
   stepHeights: [{ below: 320, height: 200 }, { below: 380, height: 220 }, { below: 500, height: 230 }, { below: Infinity, height: 260 }],
   ladderHeights: [{ below: 320, height: 180 }, { below: 500, height: 200 }, { below: Infinity, height: 240 }],

@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
-const SVG = { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle' };
+const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle' };
 function load(width = 390) {
   const rn = { ...defaultMocks()['react-native'], useWindowDimensions: () => ({ width, height: 844, scale: 1, fontScale: 1 }) };
   const loader = createTsLoader({ mocks: { 'react-native': rn, 'react-native-svg': SVG } });
@@ -158,6 +158,7 @@ test('Card·SourceFooter·RestrictedCard: h2 제목, [i] 이름, data-pd-card, r
   assert.equal(card.props.dataSet.pdCard, 'true');
   const [title] = byRole(card, 'heading');
   assert.equal(title.props['aria-level'], 2);
+  assert.equal(title.props.tabIndex, -1, '제목은 초점을 받을 수 있다(round 1 D4: 다시 시도·둘러보기 안내 닫기 뒤 초점 자리)');
   assert.equal(textOf(title), '확정 가격');
   const names = pressables(card).map(p => p.props['aria-label']);
   assert.deepEqual(names, ['산출 방식 보기: 확정 가격', '출처 표: 확정 가격']);
@@ -243,13 +244,18 @@ test('TabBar·레일: nav "주요 메뉴" > tablist > tab(aria-selected), 탭 �
   const bar = tree(h(ui.TabBar, { items, active: 'bidding', onSelect: k => selected.push(k) }));
   const [nav] = byRole(bar, 'navigation');
   assert.equal(nav.props['aria-label'], '주요 메뉴');
-  assert.deepEqual(nav.props.dataSet, { pdSafe: 'bottom' });
+  assert.deepEqual(nav.props.dataSet, { pdSafe: 'bottom x' });
   const tabs = byRole(bar, 'tab');
   assert.deepEqual(tabs.map(t => t.props['aria-label']), ['오늘', '입찰', '정산', '알아보기']);
   assert.deepEqual(tabs.map(t => [t.props['aria-selected'], t.props.tabIndex]), [[false, -1], [true, 0], [false, -1], [false, -1]]);
   tabs.forEach(t => assert.ok(flat(t.props.style).minHeight >= 56));
   tabs[3].props.onPress();
   assert.deepEqual(selected, ['guide']);
+  // Space도 탭을 연다(round 1 접근성: RN-web은 role=tab에서 Enter만 누름으로 바꾼다). 기본 동작(페이지 스크롤)은 막는다.
+  let prevented = 0;
+  tabs[0].props.onKeyDown({ key: ' ', preventDefault: () => { prevented += 1; } });
+  tabs[2].props.onKeyDown({ key: 'Spacebar', preventDefault: () => { prevented += 1; } });
+  assert.deepEqual([selected, prevented], [['guide', 'smp', 'settlement'], 2]);
   const rail = tree(h(ui.Rail, { items, active: 'smp', onSelect: () => {} }));
   assert.equal(byRole(rail, 'tablist')[0].props['aria-orientation'], 'vertical');
   assert.equal(byRole(rail, 'navigation')[0].props.dataSet, undefined);
@@ -343,8 +349,9 @@ test('Screen·LiveRegion·OfflineBanner·ErrorBoundary·Tour: main, h1 tabIndex=
   assert.equal(textOf(byRole(failed, 'heading')[0]), '화면을 그리는 중 문제가 생겼습니다');
   assert.deepEqual(pressables(failed).map(p => p.props['aria-label']), ['다시 불러오기']);
   assert.equal(textOf(tree(h(ui.ErrorBoundary, {}, 'app'))), 'app');
-  const banner = tree(h(ui.TourBanner, { title: '1분 둘러보기', body: '설명', onStart: () => {}, onDismiss: () => {} }));
+  const banner = tree(h(ui.TourBanner, { title: '1분 둘러보기', onStart: () => {}, onDismiss: () => {} }));
   assert.deepEqual(pressables(banner).map(p => p.props['aria-label']), ['둘러보기 시작', '닫기: 둘러보기 안내']);
+  assert.equal(textOf(banner), '1분 둘러보기둘러보기닫기', '오늘 화면 배너는 제목 한 줄 + 버튼(round 1 D17)');
   const step1 = tree(h(ui.TourStep, { step: 1, total: 5, onPrev: () => {}, onNext: () => {}, onSkip: () => {} }, '설명'));
   assert.equal(all(step1, n => n.props.dataSet && n.props.dataSet.pdMeta === 'tour').map(textOf).join(''), '1 / 5');
   assert.match(textOf(step1), /설명/);

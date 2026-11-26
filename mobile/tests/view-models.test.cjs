@@ -10,7 +10,7 @@ const path = require('node:path');
 const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 const { loadManifest, resolveVariant } = require('./helpers/fixtures.cjs');
 
-const SVG = { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
+const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
 const EXPECTED = require('./fixtures/round0/expected-today.json');
 
 /** forceTable: 차트/표 세그먼트와 "24시간 전체 보기"의 첫 렌더 값을 표·전체로 바꿔 그린다(React 목의 useState는 첫 값만 준다). */
@@ -218,8 +218,8 @@ test('불러오는 중·확정 가격 없음·정시 경계 유예와 지연', (
   const none = viewOf(m, 'today-price-no-data');
   assert.deepEqual([none.heroState, none.price.text], ['unavailable', 'KPX 확정 가격 없음 · 지금 거래시간 값이 아직 없습니다']);
   assert.equal(none.answer, '지금 거래시간의 확정 가격이 아직 없습니다. 낼 수 있는 전력이 쓰는 전력보다 527 MW 더 많습니다.');
-  assert.equal(none.forecast.confirmed, null, '확정 가격 점 없음');
-  assert.ok(!none.forecast.chips.some(c => c.chip && c.chip.text === '확정 가격 1점'));
+  assert.deepEqual(none.forecast.dots, [], '확정 가격 점 없음');
+  assert.ok(!none.forecast.chips.some(c => c.chip && c.chip.text === '확정 가격 · 지금 시간만'));
   const grace = viewOf(m, 'today-hour-boundary-grace');
   assert.equal(grace.price.checking, '다음 거래시간 값 확인 중');
   assert.equal(chipLabel(m, grace.price.chips[0]), '● 확정 가격', '유예 동안 이전 값과 칩 유지');
@@ -310,13 +310,13 @@ test('예측 대체값·모르는 모델·예측일 어제·0.00 입력(12–14h
     const v = viewOf(m, id);
     assert.deepEqual([v.forecast.kind, chipLabel(m, v.forecast.chips[0]), v.forecast.view.band, v.forecast.uncertainty],
       ['fallback', '▨ 추정 · API 대체값 (모델 예측 아님)', null, null], id);
-    assert.deepEqual([v.price.compare, v.forecast.confirmed], [[], null], `${id}: 대체값과는 비교하지 않는다`);
+    assert.deepEqual([v.price.compare, v.forecast.dots], [[], []], `${id}: 대체값과는 비교하지 않는다`);
     assert.deepEqual([v.accuracy.documented, v.accuracy.unregistered], [null, '이 모델의 검증 수치는 앱에 등록되어 있지 않습니다'], id);
     assert.equal(m.rich.lineText(v.forecast.reading), 'API 대체값 145.2원', id);
   }
   const old = viewOf(m, 'today-forecast-date-yesterday');
   assert.deepEqual(old.forecast.chips.map(c => chipLabel(m, c)), ['┅ 예측 · 기준선', '예측일 지연']);
-  assert.deepEqual([old.price.compare, old.forecast.confirmed], [[], null], '예측일 불일치: 비교 줄·확정 점 없음');
+  assert.deepEqual([old.price.compare, old.forecast.dots], [[], []], '예측일 불일치: 비교 줄·확정 점 없음');
   const zero = viewOf(m, 'today-forecast-zero-12-14h', { selectedHour: 13 });
   assert.match(zero.forecast.summary, /\(0\.00 입력 3시간 제외\)\.$/);
   assert.equal(m.rich.lineText(zero.forecast.reading), '기준선 입력 0.00 · 예측 아님');
@@ -429,7 +429,8 @@ test('카드 렌더 의미: today-hero data-state, [i] 4개·[출처 표] 4개 �
   assert.deepEqual(names.filter(n => n.startsWith('용어 풀이')).slice(0, 5),
     ['용어 풀이: SMP', '용어 풀이: 하루전시장', '용어 풀이: 예비율', '용어 풀이: 공급능력', '용어 풀이: 80% 구간']);
   assert.ok(names.includes('이전 거래시간') && names.includes('다음 거래시간'));
-  assert.ok(!names.includes('지금으로'), '지금 거래시간이면 [지금으로] 없음');
+  // round 1 D4: 지금 거래시간이어도 [지금으로]는 남고 까닭 있는 비활성(누른 버튼이 사라져 초점이 body로 떨어졌다).
+  assert.ok(!names.includes('지금으로') && names.includes('지금으로 · 지금 거래시간입니다'), '지금이면 까닭 있는 비활성');
   presses.forEach(p => {
     const s = flat(p.props.style);
     assert.ok(Math.max(s.minHeight || 0, s.height || 0) >= 44, `${p.props['aria-label']} 높이`);
@@ -441,22 +442,74 @@ test('카드 렌더 의미: today-hero data-state, [i] 4개·[출처 표] 4개 �
   const moved = m.model.todayView({ ...input, selectedHour: 9 });
   const r2 = renderToday(picked, moved, input.now);
   assert.ok(all(r2, n => n.type === 'Pressable').some(p => p.props['aria-label'] === '지금으로'));
+  // 600 px 아래(390)의 시간별 표는 행 카드 목록이다(D2): 시간대 요약(4칸)만 표.
   const table = load(390, { forceTable: true });
   const rt = renderToday(table, table.model.todayView(input), input.now);
-  const tables = all(rt, n => n.props.role === 'table');
+  assert.deepEqual(all(rt, n => n.props.role === 'table').map(t => t.props['aria-label']), ['시간대 요약']);
+  const [list] = all(rt, n => n.props.role === 'list');
+  assert.equal(list.props['aria-label'], '시간별 기준선 예측');
+  const items = all(list, n => n.props.role === 'listitem');
+  assert.equal(items.length, 24, 'forceTable은 "24시간 전체 보기"를 누른 상태');
+  const now = items.filter(n => n.props['aria-current'] === 'true');
+  assert.equal(now.length, 1);
+  // 머리 = 시각 범위 / 둘째 줄 = 거래시간 번호(D11), 값 조각은 표 열 순서 거래시간 · 확정 · 기준선 · 80% 구간(D2), 확정 가격은 받은 시간에만.
+  assert.equal(textOf(now[0]), '06–07시07h확정 가격 115.3 · 기준선 예측 145.2 · 80% 구간 116.9–174.6');
+  assert.equal(textOf(items[0]), '00–01시01h기준선 예측 139.3 · 80% 구간 120.5–164.0', '확정 가격이 없는 시간은 그 조각을 뺀다');
+  const nowrapItems = all(now[0], n => ds(n).pdNowrap === 'true').map(textOf);
+  assert.ok(nowrapItems.includes('80% 구간 116.9–174.6') && nowrapItems.includes('06–07시'), '범위·시각은 한 줄 조각');
+  // 600 이상(768)은 표: 열 순서 거래시간 · 확정 가격 · 기준선 예측 · 80% 구간.
+  const wide = load(768, { forceTable: true });
+  const rw = renderToday(wide, wide.model.todayView(input), input.now);
+  const tables = all(rw, n => n.props.role === 'table');
   assert.deepEqual(tables.map(t => t.props['aria-label']), ['시간대 요약', '시간별 기준선 예측']);
-  assert.equal(all(tables[1], n => n.props.role === 'row').length - 1, 24, 'forceTable은 "24시간 전체 보기"를 누른 상태');
+  assert.deepEqual(all(tables[1], n => n.props.role === 'columnheader').map(textOf), ['거래시간', '확정 가격', '기준선 예측', '80% 구간']);
   const current = all(tables[1], n => n.props.role === 'row' && n.props['aria-current'] === 'true');
   assert.equal(current.length, 1);
-  assert.equal(textOf(current[0]).startsWith('07h · 06–07시'), true, '표 칸은 거래시간 번호와 시각 범위(D11 허용)');
+  assert.deepEqual(all(current[0], n => n.props.role === 'cell').map(textOf), ['07h · 06–07시', '115.3', '145.2', '116.9–174.6'], '표 칸은 거래시간 번호와 시각 범위(D11 허용)');
+  assert.equal(textOf(all(tables[1], n => n.props.role === 'row')[1]).split('—').length, 2, '확정 가격이 없는 표 칸은 "—"');
   const twelve = view.forecast.rows.slice(view.forecast.window.from - 1, view.forecast.window.to);
   assert.deepEqual([twelve.length, twelve[0].hour, twelve[11].hour], [12, 7, 18]);
   const tail = m.model.todayView({ ...input, selectedHour: 20 }).forecast.window;
   assert.deepEqual([tail.from, tail.to], [13, 24], '하루 끝을 넘으면 마지막 12행');
 });
 
-test('전력 카드 폭별: 320은 KPI 위아래, 360 이상 나란히(라벨·값 한 줄), 768은 날씨까지 3칸', () => {
-  for (const [width, direction, weatherInRow] of [[320, 'column', false], [390, 'row', false], [768, 'row', true]]) {
+test('확정 가격 점은 이번 방문 동안 쌓인다(D10): 받은 거래시간마다 점 하나, 표·행 카드·판독 줄에도, 어제 값·대체값 예측·0.00 입력 시간은 빼고', () => {
+  const m = load();
+  const { input } = inputFor(m, 'today-base');
+  const base = input.dayAhead.data;
+  const seen = [
+    { data: { ...base, trade_hour: 6, current_smp: 120.4 }, fetchedAt: input.now - 3_600_000, available: true },
+    { data: { ...base, trade_day: '20261125', trade_hour: 9, current_smp: 99.9 }, fetchedAt: input.now - 86_400_000, available: true },
+    { data: { ...base, trade_hour: 5, current_smp: 88.8 }, fetchedAt: input.now - 7_200_000, available: false },
+  ];
+  const v = m.model.todayView({ ...input, seen, selectedHour: 6 });
+  assert.deepEqual(v.forecast.dots.map(d => [d.tradeHour, d.price.value, d.price.state]), [[6, 120.4, 'confirmed'], [7, 115.27, 'confirmed']],
+    '어제(11-25) 값과 판정을 못 지난 값은 점이 아니다');
+  assert.equal(m.rich.lineText(v.forecast.reading), '기준선 예측 119.1원 · 80% 구간 93.6–148.5원 · 확정 가격 120.4원', '고른 지난 시간의 확정 가격');
+  assert.deepEqual(v.forecast.rows.filter(r => r.confirmed).map(r => r.hour), [6, 7]);
+  assert.equal(chipLabel(m, v.forecast.chips[1]), '● 확정 가격 · 지금 시간만');
+  // 대체값 예측이면 비교하지 않으므로 쌓인 값도 점으로 두지 않는다(7.8절 1).
+  const fb = inputFor(m, 'today-forecast-fallback').input;
+  assert.deepEqual(m.model.todayView({ ...fb, seen }).forecast.dots, []);
+  // 띠가 그림 위로 넘치지 않으면 범례에 ▲ 뜻을 붙이지 않는다.
+  assert.ok(!m.model.todayView({ ...input, forecast: { ...input.forecast, data: { ...input.forecast.data, q90: input.forecast.data.q50.slice() } } })
+    .forecast.legend.includes('▲'));
+});
+
+test('오늘 카드 글 밀도(D17): 요약·불확실성은 본문 크기 한 문단, 범위 막대 이름표에 값을 다시 쓰지 않음, 둘러보기 배너는 제목 한 줄', () => {
+  const m = load();
+  const { input } = inputFor(m, 'today-base');
+  const root = renderToday(m, m.model.todayView(input), input.now);
+  const summary = all(root, n => n.props.testID === 'today-summary')[0];
+  assert.equal(flat(summary.props.style).fontSize, 15);
+  assert.equal(textOf(summary), '기준선 예측으로는 07–08시가 가장 비싸고(212.3원), 02–05시가 가장 쌉니다(102.3원). 하루 평균 169.2원. '
+    + '가장 불확실한 시간: 12–13시 (80% 구간 폭 326.4원).');
+  const bar = all(root, n => n.props.testID === 'range-bar')[0];
+  assert.equal(all(bar, n => ds(n).pdValue !== undefined).length, 0, '수요 값은 수급 식에만');
+});
+
+test('전력 카드 폭별: 320은 KPI 위아래, 360 이상 나란히(라벨·값 한 줄), 날씨는 모든 폭에서 범위 막대 아래 자기 줄(D14)', () => {
+  for (const [width, direction, weatherInRow] of [[320, 'column', false], [390, 'row', false], [768, 'row', false], [1280, 'row', false]]) {
     const m = load(width);
     const { input } = inputFor(m, 'today-base');
     const root = tree(h(m.PowerCard, { view: m.model.todayView(input).power, onMethod: () => {}, onSources: () => {}, onRetry: () => {} }));

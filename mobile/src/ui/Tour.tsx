@@ -1,4 +1,4 @@
-// 1분 둘러보기(4.4절). 배너는 덮개가 아니라 화면 안 카드다. 단계의 h1은 Screen 제목이 맡고(단계마다 h1 하나),
+// 1분 둘러보기(4.4절). 배너는 덮개가 아니라 화면 안 카드다(round 1: 한 줄 제목 + 버튼, 오늘 화면에서는 차트 뒤). 단계의 h1은 Screen 제목이 맡고(단계마다 h1 하나),
 // 여기서는 진행 "2 / 5" 글자·설명(children)·이동 버튼을 그린다. 버튼은 설명 바로 아래라 단계 예시가 길어도 첫 화면에 있다.
 // 마지막 단계는 [이전] [직접 둘러보기](→ 오늘)이고 건너뛸 단계가 없어 [건너뛰기]가 없다. 글은 guide.ko.json, 숫자는 strings.ts.
 import React from 'react';
@@ -10,9 +10,9 @@ import { Text, labelData } from './Text';
 import { useTheme } from '../app/theme';
 import { TOUR_FINISH, TOUR_NAME, tourProgressText } from '../content/strings';
 
-export type TourBannerProps = { title: string; body: string; onStart: () => void; onDismiss: () => void };
+export type TourBannerProps = { title: string; onStart: () => void; onDismiss: () => void };
 
-export function TourBanner({ title, body, onStart, onDismiss }: TourBannerProps) {
+export function TourBanner({ title, onStart, onDismiss }: TourBannerProps) {
   const { theme } = useTheme();
   return (
     <View style={[styles.banner, { backgroundColor: theme.color.surface, borderColor: theme.color.border }]} testID="tour-banner">
@@ -20,7 +20,6 @@ export function TourBanner({ title, body, onStart, onDismiss }: TourBannerProps)
       <View style={styles.grow}>
         {/* "1분 둘러보기"의 숫자는 이름표라 메타로 둔다(I2). */}
         <Text variant="body" weight="700" dataSet={labelData(title)}>{title}</Text>
-        <Text variant="label" tone="text2">{body}</Text>
         <View style={styles.actions}>
           <Button tone="primary" label="둘러보기" accessibilityLabel="둘러보기 시작" onPress={onStart} />
           <Button tone="ghost" label="닫기" accessibilityLabel="닫기: 둘러보기 안내" onPress={onDismiss} />

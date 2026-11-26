@@ -1,5 +1,6 @@
 // 지금 제주 전력(명세 4.1·7.4절): 수요·예비율 KPI, 예비율 단계(앱 기준), 수급 식과 범위 막대(짝이 맞는 실시간 값일 때만), 날씨, 출처.
-// 폭: 320은 KPI를 위아래로, 360 이상은 나란히, 768 이상은 KPI 둘과 날씨를 한 줄 3칸(4.1절 폭별 적응).
+// 폭: 320은 KPI를 위아래로, 360 이상은 나란히. 날씨는 모든 폭에서 범위 막대 아래 자기 줄이다(round 1 D14: 768·1280에서 셋째 칸에
+// 넣으면 "· 맑음"이 홀로 줄을 바꿔 세 줄이 됐다).
 import React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { KpiItem, PowerCardView } from './model';
@@ -17,8 +18,6 @@ import { KpiBlock } from '../../ui/Values';
 const TITLE = CARD_TITLES['today-power'];
 /** 스켈레톤 = 최종 본문 높이(KPI 48 + 단계 24 + 식 18 + 막대 83 + 날씨 24 + 간격 + 출처 줄): 레이아웃이 뛰지 않게. */
 const SKELETON_HEIGHT = 300;
-/** 768 이상: KPI 둘과 날씨를 한 줄 3칸. */
-const THREE_UP_FROM = 768;
 const DASH = '—';
 
 function Kpi({ item, format }: { item: KpiItem; format: (n: number) => string }) {
@@ -38,31 +37,29 @@ function Kpi({ item, format }: { item: KpiItem; format: (n: number) => string })
   );
 }
 
-export type PowerCardProps = { view: PowerCardView; onMethod: () => void; onSources: () => void; onRetry: () => void };
+export type PowerCardProps = { view: PowerCardView; onMethod: () => void; onSources: () => void; onRetry: () => void; fill?: boolean };
 
-export function PowerCard({ view, onMethod, onSources, onRetry }: PowerCardProps) {
+export function PowerCard({ view, onMethod, onSources, onRetry, fill = false }: PowerCardProps) {
   const { width } = useWindowDimensions();
   if (view.state === 'loading') {
-    return <Card title={TITLE} onMethod={onMethod} testID="today-power"><StateView kind="loading" minHeight={SKELETON_HEIGHT} /></Card>;
+    return <Card title={TITLE} onMethod={onMethod} testID="today-power" fill={fill}><StateView kind="loading" minHeight={SKELETON_HEIGHT} /></Card>;
   }
   if (view.state === 'error') {
-    return <Card title={TITLE} onMethod={onMethod} testID="today-power"><StateView kind="error" text={view.text} onRetry={onRetry} /></Card>;
+    return <Card title={TITLE} onMethod={onMethod} testID="today-power" fill={fill}><StateView kind="error" text={view.text} onRetry={onRetry} /></Card>;
   }
   const narrow = width < LAYOUT.narrowBelow;
-  const threeUp = width >= THREE_UP_FROM;
   const weather = view.weather ? (
-    <View style={[styles.weather, threeUp ? styles.kpi : null]} testID="today-weather">
+    <View style={styles.weather} testID="today-weather">
       <RichText line={view.weather.line} variant="label" tone="text2" />
       <ProvenanceChip {...view.weather.chip} />
     </View>
   ) : null;
   return (
-    <Card title={TITLE} chips={<ChipList chips={view.chips} />} onMethod={onMethod} testID="today-power">
+    <Card title={TITLE} chips={<ChipList chips={view.chips} />} onMethod={onMethod} testID="today-power" fill={fill}>
       <View style={styles.body}>
         <View style={[styles.kpis, narrow ? styles.stack : null]} testID="today-kpis">
           <Kpi item={view.demand} format={mw} />
           <Kpi item={view.reserve} format={pct} />
-          {threeUp ? weather : null}
         </View>
         {view.level ? (
           <View style={styles.levelRow}>
@@ -76,7 +73,7 @@ export function PowerCard({ view, onMethod, onSources, onRetry }: PowerCardProps
             <RangeBar supply={view.supply.supply} demand={view.supply.demand} reserve={view.supply.reserve} boundary={view.supply.boundary} />
           </>
         ) : <Text variant="meta" tone="text3" testID="today-supply-missing">{view.supply.text}</Text>}
-        {threeUp ? null : weather}
+        {weather}
       </View>
       <SourceFooter source={view.footer.source} time={view.footer.time} extra={view.footer.extra} onSources={onSources} context={TITLE} />
     </Card>

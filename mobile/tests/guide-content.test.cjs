@@ -10,7 +10,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const { createTsLoader, defaultMocks, MOBILE_ROOT, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
-const SVG = { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle', Ellipse: 'Ellipse', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
+const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle', Ellipse: 'Ellipse', Rect: 'Rect', Line: 'Line', Defs: 'Defs', Pattern: 'Pattern' };
 function load(width = 390) {
   const rn = { ...defaultMocks()['react-native'], useWindowDimensions: () => ({ width, height: 844, scale: 1, fontScale: 1 }) };
   const loader = createTsLoader({ mocks: { 'react-native': rn, 'react-native-svg': SVG } });

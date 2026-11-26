@@ -2,7 +2,8 @@
 // 레일) · 시트 · polite 알림 하나. 화면이 바뀌면 document.title을 바꾸고 h1로 초점을 옮기고 "입찰 화면"처럼 알린다. 스크롤 위치는
 // 화면마다 메모리에 두고 뒤로·앞으로(popstate) 때 되돌린다. 지금 탭을 다시 누르면 히스토리를 건드리지 않고 맨 위로 올린다.
 // 화면이 쓰는 것: useNav(경로 상태·이동·시트), useClock(60초마다 바뀌는 KST 지금·서버 시계 차이), useShellData(새로고침 손잡이).
-import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { TextStyle } from 'react-native';
 import { createRouter } from './router';
@@ -21,7 +22,7 @@ import { ErrorBoundary } from '../ui/Screen';
 import { Rail, TabBar } from '../ui/TabBar';
 import { Text, textStyle } from '../ui/Text';
 import { LAYOUT, SPACE } from '../ui/tokens';
-import { domOf, focusHeading, scrollBoxes, web } from '../ui/web';
+import { domOf, focusHeading, scrollBoxes, setInert, web } from '../ui/web';
 import type { DomEl } from '../ui/web';
 import { MINUTE_MS, clockSkew, kstNow } from '../lib/kst';
 import type { ClockSkew } from '../lib/kst';
@@ -181,6 +182,9 @@ function ShellBody({ tabs, legacy = NO_KEYS, renderRoute, renderHeader, renderPa
   const id = screenId(shown);
   const route = ROUTES[shown.key];
   const contentRef = useRef<View>(null);
+  const headerRef = useRef<View>(null);
+  const bodyRef = useRef<View>(null);
+  const tabsRef = useRef<View>(null);
   const shownRef = useRef(shown);
   shownRef.current = shown;
   const lastId = useRef<string | null>(null);
@@ -191,6 +195,15 @@ function ShellBody({ tabs, legacy = NO_KEYS, renderRoute, renderHeader, renderPa
   const online = useOnline();
 
   useEffect(() => router.start(), [router]);
+  // 시트가 열린 동안 바깥(헤더·본문·탭 막대)은 inert(round 1 접근성: 화면 읽기 프로그램이 시트 밖으로 나갔다). 레이아웃 효과라서 시트가
+  // 닫히며 연 버튼으로 초점을 돌려주기(시트의 일반 효과) 전에 풀린다.
+  const sheetOpen = Boolean(shown.sheet && registry[shown.sheet.kind]);
+  useLayoutEffect(() => {
+    if (!sheetOpen) return undefined;
+    const outside = [headerRef, bodyRef, tabsRef];
+    outside.forEach(ref => setInert(ref, true));
+    return () => outside.forEach(ref => setInert(ref, false));
+  }, [sheetOpen]);
   useEffect(() => router.subscribe((state, kind) => {
     // 화면이 바뀌기 전(아직 옛 DOM)에 지금 화면의 스크롤 위치를 적어 둔다.
     const box = scrollBoxes(domOf(contentRef))[0];
@@ -265,29 +278,37 @@ function ShellBody({ tabs, legacy = NO_KEYS, renderRoute, renderHeader, renderPa
     showBack: sub,
     onBack: () => headerBack(router),
     onHome,
-    palette: { background: c.surface, border: c.border, wordmark: c.text1, title: c.text1, version: c.text3, icon: c.text2 },
+    // 헤더 아래 선은 셸 래퍼가 화면 끝까지 그린다(가로 모드 노치에서 헤더 바탕·선이 안전 영역까지 가게, round 1 접근성).
+    palette: { background: c.surface, border: 'transparent', wordmark: c.text1, title: c.text1, version: c.text3, icon: c.text2 },
     fonts: { wordmark: textStyle('title', width, '700'), title: textStyle('body', width, '700'), version: textStyle('meta', width, '500') },
     refresh: { onPress: onRefresh, busy, disabledReason },
   });
   const page = renderRoute(shown);
-  const panel = width >= LAYOUT.panelFrom && renderPanel ? renderPanel(shown) : null;
+  const panelWide = width >= LAYOUT.panelFrom;
+  const panel = panelWide && renderPanel ? renderPanel(shown) : null;
+  // 안전 영역(가로 모드 노치)은 셸 전체가 아니라 헤더·띠·본문·탭 막대 안쪽에 준다: 바탕은 화면 끝까지 가고 글자만 안으로 든다(round 1).
   return (
     <NavContext.Provider value={navValue}>
       <DataContext.Provider value={setData}>
-        <View style={[styles.root, { backgroundColor: c.canvas }]} {...web({ dataSet: { pdSafe: 'x' } })}>
-          <View style={{ backgroundColor: c.surface }} {...web({ dataSet: { pdSafe: 'top' } })}>{header}</View>
+        <View style={[styles.root, { backgroundColor: c.canvas }]}>
+          <View ref={headerRef} style={{ backgroundColor: c.surface }} {...web({ dataSet: { pdSafe: 'top' } })}>
+            <View {...web({ dataSet: { pdSafe: 'x' } })}>{header}</View>
+            <View style={[styles.headerRule, { backgroundColor: c.border }]} />
+          </View>
           {online ? null : <OfflineBanner text={offlineText(data ? data.fetchedAt : null)} />}
-          <View style={styles.body}>
+          <View ref={bodyRef} style={styles.body}>
             {wide ? <Rail items={items} active={shown.key} onSelect={onTab} /> : null}
-            <View ref={contentRef} style={styles.content}>
+            <View ref={contentRef} style={styles.content} {...web({ dataSet: { pdSafe: 'x' } })}>
               {/* 화면(하위 상태 포함)마다 새로 그린다: 새 화면은 맨 위에서 시작하고 스크롤은 뒤로·앞으로 때만 되돌린다. */}
               <ErrorBoundary key={`${id}:${reloads}`}>
                 {legacy.includes(shown.key) ? <LegacyFrame title={route.heading}>{page}</LegacyFrame> : page}
               </ErrorBoundary>
             </View>
             {panel ? <ReadingPanel title={panel.title}>{panel.body}</ReadingPanel> : null}
+            {/* 패널이 없는 화면(알아보기)도 ≥ 1280에서 본문 열이 같은 x에서 시작한다(round 1 D14: 탭을 바꾸면 160 px 뛰었다). */}
+            {panelWide && !panel ? <View style={styles.panelSpace} testID="panel-space" /> : null}
           </View>
-          {wide ? null : <TabBar items={items} active={shown.key} onSelect={onTab} />}
+          {wide ? null : <View ref={tabsRef}><TabBar items={items} active={shown.key} onSelect={onTab} /></View>}
           <SheetHost sheet={shown.sheet} registry={registry} onClose={navValue.closeSheet} onNoOpener={focusScreen} />
         </View>
       </DataContext.Provider>
@@ -343,5 +364,7 @@ const styles = StyleSheet.create({
   h1: { flexShrink: 1 },
   legacyBody: { flex: 1, minHeight: 0 },
   panel: { width: LAYOUT.panel, borderLeftWidth: 1, minHeight: 0 },
+  panelSpace: { width: LAYOUT.panel },
+  headerRule: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1 },
   panelContent: { padding: SPACE.lg, gap: SPACE.md },
 });

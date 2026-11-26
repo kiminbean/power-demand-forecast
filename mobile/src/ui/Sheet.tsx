@@ -76,7 +76,7 @@ export function Sheet({ title, onClose, children, testID = 'sheet' }: SheetProps
         {...web({ onClick: () => closeLatest.current(), dataSet: { pdScrim: 'true' } })} />
       <View ref={panelRef} role="dialog" aria-modal aria-labelledby={titleId}
         style={[styles.panel, place, { backgroundColor: theme.color.surface }, lift, motion.enter]}
-        {...web({ dataSet: width >= LAYOUT.railFrom ? {} : { pdSafe: 'bottom' } })}>
+        {...web({ dataSet: width >= LAYOUT.railFrom ? {} : { pdSafe: 'bottom x' } })}>
         <View style={[styles.head, { borderBottomColor: theme.color.border }]}>
           {/* 숫자가 든 제목("산출 방식 · 오늘 24시간 가격", "80% 구간")은 이름표라 메타로 둔다(I2). */}
           <Text role="heading" {...web({ 'aria-level': 2 })} nativeID={titleId} variant="body" weight="700" style={styles.title}

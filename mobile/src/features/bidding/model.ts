@@ -7,18 +7,18 @@ import type { HourBidView, Provenanced, SegmentsView } from '../../data/adapters
 import { EXAMPLE_MERIT_BLOCKS, EXAMPLE_MERIT_DEMAND_MW, EXAMPLE_PLANT, exampleFromCalculator } from '../../data/examples';
 import type { Example } from '../../data/examples';
 import type { MarketStatus, OptimizedSegments, SmpForecast } from '../../data/types';
-import { HOUR_MS, MINUTE_MS, kstAt, nextIntervalAt, parseApiTime, parseDayKey } from '../../lib/kst';
+import { HOUR_MS, MINUTE_MS, addDays, kstAt, nextIntervalAt, parseApiTime, parseDayKey } from '../../lib/kst';
 import { num } from '../../lib/format';
 import { CHIPS, smpForecastKind } from '../../lib/provenance';
 import type { Chip, ForecastKind } from '../../lib/provenance';
 import { ladderStats } from '../../ui/charts/chartMath';
 import type { PillTone } from '../../ui/tokens';
 import {
-  ANSWER_DEADLINE_CHECKING, ANSWER_DEADLINE_ERROR, ANSWER_DEADLINE_MISMATCH, CALC_BAD_REQUEST_TEXT, CALC_BUSY_TEXT, CALC_EMPTY_TEXT,
+  ANSWER_DEADLINE_CHECKING, ANSWER_DEADLINE_ERROR, ANSWER_DEADLINE_MISMATCH, CALC_BAD_REQUEST_TEXT, CALC_BUSY_TEXT, CALC_EMPTY_TEXT, CLOSED_TODAY_TEXT, NEXT_DEADLINE_LEAD,
   CALC_FAILED_TEXT, CALC_UNREADABLE_TEXT, DEADLINE_FAILED_TEXT, DEADLINE_MISMATCH_TEXT, DEADLINE_PILL, RTM_NO_INTERVAL, SOURCE_ITEMS,
   SOURCE_PENDING, SOURCE_TEXT, answerClosedText, answerOpenText, basisLagText, bidTableCaption, calcFooterSource, calcInputText,
   calcMethodText, calcSourceText, countdownText, deadlineApiText, deadlineCheckText, deadlineWhenText, freshness, ladderChartLabel,
-  ladderNotRealText, ladderSentenceText, ladderTrendText, lookupAt, lookupBasisText, meritSummaryText, modelUsedText, nextDeadlineText,
+  ladderNotRealText, ladderSentenceText, ladderTrendText, lookupAt, lookupBasisText, meritSummaryText, modelUsedText, nextCountdownText, nextDeadlineText,
   priceBasisText, rtmLineText, rtmStatusText, serverTimeText,
 } from '../../content/strings';
 import type { Risk, RouteState } from '../../app/routes';
@@ -62,10 +62,14 @@ export type Pill = { tone: PillTone; text: string };
 export type DeadlineCardView = {
   phase: DeadlinePhase;
   pill: Pill | null;
+  /** 제목 옆 상태(마감 뒤 «오늘 마감됨», D13: 마감 pill이 "다음 마감" 줄 밑에 있어 다음 마감이 닫힌 것처럼 읽혔다). */
+  status: Pill | null;
   chips: ChipSpec[];
-  /** 접수 중·마감 임박만: "3시간 56분 남음". */
+  /** 접수 중·마감 임박: "3시간 56분 남음", 마감 뒤: "15시간 48분"(D13, 서버 시각 기준 앱 시각에서 센다). */
   countdown: string | null;
-  /** "마감 11-26(목) 10:00 KST · 입찰일 11-27(금)" / 마감 뒤 "다음 마감 11-27(금) 10:00 KST". */
+  /** 큰 숫자 위 줄: 마감 뒤에만 "다음 마감까지". */
+  countdownLead: string | null;
+  /** "마감 11-26(목) 10:00 KST · 입찰일 11-27(금)" / 마감 뒤 "다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)". */
   when: string | null;
   /** 불일치·오류 문장. */
   note: string | null;
@@ -159,7 +163,9 @@ function rtmText(rtm: MarketStatus['rtm'], now: number): string {
 }
 
 const CHECKING: DeadlineCardView = {
-  phase: 'checking', pill: { tone: 'neutral', text: DEADLINE_PILL.checking }, chips: [], countdown: null, when: null, note: null, rtm: null, footer: null,
+  phase: 'checking', pill: { tone: 'neutral', text: DEADLINE_PILL.checking }, status: null, chips: [], countdown: null, countdownLead: null, when: null,
+  note: null, rtm: null,
+  footer: null,
 };
 
 function deadlineOf(input: BiddingInput, f: MarketFacts | null): { view: DeadlineCardView; answer: string; mismatch: boolean } {
@@ -180,19 +186,26 @@ function deadlineOf(input: BiddingInput, f: MarketFacts | null): { view: Deadlin
     if (input.recheck !== 'done') return { view: CHECKING, answer: ANSWER_DEADLINE_CHECKING, mismatch: true };
     const when = f.deadline !== null && f.trading !== null ? deadlineWhenText(f.deadline, f.trading) : null;
     return {
-      view: { phase: 'mismatch', pill: serverPill(f.status), ...base, chips: [...base.chips, { chip: CHIPS.checkTime }], countdown: null, when, note: DEADLINE_MISMATCH_TEXT },
+      view: { phase: 'mismatch', pill: serverPill(f.status), status: null, ...base, chips: [...base.chips, { chip: CHIPS.checkTime }], countdown: null,
+        countdownLead: null, when,
+        note: DEADLINE_MISMATCH_TEXT },
       answer: ANSWER_DEADLINE_MISMATCH, mismatch: true,
     };
   }
   if (f.status === 'closed') {
-    return { view: { phase: 'closed', pill: serverPill('closed'), ...base, countdown: null, when: nextDeadlineText(f.next), note: null },
-      answer: answerClosedText(f.next), mismatch: false };
+    // 다음 마감은 입찰일(trading_date) 10:00이고 그 마감의 입찰일은 하루 뒤다(시장 규칙, round 1 integrity: 마감된 입찰일과 짝지어 읽혔다).
+    return {
+      view: { phase: 'closed', pill: null, status: { tone: 'neutral', text: CLOSED_TODAY_TEXT }, ...base, countdown: nextCountdownText(f.next - now),
+        countdownLead: NEXT_DEADLINE_LEAD,
+        when: nextDeadlineText(f.next, addDays(f.trading, 1)), note: null },
+      answer: answerClosedText(f.next), mismatch: false,
+    };
   }
   const left = f.deadline - now;
   const imminent = left <= IMMINENT_MS;
   return {
-    view: { phase: imminent ? 'imminent' : 'open', pill: imminent ? { tone: 'watch', text: DEADLINE_PILL.imminent } : serverPill('open'), ...base,
-      countdown: countdownText(left), when: deadlineWhenText(f.deadline, f.trading), note: null },
+    view: { phase: imminent ? 'imminent' : 'open', pill: imminent ? { tone: 'watch', text: DEADLINE_PILL.imminent } : serverPill('open'), status: null, ...base,
+      countdown: countdownText(left), countdownLead: null, when: deadlineWhenText(f.deadline, f.trading), note: null },
     answer: answerOpenText(f.deadline, left, imminent), mismatch: false,
   };
 }

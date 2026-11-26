@@ -14,7 +14,7 @@ import { LEGEND_LOCKED, SETTLEMENT_RESTRICTED_BODY, SETTLEMENT_RESTRICTED_TITLE,
 import { LiveFacts } from '../guide/sheets';
 import { ReadingPanelBody, TermRow } from '../today/TodayParts';
 import { settlementView } from './model';
-import { SampleStatementCard, StatementFigure } from './SampleStatementCard';
+import { SampleStatementCard } from './SampleStatementCard';
 import { RestrictedCard } from '../../ui/Card';
 import { NowPill, ProvenanceChip, SampleRibbon } from '../../ui/Chips';
 import { AnswerLine, Screen } from '../../ui/Screen';
@@ -54,14 +54,13 @@ export function SettlementMethodFacts({ card }: { card: MethodCard }) {
   );
 }
 
-/** ≥ 1280 "정산 읽는 법" 패널(4.3·4.6절): 이 화면의 표시(예시 · 잠김) · 용어 셋 · ①+② 식 그림 · 읽는 법 세 줄. */
+/** ≥ 1280 "정산 읽는 법" 패널(4.3·4.6절): 이 화면의 표시(예시 · 잠김) · 용어 셋 · 읽는 법 세 줄. ①+② 그림은 모든 폭에서 예시 정산서 카드 안에 있다(D14). */
 export function SettlementPanel() {
   const nav = useNav();
   const view = settlementView();
   const legend = [{ chip: CHIPS.example, text: view.legend }, { chip: CHIPS.locked, text: LEGEND_LOCKED }];
   return (
-    <ReadingPanelBody legend={legend} terms={PANEL_TERMS} method={view.panelMethod} figure={<StatementFigure view={view} />}
-      onTerm={id => nav.openSheet({ kind: 'term', id })} testID="settlement-panel" />
+    <ReadingPanelBody legend={legend} terms={PANEL_TERMS} method={view.panelMethod} onTerm={id => nav.openSheet({ kind: 'term', id })} testID="settlement-panel" />
   );
 }
 

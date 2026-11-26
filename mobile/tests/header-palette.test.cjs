@@ -45,7 +45,7 @@ const flat = style => (Array.isArray(style) ? Object.assign({}, ...style.map(fla
 const texts = tree => tree.filter(n => n.type === 'Text');
 const labelsOf = tree => texts(tree).flatMap(n => n.props.children).join(' ');
 
-const loader = createTsLoader({ mocks: { 'react-native-svg': { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle' } } });
+const loader = createTsLoader({ mocks: { 'react-native-svg': { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle' } } });
 const { THEMES, LAYOUT, HIT, SIZE, SPACE } = loader.load(path.join(SRC_ROOT, 'ui/tokens.ts'));
 const { textStyle } = loader.load(path.join(SRC_ROOT, 'ui/Text.tsx'));
 const { APP_VERSION, REFRESH_NONE_REASON } = loader.load(path.join(SRC_ROOT, 'content/strings.ts'));

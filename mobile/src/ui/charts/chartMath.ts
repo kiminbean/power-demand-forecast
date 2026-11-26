@@ -72,6 +72,23 @@ export function yOf(value: number, scale: Scale, plot: Box): number {
   return plot.top + ((scale.top - value) / span) * plot.height;
 }
 
+/** 그림 안으로 붙인 y(띠가 그림 위로 넘치면 맨 위에서 자른다, round 1 D10). */
+const yIn = (value: number, scale: Scale, plot: Box) => clamp(yOf(value, scale, plot), plot.top, plot.top + plot.height);
+
+/**
+ * 오늘 차트의 y 눈금(round 1 D10): 위쪽은 기준선(q50)과 확정 가격으로 정하고 80% 띠는 넣지 않는다. 띠가 15–342원까지 퍼져 그림을
+ * 덮고 기준선 계단을 납작하게 만들었다. 띠가 위로 넘친 시간은 clippedRuns가 ▲로 표시한다. 칸 수는 4 이하(눈금 글자가 적다).
+ */
+export function stepScale(q50: readonly (number | null)[], extra: readonly number[]): Scale {
+  const kinds = hourKinds(q50);
+  return niceScale([...q50.slice(0, HOURS).filter((_v, i) => kinds[i] === 'value'), ...extra], CHART.stepIntervals);
+}
+
+/** 80% 띠 위쪽(q90)이 그림 맨 위 눈금을 넘는 값 시간들(이어진 구간). */
+export function clippedRuns(kinds: readonly HourKind[], q90: readonly (number | null)[], scale: Scale): Run[] {
+  return runsOf(kinds.map((k, i) => k === 'value' && isFiniteNumber(q90[i]) && (q90[i] as number) > scale.top));
+}
+
 /** 시 경계 k(0–24)의 x. 거래시간 H는 경계 H−1과 H 사이다. */
 export const boundaryX = (k: number, plot: Box) => plot.left + (k / HOURS) * plot.width;
 export const hourCenterX = (hour: number, plot: Box) => boundaryX(hour - 0.5, plot);
@@ -109,7 +126,10 @@ export function stepPath(values: readonly (number | null)[], kinds: readonly Hou
   return d;
 }
 
-/** 80% 띠(q10–q90): 값 시간 가운데 두 분위수가 다 있는 구간만. q90 계단을 따라 갔다가 q10 계단으로 돌아와 닫는다. */
+/**
+ * 80% 띠(q10–q90): 값 시간 가운데 두 분위수가 다 있는 구간만. q90 계단을 따라 갔다가 q10 계단으로 돌아와 닫는다. 눈금이 띠를 담지
+ * 않으므로(stepScale) 그림 밖 부분은 맨 위·아래에서 자른다.
+ */
 export function bandPath(kinds: readonly HourKind[], q10: readonly (number | null)[], q90: readonly (number | null)[], scale: Scale, plot: Box): string {
   const ok = kinds.map((k, i) => k === 'value' && isFiniteNumber(q10[i]) && isFiniteNumber(q90[i]));
   let d = '';
@@ -117,11 +137,11 @@ export function bandPath(kinds: readonly HourKind[], q10: readonly (number | nul
     let upper = '';
     let lower = '';
     for (let h = run.from; h <= run.to; h += 1) {
-      const yHi = r2(yOf(q90[h - 1] as number, scale, plot));
+      const yHi = r2(yIn(q90[h - 1] as number, scale, plot));
       upper += h === run.from ? `M${r2(boundaryX(h - 1, plot))} ${yHi}H${r2(boundaryX(h, plot))}` : `V${yHi}H${r2(boundaryX(h, plot))}`;
     }
     for (let h = run.to; h >= run.from; h -= 1) {
-      lower += `V${r2(yOf(q10[h - 1] as number, scale, plot))}H${r2(boundaryX(h - 1, plot))}`;
+      lower += `V${r2(yIn(q10[h - 1] as number, scale, plot))}H${r2(boundaryX(h - 1, plot))}`;
     }
     d += `${upper}${lower}Z`;
   }
@@ -192,6 +212,15 @@ export function textWidth(text: string): number {
 
 /** 라벨 상자를 가운데 x에 두되 차트 상자 [0, width] 밖으로 나가지 않게 붙인다. */
 export const labelLeft = (centerX: number, boxWidth: number, width: number) => clamp(centerX - boxWidth / 2, 0, Math.max(0, width - boxWidth));
+/**
+ * 그 라벨의 글자 정렬: 차트 끝에 붙은 상자는 그 끝 쪽으로 정렬한다. 글자 간격을 넓히면(WCAG 1.4.12) 가운데 정렬 글자는 상자 양쪽으로
+ * 자라 끝 라벨("50 MW")이 차트 틀(overflow hidden) 밖에서 잘렸다(round 1 접근성). 끝에 붙인 쪽 정렬이면 안쪽으로만 자란다
+ * (ChartLabel이 글자를 alignItems로 그 끝에 붙인다. textAlign만으로는 상자보다 긴 글자가 오른쪽으로 넘쳤다, F13b 측정).
+ */
+export function labelAlign(centerX: number, boxWidth: number, width: number): 'left' | 'center' | 'right' {
+  if (centerX - boxWidth / 2 <= 0) return 'left';
+  return centerX + boxWidth / 2 >= width ? 'right' : 'center';
+}
 
 /** y 눈금 글자 자리: 가장 긴 눈금 글자 + 간격. */
 export const yGutter = (scale: Scale) => CHART.edge + Math.max(...scale.ticks.map(t => textWidth(priceTickText(t)))) + CHART.tickGap;

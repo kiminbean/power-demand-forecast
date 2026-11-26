@@ -47,11 +47,18 @@ export function Hatch({ id, color }: { id: string; color: string }) {
 export type ChartLabelProps = {
   text: string; left: number; top: number; width: number; meta: string;
   align?: 'left' | 'center' | 'right'; tone?: TextTone; weight?: FontWeight; testID?: string;
+  /** 글자 뒤 바탕색(계단 위 확률 글자: 기준선 점선·띠가 글자를 가로지르지 않게, round 1 D12). */
+  halo?: string;
 };
-/** 그림 위 12 px 라벨(눈금·단위·각주·확률). 숫자가 들어가므로 data-pd-meta를 단다(I2). */
-export function ChartLabel({ text, left, top, width, meta, align = 'center', tone = 'text3', weight = '500', testID }: ChartLabelProps) {
+/**
+ * 그림 위 12 px 라벨(눈금·단위·각주·확률). 숫자가 들어가므로 data-pd-meta를 단다(I2).
+ * 글자는 상자 안에서 flex로 붙인다(alignItems). 글자 간격을 넓혀(WCAG 1.4.12) 글자가 상자보다 길어지면 textAlign은 소용없다(넘치는
+ * 줄은 시작 쪽에 붙어 오른쪽으로 나간다): F13b 측정에서 오른쪽 정렬한 끝 눈금 "50 MW"가 차트 틀 밖으로 4 px 나가 잘렸다.
+ * flex-end면 왼쪽(틀 안쪽)으로, center면 양쪽으로 자란다. 세로도 가운데에 두어 줄높이 1.5에서 위아래로 반씩 자란다.
+ */
+export function ChartLabel({ text, left, top, width, meta, align = 'center', tone = 'text3', weight = '500', testID, halo }: ChartLabelProps) {
   return (
-    <View style={[styles.label, { left, top, width }]} testID={testID}>
+    <View style={[styles.label, styles[align], { left, top, width }, halo ? { backgroundColor: halo } : null]} testID={testID}>
       <Text variant="meta" weight={weight} tone={tone} nowrap dataSet={{ pdMeta: meta }} style={{ textAlign: align }}>{text}</Text>
     </View>
   );
@@ -93,5 +100,8 @@ export const chartStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  label: { position: 'absolute', height: LABEL_HEIGHT },
+  label: { position: 'absolute', height: LABEL_HEIGHT, justifyContent: 'center' },
+  left: { alignItems: 'flex-start' },
+  center: { alignItems: 'center' },
+  right: { alignItems: 'flex-end' },
 });

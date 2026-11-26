@@ -52,6 +52,8 @@ export const offlineText = (lastData: number | null) =>
   (lastData === null ? '오프라인 · 새 자료를 받을 수 없습니다' : `오프라인 · 마지막 자료 ${kstTime(lastData)}`);
 export const refreshDoneText = (at: number) => `${kstTime(at)} 기준으로 새로 불러왔습니다`;
 export const refreshFailedText = (shown: number) => `새로고침 실패 · ${kstClock(shown)} 값 표시 중`;
+/** 카드의 [다시 시도]·[다시 계산]이 성공했을 때(round 1 D4): 헤더 새로고침 알림과 같은 꼴. */
+export const retryDoneText = (at: number) => `다시 불러왔습니다 · ${kstTime(at)}`;
 export const REFRESH_FAILED_TEXT = '새로고침 실패';
 // 헤더 새로고침을 숨기지 않고 비활성으로 둘 때 이름 뒤에 붙는 까닭(3.4·7.6절).
 export const REFRESH_NONE_REASON = '이 화면은 새로 불러올 자료가 없습니다';
@@ -132,10 +134,13 @@ export function forecastSummaryText(stats: ForecastSummaryInput | null, kind: Fo
 /** "가장 불확실한 시간: 12–13시 (80% 구간 폭 326.4원)" */
 export const uncertaintyText = (widest: HourGroup) =>
   `가장 불확실한 시간: ${hourGroupText(widest.runs)} (80% 구간 폭 ${price(widest.value)}원)`;
-export const confirmedPointText = (tradeHourValue: number, value: number) =>
-  `점은 KPX 확정 가격 ${tradeClockRange(tradeHourValue)} ${price(value)}원`;
+/** 차트 이름의 확정 가격 점(D10: 이번 방문에서 받은 거래시간마다 하나): "점은 KPX 확정 가격 18–19시 151.6원, 19–20시 160.2원". */
+export const confirmedPointText = (points: readonly { hour: number; value: number }[]) =>
+  `점은 KPX 확정 가격 ${points.map(p => `${tradeClockRange(p.hour)} ${price(p.value)}원`).join(', ')}`;
 
 export const segmentText = (index: number) => `${num(index + 1, 0)}구간`;
+/** 계산기 구간 번호(segment_id)로: "1구간"(입찰 행 카드의 머리, round 1 D2). */
+export const segmentIdText = (id: number) => `${num(id, 0)}구간`;
 export const probabilityText = (value: number) => `${pct(value, 0)}%`;
 /** 계단 차트 요약 이름: "10구간, 171.7–244.1원, 낙찰 가능성 95%에서 5%(추정)" */
 export const ladderSummaryText = (s: LadderSummaryInput) =>
@@ -294,7 +299,10 @@ const FORECAST_LEGEND: Readonly<Record<ForecastKind, string>> = {
   model: '점선 = 학습 모델 예측 · 띠 = 80% 구간 · 점 = KPX 확정 가격 · 세로선 = 지금',
   fallback: '점선 = API 대체값(모델 예측 아님) · 점 = KPX 확정 가격 · 세로선 = 지금',
 };
-export const forecastLegendText = (kind: ForecastKind) => FORECAST_LEGEND[kind];
+/** 띠가 그림 위로 넘쳤으면 띠 항목에 ▲ 뜻을 붙인다(D10). 확정 가격 점의 한계(서버가 지금 시간 값만 준다)를 같은 줄에 밝힌다. */
+export const forecastLegendText = (kind: ForecastKind, clipped = false) =>
+  `${clipped ? FORECAST_LEGEND[kind].replace('띠 = 80% 구간', '띠 = 80% 구간(▲ 위쪽 잘림)') : FORECAST_LEGEND[kind]}. ${CONFIRMED_ONLY_NOW}`;
+export const CONFIRMED_ONLY_NOW = '확정 가격은 지금 시간 값만 받습니다(서버 제한).';
 export const FORECAST_SUBJECT_SHORT: Readonly<Record<ForecastKind, string>> = { baseline: '기준선 예측', model: '학습 모델 예측', fallback: 'API 대체값' };
 export const BAND_LABEL = '80% 구간';
 export const CONFIRMED_LABEL = '확정 가격';
@@ -303,6 +311,8 @@ export const hourStepLabel = (hour: number, isNow: boolean) => `${tradeHour(hour
 export const WRAP_FIRST = '(처음으로)';
 export const WRAP_LAST = '(끝으로)';
 export const TO_NOW_LABEL = '지금으로';
+/** 이미 지금 거래시간이면 [지금으로]를 지우지 않고 까닭 있는 비활성으로 둔다(round 1 D4: 누른 버튼이 사라져 초점이 body로 떨어졌다). */
+export const TO_NOW_REASON = '지금 거래시간입니다';
 /** 시간대 요약 행 이름(D11): "밤·아침 00–08시"(거래시간 01–08h). */
 export const periodLabelText = (label: string, from: number, to: number) => `${label} ${tradeClockRange(from, to)}`;
 /** 0.00 입력 시간이 있을 때만 각주를 단다(없으면 null). */
@@ -313,6 +323,8 @@ export const SHORT_DAY_LABEL = '12시간만 보기';
 export const TABLE_CAPTIONS = Object.freeze({ periods: '시간대 요약', hours: '시간별 기준선 예측' });
 export const PERIOD_COLUMNS = Object.freeze({ period: '시간대', mean: '평균', min: '최저', max: '최고' });
 export const HOUR_COLUMNS = Object.freeze({ hour: '거래시간', band: '80% 구간', confirmed: '확정 가격' });
+/** 600 px 이상 표가 카드보다 넓을 때 가장자리 흐림과 함께(D2). */
+export const SCROLL_CUE = '옆으로 밀어 보기';
 const FORECAST_SOURCE_LINE: Readonly<Record<ForecastKind, string>> = {
   baseline: '출처 API 서버 기준선 예측', model: '출처 API 서버 학습 모델 예측', fallback: '출처 API 서버 대체값 (모델 예측 아님)',
 };
@@ -343,6 +355,7 @@ export const TODAY_TERMS: ReadonlyArray<{ id: GlossaryId; label: string }> = Obj
 ]);
 export const TERMS_HEADING = '용어';
 
+/** 오늘 화면의 배너는 제목 한 줄만(round 1 D17), 설명 문장(body)은 알아보기의 둘러보기 카드에서만 쓴다. */
 export const TOUR_BANNER = Object.freeze({ title: '처음이신가요? 1분 둘러보기', body: '다섯 단계로 숫자와 표시를 짚어 봅니다.' });
 
 export const TODAY_PANEL_TITLE = '오늘 화면 읽는 법';
@@ -410,7 +423,15 @@ export const answerClosedText = (next: number) => `오늘 입찰은 마감됐습
 export const countdownText = (leftMs: number) => `${leftText(leftMs)} 남음`;
 export const deadlineWhenText = (deadline: number, tradingDate: string) =>
   `마감 ${kstDate(deadline)} ${kstTime(deadline)} · 입찰일 ${kstDayLabel(tradingDate)}`;
-export const nextDeadlineText = (next: number) => `다음 마감 ${kstDate(next)} ${kstTime(next)}`;
+/** 마감 뒤(D13): "다음 마감 11-27(금) 10:00 KST · 입찰일 11-28(토)". 다음 마감의 입찰일은 시장 상태의 입찰일 + 1일(시장 규칙). */
+export const nextDeadlineText = (next: number, tradingDate: string | null) =>
+  `다음 마감 ${kstDate(next)} ${kstTime(next)}${tradingDate ? ` · 입찰일 ${kstDayLabel(tradingDate)}` : ''}`;
+/** 마감 뒤 큰 숫자(D13): 위 줄 "다음 마감까지" + 큰 숫자 "15시간 48분"(숫자가 두 줄로 갈리지 않게 따로 둔다). 서버 시각으로 맞춘 앱 시각에서 센다. */
+export const NEXT_DEADLINE_LEAD = '다음 마감까지';
+export const nextCountdownText = (leftMs: number) => leftText(leftMs);
+export const CLOSED_TODAY_TEXT = '오늘 마감됨';
+/** 마감 뒤 예시 계산의 날짜가 마감된 입찰일임을 밝힌다(round 1 integrity). */
+export const closedBidDayText = (tradingDate: string) => `마감된 입찰일 ${dayShort(tradingDate)} 기준`;
 export const DEADLINE_PILL = Object.freeze({ checking: '확인 중', open: '접수 중', imminent: '마감 임박', closed: '마감', unknown: '상태 알 수 없음' });
 /** 시장 상태 조회가 10분(지연)·60분(끊김)을 넘으면 "지연 · 06:04 기준" / "06:04 기준". 카운트다운은 계속 움직인다. */
 export const basisLagText = (at: number, stage: Exclude<Freshness, 'fresh'>) =>
@@ -418,8 +439,8 @@ export const basisLagText = (at: number, stage: Exclude<Freshness, 'fresh'>) =>
 export const DEADLINE_CHECKING_TEXT = '시장 상태를 확인하는 중입니다';
 export const DEADLINE_FAILED_TEXT = '시장 상태를 확인하지 못했습니다';
 export const DEADLINE_MISMATCH_TEXT = '서버의 시장 상태와 계산한 마감 시각이 맞지 않아 남은 시간을 표시하지 않습니다';
-/** "실시간시장은 15분 단위입니다 (API 기준) · 다음 구간 06:15 KST" */
-export const rtmLineText = (minutes: number, next: number) => `실시간시장은 ${num(minutes, 0)}분 단위입니다 (API 기준) · 다음 구간 ${kstTime(next)}`;
+/** "실시간시장은 15분 단위입니다 · 다음 구간 06:15 KST"(출처 줄이 이미 API 서버 시장 상태라 "(API 기준)"을 뺐다, round 1 멘토). */
+export const rtmLineText = (minutes: number, next: number) => `실시간시장은 ${num(minutes, 0)}분 단위입니다 · 다음 구간 ${kstTime(next)}`;
 /** rtm.status가 active가 아닐 때. 모르는 값은 닫힌 쪽으로 "알 수 없음". */
 export function rtmStatusText(status: string): string {
   const name = status === 'closed' ? '닫힘' : status === 'inactive' ? '쉬는 중' : status === 'suspended' ? '중단' : '알 수 없음';
@@ -453,6 +474,14 @@ export const ladderTrendText = (atMin: number, atMax: number) =>
 export const ladderNotRealText = (kind: ForecastKind) =>
   `낙찰 가능성은 ${CALC_BASIS[kind]}${kind === 'fallback' ? '으로' : '로'} 계산한 값이며 실제 낙찰 확률이 아닙니다.`;
 export const NO_SEND_NOTE = '이 화면은 KPX에 아무것도 보내지 않습니다.';
+/** 계단 차트 위 범례(D12): 점선 = 그 시간 기준선, 띠 = 80% 구간, 빗금 막대 = 구간별 입찰 가격(추정). */
+export function ladderLegendText(kind: ForecastKind, q50: number | null, q10: number | null, q90: number | null): string {
+  const line = q50 === null ? null : `점선 = ${CALC_SHORT[kind]} ${price(q50)}원`;
+  const band = q10 === null || q90 === null ? null : `띠 = 80% 구간 ${price(q10)}–${price(q90)}원`;
+  return [line, band, '빗금 막대 = 입찰 가격(추정)'].filter((x): x is string => x !== null).join(' · ');
+}
+/** 계단 차트 단위 옆 설명(D12, round 1 멘토: % 글자의 뜻이 차트에 없었다). */
+export const LADDER_CAPTION = '막대 위 % = 낙찰 가능성(추정)';
 // 숫자로 끝나는 말 뒤의 '과/와': 2·4·5·9(이·사·오·구)로 끝나면 받침이 없다.
 const waGwa = (text: string) => ('2459'.includes(text.slice(-1)) ? '와' : '과');
 /** 가격 근거 공개 줄(7.8절 2): "가격 근거: 11-26 기준선(=11-25 확정 가격) · 입찰일 11-27과 하루 차이". */

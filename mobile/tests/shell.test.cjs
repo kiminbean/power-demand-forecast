@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { createTsLoader, defaultMocks, SRC_ROOT } = require('./helpers/ts-loader.cjs');
 
-const SVG = { __esModule: true, default: 'Svg', Path: 'Path', Circle: 'Circle' };
+const SVG = { __esModule: true, default: 'Svg', Svg: 'Svg', Path: 'Path', Circle: 'Circle' };
 function load(width = 390) {
   const rn = { ...defaultMocks()['react-native'], useWindowDimensions: () => ({ width, height: 844, scale: 1, fontScale: 1 }) };
   const loader = createTsLoader({ mocks: { 'react-native': rn, 'react-native-svg': SVG } });
@@ -64,16 +64,20 @@ function shell(url, { width = 390, tabs = ['smp', 'bidding', 'settlement'], lega
   return { root: { type: 'root', props: {}, children: render(element) }, seen, router, m };
 }
 
-test('390: 아래 탭 막대(3개, 지금 탭 선택), 레일 없음, 셸 바깥 x · 헤더 top · 탭 막대 bottom 안전 영역, polite 하나', () => {
+test('390: 아래 탭 막대(3개, 지금 탭 선택), 레일 없음, 헤더 top · 헤더 안쪽·본문 x · 탭 막대 bottom x 안전 영역, polite 하나', () => {
   const { root } = shell('/mobile/bidding');
   const bar = one(root, n => n.props.testID === 'tab-bar', '탭 막대');
   assert.equal(all(root, n => n.props.testID === 'rail').length, 0);
   assert.deepStrictEqual(all(bar, n => n.props.role === 'tab').map(t => [t.props['aria-label'], t.props['aria-selected']]),
     [['오늘', false], ['입찰', true], ['정산', false]]);
-  assert.equal(bar.props.dataSet.pdSafe, 'bottom');
-  assert.equal(all(root, n => n.props.dataSet && n.props.dataSet.pdSafe === 'x').length, 1);
+  // round 1 접근성(가로 모드 노치): x 안전 영역은 셸 전체가 아니라 헤더 안쪽·본문·탭 막대 안쪽에 둔다(바탕은 화면 끝까지).
+  assert.equal(bar.props.dataSet.pdSafe, 'bottom x');
+  assert.equal(all(root, n => n.props.dataSet && n.props.dataSet.pdSafe === 'x').length, 2, '헤더 안쪽 + 본문');
   const top = one(root, n => n.props.dataSet && n.props.dataSet.pdSafe === 'top', '헤더 안전 영역');
-  assert.equal(top.children[0].type, 'HeaderStub');
+  assert.equal(top.children[0].props.dataSet.pdSafe, 'x');
+  assert.equal(top.children[0].children[0].type, 'HeaderStub');
+  const rule = [].concat(top.children[1].props.style).reduce((acc, x) => Object.assign(acc, x), {});
+  assert.deepEqual([rule.position, rule.height, rule.left, rule.right], ['absolute', 1, 0, 0], '헤더 아래 선은 래퍼가 화면 끝까지 그린다');
   assert.equal(all(root, n => n.props['aria-live'] === 'polite').length, 1);
 });
 
@@ -98,6 +102,12 @@ test('≥ 1280 패널: 화면이 내용을 주면 complementary + h2 제목 + �
   for (const [width, render] of [[1279, panel], [1280, () => null], [1280, undefined]]) {
     assert.equal(all(shell('/mobile/bidding', { width, renderPanel: render }).root, n => n.props.testID === 'reading-panel').length, 0, `${width}`);
   }
+  // round 1 D14: ≥ 1280에서 패널이 없는 화면(알아보기)도 패널 폭만큼 비워 본문 열이 탭마다 같은 x에서 시작한다(160 px 뛰었다).
+  const space = n => n.props.testID === 'panel-space';
+  assert.equal(all(wide.root, space).length, 0, '패널이 있으면 빈칸 없음');
+  const none = one(shell('/mobile/bidding', { width: 1280, renderPanel: () => null }).root, space, '패널 자리');
+  assert.equal([].concat(none.props.style).reduce((acc, x) => Object.assign(acc, x), {}).width, 320);
+  assert.equal(all(shell('/mobile/bidding', { width: 1279, renderPanel: () => null }).root, space).length, 0, '1280 미만은 패널 자리도 없다');
 });
 
 test('레거시 화면: 셸이 main 하나 + h1(tabIndex=-1, 경로 제목) + NowPill(조회 없음)으로 감싸고, 새 화면은 그대로 둔다', () => {

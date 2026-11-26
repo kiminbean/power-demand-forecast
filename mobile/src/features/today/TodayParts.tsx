@@ -55,11 +55,9 @@ export type PanelBodyProps = {
   method: readonly string[];
   onTerm: (id: GlossaryId) => void;
   testID: string;
-  /** 산출 방식 요약 앞의 그림(정산: ①+② 식을 그림으로, 4.3절). */
-  figure?: React.ReactNode;
 };
 /** ≥ 1280 "이 화면 읽는 법" 패널 본문(4.6절): 상태 범례(그 화면의 실제 값 예) · 용어 3개 · 산출 방식 요약 3줄. 입찰·정산 화면도 쓴다. */
-export function ReadingPanelBody({ legend, terms, method, onTerm, testID, figure }: PanelBodyProps) {
+export function ReadingPanelBody({ legend, terms, method, onTerm, testID }: PanelBodyProps) {
   return (
     <View style={styles.panel} testID={testID}>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.legend}</Text>
@@ -69,7 +67,6 @@ export function ReadingPanelBody({ legend, terms, method, onTerm, testID, figure
         {terms.map(t => <TermLink key={t.id} label={t.label} onPress={() => onTerm(t.id)} />)}
       </View>
       <Text variant="label" weight="600" tone="text2">{PANEL_HEADINGS.method}</Text>
-      {figure}
       {method.map(m => <Text key={m} variant="label" tone="text2" dataSet={{ pdMeta: 'method' }}>{m}</Text>)}
     </View>
   );

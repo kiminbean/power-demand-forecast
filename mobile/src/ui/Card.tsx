@@ -1,7 +1,11 @@
 // 카드 골격은 하나다(4.0절): 머리(제목 h2 · 칩 · [i]) → 본문 → SourceFooter. I2 검사용 data-pd-card를 단다.
 // 모든 카드는 자기 상태를 가진다: 한 카드가 실패해도 StateView가 그 자리를 같은 크기로 채운다.
-import React, { useEffect } from 'react';
+// 카드 제목은 tabIndex=-1이라 초점을 받을 수 있다(round 1 D4): [다시 시도]·[다시 계산]을 누르면 버튼이 사라지기 전에 초점을 제목으로 옮기고,
+// 다시 받은 뒤에는 "다시 불러왔습니다 · HH:MM KST"를 알린다(초점이 body로 떨어지지 않는다).
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import type { Text as RNText } from 'react-native';
 import { HIT, LAYOUT, RADIUS, SIZE, SPACE } from './tokens';
 import { Button, IconButton } from './Button';
 import { ProvenanceChip } from './Chips';
@@ -9,9 +13,12 @@ import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { useAnnounce } from './Live';
 import { Text, keepTogether, labelData } from './Text';
-import { web, webStyle } from './web';
+import { domOf, web, webStyle } from './web';
+import { useClock } from '../app/Shell';
 import { useTheme } from '../app/theme';
+import { kstNow } from '../lib/kst';
 import { CHIPS } from '../lib/provenance';
+import { retryDoneText } from '../content/strings';
 
 export type CardProps = {
   title: string;
@@ -25,38 +32,69 @@ export type CardProps = {
   testID?: string;
   /** data-state(예: today-hero의 loading·ready·unavailable·error, M9 측정 표지). */
   state?: string;
+  /** 두 칸 줄(768–1023 오늘의 가격·전력, D14)에서 옆 카드와 같은 높이로 늘인다. */
+  fill?: boolean;
 };
 
 /** 카드 테두리와 안쪽 여백(360 미만 12, 그 밖 16). 차트를 카드 폭으로 넓힐 때(ChartBleed)도 같은 값을 쓴다. */
 export const CARD_BORDER = 1;
 export const cardPadding = (windowWidth: number) => (windowWidth < LAYOUT.narrowBelow ? SPACE.md : SPACE.lg);
 
-export function Card({ title, chips, onMethod, ribbon, children, testID, state }: CardProps) {
+/** [다시 시도]가 눌렸음을 기억했다가(arm) 그 카드의 StateView가 끝나면(report) 결과를 알린다. 카드 밖(전부 실패 안내)은 화면이 맡는다. */
+type RetryFocus = { arm(): void; report(kind: StateKind | 'gone'): void };
+const RetryContext = createContext<RetryFocus | null>(null);
+
+function useRetryFocus(focusTarget: () => void): RetryFocus {
+  const announce = useAnnounce();
+  const { skew } = useClock();
+  const armed = useRef(false);
+  const latest = useRef({ announce, skew, focusTarget });
+  latest.current = { announce, skew, focusTarget };
+  return useMemo<RetryFocus>(() => ({
+    arm: () => {
+      armed.current = true;
+      latest.current.focusTarget();
+    },
+    report: kind => {
+      if (!armed.current || kind === 'loading') return;
+      armed.current = false;
+      // 다시 실패하면 StateView가 오류 글자를 알린다. 성공(내용·빈 값)이면 옛 오류 글자를 이 알림으로 바꾼다.
+      if (kind !== 'error') latest.current.announce(retryDoneText(kstNow(latest.current.skew)));
+    },
+  }), []);
+}
+
+export function Card({ title, chips, onMethod, ribbon, children, testID, state, fill = false }: CardProps) {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
   const narrow = width < LAYOUT.narrowBelow;
   const shadow = theme.elevation.card ? webStyle({ boxShadow: theme.elevation.card }) : null;
+  const titleRef = useRef<RNText>(null);
+  const retry = useRetryFocus(() => {
+    const node = domOf(titleRef);
+    if (node) node.focus();
+  });
   return (
     <View testID={testID} style={[styles.card, { backgroundColor: theme.color.surface, borderColor: theme.color.border,
-      padding: cardPadding(width) }, shadow]} {...web({ dataSet: state ? { pdCard: 'true', state } : { pdCard: 'true' } })}>
+      padding: cardPadding(width) }, shadow, fill ? styles.fill : null]} {...web({ dataSet: state ? { pdCard: 'true', state } : { pdCard: 'true' } })}>
       {ribbon}
-      <CardHeader title={title} chips={chips} onMethod={onMethod} narrow={narrow} />
-      {children}
+      <CardHeader title={title} chips={chips} onMethod={onMethod} narrow={narrow} titleRef={titleRef} />
+      <RetryContext.Provider value={retry}>{children}</RetryContext.Provider>
     </View>
   );
 }
 
-export type CardHeaderProps = Pick<CardProps, 'title' | 'chips' | 'onMethod'> & { narrow?: boolean };
+export type CardHeaderProps = Pick<CardProps, 'title' | 'chips' | 'onMethod'> & { narrow?: boolean; titleRef?: React.Ref<RNText> };
 /**
  * 제목(h2 · 15/700) · 칩 · [i](44×44, link 색). 머리 줄은 칩 높이(24)만 차지하고 [i]의 44×44 상자는 위아래로 10씩 카드 안쪽 여백과
  * 머리 아래 간격(12)으로 내민다: DOM 상자는 그대로 44(M2)이고, 다른 누름 대상과 겹치지 않으며, 카드마다 20 px을 아낀다(4.1절 첫 화면).
  */
-export function CardHeader({ title, chips, onMethod, narrow = false }: CardHeaderProps) {
+export function CardHeader({ title, chips, onMethod, narrow = false, titleRef }: CardHeaderProps) {
   const { theme } = useTheme();
   return (
     <View style={styles.head}>
       <View style={[styles.titleRow, narrow ? styles.stack : null]}>
-        <Text role="heading" {...web({ 'aria-level': 2 })} variant="body" weight="700" dataSet={labelData(title)}>{title}</Text>
+        <Text ref={titleRef} role="heading" {...web({ 'aria-level': 2, tabIndex: -1 })} variant="body" weight="700" dataSet={labelData(title)}>{title}</Text>
         {chips ? <View style={styles.chips}>{chips}</View> : null}
       </View>
       {onMethod ? (
@@ -119,11 +157,19 @@ export type StateViewProps = {
 export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', minHeight = SIZE.stateMin }: StateViewProps) {
   const { theme } = useTheme();
   const announce = useAnnounce();
+  const retryFocus = useContext(RetryContext);
   const message = text ?? STATE_TEXT[kind];
   // 오류·지연 글자는 셸의 live region 하나로 알린다(카드마다 live region을 두지 않는다).
   useEffect(() => {
     if (kind === 'error' || kind === 'stale') announce(message);
   }, [kind, message, announce]);
+  // 다시 시도 뒤의 결과(D4): 불러오는 중은 건너뛰고, 오류면 위 알림, 내용으로 바뀌면(이 StateView가 사라지면) "다시 불러왔습니다".
+  useEffect(() => {
+    if (retryFocus) retryFocus.report(kind);
+  }, [kind, retryFocus]);
+  useEffect(() => () => {
+    if (retryFocus) retryFocus.report('gone');
+  }, [retryFocus]);
   if (kind === 'loading') {
     return (
       <View aria-busy style={[styles.state, { minHeight }]} {...web({ dataSet: { pdState: 'loading' } })}>
@@ -132,7 +178,12 @@ export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', m
       </View>
     );
   }
-  const retry = kind === 'restricted' ? undefined : onRetry;
+  const given = kind === 'restricted' ? undefined : onRetry;
+  // 누르면 버튼이 곧 스켈레톤으로 바뀐다: 그 전에 초점을 카드 제목으로 옮긴다(D4). 카드 밖(전부 실패 안내)은 화면의 onRetry가 h1로 옮긴다.
+  const retry = given ? () => {
+    if (retryFocus) retryFocus.arm();
+    given();
+  } : undefined;
   // 오류 글자에는 KST 시각이 들어간다("… · 06:04 KST"): 숫자가 있으면 메타로 둔다(I2).
   return (
     <View style={[styles.state, { minHeight }]} {...web({ dataSet: { pdState: kind } })}>
@@ -147,6 +198,7 @@ export function StateView({ kind, text, onRetry, retryLabel = '다시 시도', m
 
 const styles = StyleSheet.create({
   card: { borderRadius: RADIUS.card, borderWidth: CARD_BORDER, gap: SPACE.md, width: '100%', maxWidth: LAYOUT.column, alignSelf: 'center' },
+  fill: { flexGrow: 1 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.sm },
   titleRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.sm, minHeight: SIZE.chip },
   overhang: { marginVertical: -(HIT - SIZE.chip) / 2 },

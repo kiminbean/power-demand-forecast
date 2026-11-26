@@ -55,7 +55,31 @@ export function useScrollFocus(axis: 'x' | 'y') {
     sizes.current.content = axis === 'x' ? w : h;
     measure();
   }, [axis, measure]);
-  return { onLayout, onContentSizeChange, focus: scrolls ? { tabIndex: 0 } : {} };
+  return { onLayout, onContentSizeChange, scrolls, focus: scrolls ? { tabIndex: 0 } : {} };
+}
+
+type AttrEl = { setAttribute?: (name: string, value: string) => void; removeAttribute?: (name: string) => void };
+/**
+ * 시트가 열린 동안 바깥(헤더·본문·탭 막대)을 inert로 둔다(round 1 접근성: Chromium은 aria-modal만으로 바깥을 접근성 트리에서 빼지 않아
+ * 화면 읽기 프로그램이 시트 밖으로 나갈 수 있었다). inert는 접근성 트리와 초점에서 함께 뺀다. 네이티브·VM에서는 아무 일도 하지 않는다.
+ */
+export function setInert(ref: { current: unknown } | null | undefined, on: boolean): void {
+  const node = ref ? (ref.current as AttrEl | null) : null;
+  if (!node || typeof node.setAttribute !== 'function' || typeof node.removeAttribute !== 'function') return;
+  if (on) node.setAttribute('inert', '');
+  else node.removeAttribute('inert');
+}
+
+/**
+ * 같은 화면의 카드 제목(h2, tabIndex=-1)으로 초점을 옮긴다(round 1 D4: 둘러보기 안내를 닫으면 다음 카드 제목으로). testID는 카드의 것이다.
+ * 찾지 못하면 false(부르는 쪽이 화면 h1로 보낸다).
+ */
+export function focusCardTitle(testID: string): boolean {
+  const doc = (globalThis as { document?: { querySelector(s: string): unknown } }).document;
+  const heading = doc ? (doc.querySelector(`[data-testid="${testID}"] [role="heading"]`) as Partial<DomEl> | null) : null;
+  if (!heading || typeof heading.focus !== 'function') return false;
+  heading.focus();
+  return true;
 }
 
 /** 라우트가 바뀌면 h1(tabIndex=-1)로 초점을 옮긴다. 초점이 스크롤을 움직이지 않게 한다(복원한 위치를 지킨다). */
@@ -64,6 +88,12 @@ export function focusHeading(root: DomEl | null): boolean {
   if (!heading) return false;
   heading.focus({ preventScroll: true });
   return true;
+}
+
+/** 문서에서 화면 h1로 초점을 옮긴다(카드 밖 StateView의 [다시 시도], round 1 D4). */
+export function focusScreenHeading(): void {
+  const doc = (globalThis as unknown as { document?: DomEl }).document;
+  if (doc && typeof doc.querySelectorAll === 'function') focusHeading(doc);
 }
 
 /** Tab으로 갈 수 있는 것: Pressable은 늘 tabindex를 0 또는 -1로 쓴다(비활성·roving 칸은 -1). */

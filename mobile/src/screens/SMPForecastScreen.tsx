@@ -5,8 +5,8 @@
  * 둘러보기·시트·패널은 useTodayView로 같은 저장소를 본다(features는 이 파일을 가져오지 않는다, D18). 카드는 배치만 한다.
  * 기존 화면 경로(App.tsx의 `case 'smp': return <SMPForecastScreen`)와 기본 export(필수 prop 없음)는 그대로다.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { DayAheadSMP } from '../services/api';
 import { describeDayAhead, isAvailableDayAhead } from '../utils/smpPresentation';
 import { useClock, useNav, useShellData } from '../app/Shell';
@@ -19,7 +19,7 @@ import { kstNow, kstParts } from '../lib/kst';
 import { CHIPS } from '../lib/provenance';
 import type { ForecastKind } from '../lib/provenance';
 import { appResources, useRefreshWhileVisible } from '../lib/resource';
-import { TOUR_BANNER } from '../content/strings';
+import { TOUR_BANNER, retryDoneText } from '../content/strings';
 import { useTodayView } from '../features/today/data';
 import type { TodayEntry } from '../features/today/data';
 import { nextBoundaryCheck } from '../features/today/model';
@@ -31,9 +31,11 @@ import { PowerCard } from '../features/today/PowerCard';
 import { PriceCard } from '../features/today/PriceCard';
 import { AllFailedNotice, TermRow } from '../features/today/TodayParts';
 import { NowPill, ProvenanceChip } from '../ui/Chips';
+import { useAnnounce } from '../ui/Live';
 import { AnswerLine, Screen } from '../ui/Screen';
 import { TourBanner } from '../ui/Tour';
-import { SPACE } from '../ui/tokens';
+import { LAYOUT, SPACE } from '../ui/tokens';
+import { focusCardTitle, focusScreenHeading } from '../ui/web';
 
 /** 기준선 계단 차트의 접근 이름 머리(요약 문장이 뒤에 붙는다). 예측 종류마다 이름이 다르다. */
 const FORECAST_CHART_LABEL: Readonly<Record<ForecastKind, string>> = {
@@ -69,6 +71,7 @@ const VISIBILITY = { isVisible, watchVisible };
 export default function SMPForecastScreen() {
   const { view, res, skew, chartLabel } = useTodayView(true);
   const nav = useNav();
+  const { width } = useWindowDimensions();
   const clock = useClock();
   const [tourHidden, setTourHidden] = useState(tourSeen);
   const { dayAhead, forecast, modelInfo, kpis, powerSupply, market } = res;
@@ -128,10 +131,36 @@ export default function SMPForecastScreen() {
     markTourSeen();
     setTourHidden(true);
   };
+  // [닫기]를 누르면 그 버튼이 사라진다: 초점을 다음 카드 제목으로 옮긴다(round 1 D4, 없으면 화면 h1).
+  const dismissTour = () => {
+    if (!focusCardTitle('today-accuracy')) focusScreenHeading();
+    closeTour();
+  };
   const startTour = () => {
     closeTour();
     nav.push({ ...rootState('guide'), tour: 1 });
   };
+  // 전부 실패 안내의 [다시 시도](D4): 버튼과 안내가 곧 사라지므로 초점을 화면 h1로 옮기고, 가격 카드가 자료를 받으면 "다시 불러왔습니다"를
+  // 알린다. 다시 실패하면 안내가 다시 나타나 원인을 알린다(그때는 알리지 않는다).
+  const announce = useAnnounce();
+  const retryAll = useRef(false);
+  const onRetryAll = () => {
+    focusScreenHeading();
+    retryAll.current = true;
+    reloadAll();
+  };
+  useEffect(() => {
+    if (!retryAll.current || view.heroState === 'loading') return;
+    retryAll.current = false;
+    if (!view.allFailed && view.heroState !== 'error') announce(retryDoneText(kstNow(skew)));
+  }, [view.allFailed, view.heroState, announce, skew]);
+  // 768–1023(태블릿, 레일 전): 가격·전력 카드를 두 칸으로(round 1 D14). 그 밖에서는 한 줄씩.
+  const twoUp = width >= LAYOUT.twoUpFrom && width < LAYOUT.railFrom;
+  const price = <PriceCard view={view.price} onMethod={openMethod('today-price')} onSources={openSources('day-ahead')} onRetry={() => { dayAhead.reload(); }} fill={twoUp} />;
+  const power = (
+    <PowerCard view={view.power} onMethod={openMethod('today-power')} onSources={openSources('demand')}
+      onRetry={() => { kpis.reload(); powerSupply.reload(); }} fill={twoUp} />
+  );
 
   const pill = (
     <View style={styles.pills}>
@@ -142,15 +171,14 @@ export default function SMPForecastScreen() {
   const failedAll = view.allFailed;
   return (
     <Screen title={ROUTES.smp.heading} pill={pill} answer={<AnswerLine>{view.answer}</AnswerLine>} testID="today-screen">
-      {failedAll ? <AllFailedNotice text={failedAll.text} onRetry={() => { reloadAll(); }} hero={!failedAll.showCards} /> : null}
+      {failedAll ? <AllFailedNotice text={failedAll.text} onRetry={onRetryAll} hero={!failedAll.showCards} /> : null}
       {failedAll && !failedAll.showCards ? null : (
         <>
-          <PriceCard view={view.price} onMethod={openMethod('today-price')} onSources={openSources('day-ahead')} onRetry={() => { dayAhead.reload(); }} />
-          <PowerCard view={view.power} onMethod={openMethod('today-power')} onSources={openSources('demand')}
-            onRetry={() => { kpis.reload(); powerSupply.reload(); }} />
-          {showTour ? <TourBanner title={TOUR_BANNER.title} body={TOUR_BANNER.body} onStart={startTour} onDismiss={closeTour} /> : null}
+          {twoUp ? <View style={styles.twoUp}><View style={styles.half}>{price}</View><View style={styles.half}>{power}</View></View> : <>{price}{power}</>}
           <ForecastCard view={view.forecast} chartLabel={chartLabel} now={clock.now} onSelectHour={selectHour} onToNow={toNow}
             onMethod={openMethod('today-forecast')} onSources={openSources('forecast')} onRetry={() => { forecast.reload(); }} />
+          {/* 둘러보기 안내는 차트 뒤에 둔다(round 1 멘토: KPI 카드 바로 뒤에 있어 차트가 첫 화면에서 한 화면 넘게 밀렸다). */}
+          {showTour ? <TourBanner title={TOUR_BANNER.title} onStart={startTour} onDismiss={dismissTour} /> : null}
           <AccuracyCard view={view.accuracy} onMethod={openMethod('today-accuracy')} onSources={openSources('accuracy')}
             onRetry={() => { forecast.reload(); }} />
         </>
@@ -162,4 +190,6 @@ export default function SMPForecastScreen() {
 
 const styles = StyleSheet.create({
   pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.xs },
+  twoUp: { flexDirection: 'row', gap: SPACE.md, width: '100%' },
+  half: { flex: 1, minWidth: 0 },
 });

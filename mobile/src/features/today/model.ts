@@ -9,7 +9,7 @@ import { HOUR_MS, MINUTE_MS, kstDateKey, kstParts, parseApiTime, tradeHourAt } f
 import { mw, num, price, tradeHour } from '../../lib/format';
 import { CHIPS, DOCUMENTED_SMP_ACCURACY, forecastChip, weatherProvenance } from '../../lib/provenance';
 import type { Chip, ForecastKind, ReserveTone } from '../../lib/provenance';
-import { forecastStats, periodStats, widestBand } from '../../ui/charts/chartMath';
+import { clippedRuns, forecastStats, hourKinds, periodStats, stepScale, widestBand } from '../../ui/charts/chartMath';
 import {
   ACCURACY_SOURCE, ACCURACY_UNREGISTERED, ANSWER_ALL_FAILED, ANSWER_LOADING, BAND_LABEL, BOUNDARY_CHECKING_TEXT, CONFIRMED_LABEL,
   FAIL_CAUSE, FORECAST_DATE_LAG, FORECAST_EMPTY, FORECAST_SUBJECT_SHORT, KPI_LABELS, KPX_LINK_LABEL, LEVEL_NOTE, MODEL_INFO_FAILED,
@@ -41,7 +41,13 @@ export type TodayInput = {
   market: Fetched<MarketStatus>;
   /** URL ?hour=. 없거나 틀리면 지금 거래시간. */
   selectedHour: number | null;
+  /**
+   * 이번 방문에서 받은 하루전 확정 가격(거래시간마다 마지막 것, 앱 시각, 메모리에만, round 1 D10). 서버는 지금 시간 값만 주므로 머무는 동안
+   * 지난 시간의 점이 쌓인다. available은 화면 파일의 isAvailableDayAhead 판정. 없으면 지금 응답 하나만 본다.
+   */
+  seen?: readonly SeenPrice[];
 };
+export type SeenPrice = { data: DayAheadSmp; fetchedAt: number; available: boolean };
 
 export type ChipSpec = { chip: Chip; source?: string | null } | { lag: 'stale' | 'broken'; at: number; text?: string };
 export type Footer = { source: string; time: string; extra?: string };
@@ -66,6 +72,7 @@ export type PowerCardView =
     };
 
 export type HourRow = { hour: number; label: string; point: ForecastPoint; confirmed: Provenanced<number> | null };
+export type ConfirmedDot = { tradeHour: number; price: Provenanced<number> };
 export type PeriodRow = { id: string; label: string; mean: string; min: string; max: string };
 export type ForecastCardView =
   | { state: 'loading' }
@@ -73,7 +80,8 @@ export type ForecastCardView =
   | { state: 'empty'; text: string; chips: ChipSpec[]; footer: Footer }
   | {
       state: 'ready'; view: ForecastView; kind: ForecastKind; chips: ChipSpec[];
-      confirmed: { tradeHour: number; price: Provenanced<number> } | null; legend: string;
+      /** 확정 가격 점(D10): 이번 방문에서 받은 거래시간마다 하나, 7.8절 1 조건을 지나는 것만. 지금 응답 하나뿐이면 길이 1. */
+      dots: ConfirmedDot[]; legend: string;
       selected: number; nowHour: number; isNow: boolean; stepLabel: (hour: number) => string;
       reading: Line; summary: string; uncertainty: string | null; periods: PeriodRow[]; periodNote: string | null;
       rows: HourRow[]; window: { from: number; to: number }; footer: Footer;
@@ -268,7 +276,7 @@ function powerCard(c: Ctx, w: PowerFacts | null): PowerCardView {
 }
 
 // ---------------------------------------------------------------- 예측
-function readingLine(fc: ForecastView, point: ForecastPoint, confirmed: { tradeHour: number; price: Provenanced<number> } | null): Line {
+function readingLine(fc: ForecastView, point: ForecastPoint, confirmed: ConfirmedDot | null): Line {
   const subject = FORECAST_SUBJECT_SHORT[fc.kind];
   const segs: Seg[] = [];
   if (point.kind === 'zero') segs.push({ m: ZERO_INPUT_LABEL, tag: 'zero' });
@@ -281,6 +289,28 @@ function readingLine(fc: ForecastView, point: ForecastPoint, confirmed: { tradeH
   return segs;
 }
 
+/**
+ * 확정 가격 점(D10): 지금 응답(7.8절 1을 지난 것) + 이번 방문에서 받은 값. 같은 날짜(예측일 = KST 오늘)·대체값 아님·그 시간 기준선이
+ * 그릴 수 있는 값일 때만 두고, 거래시간마다 가장 늦게 받은 것 하나.
+ */
+function confirmedDots(c: Ctx, fc: ForecastView, p: PriceFacts | null, cmp: Comparison | null): ConfirmedDot[] {
+  const byHour = new Map<number, { at: number; dot: ConfirmedDot }>();
+  const put = (dot: ConfirmedDot, at: number) => {
+    const prev = byHour.get(dot.tradeHour);
+    if (!prev || prev.at <= at) byHour.set(dot.tradeHour, { at, dot });
+  };
+  if (fc.kind !== 'fallback' && fc.forecastDate === c.today) {
+    for (const s of c.input.seen ?? []) {
+      const v = s.available ? adaptDayAhead(s.data, s.fetchedAt) : null;
+      if (!v || v.status !== 'ready' || v.tradeDay !== fc.forecastDate) continue;
+      const point = forecastPoint(fc, v.tradeHour);
+      if (point.kind === 'value' && point.q50) put({ tradeHour: v.tradeHour, price: v.price }, s.fetchedAt);
+    }
+  }
+  if (p && cmp) put({ tradeHour: p.tradeHour, price: p.price }, c.input.dayAhead.fetchedAt ?? 0);
+  return Array.from(byHour.values()).map(x => x.dot).sort((a, b) => a.tradeHour - b.tradeHour);
+}
+
 function forecastCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): ForecastCardView {
   const r = c.input.forecast;
   if (!hasData(r)) return failed(r) ? { state: 'error', text: loadFailedText('예측', c.now) } : { state: 'loading' };
@@ -291,20 +321,24 @@ function forecastCard(c: Ctx, p: PriceFacts | null, cmp: Comparison | null): For
   const lagChips: ChipSpec[] = dateLag ? [{ lag: 'stale', at: r.fetchedAt, text: FORECAST_DATE_LAG }] : [];
   const stats = forecastStats(fc.q50.value);
   if (!stats) return { state: 'empty', text: FORECAST_EMPTY, chips: [kindChip, ...lagChips], footer };
-  const confirmed = p && cmp ? { tradeHour: p.tradeHour, price: p.price } : null;
-  const chips: ChipSpec[] = [kindChip, ...(confirmed ? [{ chip: CHIPS.confirmedPoint, source: p ? p.price.source : null }] : []), ...lagChips];
+  const dots = confirmedDots(c, fc, p, cmp);
+  const chips: ChipSpec[] = [kindChip, ...(dots.length ? [{ chip: CHIPS.confirmedPoint, source: dots[0].price.source }] : []), ...lagChips];
   const selected = validHour(c.input.selectedHour) ? c.input.selectedHour : c.nowHour;
   const widest = fc.band ? widestBand(fc.q50.value, fc.band.q10, fc.band.q90) : null;
   const periods = periodStats(fc.q50.value);
+  const dotAt = (hour: number) => dots.find(d => d.tradeHour === hour) ?? null;
   const rows: HourRow[] = Array.from({ length: HOURS_IN_DAY }, (_, i) => {
     const hour = i + 1;
-    return { hour, label: tradeHour(hour), point: forecastPoint(fc, hour), confirmed: confirmed && confirmed.tradeHour === hour ? confirmed.price : null };
+    const dot = dotAt(hour);
+    return { hour, label: tradeHour(hour), point: forecastPoint(fc, hour), confirmed: dot ? dot.price : null };
   });
+  // 차트와 같은 눈금(stepScale)으로 띠가 그림 위로 넘치는지 본다: 넘치면 범례의 띠 항목에 ▲ 뜻을 붙인다(D10).
+  const clipped = fc.band !== null && clippedRuns(hourKinds(fc.q50.value), fc.band.q90, stepScale(fc.q50.value, dots.map(d => d.price.value))).length > 0;
   const from = Math.min(selected, HOURS_IN_DAY - TABLE_ROWS + 1);
   return {
-    state: 'ready', view: fc, kind: fc.kind, chips, confirmed, legend: forecastLegendText(fc.kind),
+    state: 'ready', view: fc, kind: fc.kind, chips, dots, legend: forecastLegendText(fc.kind, clipped),
     selected, nowHour: c.nowHour, isNow: selected === c.nowHour, stepLabel: hour => hourStepLabel(hour, hour === c.nowHour),
-    reading: readingLine(fc, forecastPoint(fc, selected), confirmed),
+    reading: readingLine(fc, forecastPoint(fc, selected), dotAt(selected)),
     summary: forecastSummaryText(stats, fc.kind), uncertainty: widest ? uncertaintyText(widest) : null,
     periods: periods.map(s => ({ id: s.id, label: periodLabelText(s.label, s.from, s.to), mean: price(s.mean), min: price(s.min), max: price(s.max) })),
     periodNote: periodNoteText(stats.zeroHours), rows, window: { from, to: from + TABLE_ROWS - 1 }, footer,

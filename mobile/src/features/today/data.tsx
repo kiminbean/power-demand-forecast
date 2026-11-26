@@ -5,9 +5,10 @@
  * 입구가 화면 파일에 남는 까닭: 잠긴 기존 테스트(smp-truthfulness)가 그 파일이 getDayAheadSMP()·isAvailableDayAhead(dayAheadSmp)·
  * describeDayAhead(dayAheadSmp)·"예측 SMP"를 쓰는지 본다(명세 10절). 공급자가 없으면 조용히 비우지 않고 바로 실패한다.
  */
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
+import type React from 'react';
 import { todayView } from './model';
-import type { Fetched } from './model';
+import type { Fetched, SeenPrice } from './model';
 import { useClock, useNav } from '../../app/Shell';
 import { ENDPOINTS } from '../../data/client';
 import type { DashboardKpis, DayAheadSmp, MarketStatus, ModelInfo, PowerSupply, SmpForecast } from '../../data/types';
@@ -34,6 +35,26 @@ export type TodayEntry = Readonly<{
 }>;
 
 const EntryContext = createContext<TodayEntry | null>(null);
+
+/**
+ * 이번 방문에서 받은 하루전 확정 가격(round 1 D10): 서버는 지금 거래시간 값만 주므로 머무는 동안 받은 값을 거래시간마다 기억해 차트에
+ * 점으로 남긴다. 메모리에만 두고(새 요청·저장소 없음) 새로고침하면 사라진다. 날짜가 바뀌어도 view model이 오늘 것만 그린다.
+ */
+const SEEN = new Map<string, SeenPrice>();
+const SEEN_MAX = 48;
+function rememberPrice(data: DayAheadSmp | null, fetchedAt: number | null, available: boolean): readonly SeenPrice[] {
+  if (data && fetchedAt !== null && available && data.trade_day !== null && data.trade_hour !== null) {
+    const key = `${data.trade_day}|${data.trade_hour}`;
+    SEEN.delete(key);
+    SEEN.set(key, { data, fetchedAt, available });
+    while (SEEN.size > SEEN_MAX) {
+      const oldest = SEEN.keys().next();
+      if (oldest.done) break;
+      SEEN.delete(oldest.value);
+    }
+  }
+  return Array.from(SEEN.values());
+}
 
 /** App.tsx가 화면 파일의 TODAY_ENTRY로 셸 전체를 감싼다(시트·패널·둘러보기도 셸 안에서 그려진다). */
 export function TodayEntryProvider({ value, children }: { value: TodayEntry; children: React.ReactNode }) {
@@ -70,13 +91,15 @@ export function useTodayView(fetching = false) {
   }, [fetching, market.data, market.fetchedAt, reportServerTime]);
   const skewMs = clock.skew && clock.skew.plausible ? clock.skew.skewMs : 0;
   const judged = useMemo(() => entry.judgeDayAhead(dayAhead.data), [entry, dayAhead.data]);
+  const seen = useMemo(() => rememberPrice(dayAhead.data, dayAhead.fetchedAt, judged.available), [dayAhead.data, dayAhead.fetchedAt, judged]);
   const hour = state.key === 'smp' ? state.hour : null;
   const view = useMemo(() => {
     const app = <T,>(r: Resource<T>): Fetched<T> => ({ data: r.data, status: r.status, error: r.error, fetchedAt: r.fetchedAt === null ? null : r.fetchedAt + skewMs });
     return todayView({
       now: clock.now, dayAhead: app(dayAhead), priceAvailable: judged.available, kpxText: judged.kpxText, forecast: app(forecast),
       modelInfo: app(modelInfo), kpis: app(kpis), powerSupply: app(powerSupply), market: app(market), selectedHour: hour,
+      seen: seen.map(x => ({ data: x.data, available: x.available, fetchedAt: x.fetchedAt + skewMs })),
     });
-  }, [clock.now, skewMs, dayAhead, judged, forecast, modelInfo, kpis, powerSupply, market, hour]);
+  }, [clock.now, skewMs, dayAhead, judged, forecast, modelInfo, kpis, powerSupply, market, hour, seen]);
   return { view, res: { dayAhead, forecast, modelInfo, kpis, powerSupply, market }, skew: clock.skew, chartLabel: entry.chartLabel };
 }

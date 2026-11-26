@@ -24,6 +24,9 @@
     #root div, #root span { word-break: keep-all; overflow-wrap: anywhere; }
     #root [data-pd-nowrap] { white-space: nowrap; }
     :focus-visible { outline: 2px solid var(--pd-focus); outline-offset: 2px; }
+    #root [role="main"], #root [role="dialog"] [role="region"], #root [role="complementary"] { scroll-padding-block: 8px; }
+    #root [tabindex], #root button, #root a { scroll-margin-block: 8px; }
+    @media (forced-colors: active) { #root [role="radio"][aria-checked="true"], #root [role="tab"][aria-selected="true"], #root [aria-current="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }
     #root [data-pd-safe~="bottom"] { padding-bottom: env(safe-area-inset-bottom) !important; }
     #root [data-pd-safe~="x"] { padding-left: env(safe-area-inset-left) !important; padding-right: env(safe-area-inset-right) !important; }
     #root [data-pd-safe~="top"] { padding-top: env(safe-area-inset-top) !important; }

@@ -20,18 +20,18 @@ const joinLines = (lines: readonly Line[]): Line => lines.flatMap((line, i) => (
 const SKELETON_HEIGHT = 196;
 const DASH = '—';
 
-export type PriceCardProps = { view: PriceCardView; onMethod: () => void; onSources: () => void; onRetry: () => void };
+export type PriceCardProps = { view: PriceCardView; onMethod: () => void; onSources: () => void; onRetry: () => void; fill?: boolean };
 
-export function PriceCard({ view, onMethod, onSources, onRetry }: PriceCardProps) {
+export function PriceCard({ view, onMethod, onSources, onRetry, fill = false }: PriceCardProps) {
   if (view.state === 'loading') {
-    return <Card title={TITLE} onMethod={onMethod} testID="today-hero" state="loading"><StateView kind="loading" minHeight={SKELETON_HEIGHT} /></Card>;
+    return <Card title={TITLE} onMethod={onMethod} testID="today-hero" fill={fill} state="loading"><StateView kind="loading" minHeight={SKELETON_HEIGHT} /></Card>;
   }
   if (view.state === 'error') {
-    return <Card title={TITLE} onMethod={onMethod} testID="today-hero" state="error"><StateView kind="error" text={view.text} onRetry={onRetry} /></Card>;
+    return <Card title={TITLE} onMethod={onMethod} testID="today-hero" fill={fill} state="error"><StateView kind="error" text={view.text} onRetry={onRetry} /></Card>;
   }
   if (view.state === 'unavailable') {
     return (
-      <Card title={TITLE} onMethod={onMethod} testID="today-hero" state="unavailable">
+      <Card title={TITLE} onMethod={onMethod} testID="today-hero" fill={fill} state="unavailable">
         <View style={styles.hero}>
           <Text variant="display" weight="700" tone="text3">{DASH}</Text>
           <Text variant="body" tone="text2">{view.text}</Text>
@@ -42,7 +42,7 @@ export function PriceCard({ view, onMethod, onSources, onRetry }: PriceCardProps
   }
   const name = `${TITLE} ${spokenValue(price(view.price.value), view.price.unit)}, ${chipA11yLabel(view.price.chip, view.price.source)}`;
   return (
-    <Card title={TITLE} chips={<ChipList chips={view.chips} />} onMethod={onMethod} testID="today-hero" state="ready">
+    <Card title={TITLE} chips={<ChipList chips={view.chips} />} onMethod={onMethod} testID="today-hero" fill={fill} state="ready">
       <View style={styles.hero}>
         <View role="group" aria-label={name}>
           <Value v={view.price} format={price} size="display" />

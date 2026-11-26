@@ -1,11 +1,13 @@
-// 24시간 기준선 계단(명세 4.1·5.3·6.2·7.5·7.8절): 자홍 점선 계단(q50) + 같은 색 13 % 띠(q10–q90) + 확정 가격 점 +
+// 24시간 기준선 계단(명세 4.1·5.3·6.2·7.5·7.8절): 자홍 점선 계단(q50) + 같은 색 8 % 띠(q10–q90, 1 px 테두리) + 확정 가격 점 +
 // KST 지금선과 "지금 HH:MM" pill + 지난 시간 6 % 음영 + 0.00 입력 빗금 열(선·띠를 끊고 각주 한 번),
 // x 눈금 00 06 12 18 24시(i/24 위치), y축 0부터, 단위 원/kWh는 맨 위 눈금 위.
+// round 1 D10: y 위쪽은 기준선과 확정 가격으로 정하고(띠는 넣지 않는다) 그림 위로 넘친 띠는 그 시간 맨 위에 ▲로 표시한다. 확정 가격 점은
+// 이번 방문에서 받은 값마다 하나씩 남는다(서버는 지금 시간 값만 준다).
 // role=img + 요약 이름(안쪽 그림은 aria-hidden), 표 보기가 대안이다. 초점을 두면 ←/→/Home/End로, 누르면 가까운 시간으로
 // 선택이 바뀌고 판독 줄은 부모가 그린다(떠 있는 툴팁 없음). 세로로 끌면 페이지가 스크롤된다(응답자 없음).
 import React from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, Line, Path, Rect } from 'react-native-svg';
+import { Circle, Defs, Line, Path, Rect, Svg } from 'react-native-svg';
 import { CHART, RADIUS, SPACE } from '../tokens';
 import { useAnnounce } from '../Live';
 import { Text } from '../Text';
@@ -18,9 +20,11 @@ import {
 } from '../../content/strings';
 import { ChartLabel, Hatch, LABEL_HEIGHT, chartStyles, pickHandlers, useChartWidth, useSvgId } from './ChartFrame';
 import {
-  HOURS, X_TICK_HOURS, bandPath, boundaryX, forecastStats, hourAtX, hourCenterX, hourKinds, labelLeft, niceScale, nowFraction,
-  pillLeft, r2, stepLayout, stepPath, textWidth, tickBox, widestBand, yOf, zeroRuns,
+  HOURS, X_TICK_HOURS, bandPath, boundaryX, clippedRuns, forecastStats, hourAtX, hourCenterX, hourKinds, labelAlign, labelLeft, nowFraction,
+  pillLeft, r2, stepLayout, stepPath, stepScale, textWidth, tickBox, widestBand, yOf, zeroRuns,
 } from './chartMath';
+
+export type ConfirmedDot = { tradeHour: number; price: Provenanced<number> };
 
 export type StepChartProps = {
   forecast: ForecastView;
@@ -28,8 +32,8 @@ export type StepChartProps = {
   label: string;
   /** 앱의 지금(kstNow). 예측일이 KST 오늘일 때만 지금선·지난 시간 음영을 그린다. */
   now: number | null;
-  /** 7.8절 1 조건(같은 날짜·유한값·0.00 입력 아님)을 화면이 확인한 지금 거래시간의 확정 가격. */
-  confirmed?: { tradeHour: number; price: Provenanced<number> } | null;
+  /** 7.8절 1 조건(같은 날짜·유한값·0.00 입력 아님)을 화면이 확인한 확정 가격들: 이번 방문에서 받은 거래시간마다 하나(D10). */
+  dots?: readonly ConfirmedDot[];
   selectedHour?: number | null;
   /** 없으면 보기 전용(둘러보기 2단계): 초점·키·누름을 받지 않는다. */
   onSelectHour?: (hour: number) => void;
@@ -39,9 +43,10 @@ export type StepChartProps = {
 };
 
 const validHour = (h: unknown): h is number => typeof h === 'number' && Number.isInteger(h) && h >= 1 && h <= HOURS;
+const NO_DOTS: readonly ConfirmedDot[] = [];
 
 export function StepChart({
-  forecast, label, now, confirmed = null, selectedHour = null, onSelectHour, width: fixedWidth, testID = 'step-chart',
+  forecast, label, now, dots: given = NO_DOTS, selectedHour = null, onSelectHour, width: fixedWidth, testID = 'step-chart',
 }: StepChartProps) {
   const { theme } = useTheme();
   const announce = useAnnounce();
@@ -52,9 +57,9 @@ export function StepChart({
   const kinds = hourKinds(q50);
   const zero = zeroRuns(kinds);
   // 확정 가격 점은 그 시간 기준선이 그릴 수 있는 값일 때만 둔다(7.8절 1의 마지막 안전장치. 날짜 조건은 화면이 본다).
-  const dot = confirmed && validHour(confirmed.tradeHour) && kinds[confirmed.tradeHour - 1] === 'value' ? confirmed : null;
-  const drawn = kinds.flatMap((k, i) => (k === 'value' ? [q50[i], band ? band.q10[i] : null, band ? band.q90[i] : null] : []));
-  const scale = niceScale([...drawn, dot ? dot.price.value : null]);
+  const dots = given.filter(d => validHour(d.tradeHour) && kinds[d.tradeHour - 1] === 'value').sort((a, b) => a.tradeHour - b.tradeHour);
+  const scale = stepScale(q50, dots.map(d => d.price.value));
+  const clipped = band ? clippedRuns(kinds, band.q90, scale) : [];
   const { height, plot } = stepLayout(width, scale, zero.length > 0);
   const bottom = plot.top + plot.height;
   const cell = plot.width / HOURS;
@@ -66,7 +71,7 @@ export function StepChart({
   const stats = forecastStats(q50);
   const widest = band ? widestBand(q50, band.q10, band.q90) : null;
   const name = [`${label}:`, forecastSummaryText(stats, forecast.kind), widest ? `${uncertaintyText(widest)}.` : '',
-    dot ? `${confirmedPointText(dot.tradeHour, dot.price.value)}.` : ''].filter(Boolean).join(' ');
+    dots.length ? `${confirmedPointText(dots.map(d => ({ hour: d.tradeHour, value: d.price.value })))}.` : ''].filter(Boolean).join(' ');
 
   const pick = (hour: number) => {
     if (!onSelectHour) return;
@@ -98,7 +103,14 @@ export function StepChart({
             <Line key={`g${t}`} x1={r2(plot.left)} x2={r2(plot.left + plot.width)} y1={r2(yOf(t, scale, plot))} y2={r2(yOf(t, scale, plot))}
               stroke={c.border} strokeWidth={CHART.grid} />
           ))}
-          {band ? <Path testID="step-band" d={bandPath(kinds, band.q10, band.q90, scale, plot)} fill={theme.series.band} /> : null}
+          {band ? <Path testID="step-band" d={bandPath(kinds, band.q10, band.q90, scale, plot)} fill={theme.series.band}
+            stroke={theme.series.bandEdge} strokeWidth={CHART.axis} /> : null}
+          {clipped.flatMap(run => Array.from({ length: run.to - run.from + 1 }, (_, k) => run.from + k)).map(hour => {
+            const x = hourCenterX(hour, plot);
+            const half = Math.min(CHART.clipMark, cell) / 2;
+            return <Path key={`c${hour}`} testID="step-clipped" fill={theme.series.smp}
+              d={`M${r2(x - half)} ${r2(plot.top + CHART.clipMark)}L${r2(x)} ${r2(plot.top)}L${r2(x + half)} ${r2(plot.top + CHART.clipMark)}Z`} />;
+          })}
           <Path testID="step-line" d={stepPath(q50, kinds, scale, plot)} fill="none" stroke={theme.series.smp}
             strokeWidth={CHART.line} strokeDasharray={CHART.dash} />
           <Line testID="step-axis" x1={r2(plot.left)} x2={r2(plot.left + plot.width)} y1={r2(bottom)} y2={r2(bottom)}
@@ -114,10 +126,10 @@ export function StepChart({
             ? <Circle testID="step-selected" cx={r2(hourCenterX(selected, plot))} cy={r2(yOf(q50[selected - 1] as number, scale, plot))}
                 r={CHART.dotR} fill={c.surface} stroke={c.primary} strokeWidth={CHART.dotRing} />
             : null}
-          {dot
-            ? <Circle testID="step-confirmed" cx={r2(hourCenterX(dot.tradeHour, plot))} cy={r2(yOf(dot.price.value, scale, plot))}
-                r={CHART.dotR} fill={c.text1} stroke={c.surface} strokeWidth={CHART.dotRing} />
-            : null}
+          {dots.map(d => (
+            <Circle key={`d${d.tradeHour}`} testID="step-confirmed" cx={r2(hourCenterX(d.tradeHour, plot))} cy={r2(yOf(d.price.value, scale, plot))}
+              r={CHART.dotR} fill={c.text1} stroke={c.surface} strokeWidth={CHART.dotRing} />
+          ))}
           {zero.length
             ? <Rect x={CHART.edge} y={r2(bottom + CHART.xRow + (CHART.noteRow - CHART.swatch) / 2)} width={CHART.swatch} height={CHART.swatch}
                 fill={`url(#${hatchId})`} stroke={c.borderStrong} strokeWidth={CHART.axis} />
@@ -131,7 +143,8 @@ export function StepChart({
         {X_TICK_HOURS.map(h => {
           const text = hourTickText(h, h === HOURS);
           const box = tickBox(text);
-          return <ChartLabel key={`x${h}`} text={text} meta="axis" left={r2(labelLeft(boundaryX(h, plot), box, width))}
+          const x = boundaryX(h, plot);
+          return <ChartLabel key={`x${h}`} text={text} meta="axis" left={r2(labelLeft(x, box, width))} align={labelAlign(x, box, width)}
             top={r2(bottom + CHART.xLabelTop)} width={box} />;
         })}
         {zero.length

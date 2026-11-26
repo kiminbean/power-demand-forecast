@@ -67,7 +67,7 @@ function TourForecast() {
   return (
     <Card title={title} chips={<ChipList chips={f.chips} />} onMethod={open.method('today-forecast')} testID="tour-forecast">
       <Text variant="meta" tone="text2" dataSet={{ pdMeta: 'legend' }}>{f.legend}</Text>
-      <ChartBleed><StepChart forecast={f.view} label={chartLabel(f.kind)} now={now} confirmed={f.confirmed} /></ChartBleed>
+      <ChartBleed><StepChart forecast={f.view} label={chartLabel(f.kind)} now={now} dots={f.dots} /></ChartBleed>
       {a && a.documented ? <Text variant="body" weight="700" dataSet={{ pdMeta: 'documented' }}>{a.documented.main}</Text> : null}
       {a && a.documented ? <Text variant="meta" tone="text3" dataSet={{ pdMeta: 'period' }}>{a.documented.basis}</Text> : null}
       {a && a.unregistered ? <Text variant="body" tone="text2">{a.unregistered}</Text> : null}

@@ -171,7 +171,10 @@ export function adaptMarketStatus(res: MarketStatus, receivedAt: number): Market
 }
 
 export type SegmentView = { id: number; price: Provenanced<number>; probability: Provenanced<number>; quantity: Example<number>; revenue: Example<number> | null };
-export type HourBidView = { tradeHour: number; baselineQ50: number | null; revenue: Example<number> | null; segments: SegmentView[] };
+/** baselineBand: 그 시간 계산기 입력의 q10–q90(round 1 D12 계단 차트의 80% 띠). 대체값 예측이면 예측 구간이 아니라 null. */
+export type HourBidView = {
+  tradeHour: number; baselineQ50: number | null; baselineBand: { q10: number; q90: number } | null; revenue: Example<number> | null; segments: SegmentView[];
+};
 export type SegmentsView = {
   tradingDate: string | null; risk: string; method: string | null; modelUsed: string | null; capacityMw: number;
   /** 계산기가 쓴 SMP 예측의 종류(같은 응답의 model_used, 7.8절 3). 칩 문구가 여기서 갈린다. */
@@ -190,9 +193,11 @@ export function adaptSegments(res: OptimizedSegments, fetchedAt: number): Segmen
   const chip = CALC_CHIP[kind];
   const hours = res.hourly_bids.map((bid, i): HourBidView => {
     if (bid.hour < 0 || bid.hour > 23) throw new ApiShapeError('/api/v1/bidding/optimized-segments', `hourly_bids[${i}].hour`, '0–23');
+    const { q10, q90 } = bid.smp_forecast;
     return {
       tradeHour: bid.hour + 1,
       baselineQ50: bid.smp_forecast.q50,
+      baselineBand: kind !== 'fallback' && finite(q10) && finite(q90) && q10 <= q90 ? { q10, q90 } : null,
       revenue: bid.expected_revenue === null ? null : exampleFromCalculator(bid.expected_revenue, '천원', '기대 수입'),
       segments: bid.segments.map(seg => ({
         id: seg.segment_id,
