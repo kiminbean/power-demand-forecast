@@ -1,5 +1,5 @@
 # Project Status Backup
-> Last Updated: 2026-11-27 morning (mobile web app /mobile/ UI TOP1 redesign on branch ui/mobile-top1: build F0–F12, fix steps F13a–F14, evaluation rounds 1–3 done — round 3 passed the bar (mean 8.81, lowest R1·R8 8.4, all four lenses incl. M1–M9 and I1–I5 pass, 41 defects open incl. 3 high), not deployed, not pushed; 2026-11-26 evening: round 1 passed narrowly (mean 8.53); earlier 2026-11-26: session memory + docs refresh; 2026-11-25: dashboard app_v4 UI TOP1 redesign merged·deployed·pushed; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
+> Last Updated: 2026-11-27 09:40 KST (mobile web app /mobile/ UI TOP1 redesign on branch ui/mobile-top1: build F0–F12, fix steps F13a–F14, evaluation rounds 1–3 done — round 3 passed the bar (mean 8.81, lowest R1·R8 8.4, all four lenses incl. M1–M9 and I1–I5 pass, 41 defects open incl. 3 high); deployed to production /mobile/ at 09:39 KST with backup mobile.backup-top1-20261127-093900 (approved P1), then merged to main and pushed (approved P11); 2026-11-26 evening: round 1 passed narrowly (mean 8.53); earlier 2026-11-26: session memory + docs refresh; 2026-11-25: dashboard app_v4 UI TOP1 redesign merged·deployed·pushed; 2026-11-07: CI/CD ran green during a 9-minute public window; 2026-11-06: default model ar_gbm)
 
 ## Project Overview
 - **Project**: Jeju Power Demand Forecast System (RE-BMS)
@@ -12,7 +12,7 @@
 
 ## Current Session (2026-11-23 ~ 11-26)
 
-### Task: 모바일 웹앱(/mobile/) UI/UX TOP1 개편 — 빌드 F0\~F12, 수정 F13a\~F14, round 1\~3 평가 완료 (2026-11-26 \~ 27) ⏳ round 3 합격선 통과·운영 미반영·푸시 안 함
+### Task: 모바일 웹앱(/mobile/) UI/UX TOP1 개편 — 빌드 F0\~F12, 수정 F13a\~F14, round 1\~3 평가 완료 (2026-11-26 \~ 27) ✅ round 3 합격선 통과 · 운영 배포(11-27 09:39 KST) · main 병합·푸시
 - 사용자 목표: 공개 모바일 웹앱(`/mobile/`, Expo + react-native-web)의 UI/UX를 경쟁사 TOP1 수준으로. 기준 제품 Electricity Maps 앱(약 9.1). 합격선 = R1\~R8 모두 8.0 이상 · 평균 8.5 이상 + 게이트 M1\~M9·I1\~I5 전부. round 0(개편 전) 평균 4.34
 - 진행: 시안 3개 중 C(비전문가 안내형)를 기반으로 설계 명세 `docs/2026-11-26-mobile-ui-top1-design.md` → 빌드 F0\~F12(단계마다 빌더 1명·로컬 커밋 1개). 워크트리 `.claude/worktrees/mobile-top1`, 브랜치 `ui/mobile-top1`(기준 `f2fbb5a2`)
 - 결과: 탭 4개(오늘·입찰·정산·알아보기), 화면마다 주소, 라이트·다크(시스템 + 앱 안 선택), 모든 숫자에 상태 칩·출처·KST 시각, 지어낸 값은 `mobile/src/data/examples.ts`에서만. 앨런 AI·입찰 제출·발전소 등록·시뮬레이션은 공개 빌드에서 뺌(파일은 남김, 삭제는 P2)
@@ -22,10 +22,13 @@
 - 수정 F13a·F13b·F13c(2026-11-26 19:45 \~ 11-27 01:58 KST): 오케스트레이터 수정 결정 D1\~D18(`scratchpad/mobile/eval/round1/FIX_PLAN_r1.md`, 명세 2.4절). round 2(앱 코드 `6fb6bf64`): 평균 8.73이지만 관문 넷(mentor MEN-COPY, layout_a11y M5·FOCUS, integrity NOW-KST)이 떨어짐 → F14(`c08d443b`, 04:02 \~ 06:42 KST)가 고침
 - round 3(06:42 \~ 08:59 KST, 앱 코드 `c08d443b`): 항목 평균 R1 8.4 · R2 8.7 · R3 8.65 · R4 9.15 · R5 9.25 · R6 8.85 · R7 9.1 · R8 8.4, 평균 8.81, 네 렌즈 모두 통과(떨어진 관문 0) → 합격선 통과. M9 21회 5,024 \~ 5,160 ms(하루전 가격 +1,200 ms 지연 포함). `check.sh` tests 238 · 기존 35/35 · tsc 0 · 번들 639,947 B(한도까지 53 B). 평가한 export `scratchpad/mobile/build/runs/R3-20261127-064235/export`, 번들 sha256 `a8ec24512d8cf1630aa6d215d447fccafe9b4223e1b1030dd044afedf65308db`. 결함 41건(높음 3: 390 첫 화면에 그림 없음, 768 두 칸의 빈 자리, 번들 여유 53 B). 증거 `scratchpad/mobile/eval/round3/`(`LENSES_r3.json`, `GATES.md`)
 - 보고서: `docs/2026-11-26-mobile-ui-top1-report.md`(바뀐 것, 게이트 수치, round 1\~3 점수·관문·결함, 수정 결정 D1\~D18, 캡처 경로와 개편 전후 스크린샷 4장(개편 후는 round 3), 남은 승인). `mobile/README.md`·`CHANGELOG.md` 갱신
+- **운영 배포(P1, 2026-11-27 09:39 KST, 사용자 승인 2026-11-26 19:55 "재평가 통과 시 배포")**: 명세 13절 절차. 위 export의 번들·`index.html`·`guide.ko.json` sha256 확인 → 운영 폴더 백업 `~/.local/share/power-demand-public/mobile.backup-top1-20261127-093900`(`cp -pR`, `diff -rq` 같음) → `rsync -a export/ mobile/` → :10005에서 `index.html`이 `AppEntry-27a7d4b9bfe3d675cef91e8add41e9a2.js`를 가리킴, 번들 200 · 639,947 B · `cmp` 같음, `bidding`·`settlement`·`guide`·`content/guide.ko.json` 200 → 공개 주소(:10000)도 같은 경로와 API 200. 배포 전 개인 미리보기(:10120)에서 4경로 × 5폭 × 2테마 40건 문제 0. 배포 뒤 공개 주소와 :10005에서 같은 40건씩 문제 0, grid 48기록 실패 0, 관문 I1\~I5 통과(I3 같은 분 API 값 12개·파생 값 51개 불일치 0). 옛 번들 `AppEntry-71e4dcb6…`은 폴더에 남김(참조 안 됨). 서버 재시작 없음
+  - 되돌리기: `rsync -a ~/.local/share/power-demand-public/mobile.backup-top1-20261127-093900/ ~/.local/share/power-demand-public/mobile/` 뒤 `curl -s http://127.0.0.1:10005/mobile/ | grep -o 'AppEntry-[0-9a-f]*\.js'`가 `AppEntry-71e4dcb6…`인지 확인
+- **병합·푸시(P11, 승인 2026-11-26 19:55 "통과 뒤 병합·푸시")**: 운영 확인 뒤 `ui/mobile-top1`(로컬 커밋 20개)을 `main`에 빨리 감기로 병합하고 푸시. 푸시 전 fetch·앞섬/뒤처짐·64자리 16진 문자열 검사, `logs/*` 제외
 - 남은 일:
-  - P1(운영 배포) 승인 여부(명세 13절 절차, 위 sha256 확인부터). round 3 높음 결함 셋을 배포 전에 고칠지도 함께 정한다. 고치려면 번들 자리(P3 압축 또는 문구를 `guide.ko.json`으로 이전)가 먼저다(보고서 5.1·5.4절)
+  - round 3 결함 41건(높음 3: 390 첫 화면에 그림 없음, 768 두 칸의 빈 자리, 번들 여유 53 B)은 열린 채 배포했다. 고치려면 번들 자리(P3 압축 또는 문구를 `guide.ko.json`으로 이전)가 먼저다(보고서 5.1·5.4절)
   - 대시보드 후속: '관심 경계 (예비율 15%)'·단계 관심·주의·문장 속 `07h · 06–07시`(D9·D11), '보통' 판정 문장(F14). 모바일만 바꿨다
-  - 승인 항목 P1(운영 배포, 명세 13절 백업·되돌리기 명령) \~ P11(푸시·병합). 번들 여유를 가장 크게 늘리는 것은 P3(번들 gzip: 639,947 → 188,040 B)이다
+  - 남은 승인 항목 P2\~P10(보고서 5.1절). 번들 여유를 가장 크게 늘리는 것은 P3(번들 gzip: 639,947 → 188,040 B)이다
   - 측정 도구(`check.sh`·`sweep.py`·`run_gate_checks_v2.sh`)와 증거는 세션 scratchpad(`scratchpad/mobile/`)에 있어 세션이 끝나면 사라진다. 저장소만으로 돌릴 수 있는 것은 `cd mobile && npm test && npm run typecheck`와 웹 export다(`mobile/README.md`)
 
 ### Task: 세션 메모리 + 문서 갱신 (2026-11-26) ✅ COMPLETE
